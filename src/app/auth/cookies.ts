@@ -2,7 +2,8 @@ export const REFRESH_COOKIE = "gcc_v2_refresh";
 export const ACCESS_COOKIE = "gcc_v2_access";
 export const PKCE_COOKIE = "gcc_v2_pkce_verifier";
 
-const secure = process.env.NODE_ENV === "production";
+const secure =
+  process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 
 export const cookieOpts = {
   pkce: {
