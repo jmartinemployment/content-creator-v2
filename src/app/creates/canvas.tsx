@@ -1060,10 +1060,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Produce all formats</h2>
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Re-Purpose</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            From this primary draft: LinkedIn, X, email, blog pack, Meta/Google ads, and image prompts
-            (sync — no job poll).
+            Remix this ready draft into LinkedIn, X, email, blog pack, Meta/Google ads, and image
+            prompts (sync — not separate WRITE jobs).
           </p>
           <button
             type="button"
@@ -1071,7 +1071,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             onClick={() => void runTransform()}
             className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
           >
-            {transformBusy ? "Producing…" : "Produce all formats"}
+            {transformBusy ? "Re-purposing…" : "Re-Purpose"}
           </button>
           {transformError ? <p className="mt-2 text-xs text-red-600">{transformError}</p> : null}
           {transformVariants.length > 0 ? (

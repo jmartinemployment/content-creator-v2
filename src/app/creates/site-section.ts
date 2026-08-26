@@ -53,7 +53,6 @@ export function siteSectionFromCrawlPages(
   const relatedPages = pages
     .filter((p) => p.url?.trim())
     .sort((a, b) => toolishScore(b.url, b.title) - toolishScore(a.url, a.title))
-    .slice(0, 12)
     .map((p) => ({
       url: p.url.trim(),
       title: (p.title || p.url).trim(),
@@ -61,10 +60,7 @@ export function siteSectionFromCrawlPages(
       excerpt: p.excerpt ?? "",
     }));
 
-  const neighbors = relatedPages
-    .map((p) => p.title)
-    .filter(Boolean)
-    .slice(0, 24);
+  const neighbors = relatedPages.map((p) => p.title).filter(Boolean);
 
   return {
     siteAnalysisProfileId: profileId,

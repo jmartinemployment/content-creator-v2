@@ -11,7 +11,12 @@ import {
   type PrimaryIntent,
   type ToneOfVoice,
 } from "../brief-catalog";
-import { CONTENT_TYPES, type ContentType } from "../content-types";
+import {
+  ALSO_DRAFT_TYPES,
+  PRIMARY_DRAFT_TYPES,
+  type AlsoDraftType,
+  type PrimaryDraftType,
+} from "../content-types";
 import {
   hostFromSiteUrl,
   isProfileReady,
@@ -134,7 +139,8 @@ export function NewCreateForm() {
   const [section, setSection] = useState<SiteSectionContext | null>(null);
 
   const [title, setTitle] = useState("");
-  const [contentType, setContentType] = useState<ContentType>("blog");
+  const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraftType>("pillar");
+  const [alsoDrafts, setAlsoDrafts] = useState<Set<AlsoDraftType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
   const [operatorToolsText, setOperatorToolsText] = useState("");
   const [primaryIntent, setPrimaryIntent] = useState<PrimaryIntent | "">("");
@@ -267,7 +273,7 @@ export function NewCreateForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
-          contentType,
+          contentType: primaryDraft,
           siteUrl,
           siteSection: siteSectionForApi(section),
         }),
@@ -278,12 +284,19 @@ export function NewCreateForm() {
       }
       const create = (await createRes.json()) as { id: string };
 
+      const also = ALSO_DRAFT_TYPES.map((o) => o.value).filter((v) => alsoDrafts.has(v));
+      const contentTypes = [primaryDraft, ...also];
+      const operatorTools = parseOperatorTools(operatorToolsText);
+
       const brief = {
         briefVersion: BRIEF_VERSION,
+        title: title.trim(),
+        primaryDraft,
+        contentTypes,
         primaryIntent,
         buyingStage,
         toneOfVoice,
-        operatorTools: parseOperatorTools(operatorToolsText),
+        operatorTools,
       };
 
       const genRes = await fetch(`/api/gcc-v2/creates/${create.id}/generate`, {
@@ -293,13 +306,16 @@ export function NewCreateForm() {
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
           siteAnalysisProfileId,
+          contentTypes,
         }),
       });
       if (!genRes.ok) {
         const body = (await genRes.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error || `generate failed: HTTP ${genRes.status}`);
       }
-      const { jobId } = (await genRes.json()) as { jobId: string };
+      const data = (await genRes.json()) as { jobId?: string; jobIds?: string[] };
+      const jobId = data.jobId ?? data.jobIds?.[0];
+      if (!jobId) throw new Error("generate returned no jobId");
 
       router.push(`/creates/${create.id}?jobId=${jobId}`);
     } catch (err) {
@@ -430,26 +446,57 @@ export function NewCreateForm() {
           </div>
 
           <div className={fieldClass}>
-            <label className={labelClass} htmlFor="contentType">
+            <label className={labelClass} htmlFor="primaryDraft">
               Primary draft
             </label>
             <select
-              id="contentType"
+              id="primaryDraft"
               className={selectClass}
-              value={contentType}
-              onChange={(e) => setContentType(e.target.value as ContentType)}
+              value={primaryDraft}
+              onChange={(e) => setPrimaryDraft(e.target.value as PrimaryDraftType)}
             >
-              {CONTENT_TYPES.map((o) => (
+              {PRIMARY_DRAFT_TYPES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
             <p className="text-xs text-[var(--cc-muted)]">
-              Long-form story path for WRITE (default Blog). After the draft is ready, use Produce all
-              formats for ads, image prompts, social, and email.
+              Long-form WRITE path (default Pillar). Use Re-Purpose on a ready draft for channel packs.
             </p>
           </div>
+
+          <fieldset className={fieldClass}>
+            <legend className={labelClass}>Also draft</legend>
+            <div className="flex flex-wrap gap-3 pt-1">
+              {ALSO_DRAFT_TYPES.map((o) => {
+                const checked = alsoDrafts.has(o.value);
+                return (
+                  <label
+                    key={o.value}
+                    className="flex cursor-pointer items-center gap-2 text-sm text-[var(--cc-ink)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setAlsoDrafts((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(o.value)) next.delete(o.value);
+                          else next.add(o.value);
+                          return next;
+                        });
+                      }}
+                    />
+                    {o.label}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-xs text-[var(--cc-muted)]">
+              Each checked type gets its own WRITE job (same site, brief, and BrandKit).
+            </p>
+          </fieldset>
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="targetKeyword">
@@ -476,8 +523,7 @@ export function NewCreateForm() {
               placeholder={"One per line — URL or Name | URL\nhttps://example.com/tools/intercom\nTidio | https://example.com/tools/tidio"}
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Extra partner tools to weave into the draft (in addition to H6 links under your keyword
-              on the crawled site).
+              Saved on the brief. Extra partners to weave in (plus crawl links under your keyword).
             </p>
           </div>
 

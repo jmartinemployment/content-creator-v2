@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAccessToken } from "@/app/auth/session";
 import { fetchGccV2 } from "@/app/auth/server-bff";
 import { Canvas } from "@/app/creates/canvas";
+import { labelForContentType } from "@/app/creates/content-types";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -9,7 +10,7 @@ type PageProps = {
 };
 
 type CreateDto = { id: string; title: string; contentType: string };
-type JobDto = { id: string; status: string; stage: string };
+type JobDto = { id: string; status: string; stage: string; contentType?: string };
 
 export default async function CreateDetailPage({ params, searchParams }: PageProps) {
   await requireAccessToken();
@@ -24,12 +25,23 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
     title = create.title;
   }
 
+  let jobs: JobDto[] = [];
+  const jobsRes = await fetchGccV2(`creates/${id}/jobs`);
+  if (jobsRes.ok) {
+    const body = (await jobsRes.json()) as JobDto[];
+    if (Array.isArray(body)) jobs = body;
+  }
+
   let jobId = jobIdFromQuery ?? null;
+  if (!jobId && jobs.length > 0) {
+    jobId = jobs[0]!.id;
+  }
   if (!jobId) {
     const jobRes = await fetchGccV2(`creates/${id}/latest-job`);
     if (jobRes.ok) {
       const job = (await jobRes.json()) as JobDto;
       jobId = job.id;
+      if (jobs.length === 0) jobs = [job];
     }
   }
 
@@ -47,6 +59,28 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
           Live Canvas for this create&apos;s job — no polling, everything below comes from the realtime
           hub.
         </p>
+        {jobs.length > 1 ? (
+          <nav className="mt-4 flex flex-wrap gap-2" aria-label="Drafts for this create">
+            {jobs.map((j) => {
+              const active = j.id === jobId;
+              const label = labelForContentType(j.contentType ?? "");
+              return (
+                <Link
+                  key={j.id}
+                  href={`/creates/${id}?jobId=${j.id}`}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                    active
+                      ? "bg-[var(--cc-accent)] text-white"
+                      : "border border-[var(--cc-line)] text-[var(--cc-ink)] hover:bg-black/5"
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1 opacity-70">· {j.status}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </div>
 
       {jobId ? (
