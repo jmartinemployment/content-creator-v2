@@ -13,7 +13,8 @@ export default async function NewCreatePage() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">New content brief</h1>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
-          Creates a brief + job, then jumps to the live event stream.
+          Enter the project site URL — we crawl it and use its pages for grounding and links, then
+          you fill the brief. BrandKit and outline gates run on the canvas.
         </p>
       </div>
       <NewCreateForm />

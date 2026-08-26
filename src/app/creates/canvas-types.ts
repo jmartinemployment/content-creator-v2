@@ -158,6 +158,21 @@ export type OutlineView = {
   hierarchyChildHeadings: string[];
 };
 
+/** `BrandKitReady` job-event payload — provisional kit from the crawl for Accept/Reject. */
+export type BrandKitReadyView = {
+  brandKitId: string;
+  derivedFromProfileId?: string;
+  voiceStatus?: string;
+  companyName?: string | null;
+  website?: string | null;
+  companyDescription?: string | null;
+  tagline?: string | null;
+  positioningOneLiner?: string | null;
+  voiceSampleCount?: number;
+  voiceSamplePreviews?: string[];
+  notesCount?: number;
+};
+
 export const SECTION_EVENT_TYPES = [
   "SectionDrafted",
   "SectionRepaired",

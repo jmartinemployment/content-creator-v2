@@ -11,8 +11,10 @@ import {
 } from "@/app/auth/job-hub";
 import type {
   AiVisibilitySnapshotView,
+  BrandKitReadyView,
   CanvasSection,
   ContentRun,
+  OutlineSectionView,
   OutlineView,
   ParagraphNode,
   SectionEventPayload,
@@ -57,6 +59,34 @@ function safeParse(json: string): unknown {
   } catch {
     return null;
   }
+}
+
+function runsToPlain(runs: ContentRun[]): string {
+  return runs.map((r) => r.text).join("");
+}
+
+function paragraphToPlain(p: ParagraphNode): string {
+  if (p.type === "list") {
+    return p.items.map((item) => `• ${runsToPlain(item)}`).join("\n");
+  }
+  return runsToPlain(p.runs);
+}
+
+function sectionToPlain(section: SectionNode, depth = 0): string {
+  const parts: string[] = [];
+  if (section.heading) parts.push(section.heading);
+  for (const p of section.paragraphs) parts.push(paragraphToPlain(p));
+  for (const child of section.children) parts.push(sectionToPlain(child, depth + 1));
+  return parts.filter(Boolean).join("\n\n");
+}
+
+function canvasSectionsToPlain(sections: CanvasSection[]): string {
+  return sections
+    .map((s) => {
+      const body = sectionToPlain(s.section);
+      return body.startsWith(s.heading) ? body : `${s.heading}\n\n${body}`;
+    })
+    .join("\n\n---\n\n");
 }
 
 function runText(run: ContentRun): ReactNode {
@@ -182,12 +212,22 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [status, setStatus] = useState<string>("pending");
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [awaitingApproval, setAwaitingApproval] = useState(false);
+  const [siteUrl, setSiteUrl] = useState<string | null>(null);
+  const [awaitingBrandkit, setAwaitingBrandkit] = useState(false);
+  const [awaitingOutlineApproval, setAwaitingOutlineApproval] = useState(false);
+  const [brandKit, setBrandKit] = useState<BrandKitReadyView | null>(null);
+  const [kitCompanyName, setKitCompanyName] = useState("");
+  const [kitDescription, setKitDescription] = useState("");
+  const [kitPositioning, setKitPositioning] = useState("");
+  const [kitTagline, setKitTagline] = useState("");
+  const [kitNotice, setKitNotice] = useState<string | null>(null);
   const [outline, setOutline] = useState<OutlineView | null>(null);
+  const [editableSections, setEditableSections] = useState<OutlineSectionView[]>([]);
   const [sections, setSections] = useState<Map<string, CanvasSection>>(new Map());
   const [report, setReport] = useState<ValidationReportView | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [copyAllDone, setCopyAllDone] = useState(false);
   const [pendingSectionKey, setPendingSectionKey] = useState<string | null>(null);
   const [pendingInstruction, setPendingInstruction] = useState<Record<string, string>>({});
   const [transformBusy, setTransformBusy] = useState(false);
@@ -203,6 +243,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   const connectionRef = useRef<HubConnection | null>(null);
   const lastSeqRef = useRef(0);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   const applySectionEvent = useCallback((payload: SectionEventPayload) => {
     const section = safeParse(payload.documentJson) as SectionNode | null;
@@ -234,12 +276,60 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         case "JobStageChanged":
           setStage((payload as { stage?: string })?.stage ?? null);
           break;
-        case "OutlineReady":
-          setOutline(payload as OutlineView);
-          setAwaitingApproval(true);
+        case "BrandKitReady": {
+          const kit = payload as BrandKitReadyView;
+          setBrandKit(kit);
+          setKitCompanyName(kit.companyName ?? "");
+          setKitDescription(kit.companyDescription ?? "");
+          setKitPositioning(kit.positioningOneLiner ?? "");
+          setKitTagline(kit.tagline ?? "");
+          setKitNotice(null);
+          // Replay-safe: hub events are immutable — BrandKitReady still says provisional after Accept.
+          // Do not re-enter the gate once the job has moved on.
+          const current = statusRef.current;
+          if (
+            current === "awaiting_outline_approval" ||
+            current === "running" ||
+            current === "ready" ||
+            current === "failed" ||
+            current === "canceled"
+          ) {
+            break;
+          }
+          setAwaitingBrandkit(true);
+          setAwaitingOutlineApproval(false);
+          setStatus("awaiting_brandkit_approval");
           break;
+        }
+        case "BrandKitAccepted":
+          setAwaitingBrandkit(false);
+          setAwaitingOutlineApproval(true);
+          setStatus("awaiting_outline_approval");
+          setKitNotice(null);
+          break;
+        case "BrandKitRejected":
+          setAwaitingBrandkit(true);
+          setAwaitingOutlineApproval(false);
+          setStatus("awaiting_brandkit_approval");
+          setKitNotice(
+            "Acceptance cleared — edit description/positioning if needed, then Accept to continue.",
+          );
+          setError(null);
+          break;
+        case "OutlineReady": {
+          const next = payload as OutlineView;
+          setOutline(next);
+          setEditableSections(
+            (next.sections ?? []).map((s) => ({
+              ...s,
+              hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+            })),
+          );
+          break;
+        }
         case "OutlineApproved":
-          setAwaitingApproval(false);
+          setAwaitingOutlineApproval(false);
+          setAwaitingBrandkit(false);
           setStatus("running");
           break;
         case "ValidationReport":
@@ -248,17 +338,21 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         case "JobCompleted": {
           const p = payload as { status?: string };
           setStatus(p?.status ?? "ready");
-          setAwaitingApproval(false);
+          setAwaitingOutlineApproval(false);
+          setAwaitingBrandkit(false);
           void runAiVisibilityRefresh();
           break;
         }
         case "JobCanceled":
           setStatus("canceled");
-          setAwaitingApproval(false);
+          setAwaitingOutlineApproval(false);
+          setAwaitingBrandkit(false);
           break;
         case "JobFailed":
           setStatus("failed");
           setError((payload as { error?: string })?.error ?? "Job failed");
+          setAwaitingOutlineApproval(false);
+          setAwaitingBrandkit(false);
           break;
         case "CmsPublished": {
           const p = payload as CmsPublishedPayload;
@@ -307,6 +401,49 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     };
     // Reconnect only when the job identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/gcc-v2/creates/${createId}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const create = (await res.json()) as { siteUrl?: string | null };
+        if (!cancelled && create.siteUrl) setSiteUrl(create.siteUrl);
+      } catch {
+        /* ignore — Writing for banner is best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/gcc-v2/jobs/${jobId}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const job = (await res.json()) as { status?: string; stage?: string | null };
+        if (cancelled) return;
+        if (job.status) setStatus(job.status);
+        if (job.stage) setStage(job.stage);
+        if (job.status === "awaiting_brandkit_approval") {
+          setAwaitingBrandkit(true);
+          setAwaitingOutlineApproval(false);
+        } else if (job.status === "awaiting_outline_approval") {
+          setAwaitingBrandkit(false);
+          setAwaitingOutlineApproval(true);
+        }
+      } catch {
+        /* hub events remain primary */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [jobId]);
 
   const orderedSections = useMemo(() => Array.from(sections.values()), [sections]);
@@ -362,6 +499,134 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  async function acceptBrandKit() {
+    setBusy(true);
+    setError(null);
+    setKitNotice(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/accept-brandkit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          companyName: kitCompanyName.trim() || null,
+          companyDescription: kitDescription.trim() || null,
+          positioningOneLiner: kitPositioning.trim() || null,
+          tagline: kitTagline.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `accept brand kit failed: HTTP ${res.status}`);
+      }
+      setAwaitingBrandkit(false);
+      setAwaitingOutlineApproval(true);
+      setStatus("awaiting_outline_approval");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not accept brand kit");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rejectBrandKit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/reject-brandkit`, { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `reject brand kit failed: HTTP ${res.status}`);
+      }
+      setAwaitingBrandkit(true);
+      setAwaitingOutlineApproval(false);
+      setStatus("awaiting_brandkit_approval");
+      setKitNotice(
+        "Acceptance cleared — edit description/positioning if needed, then Accept to continue.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reject brand kit");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveOutline() {
+    if (editableSections.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body = {
+        sections: editableSections.map((s) => ({
+          key: s.key,
+          heading: s.heading,
+          job: s.job,
+          hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+        })),
+        hierarchyChildHeadings: outline?.hierarchyChildHeadings ?? [],
+      };
+      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/outline`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error || `save outline failed: HTTP ${res.status}`);
+      }
+      const saved = (await res.json()) as OutlineView;
+      setOutline(saved);
+      setEditableSections(
+        (saved.sections ?? []).map((s) => ({
+          ...s,
+          hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save outline");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function regenerateOutline() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/regenerate-outline`, { method: "POST" });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error || `regenerate outline failed: HTTP ${res.status}`);
+      }
+      const next = (await res.json()) as OutlineView;
+      if (!next?.sections?.length) {
+        throw new Error("Regenerate returned an empty outline");
+      }
+      setOutline(next);
+      setEditableSections(
+        next.sections.map((s) => ({
+          ...s,
+          hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not regenerate outline");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyAllSections() {
+    const text = canvasSectionsToPlain(orderedSections);
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyAllDone(true);
+      window.setTimeout(() => setCopyAllDone(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not copy to clipboard");
+    }
+  }
+
   async function cancelJob() {
     setBusy(true);
     setError(null);
@@ -382,7 +647,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       const res = await fetch(`/api/gcc-v2/creates/${createId}/transform`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ channels: ["linkedin", "x", "email"] }),
+        body: JSON.stringify({
+          channels: ["linkedin", "x", "email", "blog", "meta_ad", "google_ad", "image_prompt"],
+        }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
@@ -432,16 +699,29 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   }
 
   const isTerminal = status === "ready" || status === "canceled" || status === "failed";
+  const showBrandKitPanel = awaitingBrandkit || status === "awaiting_brandkit_approval";
+  // BrandKit Accept must complete before outline Approve — never show both gates together.
+  const showOutlinePanel =
+    !showBrandKitPanel &&
+    awaitingOutlineApproval &&
+    (outline !== null || editableSections.length > 0);
+  const showApproveOutline = !showBrandKitPanel && awaitingOutlineApproval;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
       <div className="flex flex-col gap-4">
+        {siteUrl ? (
+          <p className="text-sm text-[var(--cc-ink)]">
+            Writing for: <span className="font-medium">{siteUrl}</span>
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cc-line)] p-3 text-xs text-[var(--cc-muted)]">
           <span className="rounded-full bg-black/5 px-2 py-1 font-mono">job {jobId}</span>
           <span className="rounded-full bg-black/5 px-2 py-1">status: {status}</span>
           {stage ? <span className="rounded-full bg-black/5 px-2 py-1">stage: {stage}</span> : null}
 
-          {awaitingApproval ? (
+          {showApproveOutline ? (
             <button
               type="button"
               onClick={approveOutline}
@@ -452,13 +732,25 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             </button>
           ) : null}
 
+          {orderedSections.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void copyAllSections()}
+              className={`rounded-md border border-[var(--cc-line)] px-3 py-1.5 font-semibold text-[var(--cc-ink)] ${
+                showApproveOutline ? "" : "ml-auto"
+              }`}
+            >
+              {copyAllDone ? "Copied" : "Copy all"}
+            </button>
+          ) : null}
+
           {!isTerminal ? (
             <button
               type="button"
               onClick={cancelJob}
               disabled={busy}
               className={`rounded-md border border-[var(--cc-line)] px-3 py-1.5 font-semibold text-[var(--cc-ink)] disabled:opacity-60 ${
-                awaitingApproval ? "" : "ml-auto"
+                showApproveOutline || orderedSections.length > 0 ? "" : "ml-auto"
               }`}
             >
               Cancel
@@ -468,15 +760,143 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
-        {awaitingApproval && outline ? (
+        {showBrandKitPanel ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
-            <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Outline awaiting approval</h2>
-            <ol className="mt-2 flex flex-col gap-1 text-sm text-[var(--cc-muted)]">
-              {outline.sections.map((s) => (
-                <li key={s.key}>
-                  {s.heading} <span className="text-xs">({s.job})</span>
+            <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Brand kit awaiting approval</h2>
+            <p className="mt-1 text-xs text-[var(--cc-muted)]">
+              Grounded from this site&apos;s Geek-SEO crawl — edit if needed, then Accept before writing.
+            </p>
+            {kitNotice ? <p className="mt-2 text-xs text-amber-800">{kitNotice}</p> : null}
+            {brandKit ? (
+              <div className="mt-3 flex flex-col gap-3 text-sm">
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-[var(--cc-ink)]" htmlFor="kit-company">
+                    Company
+                  </label>
+                  <input
+                    id="kit-company"
+                    className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]"
+                    value={kitCompanyName}
+                    onChange={(e) => setKitCompanyName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <span className="font-medium text-[var(--cc-ink)]">Website: </span>
+                  <span className="text-[var(--cc-muted)]">{brandKit.website || "—"}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-[var(--cc-ink)]" htmlFor="kit-tagline">
+                    Tagline
+                  </label>
+                  <input
+                    id="kit-tagline"
+                    className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]"
+                    value={kitTagline}
+                    onChange={(e) => setKitTagline(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-[var(--cc-ink)]" htmlFor="kit-description">
+                    Description
+                  </label>
+                  <textarea
+                    id="kit-description"
+                    className="min-h-[88px] rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]"
+                    value={kitDescription}
+                    onChange={(e) => setKitDescription(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-[var(--cc-ink)]" htmlFor="kit-positioning">
+                    Positioning
+                  </label>
+                  <textarea
+                    id="kit-positioning"
+                    className="min-h-[72px] rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]"
+                    value={kitPositioning}
+                    onChange={(e) => setKitPositioning(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <p className="font-medium text-[var(--cc-ink)]">
+                    Voice evidence from crawl — not a picker ({brandKit.voiceSampleCount ?? 0})
+                  </p>
+                  {brandKit.voiceSamplePreviews && brandKit.voiceSamplePreviews.length > 0 ? (
+                    <ul className="mt-1 flex flex-col gap-2">
+                      {brandKit.voiceSamplePreviews.map((s, i) => (
+                        <li
+                          key={i}
+                          className="rounded-md border border-[var(--cc-line)] bg-black/[0.02] px-2.5 py-2 text-xs whitespace-pre-wrap text-[var(--cc-muted)]"
+                        >
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-[var(--cc-muted)]">Loading brand kit summary…</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void acceptBrandKit()}
+                disabled={busy}
+                className="rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                Accept brand kit
+              </button>
+              <button
+                type="button"
+                onClick={() => void rejectBrandKit()}
+                disabled={busy}
+                className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+              >
+                Clear acceptance
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {showOutlinePanel ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Outline awaiting approval</h2>
+              <button
+                type="button"
+                onClick={() => void saveOutline()}
+                disabled={busy || editableSections.length === 0}
+                className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => void regenerateOutline()}
+                disabled={busy}
+                className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+              >
+                Regenerate
+              </button>
+            </div>
+            <ol className="mt-3 flex flex-col gap-2">
+              {editableSections.map((s, i) => (
+                <li key={s.key || i} className="flex flex-col gap-1">
+                  <input
+                    type="text"
+                    value={s.heading}
+                    onChange={(e) => {
+                      const heading = e.target.value;
+                      setEditableSections((prev) =>
+                        prev.map((row, idx) => (idx === i ? { ...row, heading } : row)),
+                      );
+                    }}
+                    className="rounded-md border border-[var(--cc-line)] px-2 py-1.5 text-sm text-[var(--cc-ink)]"
+                  />
+                  <span className="text-xs text-[var(--cc-muted)]">({s.job})</span>
                   {s.hierarchyChildHeadings.length > 0 ? (
-                    <ul className="ml-4 mt-0.5 list-disc text-xs text-[var(--cc-muted)]/80">
+                    <ul className="ml-4 list-disc text-xs text-[var(--cc-muted)]/80">
                       {s.hierarchyChildHeadings.map((h) => (
                         <li key={h}>{h}</li>
                       ))}
@@ -488,7 +908,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           </div>
         ) : null}
 
-        {orderedSections.length === 0 && !awaitingApproval ? (
+        {orderedSections.length === 0 &&
+        !awaitingOutlineApproval &&
+        !awaitingBrandkit &&
+        status !== "awaiting_brandkit_approval" ? (
           <p className="text-sm text-[var(--cc-muted)]">
             Waiting for the first section to be drafted…
           </p>
@@ -637,9 +1060,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Channel transform</h2>
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Produce all formats</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Repurpose the completed draft into LinkedIn, X, and email snippets (sync — no job poll).
+            From this primary draft: LinkedIn, X, email, blog pack, Meta/Google ads, and image prompts
+            (sync — no job poll).
           </p>
           <button
             type="button"
@@ -647,7 +1071,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             onClick={() => void runTransform()}
             className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
           >
-            {transformBusy ? "Transforming…" : "Run transform"}
+            {transformBusy ? "Producing…" : "Produce all formats"}
           </button>
           {transformError ? <p className="mt-2 text-xs text-red-600">{transformError}</p> : null}
           {transformVariants.length > 0 ? (

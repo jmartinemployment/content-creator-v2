@@ -101,7 +101,13 @@ export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}
           contentType: "blog",
         }),
       });
-      if (!createRes.ok) throw new Error(`create failed: HTTP ${createRes.status}`);
+      if (!createRes.ok) {
+        const detail = (await createRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(
+          detail?.error ||
+            `create failed: HTTP ${createRes.status} — use /creates/new for the URL-first BrandKit flow`,
+        );
+      }
       const create = (await createRes.json()) as { id: string };
 
       const genRes = await fetch(`/api/gcc-v2/creates/${create.id}/generate`, { method: "POST" });
