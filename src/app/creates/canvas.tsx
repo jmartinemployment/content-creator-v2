@@ -648,19 +648,20 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          jobId,
           channels: ["linkedin", "x", "email", "blog", "meta_ad", "google_ad", "image_prompt"],
         }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`transform failed: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+        throw new Error(`Re-Purpose failed: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
       }
       const data = (await res.json()) as {
         variants?: Array<{ channel: string; title: string; body: string; headline?: string | null }>;
       };
       setTransformVariants(data.variants ?? []);
     } catch (err) {
-      setTransformError(err instanceof Error ? err.message : "Transform failed");
+      setTransformError(err instanceof Error ? err.message : "Re-Purpose failed");
     } finally {
       setTransformBusy(false);
     }
@@ -1063,7 +1064,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Re-Purpose</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Remix this ready draft into LinkedIn, X, email, blog pack, Meta/Google ads, and image
-            prompts (sync — not separate WRITE jobs).
+            prompts. Image prompts: one per H2 for Pillar/Blog; one for other draft types.
           </p>
           <button
             type="button"

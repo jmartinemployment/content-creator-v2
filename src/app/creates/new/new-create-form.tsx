@@ -12,10 +12,10 @@ import {
   type ToneOfVoice,
 } from "../brief-catalog";
 import {
-  ALSO_DRAFT_TYPES,
-  PRIMARY_DRAFT_TYPES,
-  type AlsoDraftType,
+  alsoDraftOptionsFor,
+  type ContentType,
   type PrimaryDraftType,
+  PRIMARY_DRAFT_TYPES,
 } from "../content-types";
 import {
   hostFromSiteUrl,
@@ -140,7 +140,7 @@ export function NewCreateForm() {
 
   const [title, setTitle] = useState("");
   const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraftType>("pillar");
-  const [alsoDrafts, setAlsoDrafts] = useState<Set<AlsoDraftType>>(() => new Set());
+  const [alsoDrafts, setAlsoDrafts] = useState<Set<ContentType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
   const [operatorToolsText, setOperatorToolsText] = useState("");
   const [primaryIntent, setPrimaryIntent] = useState<PrimaryIntent | "">("");
@@ -284,7 +284,9 @@ export function NewCreateForm() {
       }
       const create = (await createRes.json()) as { id: string };
 
-      const also = ALSO_DRAFT_TYPES.map((o) => o.value).filter((v) => alsoDrafts.has(v));
+      const also = alsoDraftOptionsFor(primaryDraft)
+        .map((o) => o.value)
+        .filter((v) => alsoDrafts.has(v));
       const contentTypes = [primaryDraft, ...also];
       const operatorTools = parseOperatorTools(operatorToolsText);
 
@@ -453,7 +455,15 @@ export function NewCreateForm() {
               id="primaryDraft"
               className={selectClass}
               value={primaryDraft}
-              onChange={(e) => setPrimaryDraft(e.target.value as PrimaryDraftType)}
+              onChange={(e) => {
+                const next = e.target.value as PrimaryDraftType;
+                setPrimaryDraft(next);
+                setAlsoDrafts((prev) => {
+                  const cleaned = new Set(prev);
+                  cleaned.delete(next);
+                  return cleaned;
+                });
+              }}
             >
               {PRIMARY_DRAFT_TYPES.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -462,14 +472,15 @@ export function NewCreateForm() {
               ))}
             </select>
             <p className="text-xs text-[var(--cc-muted)]">
-              Long-form WRITE path (default Pillar). Use Re-Purpose on a ready draft for channel packs.
+              Long-form WRITE path (default Pillar). Check the other long-form under Also draft to
+              write both. Re-Purpose adds channel packs (including required image prompts).
             </p>
           </div>
 
           <fieldset className={fieldClass}>
             <legend className={labelClass}>Also draft</legend>
             <div className="flex flex-wrap gap-3 pt-1">
-              {ALSO_DRAFT_TYPES.map((o) => {
+              {alsoDraftOptionsFor(primaryDraft).map((o) => {
                 const checked = alsoDrafts.has(o.value);
                 return (
                   <label
@@ -494,7 +505,8 @@ export function NewCreateForm() {
               })}
             </div>
             <p className="text-xs text-[var(--cc-muted)]">
-              Each checked type gets its own WRITE job (same site, brief, and BrandKit).
+              Each checked type gets its own WRITE job. Image prompts are produced by Re-Purpose (one
+              per H2 for Pillar/Blog; one for other types) — not listed here.
             </p>
           </fieldset>
 
