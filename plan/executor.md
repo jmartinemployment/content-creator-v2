@@ -106,8 +106,9 @@ Crawl → competitor kit mapping, event contract, isolation tables: see [`conten
 3. `GccV2BrandKitBuilder`: map crawl → competitor Infobase/Brand Voice fields ([table in design plan](./content-creator-v2.md)). Review UI; provisional voice.
 4. Hierarchy-match (read-only) → outline children; partition must-mentions; research allocation map.
 5. Outline approval gate before WRITE.
+6. CC-owned site hierarchy crawl when building structured `siteHierarchy`: **mobile-only** (Pixel 7 / Google-style), same as Site Analyzer — see [`site-hierarchy-crawl.md`](./site-hierarchy-crawl.md). Do not desktop-crawl or dual-crawl.
 
-**Do not:** blank Infobase; edit Geek-SEO; invent SERP children.
+**Do not:** blank Infobase; edit Geek-SEO; invent SERP children; treat intentional mobile/desktop twin differences (e.g. no hero on mobile) as crawl bugs; flatten hierarchy to markdown for storage/retrieval.
 
 ---
 

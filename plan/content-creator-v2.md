@@ -273,6 +273,8 @@ public sealed record GccV2Outline(
 
 PLAN loads hierarchy-match for the target keyword against the create’s site analysis profile (existing read API; v1 code unchanged). `childHeadings` and tool anchors become outline rows the operator can edit before WRITE.
 
+**Site hierarchy crawl (CC-owned):** mobile-only (Google / Site Analyzer style). See [`site-hierarchy-crawl.md`](./site-hierarchy-crawl.md). Intentional mobile vs desktop layout differences (e.g. omitting hero images on mobile; responsive twins) are **not** bugs. Dual viewport crawl is out of scope — it duplicates content. Real bugs are wrong/missing/corrupted content within the **mobile** render.
+
 ### 2.4 Research allocation map
 
 ```csharp
