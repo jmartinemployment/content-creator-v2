@@ -685,17 +685,20 @@ export function NewCreateForm() {
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="operatorTools">
-              Partner / tool URLs (optional)
+              Partner tool URLs
             </label>
             <textarea
               id="operatorTools"
               className={`${inputClass} min-h-[88px] font-mono text-xs`}
               value={operatorToolsText}
               onChange={(e) => setOperatorToolsText(e.target.value)}
-              placeholder={"One per line — URL or Name | URL\nhttps://example.com/tools/intercom\nTidio | https://example.com/tools/tidio"}
+              placeholder={
+                "One per line — Name | URL (destination pages for weave excerpts)\nBotPenguin | https://botpenguin.com/\nManyChat | https://manychat.com/"
+              }
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Saved on the brief. Extra partners to weave in (plus crawl links under your keyword).
+              Destination URLs for the tools on this use case. Fetched for excerpts when weaving tool
+              text into a paragraph. Prefer Name | URL.
             </p>
           </div>
 
@@ -775,8 +778,12 @@ export function NewCreateForm() {
             <p className="text-sm text-[var(--cc-muted)]">
               {toolsPreflight.message ??
                 (toolsPreflight.toolsFound
-                  ? `Found ${toolsPreflight.toolCount} partner tool(s).`
+                  ? `Found ${toolsPreflight.toolCount} partner tool(s). Each will be discussed in the draft.`
                   : "No partner tools found.")}
+            </p>
+            <p className="text-xs text-[var(--cc-muted)]">
+              Destination URLs (Name | URL) are fetched for excerpts when weaving tool text into a
+              paragraph.
             </p>
             {toolsPreflight.matchedHeading ? (
               <p className="text-xs text-[var(--cc-muted)]">
@@ -820,14 +827,14 @@ export function NewCreateForm() {
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="operatorToolsRecheck">
-              Partner / tool URLs (edit &amp; re-check)
+              Partner tool URLs (edit &amp; re-check)
             </label>
             <textarea
               id="operatorToolsRecheck"
               className={`${inputClass} min-h-[88px] font-mono text-xs`}
               value={operatorToolsText}
               onChange={(e) => setOperatorToolsText(e.target.value)}
-              placeholder={"One per line — URL or Name | URL"}
+              placeholder={"One per line — Name | URL\nBotPenguin | https://botpenguin.com/"}
               disabled={busy}
             />
           </div>
