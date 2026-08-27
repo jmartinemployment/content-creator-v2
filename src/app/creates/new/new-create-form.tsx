@@ -693,12 +693,12 @@ export function NewCreateForm() {
               value={operatorToolsText}
               onChange={(e) => setOperatorToolsText(e.target.value)}
               placeholder={
-                "One per line — Name | URL (destination pages for weave excerpts)\nBotPenguin | https://botpenguin.com/\nManyChat | https://manychat.com/"
+                "Optional — Name | URL (excerpt destinations only)\nBotPenguin | https://botpenguin.com/\nManyChat | https://manychat.com/"
               }
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Destination URLs for the tools on this use case. Fetched for excerpts when weaving tool
-              text into a paragraph. Prefer Name | URL.
+              Optional. Destination pages for weave excerpts — not the tool list. Tools come from
+              the site hierarchy for this use case. Prefer Name | URL.
             </p>
           </div>
 
@@ -834,9 +834,14 @@ export function NewCreateForm() {
               className={`${inputClass} min-h-[88px] font-mono text-xs`}
               value={operatorToolsText}
               onChange={(e) => setOperatorToolsText(e.target.value)}
-              placeholder={"One per line — Name | URL\nBotPenguin | https://botpenguin.com/"}
+              placeholder={
+                "Optional — Name | URL for excerpts\nBotPenguin | https://botpenguin.com/"
+              }
               disabled={busy}
             />
+            <p className="text-xs text-[var(--cc-muted)]">
+              Attaches excerpt destinations to crawl tools. Does not add new tools.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
