@@ -800,10 +800,10 @@ export function NewCreateForm() {
                 <li key={`${t.source}-${t.name}-${t.url ?? ""}`} className="flex flex-col gap-0.5">
                   <span className="font-medium text-[var(--cc-ink)]">{t.name}</span>
                   <span className="text-xs text-[var(--cc-muted)]">
-                    {t.source === "crawl" ? "From site crawl" : "Pasted"}
+                    From site hierarchy
                     {t.url ? (
                       <>
-                        {" · "}
+                        {" · excerpt "}
                         <a
                           href={t.url}
                           target="_blank"
@@ -820,8 +820,8 @@ export function NewCreateForm() {
             </ul>
           ) : (
             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              No crawl or pasted partner tools resolved. You can add URLs on the brief step and re-check,
-              or continue without partner tools (drafts may invent fewer product links).
+              No partner tools found under the matched site heading. You can add excerpt destination
+              URLs (Name | URL) on the brief step and re-check, or continue without partner tools.
             </p>
           )}
 
