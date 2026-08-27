@@ -840,7 +840,7 @@ export function NewCreateForm() {
               disabled={busy}
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Attaches excerpt destinations to crawl tools. Does not add new tools.
+              Attaches excerpt destinations to hierarchy tools. Does not add new tools.
             </p>
           </div>
 
