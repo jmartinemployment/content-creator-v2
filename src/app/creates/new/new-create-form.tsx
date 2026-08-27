@@ -199,6 +199,9 @@ export function NewCreateForm() {
   const [error, setError] = useState<string | null>(null);
   const [pendingCreateId, setPendingCreateId] = useState<string | null>(null);
   const [toolsPreflight, setToolsPreflight] = useState<PartnerToolsPreflight | null>(null);
+  const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [hierarchyError, setHierarchyError] = useState<string | null>(null);
 
   useEffect(() => {
     // #region agent log
@@ -212,6 +215,39 @@ export function NewCreateForm() {
     };
   }, []);
 
+  async function loadSiteHierarchy(resolvedSiteUrl: string) {
+    setHierarchyLoading(true);
+    setHierarchyError(null);
+    try {
+      const res = await fetch("/api/gcc-v2/site-hierarchy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ siteUrl: resolvedSiteUrl }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        siteHierarchy?: unknown;
+        message?: string;
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(body?.error || `hierarchy failed: HTTP ${res.status}`);
+      }
+      const normalized = normalizeSiteHierarchy(body?.siteHierarchy);
+      setSiteHierarchy(normalized);
+      if (!normalized) {
+        setHierarchyError(
+          body?.message ||
+            "Mobile hierarchy was not attached (browser unavailable or fetch soft-failed).",
+        );
+      }
+    } catch (err) {
+      setSiteHierarchy(null);
+      setHierarchyError(err instanceof Error ? err.message : "Could not load site hierarchy");
+    } finally {
+      setHierarchyLoading(false);
+    }
+  }
+
   const applyReadyProfile = useCallback(async (profileId: string, resolvedSiteUrl: string) => {
     setAnalyzingLabel("Loading pages from this site…");
     const loaded = await loadSectionFromSite(profileId, resolvedSiteUrl);
@@ -219,7 +255,10 @@ export function NewCreateForm() {
     setSiteUrl(resolvedSiteUrl);
     setSection(loaded);
     setStep("brief");
-    setAnalyzingLabel(null);
+    setAnalyzingLabel("Loading mobile site hierarchy…");
+    setBusy(false);
+    // Hierarchy is independent of Find tools — show on brief as soon as site is ready.
+    void loadSiteHierarchy(resolvedSiteUrl).finally(() => setAnalyzingLabel(null));
   }, []);
 
   async function pollUntilReady(domain: string, signal: AbortSignal): Promise<SiteProfileOption> {
@@ -265,6 +304,9 @@ export function NewCreateForm() {
     setAnalyzingLabel(force ? "Starting a new crawl…" : "Looking up existing crawl…");
     setSection(null);
     setSiteAnalysisProfileId(null);
+    setSiteHierarchy(null);
+    setHierarchyError(null);
+    setToolsPreflight(null);
 
     try {
       if (!force) {
@@ -326,6 +368,8 @@ export function NewCreateForm() {
         buyingStage,
         toneOfVoice,
         operatorTools,
+        // Prefer early mobile crawl so preflight does not re-fetch (avoids cold-start fail + twin noise).
+        ...(siteHierarchy ? { siteHierarchy } : {}),
       },
     };
   }
@@ -395,10 +439,13 @@ export function NewCreateForm() {
       });
       // #endregion
       setPendingCreateId(create.id);
+      const hierarchyFromPre =
+        normalizeSiteHierarchy(preflight.siteHierarchy) ?? siteHierarchy;
+      if (hierarchyFromPre) setSiteHierarchy(hierarchyFromPre);
       setToolsPreflight({
         ...preflight,
         createId: create.id,
-        siteHierarchy: normalizeSiteHierarchy(preflight.siteHierarchy),
+        siteHierarchy: hierarchyFromPre,
       });
       setStep("tools");
     } catch (err) {
@@ -488,10 +535,13 @@ export function NewCreateForm() {
         throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
       }
       const preflight = (await preRes.json()) as PartnerToolsPreflight;
+      const hierarchyFromPre =
+        normalizeSiteHierarchy(preflight.siteHierarchy) ?? siteHierarchy;
+      if (hierarchyFromPre) setSiteHierarchy(hierarchyFromPre);
       setToolsPreflight({
         ...preflight,
         createId: pendingCreateId,
-        siteHierarchy: normalizeSiteHierarchy(preflight.siteHierarchy),
+        siteHierarchy: hierarchyFromPre,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not re-check tools");
@@ -601,12 +651,24 @@ export function NewCreateForm() {
                 setStep("url");
                 setSection(null);
                 setSiteAnalysisProfileId(null);
+                setSiteHierarchy(null);
+                setHierarchyError(null);
+                setToolsPreflight(null);
               }}
               className="mt-2 text-xs font-semibold text-[var(--cc-accent)] underline"
             >
               Change URL
             </button>
           </div>
+
+          {hierarchyLoading ? (
+            <p className="text-sm text-[var(--cc-muted)]">Loading mobile site hierarchy…</p>
+          ) : (
+            <SiteHierarchyPanel hierarchy={siteHierarchy} />
+          )}
+          {hierarchyError && !siteHierarchy ? (
+            <p className="text-xs text-amber-800">{hierarchyError}</p>
+          ) : null}
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="title">
@@ -788,7 +850,7 @@ export function NewCreateForm() {
 
       {step === "tools" && toolsPreflight && (
         <div className="flex flex-col gap-4">
-          <SiteHierarchyPanel hierarchy={toolsPreflight.siteHierarchy} />
+          <SiteHierarchyPanel hierarchy={toolsPreflight.siteHierarchy ?? siteHierarchy} />
 
           <div className={fieldClass}>
             <h2 className="text-base font-semibold text-[var(--cc-ink)]">Confirm partner tools</h2>
