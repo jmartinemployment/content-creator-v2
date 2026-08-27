@@ -52,6 +52,7 @@ type PartnerToolsPreflight = {
   createId: string;
   matchedHeading?: string | null;
   matchTopic?: string | null;
+  path?: string[] | null;
   toolCount: number;
   toolsFound: boolean;
   tools: PartnerToolRow[];
@@ -869,6 +870,15 @@ export function NewCreateForm() {
                 Matched site heading:{" "}
                 <span className="font-medium text-[var(--cc-ink)]">{toolsPreflight.matchedHeading}</span>
                 {toolsPreflight.matchTopic ? ` (via “${toolsPreflight.matchTopic}”)` : null}
+                {toolsPreflight.path && toolsPreflight.path.length > 0 ? (
+                  <>
+                    <br />
+                    Path:{" "}
+                    <span className="font-medium text-[var(--cc-ink)]">
+                      {toolsPreflight.path.join(" › ")}
+                    </span>
+                  </>
+                ) : null}
               </p>
             ) : null}
           </div>
