@@ -35,7 +35,23 @@ type SiteProfileOption = {
   primaryFocus: string | null;
 };
 
-type Step = "url" | "analyzing" | "brief";
+type Step = "url" | "analyzing" | "brief" | "tools";
+
+type PartnerToolRow = {
+  name: string;
+  url?: string | null;
+  source: string;
+};
+
+type PartnerToolsPreflight = {
+  createId: string;
+  matchedHeading?: string | null;
+  matchTopic?: string | null;
+  toolCount: number;
+  toolsFound: boolean;
+  tools: PartnerToolRow[];
+  message?: string;
+};
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -149,6 +165,8 @@ export function NewCreateForm() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingCreateId, setPendingCreateId] = useState<string | null>(null);
+  const [toolsPreflight, setToolsPreflight] = useState<PartnerToolsPreflight | null>(null);
 
   useEffect(() => {
     return () => {
@@ -253,6 +271,27 @@ export function NewCreateForm() {
     }
   }
 
+  function buildBriefPayload() {
+    const also = alsoDraftOptionsFor(primaryDraft)
+      .map((o) => o.value)
+      .filter((v) => alsoDrafts.has(v));
+    const contentTypes = [primaryDraft, ...also];
+    const operatorTools = parseOperatorTools(operatorToolsText);
+    return {
+      contentTypes,
+      brief: {
+        briefVersion: BRIEF_VERSION,
+        title: title.trim(),
+        primaryDraft,
+        contentTypes,
+        primaryIntent,
+        buyingStage,
+        toneOfVoice,
+        operatorTools,
+      },
+    };
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -283,25 +322,42 @@ export function NewCreateForm() {
         throw new Error(body?.error || `create failed: HTTP ${createRes.status}`);
       }
       const create = (await createRes.json()) as { id: string };
+      const { brief } = buildBriefPayload();
 
-      const also = alsoDraftOptionsFor(primaryDraft)
-        .map((o) => o.value)
-        .filter((v) => alsoDrafts.has(v));
-      const contentTypes = [primaryDraft, ...also];
-      const operatorTools = parseOperatorTools(operatorToolsText);
+      const preRes = await fetch(`/api/gcc-v2/creates/${create.id}/partner-tools/preflight`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetKeyword: targetKeyword.trim() || undefined,
+          brief,
+          siteAnalysisProfileId,
+        }),
+      });
+      if (!preRes.ok) {
+        const body = (await preRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
+      }
+      const preflight = (await preRes.json()) as PartnerToolsPreflight;
+      setPendingCreateId(create.id);
+      setToolsPreflight({ ...preflight, createId: create.id });
+      setStep("tools");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resolve partner tools");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      const brief = {
-        briefVersion: BRIEF_VERSION,
-        title: title.trim(),
-        primaryDraft,
-        contentTypes,
-        primaryIntent,
-        buyingStage,
-        toneOfVoice,
-        operatorTools,
-      };
-
-      const genRes = await fetch(`/api/gcc-v2/creates/${create.id}/generate`, {
+  async function confirmAndGenerate() {
+    if (!pendingCreateId || !siteAnalysisProfileId) {
+      setError("Missing create — go back to the brief and try again.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const { contentTypes, brief } = buildBriefPayload();
+      const genRes = await fetch(`/api/gcc-v2/creates/${pendingCreateId}/generate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -309,6 +365,7 @@ export function NewCreateForm() {
           brief,
           siteAnalysisProfileId,
           contentTypes,
+          partnerToolsConfirmed: true,
         }),
       });
       if (!genRes.ok) {
@@ -318,10 +375,37 @@ export function NewCreateForm() {
       const data = (await genRes.json()) as { jobId?: string; jobIds?: string[] };
       const jobId = data.jobId ?? data.jobIds?.[0];
       if (!jobId) throw new Error("generate returned no jobId");
-
-      router.push(`/creates/${create.id}?jobId=${jobId}`);
+      router.push(`/creates/${pendingCreateId}?jobId=${jobId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start job");
+      setBusy(false);
+    }
+  }
+
+  async function recheckTools() {
+    if (!pendingCreateId || !siteAnalysisProfileId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const { brief } = buildBriefPayload();
+      const preRes = await fetch(`/api/gcc-v2/creates/${pendingCreateId}/partner-tools/preflight`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetKeyword: targetKeyword.trim() || undefined,
+          brief,
+          siteAnalysisProfileId,
+        }),
+      });
+      if (!preRes.ok) {
+        const body = (await preRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
+      }
+      const preflight = (await preRes.json()) as PartnerToolsPreflight;
+      setToolsPreflight({ ...preflight, createId: pendingCreateId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not re-check tools");
+    } finally {
       setBusy(false);
     }
   }
@@ -333,6 +417,7 @@ export function NewCreateForm() {
           [
             ["url", "1. Site URL"],
             ["brief", "2. Brief"],
+            ["tools", "3. Confirm tools"],
           ] as const
         ).map(([key, label]) => (
           <li
@@ -603,9 +688,109 @@ export function NewCreateForm() {
             disabled={busy}
             className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {busy ? "Starting…" : "Create & generate"}
+            {busy ? "Finding tools…" : "Find partner tools"}
           </button>
         </form>
+      )}
+
+      {step === "tools" && toolsPreflight && (
+        <div className="flex flex-col gap-4">
+          <div className={fieldClass}>
+            <h2 className="text-base font-semibold text-[var(--cc-ink)]">Confirm partner tools</h2>
+            <p className="text-sm text-[var(--cc-muted)]">
+              {toolsPreflight.message ??
+                (toolsPreflight.toolsFound
+                  ? `Found ${toolsPreflight.toolCount} partner tool(s).`
+                  : "No partner tools found.")}
+            </p>
+            {toolsPreflight.matchedHeading ? (
+              <p className="text-xs text-[var(--cc-muted)]">
+                Matched site heading:{" "}
+                <span className="font-medium text-[var(--cc-ink)]">{toolsPreflight.matchedHeading}</span>
+                {toolsPreflight.matchTopic ? ` (via “${toolsPreflight.matchTopic}”)` : null}
+              </p>
+            ) : null}
+          </div>
+
+          {toolsPreflight.tools.length > 0 ? (
+            <ul className="flex flex-col gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
+              {toolsPreflight.tools.map((t) => (
+                <li key={`${t.source}-${t.name}-${t.url ?? ""}`} className="flex flex-col gap-0.5">
+                  <span className="font-medium text-[var(--cc-ink)]">{t.name}</span>
+                  <span className="text-xs text-[var(--cc-muted)]">
+                    {t.source === "crawl" ? "From site crawl" : "Pasted"}
+                    {t.url ? (
+                      <>
+                        {" · "}
+                        <a
+                          href={t.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[var(--cc-accent)] underline-offset-2 hover:underline"
+                        >
+                          {t.url}
+                        </a>
+                      </>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              No crawl or pasted partner tools resolved. You can add URLs on the brief step and re-check,
+              or continue without partner tools (drafts may invent fewer product links).
+            </p>
+          )}
+
+          <div className={fieldClass}>
+            <label className={labelClass} htmlFor="operatorToolsRecheck">
+              Partner / tool URLs (edit &amp; re-check)
+            </label>
+            <textarea
+              id="operatorToolsRecheck"
+              className={`${inputClass} min-h-[88px] font-mono text-xs`}
+              value={operatorToolsText}
+              onChange={(e) => setOperatorToolsText(e.target.value)}
+              placeholder={"One per line — URL or Name | URL"}
+              disabled={busy}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void recheckTools()}
+              className="rounded-md border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--cc-ink)] disabled:opacity-60"
+            >
+              {busy ? "Checking…" : "Re-check tools"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setStep("brief");
+                setError(null);
+              }}
+              className="rounded-md border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--cc-ink)] disabled:opacity-60"
+            >
+              Back to brief
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void confirmAndGenerate()}
+              className="rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {busy
+                ? "Starting…"
+                : toolsPreflight.toolsFound
+                  ? "Confirm tools & generate"
+                  : "Continue without partner tools"}
+            </button>
+          </div>
+        </div>
       )}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
