@@ -26,6 +26,11 @@ import {
   siteSectionFromCrawlPages,
   type SiteSectionContext,
 } from "../site-section";
+import {
+  normalizeSiteHierarchy,
+  SiteHierarchyPanel,
+  type SiteHierarchy,
+} from "./site-hierarchy-panel";
 
 type SiteProfileOption = {
   id: string;
@@ -51,6 +56,7 @@ type PartnerToolsPreflight = {
   toolsFound: boolean;
   tools: PartnerToolRow[];
   message?: string;
+  siteHierarchy?: SiteHierarchy | null;
 };
 
 const selectClass =
@@ -385,10 +391,15 @@ export function NewCreateForm() {
         toolsLen: Array.isArray(preflight.tools) ? preflight.tools.length : -1,
         matchedHeading: preflight.matchedHeading ?? null,
         firstToolNames: (preflight.tools ?? []).slice(0, 5).map((t) => t.name),
+        hasSiteHierarchy: Boolean(preflight.siteHierarchy),
       });
       // #endregion
       setPendingCreateId(create.id);
-      setToolsPreflight({ ...preflight, createId: create.id });
+      setToolsPreflight({
+        ...preflight,
+        createId: create.id,
+        siteHierarchy: normalizeSiteHierarchy(preflight.siteHierarchy),
+      });
       setStep("tools");
     } catch (err) {
       // #region agent log
@@ -477,7 +488,11 @@ export function NewCreateForm() {
         throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
       }
       const preflight = (await preRes.json()) as PartnerToolsPreflight;
-      setToolsPreflight({ ...preflight, createId: pendingCreateId });
+      setToolsPreflight({
+        ...preflight,
+        createId: pendingCreateId,
+        siteHierarchy: normalizeSiteHierarchy(preflight.siteHierarchy),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not re-check tools");
     } finally {
@@ -773,6 +788,8 @@ export function NewCreateForm() {
 
       {step === "tools" && toolsPreflight && (
         <div className="flex flex-col gap-4">
+          <SiteHierarchyPanel hierarchy={toolsPreflight.siteHierarchy} />
+
           <div className={fieldClass}>
             <h2 className="text-base font-semibold text-[var(--cc-ink)]">Confirm partner tools</h2>
             <p className="text-sm text-[var(--cc-muted)]">
