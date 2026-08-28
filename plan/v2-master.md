@@ -652,7 +652,7 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 - [x] GeekAPI: move/copy `GccPartnerUrlResearchService` + Polite crawl + `HttpGeekSeoSiteAnalyzerClient` out of v1 folder
 - [x] Owner decision: **keep** `/legacy` read-only (§7.4)
 - [x] Update `src/app/legacy/*` copy — removed v1 app redirect
-- [x] Staging/production deploy: v1 API removed (`582a171` Railway GeekAPI SUCCESS 2026-08-28); phi BFF on v2 (`32aac1d` Vercel Production)
-- [ ] Operator E2E: run §6 checklist signed in on https://content-creator-v2-phi.vercel.app
+- [x] Staging/production deploy: E2E fixes (`63b813d` Railway GeekAPI SUCCESS 2026-08-28; `afba0b0` phi Vercel Production)
+- [ ] Operator E2E: run §6 checklist signed in on https://content-creator-v2-phi.vercel.app (use **new brief** for duplicate-heading check)
 - [x] §7.6 GeekAPI: remove `api/geek-content-creator/*` routes (`GccController` deleted)
 - [ ] §7.6 operational: decommission v1 UI — **done** 2026-08-28 (Vercel project `geek-content-creator` removed; GitHub repo archived)
