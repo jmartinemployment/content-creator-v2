@@ -83,19 +83,47 @@ function paragraphToPlain(p: ParagraphNode): string {
   return runsToPlain(p.runs);
 }
 
-function sectionToPlain(section: SectionNode, depth = 0): string {
+function normalizeHeadingText(text: string): string {
+  return text.trim().replace(/:+$/, "").trim().toLowerCase();
+}
+
+function headingsEqual(a: string, b: string): boolean {
+  if (!a.trim() || !b.trim()) return false;
+  return normalizeHeadingText(a) === normalizeHeadingText(b);
+}
+
+/** Models often repeat an H2 as an all-bold paragraph or nested child with the same text. */
+function paragraphRepeatsHeading(paragraph: ParagraphNode, heading: string): boolean {
+  if (paragraph.type !== "text" || paragraph.runs.length === 0) return false;
+  if (!paragraph.runs.every((run) => run.bold)) return false;
+  return headingsEqual(paragraphToPlain(paragraph), heading);
+}
+
+function sectionToPlain(
+  section: SectionNode,
+  options: { depth?: number; rootHeading?: string } = {},
+): string {
+  const depth = options.depth ?? 0;
+  const rootHeading = options.rootHeading ?? (depth === 0 ? section.heading : undefined);
   const parts: string[] = [];
-  if (section.heading) parts.push(section.heading);
-  for (const p of section.paragraphs) parts.push(paragraphToPlain(p));
-  for (const child of section.children) parts.push(sectionToPlain(child, depth + 1));
+  if (depth > 0 && section.heading) parts.push(section.heading);
+  for (const p of section.paragraphs) {
+    if (depth === 0 && rootHeading && paragraphRepeatsHeading(p, rootHeading)) continue;
+    parts.push(paragraphToPlain(p));
+  }
+  for (const child of section.children) {
+    if (rootHeading && headingsEqual(child.heading, rootHeading)) continue;
+    parts.push(sectionToPlain(child, { depth: depth + 1, rootHeading }));
+  }
   return parts.filter(Boolean).join("\n\n");
 }
 
 function canvasSectionsToPlain(sections: CanvasSection[]): string {
   return sections
     .map((s) => {
-      const body = sectionToPlain(s.section);
-      return body.startsWith(s.heading) ? body : `${s.heading}\n\n${body}`;
+      const displayHeading = s.section.heading || s.heading;
+      const body = sectionToPlain(s.section, { rootHeading: displayHeading });
+      return body.startsWith(displayHeading) ? body : `${displayHeading}\n\n${body}`;
     })
     .join("\n\n---\n\n");
 }
@@ -133,7 +161,15 @@ function ParagraphView({ paragraph, index }: { paragraph: ParagraphNode; index: 
   );
 }
 
-function SectionBody({ section, depth }: { section: SectionNode; depth: number }) {
+function SectionBody({
+  section,
+  depth,
+  rootHeading,
+}: {
+  section: SectionNode;
+  depth: number;
+  rootHeading?: string;
+}) {
   const HeadingTag = (section.tag && /^h[1-6]$/.test(section.tag) ? section.tag : "h3") as
     | "h1"
     | "h2"
@@ -141,6 +177,13 @@ function SectionBody({ section, depth }: { section: SectionNode; depth: number }
     | "h4"
     | "h5"
     | "h6";
+  const cardHeading = rootHeading ?? (depth === 0 ? section.heading : undefined);
+  const visibleParagraphs = section.paragraphs.filter(
+    (p) => !(depth === 0 && cardHeading && paragraphRepeatsHeading(p, cardHeading)),
+  );
+  const visibleChildren = section.children.filter(
+    (child) => !(cardHeading && headingsEqual(child.heading, cardHeading)),
+  );
 
   return (
     <div className={depth > 0 ? "mt-4 border-l-2 border-[var(--cc-line)] pl-4" : undefined}>
@@ -148,12 +191,12 @@ function SectionBody({ section, depth }: { section: SectionNode; depth: number }
         <HeadingTag className="text-base font-semibold text-[var(--cc-ink)]">{section.heading}</HeadingTag>
       ) : null}
       <div className="mt-2 flex flex-col gap-2 text-sm text-[var(--cc-ink)]">
-        {section.paragraphs.map((p, i) => (
+        {visibleParagraphs.map((p, i) => (
           <ParagraphView key={i} paragraph={p} index={i} />
         ))}
       </div>
-      {section.children.map((child, i) => (
-        <SectionBody key={i} section={child} depth={depth + 1} />
+      {visibleChildren.map((child, i) => (
+        <SectionBody key={i} section={child} depth={depth + 1} rootHeading={cardHeading} />
       ))}
     </div>
   );
@@ -1073,11 +1116,13 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                     className="rounded-md border border-[var(--cc-line)] px-2 py-1.5 text-sm text-[var(--cc-ink)]"
                   />
                   <span className="text-xs text-[var(--cc-muted)]">({s.job})</span>
-                  {s.hierarchyChildHeadings.length > 0 ? (
+                  {s.hierarchyChildHeadings.filter((h) => !headingsEqual(h, s.heading)).length > 0 ? (
                     <ul className="ml-4 list-disc text-xs text-[var(--cc-muted)]/80">
-                      {s.hierarchyChildHeadings.map((h) => (
-                        <li key={h}>{h}</li>
-                      ))}
+                      {s.hierarchyChildHeadings
+                        .filter((h) => !headingsEqual(h, s.heading))
+                        .map((h) => (
+                          <li key={h}>{h}</li>
+                        ))}
                     </ul>
                   ) : null}
                 </li>
@@ -1099,10 +1144,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           )
         ) : null}
 
-        {orderedSections.map((s) => (
+        {orderedSections.map((s) => {
+          const displayHeading = s.section.heading || s.heading;
+          return (
           <div key={s.sectionKey} className="rounded-lg border border-[var(--cc-line)] p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-[var(--cc-ink)]">{s.heading}</h2>
+              <h2 className="text-lg font-semibold text-[var(--cc-ink)]">{displayHeading}</h2>
               {s.job ? (
                 <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-[var(--cc-muted)]">
                   {s.job}
@@ -1116,7 +1163,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               ) : null}
             </div>
 
-            <SectionBody section={s.section} depth={0} />
+            <SectionBody section={s.section} depth={0} rootHeading={displayHeading} />
 
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--cc-line)] pt-3">
               <input
@@ -1145,7 +1192,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <details className="rounded-lg border border-[var(--cc-line)] p-3 text-xs">
           <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">

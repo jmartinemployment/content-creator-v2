@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAccessToken } from "@/app/auth/session";
 import { fetchGccV2 } from "@/app/auth/server-bff";
 import { Canvas } from "@/app/creates/canvas";
-import { labelForContentType } from "@/app/creates/content-types";
+import { CreateDraftTabs } from "@/app/creates/create-draft-tabs";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -53,8 +53,6 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
     }
   }
 
-  const notReadyCount = jobs.filter((j) => j.status !== "ready").length;
-
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
       <div>
@@ -69,33 +67,8 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
           Live Canvas for this create&apos;s job — no polling, everything below comes from the realtime
           hub.
         </p>
-        {jobs.length > 0 ? (
-          <nav className="mt-4 flex flex-wrap gap-2" aria-label="Drafts for this create">
-            {jobs.map((j) => {
-              const active = j.id === jobId;
-              const label = labelForContentType(j.contentType ?? "");
-              return (
-                <Link
-                  key={j.id}
-                  href={`/creates/${id}?jobId=${j.id}`}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                    active
-                      ? "bg-[var(--cc-accent)] text-white"
-                      : "border border-[var(--cc-line)] text-[var(--cc-ink)] hover:bg-black/5"
-                  }`}
-                >
-                  {label}
-                  <span className="ml-1 opacity-70">· {j.status}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        ) : null}
-        {jobs.length > 1 && notReadyCount > 0 ? (
-          <p className="mt-3 text-xs text-amber-800">
-            {notReadyCount} draft{notReadyCount === 1 ? "" : "s"} still running — Export skips jobs
-            without a completed result.
-          </p>
+        {jobs.length > 0 && jobId ? (
+          <CreateDraftTabs createId={id} activeJobId={jobId} initialJobs={jobs} />
         ) : null}
         {jobs.length <= 1 ? (
           <p className="mt-3 text-xs text-[var(--cc-muted)]">
