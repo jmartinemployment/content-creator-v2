@@ -458,7 +458,7 @@ E2E on phi after deploy:
 5. Export UI reports exported vs skipped counts
 6. CMS publish (pillar/blog/tool): republish updates same `externalPostId`; email/social/ads rejected
 
-- [ ] End-to-end verify (deploy + smoke test in production)
+- [ ] End-to-end verify (deploy + smoke test in production) — **deployed** `582a171` (GeekAPI) + `32aac1d` (phi); operator sign-in required for full §6 flow
 
 **Also required before v1 delete:** §7 inventory complete (Site Analyzer v2 handlers, BFF retarget, C# copies, legacy decision).
 
@@ -651,6 +651,7 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 - [x] GeekAPI: move/copy `GccPartnerUrlResearchService` + Polite crawl + `HttpGeekSeoSiteAnalyzerClient` out of v1 folder
 - [x] Owner decision: **keep** `/legacy` read-only (§7.4)
 - [x] Update `src/app/legacy/*` copy — removed v1 app redirect
-- [ ] Staging: new brief E2E with v1 site-analyzer routes disabled (v1 API removed — verify on deploy)
+- [x] Staging/production deploy: v1 API removed (`582a171` Railway GeekAPI SUCCESS 2026-08-28); phi BFF on v2 (`32aac1d` Vercel Production)
+- [ ] Operator E2E: run §6 checklist signed in on https://content-creator-v2-phi.vercel.app
 - [x] §7.6 GeekAPI: remove `api/geek-content-creator/*` routes (`GccController` deleted)
 - [ ] §7.6 operational: decommission v1 UI (GeekContentCreator Vercel deployment)
