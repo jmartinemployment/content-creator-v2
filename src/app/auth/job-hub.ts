@@ -54,14 +54,16 @@ export async function joinJob(
   await connection.invoke("JoinJob", jobId, lastSeq);
 }
 
-/** Re-join the job group after SignalR automatic reconnect (new connection id). */
+/** Re-join the active job group after SignalR automatic reconnect (new connection id). */
 export function onHubReconnected(
   connection: HubConnection,
-  jobId: string,
+  getJobId: () => string,
   getLastSeq: () => number,
 ): () => void {
   const handler = async () => {
     try {
+      const jobId = getJobId();
+      if (!jobId) return;
       await connection.invoke("JoinJob", jobId, getLastSeq());
     } catch {
       /* caller may surface connection errors separately */

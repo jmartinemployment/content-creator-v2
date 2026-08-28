@@ -2,14 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { HubConnection } from "@microsoft/signalr";
-import {
-  createJobHubConnection,
-  joinJob,
-  onHubReconnected,
-  onJobEvent,
-  type GccV2JobEvent,
-} from "@/app/auth/job-hub";
+import { type GccV2JobEvent } from "@/app/auth/job-hub";
 import type {
   AiVisibilitySnapshotView,
   BrandKitReadyView,
@@ -34,6 +27,7 @@ import {
   REPURPOSE_CHANNELS,
 } from "@/app/creates/repurpose-channels";
 import { isCmsPublishType, labelForContentType } from "@/app/creates/content-types";
+import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 
 type LogEntry = { seq: number; type: string; payload: unknown; atUtc: string };
 
@@ -348,6 +342,7 @@ async function callFixReadiness(createId: string, jobId: string): Promise<FixRea
  * rewrite/expand/re-tone actions against the sync Canvas API.
  */
 export function Canvas({ createId, jobId }: CanvasProps) {
+  const { subscribeJobEvents, joinActiveJob, hubError } = useCreateJobHub();
   const [status, setStatus] = useState<string>("pending");
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -387,7 +382,6 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [jobHydrating, setJobHydrating] = useState(true);
   const [contentType, setContentType] = useState<string>("blog");
 
-  const connectionRef = useRef<HubConnection | null>(null);
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -414,6 +408,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   const appendEvent = useCallback(
     (evt: GccV2JobEvent) => {
+      if (evt.jobId !== jobId) return;
       if (evt.seq <= lastSeqRef.current) return;
       lastSeqRef.current = evt.seq;
 
@@ -527,33 +522,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           }
       }
     },
-    [applySectionEvent],
+    [applySectionEvent, jobId],
   );
 
   useEffect(() => {
-    let cancelled = false;
-    let offReconnected: (() => void) | undefined;
-    async function connect() {
-      const connection = createJobHubConnection();
-      connectionRef.current = connection;
-      onJobEvent(connection, appendEvent);
-      offReconnected = onHubReconnected(connection, jobId, () => lastSeqRef.current);
-      try {
-        await joinJob(connection, jobId, 0);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not connect to job");
-      }
-    }
-    connect();
-    return () => {
-      cancelled = true;
-      offReconnected?.();
-      connectionRef.current?.stop();
-      connectionRef.current = null;
-    };
-    // Reconnect only when the job identity changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+    lastSeqRef.current = 0;
+    void joinActiveJob(jobId, 0);
+  }, [jobId, joinActiveJob]);
+
+  useEffect(() => {
+    return subscribeJobEvents(appendEvent);
+  }, [appendEvent, subscribeJobEvents]);
 
   useEffect(() => {
     let cancelled = false;
@@ -981,6 +960,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
+        {hubError ? (
+          <p className="text-xs text-red-600" role="alert">
+            {hubError}
+          </p>
+        ) : null}
 
         {jobHydrating ? <LoadingRow label="Connecting to job…" /> : null}
 

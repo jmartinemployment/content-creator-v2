@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { labelForContentType } from "@/app/creates/content-types";
+import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 import {
   isJobQueued,
   isJobRunning,
@@ -12,30 +13,10 @@ import {
   LoadingSpinner,
 } from "@/app/components/loading-indicator";
 
-type JobDto = {
-  id: string;
-  status: string;
-  stage?: string;
-  contentType?: string;
-  error?: string | null;
-  updatedAtUtc?: string | null;
-};
-
 type CreateDraftTabsProps = {
   createId: string;
   activeJobId: string;
-  initialJobs: JobDto[];
 };
-
-const GENERATE_TYPE_ORDER = ["pillar", "blog", "tool", "email", "social", "ads", "image-prompt"];
-
-function sortJobs(jobs: JobDto[]): JobDto[] {
-  return [...jobs].sort((a, b) => {
-    const ai = GENERATE_TYPE_ORDER.indexOf((a.contentType ?? "").toLowerCase());
-    const bi = GENERATE_TYPE_ORDER.indexOf((b.contentType ?? "").toLowerCase());
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-}
 
 function isAwaitingGate(status: string): boolean {
   return status === "awaiting_brandkit_approval" || status === "awaiting_outline_approval";
@@ -46,31 +27,9 @@ function truncateError(error: string, max = 80): string {
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`;
 }
 
-export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDraftTabsProps) {
-  const [jobs, setJobs] = useState<JobDto[]>(() => sortJobs(initialJobs));
-  const [pollError, setPollError] = useState<string | null>(null);
+export function CreateDraftTabs({ createId, activeJobId }: CreateDraftTabsProps) {
+  const { jobs, hubError, reloadJob, reloadAllJobs } = useCreateJobHub();
   const [retryBusy, setRetryBusy] = useState<string | null>(null);
-
-  const refreshJobs = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/jobs`, { cache: "no-store" });
-      if (!res.ok) {
-        setPollError("Could not refresh job list");
-        return;
-      }
-      const body = (await res.json()) as JobDto[];
-      if (Array.isArray(body)) {
-        setJobs(sortJobs(body));
-        setPollError(null);
-      }
-    } catch {
-      setPollError("Could not refresh job list");
-    }
-  }, [createId]);
-
-  useEffect(() => {
-    void refreshJobs();
-  }, [refreshJobs]);
 
   const notReadyCount = useMemo(() => jobs.filter((j) => j.status !== "ready").length, [jobs]);
   const runningJobs = useMemo(() => jobs.filter((j) => isJobRunning(j.status)), [jobs]);
@@ -85,24 +44,18 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
   const activeRunning = activeJob ? isJobRunning(activeJob.status) : false;
   const siblingRunningCount = runningJobs.filter((j) => j.id !== activeJobId).length;
 
-  useEffect(() => {
-    if (notReadyCount === 0) return;
-    const id = window.setInterval(() => void refreshJobs(), 12_000);
-    return () => window.clearInterval(id);
-  }, [notReadyCount, refreshJobs]);
-
   const retryJob = useCallback(
     async (jobId: string) => {
       setRetryBusy(jobId);
       try {
         const res = await fetch(`/api/gcc-v2/jobs/${jobId}/retry`, { method: "POST" });
         if (!res.ok) return;
-        await refreshJobs();
+        await reloadJob(jobId);
       } finally {
         setRetryBusy(null);
       }
     },
-    [refreshJobs],
+    [reloadJob],
   );
 
   const retryAllStuck = useCallback(async () => {
@@ -110,11 +63,11 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
     try {
       const res = await fetch(`/api/gcc-v2/creates/${createId}/retry-stuck-jobs`, { method: "POST" });
       if (!res.ok) return;
-      await refreshJobs();
+      await reloadAllJobs();
     } finally {
       setRetryBusy(null);
     }
-  }, [createId, refreshJobs]);
+  }, [createId, reloadAllJobs]);
 
   if (jobs.length === 0) return null;
 
@@ -166,9 +119,9 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
         })}
       </nav>
 
-      {pollError ? (
+      {hubError ? (
         <p className="mt-2 text-xs text-red-700" role="alert">
-          {pollError}
+          {hubError}
         </p>
       ) : null}
 
