@@ -622,7 +622,7 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 |------|--------|---------------------|
 | `content-creator-v2` | Vercel phi | **Only** Content Creator UI |
 | `GeekBackend` (GeekAPI) | Railway → `api.geekatyourspot.com` | `api/geek-content-creator-v2/*` only |
-| `GeekContentCreator` | Vercel (v1, today) | **Removed** — not accessible |
+| `GeekContentCreator` | ~~Vercel (v1)~~ | **Removed** — repo archived, Vercel project deleted |
 
 ---
 
@@ -654,4 +654,4 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 - [x] Staging/production deploy: v1 API removed (`582a171` Railway GeekAPI SUCCESS 2026-08-28); phi BFF on v2 (`32aac1d` Vercel Production)
 - [ ] Operator E2E: run §6 checklist signed in on https://content-creator-v2-phi.vercel.app
 - [x] §7.6 GeekAPI: remove `api/geek-content-creator/*` routes (`GccController` deleted)
-- [ ] §7.6 operational: decommission v1 UI (GeekContentCreator Vercel deployment)
+- [ ] §7.6 operational: decommission v1 UI — **done** 2026-08-28 (Vercel project `geek-content-creator` removed; GitHub repo archived)
