@@ -449,16 +449,17 @@ After approving requested job, list siblings on same create. For each in `awaiti
 
 ## 6. Verification gate (required before marking done)
 
-E2E on phi after deploy:
+E2E on phi after deploy (`63b813d` GeekAPI + `afba0b0` phi, 2026-08-28):
 
 1. New brief — all Also draft checked
 2. Generate → brand kit → **one** outline approve
-3. Tabs show Pillar · Blog · Tool · Email · Social · Ads · **Image prompt** (one tab per spawned job)
-4. Export ZIP contains `.html` + `.txt` (email/social/ads + image prompts) under correct §3.1 folders
-5. Export UI reports exported vs skipped counts
-6. CMS publish (pillar/blog/tool): republish updates same `externalPostId`; email/social/ads rejected
+3. Tabs show Pillar · Blog · Tool · Email · Social · Ads · **Image prompt** (one tab per spawned job); running tabs show spinners; `LoadingRow` when active tab is `ready` but siblings generate
+4. **New pillar brief:** first H2 appears once (lede only) — not lede + duplicate outline section card
+5. Export ZIP contains `.html` + `.txt` (email/social/ads + image prompts) under correct §3.1 folders
+6. Export UI reports exported vs skipped counts
+7. CMS publish (pillar/blog/tool): republish updates same `externalPostId`; email/social/ads rejected
 
-- [ ] End-to-end verify (deploy + smoke test in production) — **deployed** `582a171` (GeekAPI) + `32aac1d` (phi); operator sign-in required for full §6 flow
+- [ ] End-to-end verify (deploy + smoke test in production) — **deployed** `63b813d` (GeekAPI Railway SUCCESS) + `afba0b0` (phi Vercel Production); operator sign-in required for full §6 flow
 
 **Also required before v1 delete:** §7 inventory complete (Site Analyzer v2 handlers, BFF retarget, C# copies, legacy decision).
 
