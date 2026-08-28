@@ -192,6 +192,8 @@ export function NewCreateForm() {
   const [alsoDrafts, setAlsoDrafts] = useState<Set<ContentType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
   const [operatorToolsText, setOperatorToolsText] = useState("");
+  const [paaQuestionsText, setPaaQuestionsText] = useState("");
+  const [competitorUrlsText, setCompetitorUrlsText] = useState("");
   const [primaryIntent, setPrimaryIntent] = useState<PrimaryIntent | "">("");
   const [buyingStage, setBuyingStage] = useState<BuyingStage | "">("");
   const [toneOfVoice, setToneOfVoice] = useState<ToneOfVoice | "">("");
@@ -369,6 +371,8 @@ export function NewCreateForm() {
         buyingStage,
         toneOfVoice,
         operatorTools,
+        paaQuestions: paaQuestionsText,
+        competitorUrls: competitorUrlsText,
         // Prefer early mobile crawl so preflight does not re-fetch (avoids cold-start fail + twin noise).
         ...(siteHierarchy ? { siteHierarchy } : {}),
       },
@@ -777,6 +781,40 @@ export function NewCreateForm() {
             <p className="text-xs text-[var(--cc-muted)]">
               Optional. Destination pages for weave excerpts — not the tool list. Tools come from
               the site hierarchy for this use case. Prefer Name | URL.
+            </p>
+          </div>
+
+          <div className={fieldClass}>
+            <label className={labelClass} htmlFor="paaQuestions">
+              People Also Ask
+            </label>
+            <textarea
+              id="paaQuestions"
+              className={`${inputClass} min-h-[88px] font-mono text-xs`}
+              value={paaQuestionsText}
+              onChange={(e) => setPaaQuestionsText(e.target.value)}
+              placeholder={"Optional — one question per line\nWhat is the best CRM for small teams?\nHow much does CRM software cost?"}
+            />
+            <p className="text-xs text-[var(--cc-muted)]">
+              Operator-curated PAA questions become the FAQ section (People Also Ask) in pillar/blog
+              outlines. Never auto-filled from SERP uploads.
+            </p>
+          </div>
+
+          <div className={fieldClass}>
+            <label className={labelClass} htmlFor="competitorUrls">
+              Competitor page URLs
+            </label>
+            <textarea
+              id="competitorUrls"
+              className={`${inputClass} min-h-[72px] font-mono text-xs`}
+              value={competitorUrlsText}
+              onChange={(e) => setCompetitorUrlsText(e.target.value)}
+              placeholder={"Optional — one absolute URL per line\nhttps://competitor.com/alternative-guide"}
+            />
+            <p className="text-xs text-[var(--cc-muted)]">
+              Optional rival pages for polite crawl — differentiation notes only. Never used as inline
+              CTAs or outline must-mentions.
             </p>
           </div>
 

@@ -202,6 +202,68 @@ async function callPublish(createId: string, isPublished: boolean): Promise<Publ
   return data ?? { status: "failed", error: "Empty publish response" };
 }
 
+type ExportCommitResult = {
+  commitSha?: string;
+  commitUrl?: string;
+  filePaths?: string[];
+  error?: string;
+};
+
+async function downloadHtmlExport(createId: string): Promise<void> {
+  const res = await fetch(`/api/gcc-v2/creates/${createId}/export/html`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Export failed: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${createId}-html-export.zip`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function commitHtmlExport(createId: string): Promise<ExportCommitResult> {
+  const res = await fetch(`/api/gcc-v2/creates/${createId}/export/html/commit`, { method: "POST" });
+  const data = (await res.json().catch(() => null)) as ExportCommitResult | { title?: string; detail?: string } | null;
+  if (!res.ok) {
+    const message =
+      (data && "detail" in data && typeof data.detail === "string" ? data.detail : null)
+      ?? (data && "error" in data && typeof data.error === "string" ? data.error : null)
+      ?? `Commit failed: HTTP ${res.status}`;
+    return { error: message };
+  }
+  return (data as ExportCommitResult) ?? { error: "Empty commit response" };
+}
+
+type FixReadinessResult = {
+  shipReady?: boolean;
+  outstandingIssues?: boolean;
+  seoScore?: number;
+  geoScore?: number;
+  seoChecks?: ValidationReportView["seoChecks"];
+  geoChecks?: ValidationReportView["geoChecks"];
+  error?: string;
+};
+
+async function callFixReadiness(createId: string, jobId: string): Promise<FixReadinessResult> {
+  const res = await fetch(`/api/gcc-v2/creates/${createId}/validate/fix-readiness`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  });
+  const data = (await res.json().catch(() => null)) as FixReadinessResult | { detail?: string; error?: string } | null;
+  if (!res.ok) {
+    const message =
+      (data && "detail" in data && typeof data.detail === "string" ? data.detail : null)
+      ?? (data && "error" in data && typeof data.error === "string" ? data.error : null)
+      ?? `Fix readiness failed: HTTP ${res.status}`;
+    return { error: message };
+  }
+  return (data as FixReadinessResult) ?? { error: "Empty fix-readiness response" };
+}
+
 /**
  * Phase 5 Canvas: streamed WRITE/REPAIR sections in the main column (no polling — everything comes
  * from `SectionDrafted`/`SectionRepaired`/... hub events), SEO/polish scores + named OverlapGate
@@ -237,6 +299,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   >([]);
   const [publishBusy, setPublishBusy] = useState<"draft" | "live" | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  const [exportBusy, setExportBusy] = useState<"zip" | "commit" | null>(null);
+  const [exportResult, setExportResult] = useState<ExportCommitResult | null>(null);
+  const [readinessBusy, setReadinessBusy] = useState(false);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [aiVisibility, setAiVisibility] = useState<AiVisibilitySnapshotView | null>(null);
   const [aiVisibilityBusy, setAiVisibilityBusy] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
@@ -682,6 +748,64 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  async function runExportZip() {
+    setExportBusy("zip");
+    setExportResult(null);
+    try {
+      await downloadHtmlExport(createId);
+    } catch (err) {
+      setExportResult({ error: err instanceof Error ? err.message : "Export failed" });
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  async function runExportCommit() {
+    setExportBusy("commit");
+    setExportResult(null);
+    try {
+      const result = await commitHtmlExport(createId);
+      setExportResult(result);
+    } catch (err) {
+      setExportResult({ error: err instanceof Error ? err.message : "Commit failed" });
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  async function runFixReadiness() {
+    setReadinessBusy(true);
+    setReadinessError(null);
+    try {
+      const result = await callFixReadiness(createId, jobId);
+      if (result.error) {
+        setReadinessError(result.error);
+        return;
+      }
+      setReport((prev) =>
+        prev
+          ? {
+              ...prev,
+              shipReady: result.shipReady ?? prev.shipReady,
+              outstandingIssues: result.outstandingIssues ?? prev.outstandingIssues,
+              seoScore: result.seoScore ?? prev.seoScore,
+              geoScore: result.geoScore ?? prev.geoScore,
+              seoChecks: result.seoChecks ?? prev.seoChecks,
+              geoChecks: result.geoChecks ?? prev.geoChecks,
+            }
+          : prev,
+      );
+    } catch (err) {
+      setReadinessError(err instanceof Error ? err.message : "Fix readiness failed");
+    } finally {
+      setReadinessBusy(false);
+    }
+  }
+
+  const hasReadinessFailures =
+    (report?.seoChecks?.some((c) => !c.passed) ?? false)
+    || (report?.geoChecks?.some((c) => !c.passed) ?? false);
+
   async function runCanvasAction(sectionKey: string, action: CanvasAction) {
     setPendingSectionKey(sectionKey);
     setError(null);
@@ -981,6 +1105,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       <aside className="flex flex-col gap-4">
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Validation</h2>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            SEO and GEO scores are an AI-visibility readiness checklist — advisory only, not a content
+            quality grade. Export is never blocked by low scores.
+          </p>
           {report ? (
             <div className="mt-2 flex flex-col gap-2 text-xs text-[var(--cc-muted)]">
               <p>
@@ -1015,6 +1143,20 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   </ul>
                 </div>
               ) : null}
+              {report.seoChecks && report.seoChecks.some((c) => !c.passed) ? (
+                <div className="rounded-md bg-blue-50 p-2 text-blue-900">
+                  <p className="font-semibold">SEO fixes</p>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {report.seoChecks
+                      .filter((c) => !c.passed)
+                      .map((c) => (
+                        <li key={c.id}>
+                          <span className="font-medium">{c.label}:</span> {c.fixHint ?? c.detail}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
               {typeof report.guardrailFlaggedCount === "number" ? (
                 <p>Guardrail auto-fixes: {report.guardrailFlaggedCount}</p>
               ) : null}
@@ -1032,6 +1174,19 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               ) : null}
               {report.outstandingIssues ? (
                 <p className="font-semibold text-amber-700">Outstanding issues remain after repair.</p>
+              ) : null}
+              {status === "ready" && hasReadinessFailures ? (
+                <div className="mt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={readinessBusy}
+                    onClick={() => void runFixReadiness()}
+                    className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
+                  >
+                    {readinessBusy ? "Fixing readiness…" : "Fix readiness"}
+                  </button>
+                  {readinessError ? <p className="text-red-600">{readinessError}</p> : null}
+                </div>
               ) : null}
             </div>
           ) : (
@@ -1091,10 +1246,58 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Publish to CMS</h2>
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Export</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Sync this draft into the Geek blog CMS. Draft keeps it unpublished; live makes it public
-            immediately.
+            Download or commit finished drafts for all jobs on this create — pillar, blog, tool, email,
+            social, ads, and image prompts — into geekatyourspot&apos;s content-writer-output folder.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={exportBusy !== null}
+              onClick={() => void runExportZip()}
+              className="rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            >
+              {exportBusy === "zip" ? "Exporting…" : "Export .html (.zip)"}
+            </button>
+            <button
+              type="button"
+              disabled={exportBusy !== null}
+              onClick={() => void runExportCommit()}
+              className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
+            >
+              {exportBusy === "commit" ? "Committing…" : "Commit to geekatyourspot"}
+            </button>
+          </div>
+          {exportResult ? (
+            <div className="mt-3 flex flex-col gap-1 text-xs">
+              {exportResult.error ? <p className="text-red-600">{exportResult.error}</p> : null}
+              {exportResult.commitUrl ? (
+                <p>
+                  <a
+                    href={exportResult.commitUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[var(--cc-accent)] underline"
+                  >
+                    View commit
+                  </a>
+                </p>
+              ) : null}
+              {exportResult.filePaths && exportResult.filePaths.length > 0 ? (
+                <p className="text-[var(--cc-muted)]">
+                  {exportResult.filePaths.length} file(s) committed.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Blog CMS only</h2>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            Optional — sync the blog draft into the Geek blog CMS. Draft keeps it unpublished; live
+            makes it public immediately. Use Export above for pillar, tool, and channel packs.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button

@@ -59,7 +59,7 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
           Live Canvas for this create&apos;s job — no polling, everything below comes from the realtime
           hub.
         </p>
-        {jobs.length > 1 ? (
+        {jobs.length > 0 ? (
           <nav className="mt-4 flex flex-wrap gap-2" aria-label="Drafts for this create">
             {jobs.map((j) => {
               const active = j.id === jobId;
@@ -80,6 +80,12 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
               );
             })}
           </nav>
+        ) : null}
+        {jobs.length <= 1 ? (
+          <p className="mt-3 text-xs text-[var(--cc-muted)]">
+            Need tool, email, social, or ads drafts? Start a new brief and check types under Also
+            draft — each checked type gets its own job tab here.
+          </p>
         ) : null}
       </div>
 

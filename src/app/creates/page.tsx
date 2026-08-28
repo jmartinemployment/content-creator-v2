@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAccessToken } from "@/app/auth/session";
 import { fetchGccV2 } from "@/app/auth/server-bff";
+import { labelForContentType } from "@/app/creates/content-types";
 
 type V2CreateSummary = {
   id: string;
@@ -8,6 +9,7 @@ type V2CreateSummary = {
   contentType: string;
   createdAtUtc: string;
   updatedAtUtc?: string | null;
+  jobContentTypes?: string[];
 };
 
 export default async function CreatesListPage() {
@@ -34,7 +36,8 @@ export default async function CreatesListPage() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">Your creates</h1>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
-          v2 creates for this account — open one to view its Canvas or start a new brief.
+          v2 creates for this account — open one to view its Canvas or start a new brief. Use Also
+          draft on a new brief to generate tool, email, social, or ads jobs alongside pillar/blog.
         </p>
       </div>
 
@@ -51,16 +54,24 @@ export default async function CreatesListPage() {
         <p className="text-sm text-[var(--cc-muted)]">No v2 creates yet.</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {creates.map((c) => (
-            <li key={c.id} className="rounded-lg border border-[var(--cc-line)] p-4">
-              <Link href={`/creates/${c.id}`} className="font-semibold text-[var(--cc-ink)] hover:underline">
-                {c.title}
-              </Link>
-              <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                {c.contentType} · created {new Date(c.createdAtUtc).toLocaleString()}
-              </p>
-            </li>
-          ))}
+          {creates.map((c) => {
+            const jobTypes =
+              c.jobContentTypes && c.jobContentTypes.length > 0
+                ? c.jobContentTypes
+                : [c.contentType];
+            return (
+              <li key={c.id} className="rounded-lg border border-[var(--cc-line)] p-4">
+                <Link href={`/creates/${c.id}`} className="font-semibold text-[var(--cc-ink)] hover:underline">
+                  {c.title}
+                </Link>
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                  Drafts:{" "}
+                  {jobTypes.map((t) => labelForContentType(t)).join(" · ")} · created{" "}
+                  {new Date(c.createdAtUtc).toLocaleString()}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

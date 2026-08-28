@@ -85,6 +85,7 @@ export type ValidationReportView = {
   geoScore?: number;
   geoChecks?: GeoCheckView[];
   geoSummary?: string | null;
+  seoChecks?: GeoCheckView[];
   overlapHits: OverlapHitView[];
   outstandingIssues: boolean;
   repairAttempt?: number;
