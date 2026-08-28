@@ -10,7 +10,14 @@ type PageProps = {
 };
 
 type CreateDto = { id: string; title: string; contentType: string };
-type JobDto = { id: string; status: string; stage: string; contentType?: string };
+type JobDto = {
+  id: string;
+  status: string;
+  stage: string;
+  contentType?: string;
+  error?: string | null;
+  updatedAtUtc?: string | null;
+};
 
 export default async function CreateDetailPage({ params, searchParams }: PageProps) {
   await requireAccessToken();

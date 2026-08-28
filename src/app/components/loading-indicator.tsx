@@ -59,12 +59,21 @@ export function ButtonBusyLabel({ busy, busyLabel, idleLabel }: ButtonBusyLabelP
   );
 }
 
+export function isJobRunning(status: string): boolean {
+  return status === "running";
+}
+
+export function isJobQueued(status: string): boolean {
+  return status === "pending";
+}
+
+/** True when the worker should be actively processing (not idle queue). */
 export function isJobProcessing(status: string): boolean {
-  return status === "pending" || status === "running";
+  return isJobRunning(status) || isJobQueued(status);
 }
 
 export function jobProcessLabel(status: string, stage: string | null): string | null {
-  if (status === "pending") return "Starting job…";
+  if (status === "pending") return "Queued (not started)";
   if (status !== "running") return null;
 
   switch (stage?.toLowerCase()) {
@@ -83,13 +92,24 @@ export function jobProcessLabel(status: string, stage: string | null): string | 
   }
 }
 
+const STUCK_PENDING_MS = 3 * 60 * 1000;
+
+export function isJobStuckPending(updatedAtUtc: string | null | undefined, nowMs = Date.now()): boolean {
+  if (!updatedAtUtc) return false;
+  const updated = Date.parse(updatedAtUtc);
+  if (Number.isNaN(updated)) return false;
+  return nowMs - updated >= STUCK_PENDING_MS;
+}
+
 type ProcessBannerProps = {
   status: string;
   stage: string | null;
 };
 
-/** Prominent banner while a job is pending or running (PLAN / WRITE / VALIDATE / REPAIR). */
+/** Prominent banner while a job is actively running (PLAN / WRITE / VALIDATE / REPAIR). */
 export function ProcessBanner({ status, stage }: ProcessBannerProps) {
+  if (status !== "running") return null;
+
   const label = jobProcessLabel(status, stage);
   if (!label) return null;
 

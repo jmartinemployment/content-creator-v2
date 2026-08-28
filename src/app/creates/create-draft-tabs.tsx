@@ -4,13 +4,22 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { labelForContentType } from "@/app/creates/content-types";
 import {
-  isJobProcessing,
+  isJobQueued,
+  isJobRunning,
+  isJobStuckPending,
   jobProcessLabel,
   LoadingRow,
   LoadingSpinner,
 } from "@/app/components/loading-indicator";
 
-type JobDto = { id: string; status: string; stage?: string; contentType?: string };
+type JobDto = {
+  id: string;
+  status: string;
+  stage?: string;
+  contentType?: string;
+  error?: string | null;
+  updatedAtUtc?: string | null;
+};
 
 type CreateDraftTabsProps = {
   createId: string;
@@ -32,17 +41,30 @@ function isAwaitingGate(status: string): boolean {
   return status === "awaiting_brandkit_approval" || status === "awaiting_outline_approval";
 }
 
+function truncateError(error: string, max = 80): string {
+  const trimmed = error.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`;
+}
+
 export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDraftTabsProps) {
   const [jobs, setJobs] = useState<JobDto[]>(() => sortJobs(initialJobs));
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [retryBusy, setRetryBusy] = useState<string | null>(null);
 
   const refreshJobs = useCallback(async () => {
     try {
       const res = await fetch(`/api/gcc-v2/creates/${createId}/jobs`, { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setPollError("Could not refresh job list");
+        return;
+      }
       const body = (await res.json()) as JobDto[];
-      if (Array.isArray(body)) setJobs(sortJobs(body));
+      if (Array.isArray(body)) {
+        setJobs(sortJobs(body));
+        setPollError(null);
+      }
     } catch {
-      /* keep last known list */
+      setPollError("Could not refresh job list");
     }
   }, [createId]);
 
@@ -51,11 +73,17 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
   }, [refreshJobs]);
 
   const notReadyCount = useMemo(() => jobs.filter((j) => j.status !== "ready").length, [jobs]);
-  const processingJobs = useMemo(() => jobs.filter((j) => isJobProcessing(j.status)), [jobs]);
+  const runningJobs = useMemo(() => jobs.filter((j) => isJobRunning(j.status)), [jobs]);
+  const queuedJobs = useMemo(() => jobs.filter((j) => isJobQueued(j.status)), [jobs]);
+  const failedJobs = useMemo(() => jobs.filter((j) => j.status === "failed"), [jobs]);
   const awaitingJobs = useMemo(() => jobs.filter((j) => isAwaitingGate(j.status)), [jobs]);
+  const stuckJobs = useMemo(
+    () => queuedJobs.filter((j) => isJobStuckPending(j.updatedAtUtc)),
+    [queuedJobs],
+  );
   const activeJob = useMemo(() => jobs.find((j) => j.id === activeJobId), [jobs, activeJobId]);
-  const activeProcessing = activeJob ? isJobProcessing(activeJob.status) : false;
-  const siblingProcessingCount = processingJobs.filter((j) => j.id !== activeJobId).length;
+  const activeRunning = activeJob ? isJobRunning(activeJob.status) : false;
+  const siblingRunningCount = runningJobs.filter((j) => j.id !== activeJobId).length;
 
   useEffect(() => {
     if (notReadyCount === 0) return;
@@ -63,10 +91,34 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
     return () => window.clearInterval(id);
   }, [notReadyCount, refreshJobs]);
 
+  const retryJob = useCallback(
+    async (jobId: string) => {
+      setRetryBusy(jobId);
+      try {
+        const res = await fetch(`/api/gcc-v2/jobs/${jobId}/retry`, { method: "POST" });
+        if (!res.ok) return;
+        await refreshJobs();
+      } finally {
+        setRetryBusy(null);
+      }
+    },
+    [refreshJobs],
+  );
+
+  const retryAllStuck = useCallback(async () => {
+    setRetryBusy("bulk");
+    try {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/retry-stuck-jobs`, { method: "POST" });
+      if (!res.ok) return;
+      await refreshJobs();
+    } finally {
+      setRetryBusy(null);
+    }
+  }, [createId, refreshJobs]);
+
   if (jobs.length === 0) return null;
 
-  const showSiblingProgress =
-    siblingProcessingCount > 0 && !activeProcessing;
+  const showSiblingProgress = siblingRunningCount > 0 && !activeRunning;
 
   return (
     <>
@@ -74,48 +126,121 @@ export function CreateDraftTabs({ createId, activeJobId, initialJobs }: CreateDr
         {jobs.map((j) => {
           const active = j.id === activeJobId;
           const label = labelForContentType(j.contentType ?? "");
-          const processing = isJobProcessing(j.status);
-          const stageLabel = processing ? jobProcessLabel(j.status, j.stage ?? null) : null;
+          const running = isJobRunning(j.status);
+          const failed = j.status === "failed";
+          const stuck = isJobQueued(j.status) && isJobStuckPending(j.updatedAtUtc);
+          const stageLabel = running ? jobProcessLabel(j.status, j.stage ?? null) : null;
+          const tooltip = failed && j.error
+            ? truncateError(j.error, 200)
+            : stuck
+              ? "Stuck in queue — retry"
+              : (stageLabel ?? j.status);
+
           return (
             <Link
               key={j.id}
               href={`/creates/${createId}?jobId=${j.id}`}
-              title={stageLabel ?? j.status}
+              title={tooltip}
               className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ${
-                active
-                  ? "bg-[var(--cc-accent)] text-white"
-                  : "border border-[var(--cc-line)] text-[var(--cc-ink)] hover:bg-black/5"
+                failed
+                  ? active
+                    ? "bg-red-700 text-white"
+                    : "border border-red-300 bg-red-50 text-red-900 hover:bg-red-100"
+                  : stuck
+                    ? active
+                      ? "bg-amber-600 text-white"
+                      : "border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                    : active
+                      ? "bg-[var(--cc-accent)] text-white"
+                      : "border border-[var(--cc-line)] text-[var(--cc-ink)] hover:bg-black/5"
               }`}
             >
-              {processing ? <LoadingSpinner size="xs" /> : null}
+              {running ? <LoadingSpinner size="xs" /> : null}
               {label}
               <span className="opacity-70">· {j.status}</span>
+              {failed && j.error ? (
+                <span className="max-w-[8rem] truncate opacity-90">· {truncateError(j.error)}</span>
+              ) : null}
             </Link>
           );
         })}
       </nav>
 
+      {pollError ? (
+        <p className="mt-2 text-xs text-red-700" role="alert">
+          {pollError}
+        </p>
+      ) : null}
+
       {showSiblingProgress ? (
         <LoadingRow
           className="mt-3 text-xs text-[var(--cc-ink)]"
-          label={`${siblingProcessingCount} other draft${siblingProcessingCount === 1 ? "" : "s"} still generating — switch tabs to watch progress.`}
+          label={`${siblingRunningCount} other draft${siblingRunningCount === 1 ? "" : "s"} still generating — switch tabs to watch progress.`}
         />
       ) : null}
 
       {jobs.length > 1 && notReadyCount > 0 ? (
         <p className="mt-2 text-xs text-amber-800">
-          {processingJobs.length > 0
-            ? `${processingJobs.length} draft${processingJobs.length === 1 ? "" : "s"} generating`
+          {runningJobs.length > 0
+            ? `${runningJobs.length} draft${runningJobs.length === 1 ? "" : "s"} generating`
             : null}
-          {processingJobs.length > 0 && awaitingJobs.length > 0 ? "; " : null}
-          {awaitingJobs.length > 0
+          {runningJobs.length > 0 && queuedJobs.length > 0 ? "; " : null}
+          {queuedJobs.length > 0
+            ? `${queuedJobs.length} draft${queuedJobs.length === 1 ? "" : "s"} queued (not started)`
+            : null}
+          {(runningJobs.length > 0 || queuedJobs.length > 0) && failedJobs.length > 0 ? "; " : null}
+          {failedJobs.length > 0
+            ? `${failedJobs.length} draft${failedJobs.length === 1 ? "" : "s"} failed — see tab errors`
+            : null}
+          {runningJobs.length === 0 && queuedJobs.length === 0 && failedJobs.length === 0 && awaitingJobs.length > 0
             ? `${awaitingJobs.length} awaiting approval`
             : null}
-          {processingJobs.length === 0 && awaitingJobs.length === 0
+          {runningJobs.length === 0 &&
+          queuedJobs.length === 0 &&
+          failedJobs.length === 0 &&
+          awaitingJobs.length === 0
             ? `${notReadyCount} draft${notReadyCount === 1 ? "" : "s"} not ready`
             : null}
           {" — Export skips jobs without a completed result."}
         </p>
+      ) : null}
+
+      {jobs.length > 1 && (failedJobs.length > 0 || stuckJobs.length > 0 || queuedJobs.some((j) => j.status === "running")) ? (
+        <div className="mt-2 rounded-md border border-[var(--cc-line)] bg-black/[0.02] px-3 py-2 text-xs">
+          <p className="font-medium text-[var(--cc-ink)]">Job status on this create</p>
+          <ul className="mt-1 space-y-0.5 text-[var(--cc-muted)]">
+            {jobs
+              .filter((j) => j.status !== "ready" && !isAwaitingGate(j.status))
+              .map((j) => (
+                <li key={j.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-[var(--cc-ink)]">{labelForContentType(j.contentType ?? "")}</span>
+                  <span>· {j.status}</span>
+                  {j.error ? <span className="text-red-700">· {truncateError(j.error, 120)}</span> : null}
+                  {(j.status === "failed" || (isJobQueued(j.status) && isJobStuckPending(j.updatedAtUtc))) &&
+                  j.id !== retryBusy ? (
+                    <button
+                      type="button"
+                      className="text-[var(--cc-accent)] underline"
+                      onClick={() => void retryJob(j.id)}
+                    >
+                      retry
+                    </button>
+                  ) : null}
+                  {retryBusy === j.id ? <span>retrying…</span> : null}
+                </li>
+              ))}
+          </ul>
+          {stuckJobs.length > 1 ? (
+            <button
+              type="button"
+              className="mt-2 text-[var(--cc-accent)] underline"
+              disabled={retryBusy === "bulk"}
+              onClick={() => void retryAllStuck()}
+            >
+              {retryBusy === "bulk" ? "Retrying stuck jobs…" : "Retry all stuck jobs on this create"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </>
   );

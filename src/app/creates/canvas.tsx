@@ -390,6 +390,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
   statusRef.current = status;
+  /** True while the operator has unsaved outline edits — blocks hub OutlineReady from clobbering them. */
+  const outlineDirtyRef = useRef(false);
 
   const applySectionEvent = useCallback((payload: SectionEventPayload) => {
     const section = safeParse(payload.documentJson) as SectionNode | null;
@@ -462,6 +464,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           setError(null);
           break;
         case "OutlineReady": {
+          if (outlineDirtyRef.current) break;
           const next = payload as OutlineView;
           setOutline(next);
           setEditableSections(
@@ -638,14 +641,49 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  async function persistOutline(): Promise<boolean> {
+    if (editableSections.length === 0) return true;
+    const body = {
+      sections: editableSections.map((s) => ({
+        key: s.key,
+        heading: s.heading,
+        job: s.job,
+        hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+      })),
+      hierarchyChildHeadings: outline?.hierarchyChildHeadings ?? [],
+    };
+    const res = await fetch(`/api/gcc-v2/jobs/${jobId}/outline`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(detail?.error || `save outline failed: HTTP ${res.status}`);
+    }
+    const saved = (await res.json()) as OutlineView;
+    outlineDirtyRef.current = false;
+    setOutline(saved);
+    setEditableSections(
+      (saved.sections ?? []).map((s) => ({
+        ...s,
+        hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
+      })),
+    );
+    return true;
+  }
+
   async function approveOutline() {
     setBusy(true);
     setError(null);
     try {
+      if (editableSections.length > 0) {
+        await persistOutline();
+      }
       const res = await fetch(`/api/gcc-v2/jobs/${jobId}/approve-outline`, { method: "POST" });
       if (!res.ok) throw new Error(`approve failed: HTTP ${res.status}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not approve outline");
+      setError(err instanceof Error ? err.message : "Could not save and approve outline");
     } finally {
       setBusy(false);
     }
@@ -702,44 +740,6 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
-  async function saveOutline() {
-    if (editableSections.length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const body = {
-        sections: editableSections.map((s) => ({
-          key: s.key,
-          heading: s.heading,
-          job: s.job,
-          hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
-        })),
-        hierarchyChildHeadings: outline?.hierarchyChildHeadings ?? [],
-      };
-      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/outline`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const detail = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(detail?.error || `save outline failed: HTTP ${res.status}`);
-      }
-      const saved = (await res.json()) as OutlineView;
-      setOutline(saved);
-      setEditableSections(
-        (saved.sections ?? []).map((s) => ({
-          ...s,
-          hierarchyChildHeadings: s.hierarchyChildHeadings ?? [],
-        })),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save outline");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function regenerateOutline() {
     setBusy(true);
     setError(null);
@@ -753,6 +753,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       if (!next?.sections?.length) {
         throw new Error("Regenerate returned an empty outline");
       }
+      outlineDirtyRef.current = false;
       setOutline(next);
       setEditableSections(
         next.sections.map((s) => ({
@@ -945,7 +946,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               disabled={busy}
               className="ml-auto rounded-md bg-[var(--cc-accent)] px-3 py-1.5 font-semibold text-white disabled:opacity-60"
             >
-              <ButtonBusyLabel busy={busy} busyLabel="Approving…" idleLabel="Approve outline" />
+              <ButtonBusyLabel busy={busy} busyLabel="Saving…" idleLabel="Save & approve outline" />
             </button>
           ) : null}
 
@@ -1086,28 +1087,26 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Outline awaiting approval</h2>
               <button
                 type="button"
-                onClick={() => void saveOutline()}
-                disabled={busy || editableSections.length === 0}
-                className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
-              >
-                <ButtonBusyLabel busy={busy} busyLabel="Saving…" idleLabel="Save" />
-              </button>
-              <button
-                type="button"
                 onClick={() => void regenerateOutline()}
                 disabled={busy}
-                className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+                className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
               >
                 <ButtonBusyLabel busy={busy} busyLabel="Regenerating…" idleLabel="Regenerate" />
               </button>
             </div>
-            <ol className="mt-3 flex flex-col gap-2">
+            <p className="mt-2 text-xs text-[var(--cc-muted)]">
+              Assign each section a role (<strong>problem</strong> establishes the pain once;{" "}
+              <strong>advance</strong> moves past it). Must-mentions apply only to that section at write
+              time. <strong>Save &amp; approve outline</strong> in the bar above persists your edits.
+            </p>
+            <ol className="mt-3 flex flex-col gap-3">
               {editableSections.map((s, i) => (
-                <li key={s.key || i} className="flex flex-col gap-1">
+                <li key={s.key || i} className="flex flex-col gap-1.5 rounded-md border border-[var(--cc-line)] p-2">
                   <input
                     type="text"
                     value={s.heading}
                     onChange={(e) => {
+                      outlineDirtyRef.current = true;
                       const heading = e.target.value;
                       setEditableSections((prev) =>
                         prev.map((row, idx) => (idx === i ? { ...row, heading } : row)),
@@ -1115,16 +1114,45 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                     }}
                     className="rounded-md border border-[var(--cc-line)] px-2 py-1.5 text-sm text-[var(--cc-ink)]"
                   />
-                  <span className="text-xs text-[var(--cc-muted)]">({s.job})</span>
-                  {s.hierarchyChildHeadings.filter((h) => !headingsEqual(h, s.heading)).length > 0 ? (
-                    <ul className="ml-4 list-disc text-xs text-[var(--cc-muted)]/80">
-                      {s.hierarchyChildHeadings
-                        .filter((h) => !headingsEqual(h, s.heading))
-                        .map((h) => (
-                          <li key={h}>{h}</li>
-                        ))}
-                    </ul>
-                  ) : null}
+                  <label className="flex flex-wrap items-center gap-2 text-xs text-[var(--cc-muted)]">
+                    <span>Role</span>
+                    <select
+                      value={s.job}
+                      onChange={(e) => {
+                        outlineDirtyRef.current = true;
+                        const job = e.target.value;
+                        setEditableSections((prev) =>
+                          prev.map((row, idx) => (idx === i ? { ...row, job } : row)),
+                        );
+                      }}
+                      className="rounded-md border border-[var(--cc-line)] bg-white px-2 py-1 text-xs text-[var(--cc-ink)]"
+                    >
+                      <option value="problem">problem</option>
+                      <option value="advance">advance</option>
+                      <option value="faq">faq</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
+                    <span>Must mention (one per line)</span>
+                    <textarea
+                      rows={Math.min(6, Math.max(2, s.hierarchyChildHeadings.length + 1))}
+                      value={s.hierarchyChildHeadings.join("\n")}
+                      onChange={(e) => {
+                        outlineDirtyRef.current = true;
+                        const hierarchyChildHeadings = e.target.value
+                          .split("\n")
+                          .map((line) => line.trim())
+                          .filter(Boolean);
+                        setEditableSections((prev) =>
+                          prev.map((row, idx) =>
+                            idx === i ? { ...row, hierarchyChildHeadings } : row,
+                          ),
+                        );
+                      }}
+                      className="rounded-md border border-[var(--cc-line)] px-2 py-1.5 font-mono text-xs text-[var(--cc-ink)]"
+                      placeholder="Sub-topics or partner tools for this section only"
+                    />
+                  </label>
                 </li>
               ))}
             </ol>
