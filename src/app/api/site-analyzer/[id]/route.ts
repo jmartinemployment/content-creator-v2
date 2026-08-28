@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccessTokenWithRefresh } from "@/app/auth/session";
 import { apiConfig } from "@/app/auth/config";
 
-/** BFF → GeekAPI v1 `api/geek-content-creator/site-analyzer/{id}`. */
+/** BFF → GeekAPI v2 `api/geek-content-creator-v2/site-analyzer/{id}`. */
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -18,7 +18,7 @@ export async function GET(
   }
 
   const res = await fetch(
-    `${apiConfig.baseUrl}/api/geek-content-creator/site-analyzer/${encodeURIComponent(id)}`,
+    `${apiConfig.baseUrl}/api/geek-content-creator-v2/site-analyzer/${encodeURIComponent(id)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

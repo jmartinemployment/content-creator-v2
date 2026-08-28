@@ -24,7 +24,7 @@ export const PRIMARY_DRAFT_TYPES = [
 
 export type PrimaryDraftType = (typeof PRIMARY_DRAFT_TYPES)[number]["value"];
 
-/** Short-form Also draft types (image prompts come from Re-Purpose, not a checkbox). */
+/** Short-form Also draft types. Image prompts auto-spawn per job when ready — see plan §3.1. */
 export const ALSO_DRAFT_SHORT_TYPES = [
   { value: "tool", label: "Tool page" },
   { value: "email", label: "Email" },
@@ -46,4 +46,16 @@ export function alsoDraftOptionsFor(
 export function labelForContentType(value: string): string {
   const hit = CONTENT_TYPES.find((o) => o.value === value);
   return hit?.label ?? value;
+}
+
+/** CMS upsert types — pillar, blog, tool only (§5.6). */
+export const CMS_PUBLISH_TYPES = ["pillar", "blog", "tool"] as const;
+
+export function isCmsPublishType(value: string): boolean {
+  return (CMS_PUBLISH_TYPES as readonly string[]).includes(value.trim().toLowerCase());
+}
+
+export function isExportOnlyType(value: string): boolean {
+  const t = value.trim().toLowerCase();
+  return t === "email" || t === "social" || t === "ads" || t === "image-prompt";
 }

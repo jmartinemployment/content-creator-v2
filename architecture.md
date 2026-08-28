@@ -1,8 +1,10 @@
 # Geek Content Creator — Architecture
 
-Product plan: [`CONTENT_CREATOR_PLAN.md`](./CONTENT_CREATOR_PLAN.md).
+**Correctness over expediency.**
 
-This document describes **what already exists** in the Geek platform and **what Content Creator should call / reuse**. It is the backend map for implementers working in this repo.
+Product plan: [`plan/v2-master.md`](./plan/v2-master.md) (v2). Legacy v1 notes below remain as platform context.
+
+This document is the **backend and dependency map** for Content Creator: what exists on the Geek platform, what v2 **copies** into its own code, what it **calls** in-process without forking, and what it must **not reuse** as a permanent runtime dependency on v1 GCC.
 
 **Preferred term:** **site section context** (related pages, headings, excerpts, section path around a gap). Not “neighborhood.”
 
@@ -10,14 +12,15 @@ This document describes **what already exists** in the Geek platform and **what 
 
 ## 1. This application
 
-| Item | Value |
-|------|--------|
-| Repo | `/Users/jeffmartin/development/GeekContentCreator` |
-| UI | Next.js 16 App Router (`src/`), TypeScript, Tailwind |
-| Role | Product surface: create, Site Analyzer, generate, revise, on-page SEO, polish, content approval, repurpose, image prompts |
-| Persistence of drafts | Owned by Content Creator’s domain (new GeekAPI surfaces), **not** by stuffing Content Writer v2 `Project` rows as the product model |
+| Item | v1 (legacy) | v2 (current) |
+|------|-------------|--------------|
+| Repo | `/Users/jeffmartin/development/GeekContentCreator` | `/Users/jeffmartin/development/content-creator-v2` |
+| UI | Next.js App Router | Next.js App Router (phi on Vercel) |
+| GeekAPI prefix | `api/geek-content-creator` | `api/geek-content-creator-v2` |
+| Role | Create, Site Analyzer, generate, revise, export | Same outcomes; event-driven jobs + BrandKit; **replaces v1** when [`v2-master.md`](./plan/v2-master.md) §5–§7 complete |
+| Persistence | `content_creator` schema | `content_creator_v2` schema |
 
-Content Creator is a **new app**. It is **not** a feature inside Geek Content Workflow and **not** a thin form over Content Writer v2’s old project UI.
+phi is the Content Creator product surface after cutover. It is **not** a feature inside Geek Content Workflow and **not** a thin form over Content Writer v2’s old project UI.
 
 ---
 
@@ -142,7 +145,53 @@ UI must show **running / failed / ready** and not double-submit. Prefer GeekAPI 
 
 ---
 
-## 8. What to call (and what not to)
+## 8. Copy, call, do not reuse
+
+**Hard rule for v2** (also in [`plan/executor.md`](./plan/executor.md), GeekBackend `AGENTS.md`):
+
+| Action | What | Why |
+|--------|------|-----|
+| **Copy** | v1-specific shapes/logic into v2-owned files | v1 GCC can be deleted after cutover |
+| **Call** | Shared engines (`ContentPromptBuilder`, SEO/GEO analyzers, editorial review) | One canonical stack — **called, never edited or copied** |
+| **Do not reuse** | v1 Content Creator as a permanent runtime dependency | No `GccController`, `HttpGccRepository`, or v1 generate routes for new work |
+
+GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **copy into GeekAPI** (orchestration and plumbing), **never import** deprecated repos; frontends call GeekAPI only.
+
+### Copied into v2 (done)
+
+| Area | v2 location |
+|------|-------------|
+| Brief catalogs (UI) | `src/app/creates/new/brief-catalog.ts` |
+| Context translation | `GccV2ContextAdapter` (shape from `BuildMinimalContext`) |
+| Site hierarchy crawl | `GccV2SiteHierarchyService` (CC-owned mobile crawl) |
+| Realtime | `gcc-v2-realtime` hub (patterns copied; new files) |
+| Jobs, export, brand kit, validate/repair | `ContentCreatorV2/*`, `HttpGccV2Repository` |
+
+### Still reusing v1 at runtime (debt — blocks v1 delete)
+
+| Dependency | Where | Migration |
+|------------|-------|-----------|
+| Site Analyzer HTTP | `src/app/api/site-analyzer/*` → `api/geek-content-creator/site-analyzer/*` | GeekAPI-owned routes under `api/geek-content-creator-v2/site-analyzer/*`; BFF retarget |
+| Section helpers | `GccGenerateService.ParseSiteSection`, `FlattenSections` in v2 services | Copy into `Services/ContentCreatorV2/` |
+| Legacy read | `GccV2LegacyController` + `HttpGccRepository` | Keep until `/legacy` dropped |
+
+### Safe to delete without breaking v2 generate/export
+
+- GeekContentCreator UI (phi replaces it)
+- v1 generate/job routes for **new** creates (v2 uses `geek-content-creator-v2`)
+
+### Do not delete yet
+
+- Geek-SEO / Site Analyzer crawl backend (read-only source of truth)
+- Shared prompt/review/analyzer assemblies v2 calls in-process
+- v1 Site Analyzer routes until BFF points at v2-owned endpoints
+- `HttpGccRepository` if `/legacy` or backfill still needed
+
+**Decommission gate:** v2 E2E on phi passes ([`v2-master.md` §6](./plan/v2-master.md)) **and** Site Analyzer BFF + remaining `GccGenerateService` helper calls migrated to v2-owned code.
+
+---
+
+## 9. What to call (and what not to)
 
 ### Do
 
@@ -156,7 +205,7 @@ UI must show **running / failed / ready** and not double-submit. Prefer GeekAPI 
   - **`SiteSectionContext`** when create started from Site Analyzer — **required** if site analysis is attached (`ValidateSiteSectionGate`: non-empty `relatedPages`)
   - tool names + brief when generating AI Tools
 - Reuse Geek-SEO site analysis gap signals behind a **new** Site Analyzer UI.
-- **Correctness over expediency.** Copied CWV2 code becomes canonical Content Creator code when CWV2 retires — no upstream sync ceremony.
+- Copied CWV2 code becomes canonical Content Creator code when CWV2 retires — no upstream sync ceremony.
 
 ### Do not
 
@@ -194,7 +243,7 @@ Ops: GeekRepository startup runs `Database.MigrateAsync` for Content Creator (pr
 
 ---
 
-## 9. Existing systems (detail)
+## 10. Existing systems (detail)
 
 ### GeekAPI + GeekRepository
 
@@ -230,7 +279,7 @@ Later: render prompt text to pixels.
 
 ---
 
-## 10. Site section context (contract)
+## 11. Site section context (contract)
 
 ```text
 SiteSectionContext:
@@ -253,7 +302,7 @@ GenerateRequest (Site Analyzer path):
 
 ---
 
-## 11. Domain flow
+## 12. Domain flow
 
 ```mermaid
 flowchart TD
@@ -278,11 +327,12 @@ flowchart TD
 
 ---
 
-## 12. Sibling repo map
+## 13. Sibling repo map
 
 | Repo | Role |
 |------|------|
-| `GeekContentCreator` | This app |
+| `content-creator-v2` | v2 product app (this workspace) |
+| `GeekContentCreator` | v1 UI (legacy; decommission after phi E2E + §8 migrations) |
 | `GeekBackend` / `GeekAPI` | Backend to extend and call |
 | `content-writer-v2` | Generate engine source |
 | `Geek-SEO` | Site Analyzer capability |
@@ -291,7 +341,7 @@ flowchart TD
 
 ---
 
-## 13. First wiring checklist
+## 14. First wiring checklist
 
 1. GeekOAuth + env from §3 (mirror Geek Content Workflow).  
 2. GeekAPI client in `src/lib/`.  

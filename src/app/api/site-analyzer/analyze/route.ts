@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccessTokenWithRefresh } from "@/app/auth/session";
 import { apiConfig } from "@/app/auth/config";
 
-/** BFF → GeekAPI v1 `api/geek-content-creator/site-analyzer/analyze` (not v2). */
+/** BFF → GeekAPI v2 `api/geek-content-creator-v2/site-analyzer/analyze`. */
 export async function POST(request: Request) {
   const token = await getAccessTokenWithRefresh();
   if (!token) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const res = await fetch(
-    `${apiConfig.baseUrl}/api/geek-content-creator/site-analyzer/analyze`,
+    `${apiConfig.baseUrl}/api/geek-content-creator-v2/site-analyzer/analyze`,
     {
       method: "POST",
       headers: {

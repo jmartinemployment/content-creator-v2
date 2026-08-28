@@ -32,6 +32,14 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
     if (Array.isArray(body)) jobs = body;
   }
 
+  if (jobIdFromQuery && !jobs.some((j) => j.id === jobIdFromQuery)) {
+    const oneRes = await fetchGccV2(`jobs/${jobIdFromQuery}`);
+    if (oneRes.ok) {
+      const one = (await oneRes.json()) as JobDto;
+      jobs = [...jobs, one];
+    }
+  }
+
   let jobId = jobIdFromQuery ?? null;
   if (!jobId && jobs.length > 0) {
     jobId = jobs[0]!.id;
@@ -41,9 +49,11 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
     if (jobRes.ok) {
       const job = (await jobRes.json()) as JobDto;
       jobId = job.id;
-      if (jobs.length === 0) jobs = [job];
+      if (!jobs.some((j) => j.id === job.id)) jobs = [...jobs, job];
     }
   }
+
+  const notReadyCount = jobs.filter((j) => j.status !== "ready").length;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
@@ -81,10 +91,17 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
             })}
           </nav>
         ) : null}
+        {jobs.length > 1 && notReadyCount > 0 ? (
+          <p className="mt-3 text-xs text-amber-800">
+            {notReadyCount} draft{notReadyCount === 1 ? "" : "s"} still running — Export skips jobs
+            without a completed result.
+          </p>
+        ) : null}
         {jobs.length <= 1 ? (
           <p className="mt-3 text-xs text-[var(--cc-muted)]">
             Need tool, email, social, or ads drafts? Start a new brief and check types under Also
-            draft — each checked type gets its own job tab here.
+            draft — each checked type gets its own job tab here. Image prompts auto-spawn when each
+            draft is ready.
           </p>
         ) : null}
       </div>

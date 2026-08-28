@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccessTokenWithRefresh } from "@/app/auth/session";
 import { apiConfig } from "@/app/auth/config";
 
-/** BFF → GeekAPI v1 `api/geek-content-creator/site-analyzer/profiles/recent`. */
+/** BFF → GeekAPI v2 `api/geek-content-creator-v2/site-analyzer/profiles/recent`. */
 export async function GET(request: Request) {
   const token = await getAccessTokenWithRefresh();
   if (!token) {

@@ -4,7 +4,7 @@ import { apiConfig } from "@/app/auth/config";
 
 /**
  * BFF → GeekAPI v1
- * `api/geek-content-creator/site-analyzer/{id}/section-context?gapTopic=`.
+ * `api/geek-content-creator-v2/site-analyzer/{id}/section-context?gapTopic=`.
  */
 export async function GET(request: Request) {
   const token = await getAccessTokenWithRefresh();
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   }
 
   const res = await fetch(
-    `${apiConfig.baseUrl}/api/geek-content-creator/site-analyzer/${encodeURIComponent(siteAnalysisProfileId)}/section-context?gapTopic=${encodeURIComponent(gapTopic)}`,
+    `${apiConfig.baseUrl}/api/geek-content-creator-v2/site-analyzer/${encodeURIComponent(siteAnalysisProfileId)}/section-context?gapTopic=${encodeURIComponent(gapTopic)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

@@ -22,6 +22,17 @@ import type {
   ValidationReportView,
 } from "@/app/creates/canvas-types";
 import { SECTION_EVENT_TYPES } from "@/app/creates/canvas-types";
+import {
+  ButtonBusyLabel,
+  isJobProcessing,
+  LoadingRow,
+  ProcessBanner,
+} from "@/app/components/loading-indicator";
+import {
+  canRepurposeContentType,
+  REPURPOSE_CHANNELS,
+} from "@/app/creates/repurpose-channels";
+import { isCmsPublishType, labelForContentType } from "@/app/creates/content-types";
 
 type LogEntry = { seq: number; type: string; payload: unknown; atUtc: string };
 
@@ -186,11 +197,15 @@ async function refreshAiVisibility(createId: string): Promise<AiVisibilitySnapsh
   return data ?? { ready: false, createId, message: "Empty refresh response" };
 }
 
-async function callPublish(createId: string, isPublished: boolean): Promise<PublishResult> {
+async function callPublish(
+  createId: string,
+  jobId: string,
+  isPublished: boolean,
+): Promise<PublishResult> {
   const res = await fetch(`/api/gcc-v2/creates/${createId}/publish`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ isPublished }),
+    body: JSON.stringify({ jobId, isPublished }),
   });
   const data = (await res.json().catch(() => null)) as PublishResult | null;
   if (!res.ok) {
@@ -202,19 +217,36 @@ async function callPublish(createId: string, isPublished: boolean): Promise<Publ
   return data ?? { status: "failed", error: "Empty publish response" };
 }
 
+type ExportSummary = {
+  exportedCount: number;
+  totalJobs: number;
+  skipped: { jobId: string; contentType: string; reason: string }[];
+};
+
 type ExportCommitResult = {
   commitSha?: string;
   commitUrl?: string;
   filePaths?: string[];
+  exportSummary?: ExportSummary;
   error?: string;
 };
 
-async function downloadHtmlExport(createId: string): Promise<void> {
+function parseExportSummary(header: string | null): ExportSummary | null {
+  if (!header) return null;
+  try {
+    return JSON.parse(header) as ExportSummary;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadHtmlExport(createId: string): Promise<ExportSummary | null> {
   const res = await fetch(`/api/gcc-v2/creates/${createId}/export/html`);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`Export failed: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
   }
+  const summary = parseExportSummary(res.headers.get("X-GccV2-Export-Summary"));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -222,6 +254,7 @@ async function downloadHtmlExport(createId: string): Promise<void> {
   anchor.download = `${createId}-html-export.zip`;
   anchor.click();
   URL.revokeObjectURL(url);
+  return summary;
 }
 
 async function commitHtmlExport(createId: string): Promise<ExportCommitResult> {
@@ -301,11 +334,14 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [exportBusy, setExportBusy] = useState<"zip" | "commit" | null>(null);
   const [exportResult, setExportResult] = useState<ExportCommitResult | null>(null);
+  const [exportSummary, setExportSummary] = useState<ExportSummary | null>(null);
   const [readinessBusy, setReadinessBusy] = useState(false);
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [aiVisibility, setAiVisibility] = useState<AiVisibilitySnapshotView | null>(null);
   const [aiVisibilityBusy, setAiVisibilityBusy] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
+  const [jobHydrating, setJobHydrating] = useState(true);
+  const [contentType, setContentType] = useState<string>("blog");
 
   const connectionRef = useRef<HubConnection | null>(null);
   const lastSeqRef = useRef(0);
@@ -492,10 +528,15 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       try {
         const res = await fetch(`/api/gcc-v2/jobs/${jobId}`, { cache: "no-store" });
         if (!res.ok) return;
-        const job = (await res.json()) as { status?: string; stage?: string | null };
+        const job = (await res.json()) as {
+          status?: string;
+          stage?: string | null;
+          contentType?: string;
+        };
         if (cancelled) return;
         if (job.status) setStatus(job.status);
         if (job.stage) setStage(job.stage);
+        if (job.contentType) setContentType(job.contentType.trim().toLowerCase());
         if (job.status === "awaiting_brandkit_approval") {
           setAwaitingBrandkit(true);
           setAwaitingOutlineApproval(false);
@@ -505,6 +546,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         }
       } catch {
         /* hub events remain primary */
+      } finally {
+        if (!cancelled) setJobHydrating(false);
       }
     })();
     return () => {
@@ -715,7 +758,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           jobId,
-          channels: ["linkedin", "x", "email", "blog", "meta_ad", "google_ad", "image_prompt"],
+          channels: [...REPURPOSE_CHANNELS],
         }),
       });
       if (!res.ok) {
@@ -736,7 +779,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   async function runPublish(isPublished: boolean) {
     setPublishBusy(isPublished ? "live" : "draft");
     try {
-      const result = await callPublish(createId, isPublished);
+      const result = await callPublish(createId, jobId, isPublished);
       setPublishResult(result);
     } catch (err) {
       setPublishResult({
@@ -751,8 +794,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   async function runExportZip() {
     setExportBusy("zip");
     setExportResult(null);
+    setExportSummary(null);
     try {
-      await downloadHtmlExport(createId);
+      const summary = await downloadHtmlExport(createId);
+      setExportSummary(summary);
     } catch (err) {
       setExportResult({ error: err instanceof Error ? err.message : "Export failed" });
     } finally {
@@ -763,9 +808,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   async function runExportCommit() {
     setExportBusy("commit");
     setExportResult(null);
+    setExportSummary(null);
     try {
       const result = await commitHtmlExport(createId);
       setExportResult(result);
+      if (result.exportSummary) setExportSummary(result.exportSummary);
     } catch (err) {
       setExportResult({ error: err instanceof Error ? err.message : "Commit failed" });
     } finally {
@@ -824,6 +871,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   }
 
   const isTerminal = status === "ready" || status === "canceled" || status === "failed";
+  const canRepurpose = status === "ready" && canRepurposeContentType(contentType);
+  const repurposeSourceLabel = labelForContentType(contentType);
   const showBrandKitPanel = awaitingBrandkit || status === "awaiting_brandkit_approval";
   // BrandKit Accept must complete before outline Approve — never show both gates together.
   const showOutlinePanel =
@@ -853,7 +902,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               disabled={busy}
               className="ml-auto rounded-md bg-[var(--cc-accent)] px-3 py-1.5 font-semibold text-white disabled:opacity-60"
             >
-              Approve outline
+              <ButtonBusyLabel busy={busy} busyLabel="Approving…" idleLabel="Approve outline" />
             </button>
           ) : null}
 
@@ -884,6 +933,10 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
+
+        {jobHydrating ? <LoadingRow label="Connecting to job…" /> : null}
+
+        <ProcessBanner status={status} stage={stage} />
 
         {showBrandKitPanel ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
@@ -961,7 +1014,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-[var(--cc-muted)]">Loading brand kit summary…</p>
+              <LoadingRow label="Loading brand kit summary…" className="mt-2" />
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -970,7 +1023,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 disabled={busy}
                 className="rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
               >
-                Accept brand kit
+                <ButtonBusyLabel busy={busy} busyLabel="Accepting…" idleLabel="Accept brand kit" />
               </button>
               <button
                 type="button"
@@ -978,7 +1031,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 disabled={busy}
                 className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
               >
-                Clear acceptance
+                <ButtonBusyLabel busy={busy} busyLabel="Clearing…" idleLabel="Clear acceptance" />
               </button>
             </div>
           </div>
@@ -994,7 +1047,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 disabled={busy || editableSections.length === 0}
                 className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
               >
-                Save
+                <ButtonBusyLabel busy={busy} busyLabel="Saving…" idleLabel="Save" />
               </button>
               <button
                 type="button"
@@ -1002,7 +1055,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 disabled={busy}
                 className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
               >
-                Regenerate
+                <ButtonBusyLabel busy={busy} busyLabel="Regenerating…" idleLabel="Regenerate" />
               </button>
             </div>
             <ol className="mt-3 flex flex-col gap-2">
@@ -1037,9 +1090,13 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         !awaitingOutlineApproval &&
         !awaitingBrandkit &&
         status !== "awaiting_brandkit_approval" ? (
-          <p className="text-sm text-[var(--cc-muted)]">
-            Waiting for the first section to be drafted…
-          </p>
+          isJobProcessing(status) ? (
+            <LoadingRow label="Waiting for the first section to be drafted…" />
+          ) : (
+            <p className="text-sm text-[var(--cc-muted)]">
+              Waiting for the first section to be drafted…
+            </p>
+          )
         ) : null}
 
         {orderedSections.map((s) => (
@@ -1079,7 +1136,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   disabled={pendingSectionKey === s.sectionKey}
                   className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
                 >
-                  {pendingSectionKey === s.sectionKey ? "Working…" : action}
+                  <ButtonBusyLabel
+                    busy={pendingSectionKey === s.sectionKey}
+                    busyLabel="Working…"
+                    idleLabel={action}
+                  />
                 </button>
               ))}
             </div>
@@ -1183,7 +1244,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                     onClick={() => void runFixReadiness()}
                     className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
                   >
-                    {readinessBusy ? "Fixing readiness…" : "Fix readiness"}
+                    <ButtonBusyLabel
+                      busy={readinessBusy}
+                      busyLabel="Fixing readiness…"
+                      idleLabel="Fix readiness"
+                    />
                   </button>
                   {readinessError ? <p className="text-red-600">{readinessError}</p> : null}
                 </div>
@@ -1218,17 +1283,29 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Re-Purpose</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Remix this ready draft into LinkedIn, X, email, blog pack, Meta/Google ads, and image
-            prompts. Image prompts: one per H2 for Pillar/Blog; one for other draft types.
+            Remix the active <span className="font-medium text-[var(--cc-ink)]">{repurposeSourceLabel}</span>{" "}
+            tab into LinkedIn, X, email, blog pack, and Meta/Google ads — same channel pack for every
+            generate type. Image prompts are separate jobs (§3.1 auto-spawn) — not part of Re-Purpose.
           </p>
-          <button
-            type="button"
-            disabled={transformBusy || status !== "ready"}
-            onClick={() => void runTransform()}
-            className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-          >
-            {transformBusy ? "Re-purposing…" : "Re-Purpose"}
-          </button>
+          {!canRepurposeContentType(contentType) ? (
+            <p className="mt-2 text-xs text-amber-800">
+              Switch to a generate draft tab (pillar, blog, tool, email, social, or ads) to
+              Re-Purpose.
+            </p>
+          ) : status !== "ready" ? (
+            <p className="mt-2 text-xs text-[var(--cc-muted)]">
+              Re-Purpose unlocks when this {repurposeSourceLabel} draft is ready.
+            </p>
+          ) : (
+            <button
+              type="button"
+              disabled={transformBusy || !canRepurpose}
+              onClick={() => void runTransform()}
+              className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            >
+              <ButtonBusyLabel busy={transformBusy} busyLabel="Re-purposing…" idleLabel="Re-Purpose" />
+            </button>
+          )}
           {transformError ? <p className="mt-2 text-xs text-red-600">{transformError}</p> : null}
           {transformVariants.length > 0 ? (
             <ul className="mt-3 flex flex-col gap-3 text-xs">
@@ -1258,7 +1335,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runExportZip()}
               className="rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              {exportBusy === "zip" ? "Exporting…" : "Export .html (.zip)"}
+              <ButtonBusyLabel
+                busy={exportBusy === "zip"}
+                busyLabel="Exporting…"
+                idleLabel="Export .html (.zip)"
+              />
             </button>
             <button
               type="button"
@@ -1266,9 +1347,23 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runExportCommit()}
               className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
             >
-              {exportBusy === "commit" ? "Committing…" : "Commit to geekatyourspot"}
+              <ButtonBusyLabel
+                busy={exportBusy === "commit"}
+                busyLabel="Committing…"
+                idleLabel="Commit to geekatyourspot"
+              />
             </button>
           </div>
+          {exportSummary ? (
+            <p className="mt-3 text-xs text-[var(--cc-muted)]">
+              Exported {exportSummary.exportedCount} of {exportSummary.totalJobs} job
+              {exportSummary.totalJobs === 1 ? "" : "s"}
+              {exportSummary.skipped.length > 0
+                ? ` (${exportSummary.skipped.length} skipped — still running or no result yet)`
+                : ""}
+              .
+            </p>
+          ) : null}
           {exportResult ? (
             <div className="mt-3 flex flex-col gap-1 text-xs">
               {exportResult.error ? <p className="text-red-600">{exportResult.error}</p> : null}
@@ -1293,11 +1388,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           ) : null}
         </div>
 
+        {isCmsPublishType(contentType) ? (
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Blog CMS only</h2>
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Publish to site</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Optional — sync the blog draft into the Geek blog CMS. Draft keeps it unpublished; live
-            makes it public immediately. Use Export above for pillar, tool, and channel packs.
+            Sync this {labelForContentType(contentType)} draft into the Geek blog CMS. Draft keeps it
+            unpublished; live makes it public immediately. Republish updates the same CMS post.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -1306,7 +1402,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runPublish(false)}
               className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
             >
-              {publishBusy === "draft" ? "Publishing…" : "Publish to CMS (draft)"}
+              <ButtonBusyLabel
+                busy={publishBusy === "draft"}
+                busyLabel="Publishing…"
+                idleLabel="Publish to CMS (draft)"
+              />
             </button>
             <button
               type="button"
@@ -1314,7 +1414,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runPublish(true)}
               className="rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              {publishBusy === "live" ? "Publishing…" : "Publish live"}
+              <ButtonBusyLabel
+                busy={publishBusy === "live"}
+                busyLabel="Publishing…"
+                idleLabel="Publish live"
+              />
             </button>
           </div>
 
@@ -1352,6 +1456,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             </div>
           ) : null}
         </div>
+        ) : null}
 
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
           <div className="flex items-center justify-between gap-2">
@@ -1362,7 +1467,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runAiVisibilityRefresh()}
               className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-50"
             >
-              {aiVisibilityBusy ? "Refreshing…" : "Refresh"}
+              <ButtonBusyLabel busy={aiVisibilityBusy} busyLabel="Refreshing…" idleLabel="Refresh" />
             </button>
           </div>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
@@ -1426,7 +1531,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           ) : aiVisibility && !aiVisibility.ready ? (
             <p className="mt-2 text-xs text-[var(--cc-muted)]">{aiVisibility.message}</p>
           ) : (
-            <p className="mt-2 text-xs text-[var(--cc-muted)]">Loading…</p>
+            <LoadingRow label="Loading AI visibility…" className="mt-2 text-xs" />
           )}
         </div>
       </aside>

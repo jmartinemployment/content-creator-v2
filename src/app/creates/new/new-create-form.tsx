@@ -31,6 +31,7 @@ import {
   SiteHierarchyPanel,
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
+import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
 
 type SiteProfileOption = {
   id: string;
@@ -534,7 +535,7 @@ export function NewCreateForm() {
           </label>
 
           {step === "analyzing" && analyzingLabel ? (
-            <p className="text-sm text-[var(--cc-muted)]">{analyzingLabel}</p>
+            <LoadingRow label={analyzingLabel} />
           ) : null}
 
           <div className="flex flex-wrap gap-2">
@@ -544,7 +545,11 @@ export function NewCreateForm() {
               onClick={() => void resolveSite(forceReanalyze)}
               className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {step === "analyzing" ? "Working…" : "Continue"}
+              <ButtonBusyLabel
+                busy={step === "analyzing" || busy}
+                busyLabel="Working…"
+                idleLabel="Continue"
+              />
             </button>
             {step === "analyzing" ? (
               <button
@@ -591,7 +596,7 @@ export function NewCreateForm() {
           </div>
 
           {hierarchyLoading ? (
-            <p className="text-sm text-[var(--cc-muted)]">Loading mobile site hierarchy…</p>
+            <LoadingRow label="Loading mobile site hierarchy…" />
           ) : (
             <SiteHierarchyPanel hierarchy={siteHierarchy} />
           )}
@@ -639,7 +644,8 @@ export function NewCreateForm() {
             </select>
             <p className="text-xs text-[var(--cc-muted)]">
               Long-form WRITE path (default Pillar). Check the other long-form under Also draft to
-              write both. Re-Purpose adds channel packs (including required image prompts).
+              write both. Re-Purpose on Canvas remixes any ready draft tab (pillar, blog, tool,
+              email, social, ads) into channel packs — not image prompts.
             </p>
           </div>
 
@@ -671,8 +677,9 @@ export function NewCreateForm() {
               })}
             </div>
             <p className="text-xs text-[var(--cc-muted)]">
-              Each checked type gets its own WRITE job. Image prompts are produced by Re-Purpose (one
-              per H2 for Pillar/Blog; one for other types) — not listed here.
+              Each checked type gets its own WRITE job. Image prompts auto-queue when that job
+              finishes (§3.1 — pillar/blog get hero + per H2; tool/email/social/ads get one each) —
+              not listed here.
             </p>
           </fieldset>
 
@@ -806,7 +813,7 @@ export function NewCreateForm() {
             disabled={busy}
             className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {busy ? "Finding tools…" : "Find partner tools"}
+            <ButtonBusyLabel busy={busy} busyLabel="Finding tools…" idleLabel="Find partner tools" />
           </button>
         </form>
       )}
@@ -902,7 +909,7 @@ export function NewCreateForm() {
               onClick={() => void recheckTools()}
               className="rounded-md border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--cc-ink)] disabled:opacity-60"
             >
-              {busy ? "Checking…" : "Re-check tools"}
+              <ButtonBusyLabel busy={busy} busyLabel="Checking…" idleLabel="Re-check tools" />
             </button>
             <button
               type="button"
@@ -921,11 +928,15 @@ export function NewCreateForm() {
               onClick={() => void confirmAndGenerate()}
               className="rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {busy
-                ? "Starting…"
-                : toolsPreflight.toolsFound
-                  ? "Confirm tools & generate"
-                  : "Continue without partner tools"}
+              <ButtonBusyLabel
+                busy={busy}
+                busyLabel="Starting…"
+                idleLabel={
+                  toolsPreflight.toolsFound
+                    ? "Confirm tools & generate"
+                    : "Continue without partner tools"
+                }
+              />
             </button>
           </div>
         </div>

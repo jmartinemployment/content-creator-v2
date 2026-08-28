@@ -1,7 +1,9 @@
 # Content Creator v2 — Executor Plan
 
+**Correctness over expediency.**
+
 **Workspace (only):** `/Users/jeffmartin/development/content-creator-v2`  
-**Design authority:** [`content-creator-v2.md`](./content-creator-v2.md) + [`../architecture.md`](../architecture.md) (architecture = **v1 platform map**; do not treat its GeekOAuth/Next wiring as an automatic v2 copy order).
+**Design authority:** [`v2-master.md`](./v2-master.md) + [`../architecture.md`](../architecture.md) (platform map; **§8 copy / call / do not reuse** is canonical for v1 dependency boundaries).
 
 **This file is what an executor follows.** Do not invent sibling repos. Use existing GeekOAuth as IdP (client only — never duplicate that service).
 
@@ -16,25 +18,11 @@
    - Geek-SEO hubs / crawlers (read-only from v2)
 2. **No polling.** No `usePollJob`, no `setInterval` on job URLs, no worker `SELECT pending` sleep loop.
 3. **No second crawler.** Brand/site facts come from existing Geek-SEO analysis (read).
-4. **Keep the v1 Content Brief** (same fields/catalogs). Do not replace with blank Infobase forms.
+4. **Content Brief** fields and catalogs live in `brief-catalog.ts` (this app owns them; do not call v1 for brief data or replace with blank Infobase forms).
 5. **Next.js = standard App Router.** Routes under `src/app`. Auth colocated under `src/app/auth/` (next to callback) + `src/app/api/auth/` route handlers. **Do not** invent a top-level `server/` tree. **Do not** put GeekAPI/BFF fetch clients in a folder named `lib`.
 6. **Use existing GeekOAuth — do not duplicate it.** This app is an **OAuth client** of the already-running GeekOAuth service. Distinct client id + cookies from v1. Do not copy the GeekOAuth repo or stand up a second IdP.
 7. **Do not create** `/Users/jeffmartin/development/GeekContentCreatorV2` or folders named `web` / `frontend`. App lives **in this workspace**. Prefer **repo root** as the Next app (keep `plan/` + `architecture.md` beside it). If a subfolder is required, ask the owner for the name first.
 8. **One app, no `/app` URL.** `src/app/` is the Next App Router root only. Do not nest `src/app/app/`. Product routes are `/`, `/creates/...`, etc.
-
----
-
-## Product outcomes (why we build)
-
-| Problem | v2 fix |
-|---|---|
-| Same problem/solution under every H2 | Per-section **job** in PLAN + **OverlapGate** in VALIDATE |
-| Must-mention bag | Partition children per section |
-| Undifferentiated research | Allocation map per section |
-| Operator invents brand voice / Infobase | **BrandKit** from crawl (competitor-shaped fields); brief still steers the piece |
-| Sync generate / poll jobs | Event log + Postgres `NOTIFY` + SignalR replay |
-
-Crawl → competitor kit mapping, event contract, isolation tables: see [`content-creator-v2.md`](./content-creator-v2.md).
 
 ---
 
@@ -103,10 +91,10 @@ Crawl → competitor kit mapping, event contract, isolation tables: see [`conten
 
 1. Copy **brief catalogs/fields** from v1 into this app (UI form only) — not auth.
 2. Require crawl id (same gate spirit as v1 Generate).
-3. `GccV2BrandKitBuilder`: map crawl → competitor Infobase/Brand Voice fields ([table in design plan](./content-creator-v2.md)). Review UI; provisional voice.
+3. `GccV2BrandKitBuilder`: map crawl → competitor Infobase/Brand Voice fields ([`v2-master.md`](./v2-master.md) §1). Review UI; provisional voice.
 4. Hierarchy-match (read-only) → outline children; partition must-mentions; research allocation map.
 5. Outline approval gate before WRITE.
-6. CC-owned site hierarchy crawl when building structured `siteHierarchy`: **mobile-only** (Pixel 7 / Google-style), same as Site Analyzer — see [`site-hierarchy-crawl.md`](./site-hierarchy-crawl.md). Do not desktop-crawl or dual-crawl.
+6. CC-owned site hierarchy crawl when building structured `siteHierarchy`: **mobile-only** (Pixel 7 / Google-style), same as Site Analyzer — shipped in v2 (see [`v2-master.md`](./v2-master.md) §4). Do not desktop-crawl or dual-crawl.
 
 **Do not:** blank Infobase; edit Geek-SEO; invent SERP children; treat intentional mobile/desktop twin differences (e.g. no hero on mobile) as crawl bugs; flatten hierarchy to markdown for storage/retrieval.
 
