@@ -6,6 +6,7 @@ import type { HubConnection } from "@microsoft/signalr";
 import {
   createJobHubConnection,
   joinJob,
+  onHubReconnected,
   onJobEvent,
   type GccV2JobEvent,
 } from "@/app/auth/job-hub";
@@ -531,10 +532,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let offReconnected: (() => void) | undefined;
     async function connect() {
       const connection = createJobHubConnection();
       connectionRef.current = connection;
       onJobEvent(connection, appendEvent);
+      offReconnected = onHubReconnected(connection, jobId, () => lastSeqRef.current);
       try {
         await joinJob(connection, jobId, 0);
       } catch (err) {
@@ -544,6 +547,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     connect();
     return () => {
       cancelled = true;
+      offReconnected?.();
       connectionRef.current?.stop();
       connectionRef.current = null;
     };
