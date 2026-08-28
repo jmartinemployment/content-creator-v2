@@ -656,6 +656,19 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     return true;
   }
 
+  async function saveOutline() {
+    if (editableSections.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await persistOutline();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save outline");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function approveOutline() {
     setBusy(true);
     setError(null);
@@ -1075,9 +1088,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Outline awaiting approval</h2>
               <button
                 type="button"
+                onClick={() => void saveOutline()}
+                disabled={busy || editableSections.length === 0}
+                className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+              >
+                <ButtonBusyLabel busy={busy} busyLabel="Saving…" idleLabel="Save" />
+              </button>
+              <button
+                type="button"
                 onClick={() => void regenerateOutline()}
                 disabled={busy}
-                className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+                className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
               >
                 <ButtonBusyLabel busy={busy} busyLabel="Regenerating…" idleLabel="Regenerate" />
               </button>
@@ -1085,7 +1106,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             <p className="mt-2 text-xs text-[var(--cc-muted)]">
               Assign each section a role (<strong>problem</strong> establishes the pain once;{" "}
               <strong>advance</strong> moves past it). Must-mentions apply only to that section at write
-              time. <strong>Save &amp; approve outline</strong> in the bar above persists your edits.
+              time. <strong>Save</strong> persists edits; <strong>Save &amp; approve outline</strong> in the
+              bar above continues generation.
             </p>
             <ol className="mt-3 flex flex-col gap-3">
               {editableSections.map((s, i) => (
