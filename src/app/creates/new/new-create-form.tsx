@@ -69,32 +69,6 @@ const fieldClass = "flex flex-col gap-1.5";
 const POLL_MS = 3000;
 const POLL_MAX_MS = 10 * 60 * 1000;
 
-// #region agent log
-function agentDebugLog(
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data?: Record<string, unknown>,
-) {
-  fetch("http://127.0.0.1:7816/ingest/22ee2238-7bb8-4fc3-9705-0dea2c361cf3", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "fa72fe",
-    },
-    body: JSON.stringify({
-      sessionId: "fa72fe",
-      hypothesisId,
-      location,
-      message,
-      data: data ?? {},
-      timestamp: Date.now(),
-      runId: "prod-browser",
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 function normalizeProfiles(body: unknown): SiteProfileOption[] {
   if (!Array.isArray(body)) return [];
   return body
@@ -207,12 +181,6 @@ export function NewCreateForm() {
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
 
   useEffect(() => {
-    // #region agent log
-    agentDebugLog("F", "NewCreateForm.mount", "Confirm-tools UI loaded", {
-      hasConfirmToolsStep: true,
-      href: typeof window !== "undefined" ? window.location.href : "",
-    });
-    // #endregion
     return () => {
       pollAbortRef.current?.abort();
     };
@@ -422,27 +390,9 @@ export function NewCreateForm() {
       });
       if (!preRes.ok) {
         const body = (await preRes.json().catch(() => null)) as { error?: string } | null;
-        // #region agent log
-        agentDebugLog("F", "NewCreateForm.findTools", "preflight HTTP error", {
-          status: preRes.status,
-          error: body?.error ?? null,
-          createId: create.id,
-        });
-        // #endregion
         throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
       }
       const preflight = (await preRes.json()) as PartnerToolsPreflight;
-      // #region agent log
-      agentDebugLog("G", "NewCreateForm.findTools", "preflight ok", {
-        createId: create.id,
-        toolCount: preflight.toolCount,
-        toolsFound: preflight.toolsFound,
-        toolsLen: Array.isArray(preflight.tools) ? preflight.tools.length : -1,
-        matchedHeading: preflight.matchedHeading ?? null,
-        firstToolNames: (preflight.tools ?? []).slice(0, 5).map((t) => t.name),
-        hasSiteHierarchy: Boolean(preflight.siteHierarchy),
-      });
-      // #endregion
       setPendingCreateId(create.id);
       const hierarchyFromPre =
         normalizeSiteHierarchy(preflight.siteHierarchy) ?? siteHierarchy;
@@ -454,11 +404,6 @@ export function NewCreateForm() {
       });
       setStep("tools");
     } catch (err) {
-      // #region agent log
-      agentDebugLog("F", "NewCreateForm.findTools", "findTools catch", {
-        message: err instanceof Error ? err.message : String(err),
-      });
-      // #endregion
       setError(err instanceof Error ? err.message : "Could not resolve partner tools");
     } finally {
       setBusy(false);
@@ -487,34 +432,13 @@ export function NewCreateForm() {
       });
       if (!genRes.ok) {
         const body = (await genRes.json().catch(() => null)) as { error?: string } | null;
-        // #region agent log
-        agentDebugLog("H", "NewCreateForm.confirmAndGenerate", "generate HTTP error", {
-          status: genRes.status,
-          error: body?.error ?? null,
-          pendingCreateId,
-          partnerToolsConfirmed: true,
-        });
-        // #endregion
         throw new Error(body?.error || `generate failed: HTTP ${genRes.status}`);
       }
       const data = (await genRes.json()) as { jobId?: string; jobIds?: string[] };
       const jobId = data.jobId ?? data.jobIds?.[0];
-      // #region agent log
-      agentDebugLog("H", "NewCreateForm.confirmAndGenerate", "generate ok", {
-        pendingCreateId,
-        jobId: jobId ?? null,
-        jobIdsLen: Array.isArray(data.jobIds) ? data.jobIds.length : 0,
-        preflightToolCount: toolsPreflight?.toolCount ?? null,
-      });
-      // #endregion
       if (!jobId) throw new Error("generate returned no jobId");
       router.push(`/creates/${pendingCreateId}?jobId=${jobId}`);
     } catch (err) {
-      // #region agent log
-      agentDebugLog("H", "NewCreateForm.confirmAndGenerate", "generate catch", {
-        message: err instanceof Error ? err.message : String(err),
-      });
-      // #endregion
       setError(err instanceof Error ? err.message : "Could not start job");
       setBusy(false);
     }
