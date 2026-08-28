@@ -477,7 +477,7 @@ This section is the **complete inventory** of every v1 touchpoint v2 still has, 
 | You delete… | phi / v2 breaks? |
 |-------------|------------------|
 | GeekContentCreator **UI** (repo / Vercel) | **No** — phi never calls the v1 website |
-| v1 **`api/geek-content-creator/*`** routes only | **Partially** — see §7.3 (BFF is half-migrated; analyze/status still need v2 handlers or v1 stays up) |
+| v1 **`api/geek-content-creator/*`** routes only | **No** — retired in GeekAPI (`GccController` removed); phi uses v2 prefix only |
 | v1 **C# services** under `Services/ContentCreator` without copying | **Yes** — generate, brand kit, partner/competitor crawl fail |
 | v1 **`content_creator` DB** schema | **No** for new v2 creates; **yes** for `/legacy` and old v1 data |
 | Geek-SEO / shared Workflow engines | **Yes** — out of scope; v2 **calls** these forever |
@@ -504,11 +504,11 @@ phi proxies Site Analyzer through `src/app/api/site-analyzer/*`. Target prefix: 
 
 | BFF route | BFF calls today | v2 GeekAPI handler exists? | Status |
 |-----------|-----------------|----------------------------|--------|
-| `POST .../analyze` | **v2** prefix | **No** — only on v1 `GccController` | **BFF ahead of backend** — works only while v1 route stays up |
-| `GET .../[id]` | **v2** prefix | **No** | Same |
-| `GET .../section-context` | **v2** prefix | **No** | BFF ready; UI not wired yet (§8) |
-| `GET .../profiles/recent` | **v1** prefix | **Yes** (`GccV2Controller`) | BFF not retargeted |
-| `GET .../profiles/by-domain` | **v1** prefix | **Yes** | BFF not retargeted |
+| `POST .../analyze` | **v2** prefix | **Yes** (`GccV2Controller`) | **Done** |
+| `GET .../[id]` | **v2** prefix | **Yes** | **Done** |
+| `GET .../section-context` | **v2** prefix | **Yes** | **Done** |
+| `GET .../profiles/recent` | **v2** prefix | **Yes** (`GccV2Controller`) | **Done** — BFF retargeted |
+| `GET .../profiles/by-domain` | **v2** prefix | **Yes** | **Done** — BFF retargeted |
 
 **v1-only Site Analyzer routes** (not used by phi today; copy when building full Site Analyzer UI in v2):
 
@@ -587,7 +587,7 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 3. **GeekAPI:** Copy/move C# helpers (§7.3) — deploy Railway
 4. E2E smoke (§6) + Site Analyzer path with v1 `GccController` site-analyzer **off** in staging
 5. **Decommission v1 UI:** Remove GeekContentCreator Vercel deployment + archive repo — **v1 no longer accessible in browser**
-6. **Decommission v1 API:** Remove `api/geek-content-creator` routes (generate, jobs, site-analyzer) — v2 prefix only
+6. **Decommission v1 API:** ~~Remove `api/geek-content-creator` routes~~ **Done** — `GccController` removed; v2 prefix only
 7. Drop `HttpGccRepository` + `/legacy` when §7.4 option = drop
 8. Optional: drop `content_creator` schema after data retention policy
 
@@ -645,10 +645,12 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 - [ ] E2E smoke test on phi
 
 ### Active — v1 cutover (§7)
-- [ ] GeekAPI: copy `analyze`, `GET {id}`, `section-context` to v2 controller (BFF already targets v2)
-- [ ] phi BFF: retarget `profiles/recent` + `profiles/by-domain` to v2 prefix
-- [ ] GeekAPI: copy `ParseSiteSection`, `ValidateSiteSectionGate`, `FlattenSections`, DTOs to v2 namespace
-- [ ] GeekAPI: move/copy `GccPartnerUrlResearchService` + Polite crawl + `HttpGeekSeoSiteAnalyzerClient` out of v1 folder
-- [ ] Staging: new brief E2E with v1 site-analyzer routes disabled
-- [ ] Owner decision: keep or drop `/legacy` (§7.4)
-- [ ] Update `src/app/legacy/*` copy — remove "use the live v1 Content Creator app" after cutover
+- [x] GeekAPI: copy `analyze`, `GET {id}`, `section-context` to v2 controller (BFF already targets v2)
+- [x] phi BFF: retarget `profiles/recent` + `profiles/by-domain` to v2 prefix
+- [x] GeekAPI: copy `ParseSiteSection`, `ValidateSiteSectionGate`, `FlattenSections`, DTOs to v2 namespace (`GccV2SiteSection.cs`)
+- [x] GeekAPI: move/copy `GccPartnerUrlResearchService` + Polite crawl + `HttpGeekSeoSiteAnalyzerClient` out of v1 folder
+- [x] Owner decision: **keep** `/legacy` read-only (§7.4)
+- [x] Update `src/app/legacy/*` copy — removed v1 app redirect
+- [ ] Staging: new brief E2E with v1 site-analyzer routes disabled (v1 API removed — verify on deploy)
+- [x] §7.6 GeekAPI: remove `api/geek-content-creator/*` routes (`GccController` deleted)
+- [ ] §7.6 operational: decommission v1 UI (GeekContentCreator Vercel deployment)

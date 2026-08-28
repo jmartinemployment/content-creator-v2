@@ -122,7 +122,7 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
       </section>
 
       <p className="text-xs text-[var(--cc-muted)]">
-        To edit or regenerate, use the live v1 Content Creator app — v2 does not write to v1 tables.
+        Historical v1 create — read-only. New work uses Content Creator v2 (<Link href="/creates" className="text-[var(--cc-accent)]">creates</Link>).
       </p>
     </main>
   );

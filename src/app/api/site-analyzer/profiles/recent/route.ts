@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = searchParams.get("limit") ?? "50";
   const res = await fetch(
-    `${apiConfig.baseUrl}/api/geek-content-creator/site-analyzer/profiles/recent?limit=${encodeURIComponent(limit)}`,
+    `${apiConfig.baseUrl}/api/geek-content-creator-v2/site-analyzer/profiles/recent?limit=${encodeURIComponent(limit)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

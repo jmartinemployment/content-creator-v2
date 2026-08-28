@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccessTokenWithRefresh } from "@/app/auth/session";
 import { apiConfig } from "@/app/auth/config";
 
-/** BFF → GeekAPI v1 `api/geek-content-creator/site-analyzer/profiles/by-domain`. */
+/** BFF → GeekAPI v2 `api/geek-content-creator-v2/site-analyzer/profiles/by-domain`. */
 export async function GET(request: Request) {
   const token = await getAccessTokenWithRefresh();
   if (!token) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
   const limit = searchParams.get("limit") ?? "50";
   const res = await fetch(
-    `${apiConfig.baseUrl}/api/geek-content-creator/site-analyzer/profiles/by-domain?domain=${encodeURIComponent(domain.trim())}&limit=${encodeURIComponent(limit)}`,
+    `${apiConfig.baseUrl}/api/geek-content-creator-v2/site-analyzer/profiles/by-domain?domain=${encodeURIComponent(domain.trim())}&limit=${encodeURIComponent(limit)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

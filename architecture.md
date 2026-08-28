@@ -167,27 +167,30 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
 | Realtime | `gcc-v2-realtime` hub (patterns copied; new files) |
 | Jobs, export, brand kit, validate/repair | `ContentCreatorV2/*`, `HttpGccV2Repository` |
 
-### Still reusing v1 at runtime (debt — blocks v1 delete)
+### v1 cutover status (2026-08-28)
 
-| Dependency | Where | Migration |
-|------------|-------|-----------|
-| Site Analyzer HTTP | `src/app/api/site-analyzer/*` → `api/geek-content-creator/site-analyzer/*` | GeekAPI-owned routes under `api/geek-content-creator-v2/site-analyzer/*`; BFF retarget |
-| Section helpers | `GccGenerateService.ParseSiteSection`, `FlattenSections` in v2 services | Copy into `Services/ContentCreatorV2/` |
-| Legacy read | `GccV2LegacyController` + `HttpGccRepository` | Keep until `/legacy` dropped |
+| Dependency | Status |
+|------------|--------|
+| Site Analyzer BFF | **Done** — all `src/app/api/site-analyzer/*` → `api/geek-content-creator-v2/site-analyzer/*` |
+| Section helpers | **Done** — `GccV2SiteSection.cs` |
+| Partner / polite crawl | **Done** — `ContentCreatorV2/Partner`, `ContentCreatorV2/Polite` |
+| SEO client | **Done** — `Services/GeekSeo/HttpGeekSeoSiteAnalyzerClient` |
+| Legacy read | **Keep** — `GccV2LegacyController` + `HttpGccRepository` |
+| v1 API routes | **Retired** — `GccController` removed; v2 prefix only for new work |
 
 ### Safe to delete without breaking v2 generate/export
 
-- GeekContentCreator UI (phi replaces it)
-- v1 generate/job routes for **new** creates (v2 uses `geek-content-creator-v2`)
+- GeekContentCreator UI (phi replaces it) — **operational:** remove Vercel deployment when ready
+- v1 `api/geek-content-creator/*` routes — **removed in GeekAPI**
 
 ### Do not delete yet
 
 - Geek-SEO / Site Analyzer crawl backend (read-only source of truth)
 - Shared prompt/review/analyzer assemblies v2 calls in-process
-- v1 Site Analyzer routes until BFF points at v2-owned endpoints
-- `HttpGccRepository` if `/legacy` or backfill still needed
+- `HttpGccRepository` while `/legacy` is kept
+- `GccGenerateService` static helpers still used by Workflow (`ContentGenerationOrchestrator`, tests)
 
-**Decommission gate:** v2 E2E on phi passes ([`v2-master.md` §6](./plan/v2-master.md)) **and** Site Analyzer BFF + remaining `GccGenerateService` helper calls migrated to v2-owned code.
+**Decommission gate:** v2 E2E on phi passes ([`v2-master.md` §6](./plan/v2-master.md)).
 
 ---
 
