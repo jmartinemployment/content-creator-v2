@@ -17,15 +17,8 @@ import {
   type PrimaryDraftType,
   PRIMARY_DRAFT_TYPES,
 } from "../content-types";
-import {
-  hostFromSiteUrl,
-  isProfileReady,
-  normalizeCrawlPage,
-  normalizeSiteUrl,
-  siteSectionForApi,
-  siteSectionFromCrawlPages,
-  type SiteSectionContext,
-} from "../site-section";
+import { siteSectionForApi, type SiteSectionContext } from "../site-section";
+import { loadSectionFromSite, resolveSiteAnalysis } from "@/app/site-analyze-flow";
 import {
   normalizeSiteHierarchy,
   SiteHierarchyPanel,
@@ -39,14 +32,6 @@ import {
   type ToolSourceCrawlStatus,
   useToolSourceCrawlHub,
 } from "@/app/tool-vendor-crawl";
-
-type SiteProfileOption = {
-  id: string;
-  domain: string;
-  status: string | null;
-  analyzedAt: string | null;
-  primaryFocus: string | null;
-};
 
 type Step = "url" | "analyzing" | "brief" | "tools";
 
@@ -73,70 +58,6 @@ const selectClass =
 const inputClass = selectClass;
 const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
 const fieldClass = "flex flex-col gap-1.5";
-
-const POLL_MS = 3000;
-const POLL_MAX_MS = 10 * 60 * 1000;
-
-function normalizeProfiles(body: unknown): SiteProfileOption[] {
-  if (!Array.isArray(body)) return [];
-  return body
-    .map((raw) => {
-      const p = raw as Record<string, unknown>;
-      const id = String(p.id ?? p.Id ?? "").trim();
-      if (!id) return null;
-      return {
-        id,
-        domain: String(p.domain ?? p.Domain ?? "").trim(),
-        status: (p.status ?? p.Status ?? null) as string | null,
-        analyzedAt: (p.analyzedAt ?? p.AnalyzedAt ?? null) as string | null,
-        primaryFocus: (p.primaryFocus ?? p.PrimaryFocus ?? null) as string | null,
-      };
-    })
-    .filter((p): p is SiteProfileOption => p !== null);
-}
-
-function pickReadyProfile(list: SiteProfileOption[]): SiteProfileOption | null {
-  return list.find((p) => isProfileReady(p.status)) ?? null;
-}
-
-async function fetchProfilesByDomain(domain: string): Promise<SiteProfileOption[]> {
-  const res = await fetch(
-    `/api/site-analyzer/profiles/by-domain?domain=${encodeURIComponent(domain)}&limit=50`,
-    { cache: "no-store" },
-  );
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(
-      typeof body?.error === "string" ? body.error : `Could not list profiles (HTTP ${res.status})`,
-    );
-  }
-  return normalizeProfiles(body);
-}
-
-/** Load crawled pages for this profile and build site section (relatedPages from the URL). */
-async function loadSectionFromSite(
-  profileId: string,
-  resolvedSiteUrl: string,
-): Promise<SiteSectionContext> {
-  const res = await fetch(`/api/site-analyzer/${encodeURIComponent(profileId)}`, {
-    cache: "no-store",
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(
-      typeof body.error === "string" ? body.error : `Could not load crawl (HTTP ${res.status})`,
-    );
-  }
-  const rawPages = (body.pages ?? body.Pages ?? []) as Record<string, unknown>[];
-  const pages = rawPages.map(normalizeCrawlPage).filter((p): p is NonNullable<typeof p> => p !== null);
-  const section = siteSectionFromCrawlPages(profileId, resolvedSiteUrl, pages);
-  if (section.relatedPages.length === 0) {
-    throw new Error(
-      "This crawl has no site pages yet — force a new crawl, or wait for the analysis to finish.",
-    );
-  }
-  return section;
-}
 
 export function NewCreateForm() {
   const router = useRouter();
@@ -210,52 +131,24 @@ export function NewCreateForm() {
     }
   }
 
-  const applyReadyProfile = useCallback(async (profileId: string, resolvedSiteUrl: string) => {
-    setAnalyzingLabel("Loading pages from this site…");
-    const loaded = await loadSectionFromSite(profileId, resolvedSiteUrl);
-    setSiteAnalysisProfileId(profileId);
-    setSiteUrl(resolvedSiteUrl);
-    setSection(loaded);
-    setStep("brief");
-    setAnalyzingLabel("Loading mobile site hierarchy…");
-    setBusy(false);
-    // Hierarchy is independent of Find tools — show on brief as soon as site is ready.
-    void loadSiteHierarchy(resolvedSiteUrl).finally(() => setAnalyzingLabel(null));
-  }, []);
-
-  async function pollUntilReady(domain: string, signal: AbortSignal): Promise<SiteProfileOption> {
-    const started = Date.now();
-    while (!signal.aborted) {
-      const list = await fetchProfilesByDomain(domain);
-      const ready = pickReadyProfile(list);
-      if (ready) return ready;
-      if (Date.now() - started > POLL_MAX_MS) {
-        throw new Error("Site analysis timed out — try again or re-analyze.");
-      }
-      setAnalyzingLabel("Waiting for crawl to finish…");
-      await new Promise<void>((resolve, reject) => {
-        const t = window.setTimeout(resolve, POLL_MS);
-        signal.addEventListener(
-          "abort",
-          () => {
-            window.clearTimeout(t);
-            reject(new DOMException("Aborted", "AbortError"));
-          },
-          { once: true },
-        );
-      });
-    }
-    throw new DOMException("Aborted", "AbortError");
-  }
+  const applyReadyProfile = useCallback(
+    async (profileId: string, resolvedSiteUrl: string, loadedSection?: SiteSectionContext) => {
+      setAnalyzingLabel("Loading pages from this site…");
+      const loaded = loadedSection ?? (await loadSectionFromSite(profileId, resolvedSiteUrl));
+      setSiteAnalysisProfileId(profileId);
+      setSiteUrl(resolvedSiteUrl);
+      setSection(loaded);
+      setStep("brief");
+      setAnalyzingLabel("Loading mobile site hierarchy…");
+      setBusy(false);
+      // Hierarchy is independent of Find tools — show on brief as soon as site is ready.
+      void loadSiteHierarchy(resolvedSiteUrl).finally(() => setAnalyzingLabel(null));
+    },
+    [],
+  );
 
   async function resolveSite(force: boolean) {
     setError(null);
-    const normalized = normalizeSiteUrl(siteUrlInput);
-    const domain = hostFromSiteUrl(siteUrlInput);
-    if (!domain) {
-      setError("Enter a site URL or domain (required).");
-      return;
-    }
 
     pollAbortRef.current?.abort();
     const ac = new AbortController();
@@ -271,34 +164,13 @@ export function NewCreateForm() {
     setToolsPreflight(null);
 
     try {
-      if (!force) {
-        const existing = await fetchProfilesByDomain(domain);
-        const ready = pickReadyProfile(existing);
-        if (ready) {
-          await applyReadyProfile(ready.id, normalized);
-          return;
-        }
-      }
-
-      setAnalyzingLabel("Starting site analysis…");
-      const analyzeRes = await fetch("/api/site-analyzer/analyze", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domain, force }),
-        signal: ac.signal,
-      });
-      const analyzeBody = await analyzeRes.json().catch(() => ({}));
-      if (!analyzeRes.ok) {
-        throw new Error(
-          typeof analyzeBody.error === "string"
-            ? analyzeBody.error
-            : `Analyze failed (HTTP ${analyzeRes.status})`,
-        );
-      }
-
-      setAnalyzingLabel("Crawl queued — polling for ready profile…");
-      const ready = await pollUntilReady(domain, ac.signal);
-      await applyReadyProfile(ready.id, normalized);
+      const analyzed = await resolveSiteAnalysis(
+        siteUrlInput,
+        force,
+        ac.signal,
+        setAnalyzingLabel,
+      );
+      await applyReadyProfile(analyzed.profileId, analyzed.siteUrl, analyzed.section);
     } catch (err) {
       if (ac.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         setStep("url");
