@@ -33,12 +33,12 @@ import {
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
 import {
-  createJobHubConnection,
-  joinCrawlRun,
-  onCrawlEvent,
-  onCrawlHubReconnected,
-  type GccV2CrawlEvent,
-} from "@/app/auth/job-hub";
+  crawlStatusLabel,
+  fetchToolSourceCrawlStatus,
+  parseOperatorTools,
+  type ToolSourceCrawlStatus,
+  useToolSourceCrawlHub,
+} from "@/app/tool-vendor-crawl";
 
 type SiteProfileOption = {
   id: string;
@@ -67,65 +67,6 @@ type PartnerToolsPreflight = {
   message?: string;
   siteHierarchy?: SiteHierarchy | null;
 };
-
-type ToolSourceCrawlStatus = {
-  runId?: string;
-  status: string;
-  errorSummary?: string | null;
-  currentOrigin?: string | null;
-  hosts?: Array<{
-    origin?: string;
-    pagesAttempted?: number;
-    pagesWithHtml?: number;
-    quotePages?: number;
-  }> | null;
-};
-
-function isCrawlActive(status: string | undefined): boolean {
-  return status === "pending" || status === "running";
-}
-
-function mapCrawlApiBody(body: Record<string, unknown>): ToolSourceCrawlStatus {
-  const hosts = body.hosts;
-  return {
-    runId: typeof body.runId === "string" ? body.runId : undefined,
-    status: String(body.status ?? "unknown"),
-    errorSummary: (body.errorSummary ?? null) as string | null,
-    currentOrigin: (body.currentOrigin ?? null) as string | null,
-    hosts: Array.isArray(hosts)
-      ? (hosts as ToolSourceCrawlStatus["hosts"])
-      : null,
-  };
-}
-
-function mapCrawlEvent(evt: GccV2CrawlEvent): ToolSourceCrawlStatus {
-  return {
-    runId: evt.runId,
-    status: evt.status,
-    errorSummary: evt.errorSummary,
-    currentOrigin: evt.currentOrigin,
-    hosts: evt.hosts,
-  };
-}
-
-function crawlStatusLabel(crawl: ToolSourceCrawlStatus): string {
-  if (crawl.status === "pending") return "Queued — starting vendor crawl…";
-  if (crawl.status === "running") {
-    if (crawl.currentOrigin) {
-      const done = crawl.hosts?.length ?? 0;
-      return done > 0
-        ? `Crawling ${crawl.currentOrigin}… (${done} site(s) done)`
-        : `Crawling ${crawl.currentOrigin}…`;
-    }
-    return "Crawling vendor sites…";
-  }
-  if (crawl.status === "complete") {
-    const quotes = crawl.hosts?.reduce((n, h) => n + (h.quotePages ?? 0), 0) ?? 0;
-    return `Vendor research ready — ${quotes} quoteable page(s)`;
-  }
-  if (crawl.status === "failed") return "Crawl failed";
-  return crawl.status;
-}
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -197,24 +138,6 @@ async function loadSectionFromSite(
   return section;
 }
 
-function parseOperatorTools(text: string): Array<{ name?: string; url: string }> {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const pipe = line.indexOf("|");
-      if (pipe >= 0) {
-        const name = line.slice(0, pipe).trim();
-        const url = line.slice(pipe + 1).trim();
-        if (!url) return null;
-        return name ? { name, url } : { url };
-      }
-      return { url: line };
-    })
-    .filter((row): row is { name?: string; url: string } => row !== null);
-}
-
 export function NewCreateForm() {
   const router = useRouter();
   const pollAbortRef = useRef<AbortController | null>(null);
@@ -244,7 +167,6 @@ export function NewCreateForm() {
   const [pendingCreateId, setPendingCreateId] = useState<string | null>(null);
   const [toolsPreflight, setToolsPreflight] = useState<PartnerToolsPreflight | null>(null);
   const [toolSourceCrawl, setToolSourceCrawl] = useState<ToolSourceCrawlStatus | null>(null);
-  const [crawlBusy, setCrawlBusy] = useState(false);
   const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
@@ -416,81 +338,41 @@ export function NewCreateForm() {
     };
   }
 
-  async function refreshToolSourceCrawl(createId: string) {
-    const res = await fetch(`/api/gcc-v2/creates/${createId}/tool-sources/crawl`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return;
-    const body = (await res.json()) as Record<string, unknown>;
-    setToolSourceCrawl(mapCrawlApiBody(body));
-  }
-
-  async function startToolSourceCrawl(createId: string, force = false) {
-    if (parseOperatorTools(operatorToolsText).length === 0) return;
-    setCrawlBusy(true);
-    try {
-      const { brief } = buildBriefPayload();
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/tool-sources/crawl`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief, force }),
-      });
-      const body = (await res.json().catch(() => null)) as Record<string, unknown> & {
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(body?.error || `tool source crawl failed: HTTP ${res.status}`);
-      }
-      setToolSourceCrawl(mapCrawlApiBody(body ?? {}));
-    } finally {
-      setCrawlBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    if (step !== "tools" || !pendingCreateId) return;
-    if (parseOperatorTools(operatorToolsText).length === 0) {
+  const refreshToolSourceCrawlStatus = useCallback(async () => {
+    const tools = parseOperatorTools(operatorToolsText);
+    if (tools.length === 0) {
       setToolSourceCrawl(null);
       return;
     }
-    void startToolSourceCrawl(pendingCreateId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- kick off once when entering confirm-tools step
-  }, [step, pendingCreateId]);
+    try {
+      const run = await fetchToolSourceCrawlStatus(tools);
+      setToolSourceCrawl(run);
+    } catch {
+      setToolSourceCrawl(null);
+    }
+  }, [operatorToolsText]);
 
   useEffect(() => {
-    const runId = toolSourceCrawl?.runId;
-    if (!runId || !isCrawlActive(toolSourceCrawl?.status)) return;
+    if (step !== "tools") return;
+    void refreshToolSourceCrawlStatus();
+  }, [step, pendingCreateId, refreshToolSourceCrawlStatus]);
 
-    let cancelled = false;
-    const connection = createJobHubConnection();
-    const runIdRef = { current: runId };
+  useEffect(() => {
+    if (step !== "tools") return;
+    const tools = parseOperatorTools(operatorToolsText);
+    if (tools.length === 0) {
+      setToolSourceCrawl(null);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void refreshToolSourceCrawlStatus();
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [operatorToolsText, step, refreshToolSourceCrawlStatus]);
 
-    const offEvents = onCrawlEvent(connection, (evt) => {
-      if (cancelled || evt.runId !== runIdRef.current) return;
-      setToolSourceCrawl(mapCrawlEvent(evt));
-    });
-
-    const offReconnect = onCrawlHubReconnected(connection, () => runIdRef.current);
-
-    void (async () => {
-      try {
-        await connection.start();
-        if (cancelled) return;
-        await joinCrawlRun(connection, runId);
-      } catch {
-        if (!cancelled && pendingCreateId) {
-          void refreshToolSourceCrawl(pendingCreateId);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      offEvents();
-      offReconnect();
-      void connection.stop();
-    };
-  }, [toolSourceCrawl?.runId, toolSourceCrawl?.status, pendingCreateId]);
+  useToolSourceCrawlHub(toolSourceCrawl, setToolSourceCrawl, () => {
+    void refreshToolSourceCrawlStatus();
+  });
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1048,20 +930,9 @@ export function NewCreateForm() {
 
           {parseOperatorTools(operatorToolsText).length > 0 ? (
             <div className="rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-semibold text-[var(--cc-ink)]">Tool source crawl</h3>
-                <button
-                  type="button"
-                  disabled={busy || crawlBusy || !pendingCreateId}
-                  onClick={() => pendingCreateId && void startToolSourceCrawl(pendingCreateId, true)}
-                  className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--cc-ink)] disabled:opacity-60"
-                >
-                  {crawlBusy ? "Starting…" : "Crawl tool sources"}
-                </button>
-              </div>
+              <h3 className="font-semibold text-[var(--cc-ink)]">Vendor research status</h3>
               <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                Fetches vendor sites in the background (robots-gated). Tool pages wait for this to
-                finish; pillar/blog can generate while it runs.
+                Read-only — start vendor crawl from home. Tool pages use this when complete.
               </p>
               {toolSourceCrawl ? (
                 <div className="mt-2 text-xs text-[var(--cc-ink)]">
@@ -1080,7 +951,9 @@ export function NewCreateForm() {
                     </ul>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <p className="mt-2 text-xs text-[var(--cc-muted)]">Checking database…</p>
+              )}
             </div>
           ) : null}
 
