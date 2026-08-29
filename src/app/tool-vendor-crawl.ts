@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { HubConnection } from "@microsoft/signalr";
+import { HubConnectionState } from "@microsoft/signalr";
 import {
   createJobHubConnection,
   joinCrawlRun,
@@ -125,9 +126,19 @@ export function useToolSourceCrawlHub(
   setCrawl: (next: ToolSourceCrawlStatus) => void,
   onHubError?: () => void,
 ) {
+  const setCrawlRef = useRef(setCrawl);
+  const onHubErrorRef = useRef(onHubError);
+
   useEffect(() => {
-    const runId = crawl?.runId;
-    if (!runId || !isCrawlActive(crawl?.status)) return;
+    setCrawlRef.current = setCrawl;
+    onHubErrorRef.current = onHubError;
+  });
+
+  const runId = crawl?.runId;
+  const crawlActive = isCrawlActive(crawl?.status);
+
+  useEffect(() => {
+    if (!runId || !crawlActive) return;
 
     let cancelled = false;
     const connection: HubConnection = createJobHubConnection();
@@ -135,7 +146,7 @@ export function useToolSourceCrawlHub(
 
     const offEvents = onCrawlEvent(connection, (evt) => {
       if (cancelled || evt.runId !== runIdRef.current) return;
-      setCrawl(mapCrawlEvent(evt));
+      setCrawlRef.current(mapCrawlEvent(evt));
     });
 
     const offReconnect = onCrawlHubReconnected(connection, () => runIdRef.current);
@@ -146,7 +157,7 @@ export function useToolSourceCrawlHub(
         if (cancelled) return;
         await joinCrawlRun(connection, runId);
       } catch {
-        if (!cancelled) onHubError?.();
+        if (!cancelled) onHubErrorRef.current?.();
       }
     })();
 
@@ -154,7 +165,9 @@ export function useToolSourceCrawlHub(
       cancelled = true;
       offEvents();
       offReconnect();
-      void connection.stop();
+      if (connection.state !== HubConnectionState.Disconnected) {
+        void connection.stop();
+      }
     };
-  }, [crawl?.runId, crawl?.status, onHubError, setCrawl]);
+  }, [runId, crawlActive]);
 }
