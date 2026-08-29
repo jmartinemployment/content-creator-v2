@@ -1371,7 +1371,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         })}
 
         {sourceAttributionHtml ? (
-          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+          <div className="gcc-tool-sources-panel rounded-lg border border-[var(--cc-line)] p-4">
             <h2 className="text-lg font-semibold text-[var(--cc-ink)]">Sources</h2>
             <div
               className="prose prose-sm mt-3 max-w-none text-[var(--cc-ink)]"
