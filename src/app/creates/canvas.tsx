@@ -17,6 +17,14 @@ import type {
 } from "@/app/creates/canvas-types";
 import { SECTION_EVENT_TYPES } from "@/app/creates/canvas-types";
 import {
+  canRemoveSection,
+  insertAdvanceSection,
+  isProblemLocked,
+  isRoleLocked,
+  removeSectionAt,
+  supportsAdvanceOutlineRows,
+} from "@/app/creates/outline-editor";
+import {
   ButtonBusyLabel,
   isJobProcessing,
   LoadingRow,
@@ -736,6 +744,16 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  function addAdvanceOutlineSection() {
+    outlineDirtyRef.current = true;
+    setEditableSections((prev) => insertAdvanceSection(prev));
+  }
+
+  function removeOutlineSection(index: number) {
+    outlineDirtyRef.current = true;
+    setEditableSections((prev) => removeSectionAt(prev, index));
+  }
+
   async function regenerateOutline() {
     setBusy(true);
     setError(null);
@@ -920,6 +938,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     awaitingOutlineApproval &&
     (outline !== null || editableSections.length > 0);
   const showApproveOutline = !showBrandKitPanel && awaitingOutlineApproval;
+  const showAddAdvanceOutline = showOutlinePanel && supportsAdvanceOutlineRows(contentType);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -1108,26 +1127,63 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               <strong>advance</strong> moves past it). Must-mentions apply only to that section at write
               time. <strong>Save</strong> persists edits; <strong>Save &amp; approve outline</strong> in the
               bar above continues generation.
+              {showAddAdvanceOutline ? (
+                <>
+                  {" "}
+                  Adding an Advance section typically adds ~500–700 words at write — the preferred fix for
+                  thin Pillar drafts before approve.
+                </>
+              ) : null}
             </p>
+            {showAddAdvanceOutline ? (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={addAdvanceOutlineSection}
+                  disabled={busy}
+                  className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+                >
+                  Add Advance section
+                </button>
+              </div>
+            ) : null}
             <ol className="mt-3 flex flex-col gap-3">
               {editableSections.map((s, i) => (
                 <li key={s.key || i} className="flex flex-col gap-1.5 rounded-md border border-[var(--cc-line)] p-2">
-                  <input
-                    type="text"
-                    value={s.heading}
-                    onChange={(e) => {
-                      outlineDirtyRef.current = true;
-                      const heading = e.target.value;
-                      setEditableSections((prev) =>
-                        prev.map((row, idx) => (idx === i ? { ...row, heading } : row)),
-                      );
-                    }}
-                    className="rounded-md border border-[var(--cc-line)] px-2 py-1.5 text-sm text-[var(--cc-ink)]"
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={s.heading}
+                      onChange={(e) => {
+                        outlineDirtyRef.current = true;
+                        const heading = e.target.value;
+                        setEditableSections((prev) =>
+                          prev.map((row, idx) => (idx === i ? { ...row, heading } : row)),
+                        );
+                      }}
+                      placeholder={
+                        s.job === "advance" && !s.heading.trim()
+                          ? "e.g. How … or Next steps for …"
+                          : undefined
+                      }
+                      className="min-w-0 flex-1 rounded-md border border-[var(--cc-line)] px-2 py-1.5 text-sm text-[var(--cc-ink)]"
+                    />
+                    {canRemoveSection(s, i) ? (
+                      <button
+                        type="button"
+                        onClick={() => removeOutlineSection(i)}
+                        disabled={busy}
+                        className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs font-semibold text-[var(--cc-muted)] disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
                   <label className="flex flex-wrap items-center gap-2 text-xs text-[var(--cc-muted)]">
                     <span>Role</span>
                     <select
-                      value={s.job}
+                      value={isProblemLocked(i) ? "problem" : s.job}
+                      disabled={isRoleLocked(s, i)}
                       onChange={(e) => {
                         outlineDirtyRef.current = true;
                         const job = e.target.value;
@@ -1135,12 +1191,15 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                           prev.map((row, idx) => (idx === i ? { ...row, job } : row)),
                         );
                       }}
-                      className="rounded-md border border-[var(--cc-line)] bg-white px-2 py-1 text-xs text-[var(--cc-ink)]"
+                      className="rounded-md border border-[var(--cc-line)] bg-white px-2 py-1 text-xs text-[var(--cc-ink)] disabled:opacity-60"
                     >
                       <option value="problem">problem</option>
                       <option value="advance">advance</option>
                       <option value="faq">faq</option>
                     </select>
+                    {isProblemLocked(i) ? (
+                      <span>Lede — establishes the problem once.</span>
+                    ) : null}
                   </label>
                   <label className="flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
                     <span>Must mention (one per line)</span>
