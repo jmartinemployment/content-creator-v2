@@ -941,7 +941,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     try {
       await callCanvasAction(createId, jobId, action, {
         sectionKey,
-        instruction: instructionOverride ?? pendingInstruction[sectionKey]?.trim() || undefined,
+        instruction: instructionOverride ?? (pendingInstruction[sectionKey]?.trim() || undefined),
       });
       // The Canvas endpoint also emits a job event (SectionRewritten/Expanded/Retoned) which will
       // update this section again via the hub — this direct clear just avoids a stuck spinner if
