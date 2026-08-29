@@ -271,6 +271,21 @@ type ExportSummary = {
   skipped: { jobId: string; contentType: string; reason: string }[];
 };
 
+function parseSourceAttributionFromResultJson(resultJson: string | null | undefined): string | null {
+  if (!resultJson?.trim()) return null;
+  try {
+    const parsed = JSON.parse(resultJson) as {
+      sourceAttributionHtml?: string | null;
+      toolPageKind?: string | null;
+    };
+    if (parsed.toolPageKind?.toLowerCase() !== "partner") return null;
+    const html = parsed.sourceAttributionHtml?.trim();
+    return html ? html : null;
+  } catch {
+    return null;
+  }
+}
+
 type ExportCommitResult = {
   commitSha?: string;
   commitUrl?: string;
@@ -357,7 +372,7 @@ async function callFixReadiness(createId: string, jobId: string): Promise<FixRea
  * rewrite/expand/re-tone actions against the sync Canvas API.
  */
 export function Canvas({ createId, jobId }: CanvasProps) {
-  const { subscribeJobEvents, joinActiveJob, hubError } = useCreateJobHub();
+  const { subscribeJobEvents, joinActiveJob, hubError, jobs } = useCreateJobHub();
   const [status, setStatus] = useState<string>("pending");
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -397,6 +412,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
   const [jobHydrating, setJobHydrating] = useState(true);
   const [contentType, setContentType] = useState<string>("blog");
+  const [sourceAttributionHtml, setSourceAttributionHtml] = useState<string | null>(null);
 
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
@@ -501,6 +517,16 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           setAwaitingOutlineApproval(false);
           setAwaitingBrandkit(false);
           void runAiVisibilityRefresh();
+          void (async () => {
+            try {
+              const res = await fetch(`/api/gcc-v2/jobs/${jobId}`, { cache: "no-store" });
+              if (!res.ok) return;
+              const job = (await res.json()) as { resultJson?: string | null };
+              setSourceAttributionHtml(parseSourceAttributionFromResultJson(job.resultJson));
+            } catch {
+              /* best-effort */
+            }
+          })();
           break;
         }
         case "JobCanceled":
@@ -543,6 +569,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   useEffect(() => {
     lastSeqRef.current = 0;
+    setSourceAttributionHtml(null);
     void joinActiveJob(jobId, 0);
   }, [jobId, joinActiveJob]);
 
@@ -577,11 +604,13 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           status?: string;
           stage?: string | null;
           contentType?: string;
+          resultJson?: string | null;
         };
         if (cancelled) return;
         if (job.status) setStatus(job.status);
         if (job.stage) setStage(job.stage);
         if (job.contentType) setContentType(job.contentType.trim().toLowerCase());
+        setSourceAttributionHtml(parseSourceAttributionFromResultJson(job.resultJson));
         if (job.status === "awaiting_brandkit_approval") {
           setAwaitingBrandkit(true);
           setAwaitingOutlineApproval(false);
@@ -1341,6 +1370,16 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           );
         })}
 
+        {sourceAttributionHtml ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <h2 className="text-lg font-semibold text-[var(--cc-ink)]">Sources</h2>
+            <div
+              className="prose prose-sm mt-3 max-w-none text-[var(--cc-ink)]"
+              dangerouslySetInnerHTML={{ __html: sourceAttributionHtml }}
+            />
+          </div>
+        ) : null}
+
         <details className="rounded-lg border border-[var(--cc-line)] p-3 text-xs">
           <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">
             Event log ({log.length})
@@ -1564,7 +1603,13 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               Exported {exportSummary.exportedCount} of {exportSummary.totalJobs} job
               {exportSummary.totalJobs === 1 ? "" : "s"}
               {exportSummary.skipped.length > 0
-                ? ` (${exportSummary.skipped.length} skipped — still running or no result yet)`
+                ? ` (${exportSummary.skipped.length} skipped: ${exportSummary.skipped
+                    .map((s) => {
+                      const tab = jobs.find((j) => j.id === s.jobId);
+                      const label = tab?.tabLabel?.trim() || tab?.contentType || s.contentType;
+                      return label;
+                    })
+                    .join(", ")})`
                 : ""}
               .
             </p>
