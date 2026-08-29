@@ -128,7 +128,7 @@ Workspaces (if reused from Geek Content Workflow patterns) group clients; confir
 
 - Selection: per generate/revise request (UI select), default OpenAI unless product default changes.  
 - Keys: **GeekAPI only**.  
-- Budgets: see `CONTENT_CREATOR_PLAN.md` § LLM call budget (pack = 1 call, tools ≈ 2 each, revise = 1, image prompt paths = 1, etc.).
+- Budgets: see `CONTENT_CREATOR_PLAN.md` § LLM call budget (pack = 1 call, tools ≈ 2 calls per partner page + overview, revise = 1, image prompt paths = 1, etc.). Planned tool model: [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md).
 
 ---
 
@@ -166,6 +166,7 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
 | Site hierarchy crawl | `GccV2SiteHierarchyService` (CC-owned mobile crawl) |
 | Realtime | `gcc-v2-realtime` hub (patterns copied; new files) |
 | Jobs, export, brand kit, validate/repair | `ContentCreatorV2/*`, `HttpGccV2Repository` |
+| Tool pages (planned) | [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md) → `ContentCreatorV2/ToolPages/*` |
 
 ### v1 cutover status (2026-08-28)
 
@@ -206,7 +207,7 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
   - **Research** (`ResearchJson` — SERP index + ≤3 quoteable destination-page extracts)
   - optional freeform notes
   - **`SiteSectionContext`** when create started from Site Analyzer — **required** if site analysis is attached (`ValidateSiteSectionGate`: non-empty `relatedPages`)
-  - tool names + brief when generating AI Tools
+  - tool names + brief when generating AI Tools — target: [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md) (keyword overview + N partner pages from operator URLs)
 - Reuse Geek-SEO site analysis gap signals behind a **new** Site Analyzer UI.
 - Copied CWV2 code becomes canonical Content Creator code when CWV2 retires — no upstream sync ceremony.
 
@@ -260,7 +261,7 @@ Open at wire-up only: extract shared writing package vs existing in-process serv
 
 | Reuse | Ignore |
 |-------|--------|
-| Orchestrator, prompts, validation, image-prompt JSON, tool body+metadata (~2 calls/tool) | Old UI; keyword-from-home with zero site section context |
+| Orchestrator, prompts, validation, image-prompt JSON, tool body+metadata (~2 calls/tool) | Old UI; keyword-from-home with zero site section context; v2 tool stub (keyword as product) — replace per [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md) |
 
 ### Geek-SEO Site Analyzer capability
 

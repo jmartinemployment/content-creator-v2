@@ -643,9 +643,9 @@ export function NewCreateForm() {
               ))}
             </select>
             <p className="text-xs text-[var(--cc-muted)]">
-              Long-form WRITE path (default Pillar). Check the other long-form under Also draft to
-              write both. Re-Purpose on Canvas remixes any ready draft tab (pillar, blog, tool,
-              email, social, ads) into channel packs — not image prompts.
+              {primaryDraft === "tool"
+                ? "Long-form tool pages: one keyword overview plus a full page per partner tool from supplied URLs. Optionally add pillar/blog under Also draft for a use-case article to ground the overview."
+                : "Long-form WRITE path (default Pillar). Check the other long-form under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab (pillar, blog, tool, email, social, ads) into channel packs — not image prompts."}
             </p>
           </div>
 
@@ -827,7 +827,7 @@ export function NewCreateForm() {
             <p className="text-sm text-[var(--cc-muted)]">
               {toolsPreflight.message ??
                 (toolsPreflight.toolsFound
-                  ? `Found ${toolsPreflight.toolCount} partner tool(s). Each will be discussed in the draft.`
+                  ? `Found ${toolsPreflight.toolCount} partner tool(s). Each gets a full tool page from its supplied URL, plus a keyword overview page linking to them on-site.`
                   : "No partner tools found.")}
             </p>
             <p className="text-xs text-[var(--cc-muted)]">

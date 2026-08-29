@@ -7,6 +7,7 @@ export type JobSnapshot = {
   contentType?: string;
   error?: string | null;
   updatedAtUtc?: string | null;
+  tabLabel?: string | null;
 };
 
 function parsePayload(payloadJson: string): Record<string, unknown> {

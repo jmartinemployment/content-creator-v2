@@ -24,6 +24,7 @@ import {
   removeSectionAt,
   supportsAdvanceOutlineRows,
 } from "@/app/creates/outline-editor";
+import { listOutstandingBlockers } from "@/app/creates/validation-blockers";
 import {
   ButtonBusyLabel,
   isJobProcessing,
@@ -207,13 +208,14 @@ function SectionBody({
 
 async function callCanvasAction(
   createId: string,
+  jobId: string,
   action: CanvasAction,
   body: { sectionKey: string; text?: string; instruction?: string },
 ): Promise<void> {
   const res = await fetch(`/api/gcc-v2/creates/${createId}/canvas/${action}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, jobId }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -321,8 +323,13 @@ type FixReadinessResult = {
   outstandingIssues?: boolean;
   seoScore?: number;
   geoScore?: number;
+  polishScore?: number;
+  polishShipReady?: boolean;
+  guardrailRestructureCount?: number;
+  guardrailRestructurePhrases?: string[];
   seoChecks?: ValidationReportView["seoChecks"];
   geoChecks?: ValidationReportView["geoChecks"];
+  overlapHits?: ValidationReportView["overlapHits"];
   error?: string;
 };
 
@@ -384,6 +391,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [exportSummary, setExportSummary] = useState<ExportSummary | null>(null);
   const [readinessBusy, setReadinessBusy] = useState(false);
   const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [highlightSectionKey, setHighlightSectionKey] = useState<string | null>(null);
   const [aiVisibility, setAiVisibility] = useState<AiVisibilitySnapshotView | null>(null);
   const [aiVisibilityBusy, setAiVisibilityBusy] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
@@ -895,8 +903,15 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               outstandingIssues: result.outstandingIssues ?? prev.outstandingIssues,
               seoScore: result.seoScore ?? prev.seoScore,
               geoScore: result.geoScore ?? prev.geoScore,
+              polishScore: result.polishScore ?? prev.polishScore,
+              polishShipReady: result.polishShipReady ?? prev.polishShipReady,
+              guardrailRestructureCount:
+                result.guardrailRestructureCount ?? prev.guardrailRestructureCount,
+              guardrailRestructurePhrases:
+                result.guardrailRestructurePhrases ?? prev.guardrailRestructurePhrases,
               seoChecks: result.seoChecks ?? prev.seoChecks,
               geoChecks: result.geoChecks ?? prev.geoChecks,
+              overlapHits: result.overlapHits ?? prev.overlapHits,
             }
           : prev,
       );
@@ -911,13 +926,22 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     (report?.seoChecks?.some((c) => !c.passed) ?? false)
     || (report?.geoChecks?.some((c) => !c.passed) ?? false);
 
-  async function runCanvasAction(sectionKey: string, action: CanvasAction) {
+  const outstandingBlockers = useMemo(
+    () => (report ? listOutstandingBlockers(report) : []),
+    [report],
+  );
+
+  async function runCanvasAction(
+    sectionKey: string,
+    action: CanvasAction,
+    instructionOverride?: string,
+  ) {
     setPendingSectionKey(sectionKey);
     setError(null);
     try {
-      await callCanvasAction(createId, action, {
+      await callCanvasAction(createId, jobId, action, {
         sectionKey,
-        instruction: pendingInstruction[sectionKey]?.trim() || undefined,
+        instruction: instructionOverride ?? pendingInstruction[sectionKey]?.trim() || undefined,
       });
       // The Canvas endpoint also emits a job event (SectionRewritten/Expanded/Retoned) which will
       // update this section again via the hub — this direct clear just avoids a stuck spinner if
@@ -926,6 +950,19 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       setError(err instanceof Error ? err.message : `${action} failed`);
       setPendingSectionKey((current) => (current === sectionKey ? null : current));
     }
+  }
+
+  function scrollToSection(sectionKey: string) {
+    setHighlightSectionKey(sectionKey);
+    document.getElementById(`section-card-${sectionKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      setHighlightSectionKey((current) => (current === sectionKey ? null : current));
+    }, 4000);
+  }
+
+  function prepareOverlapFix(sectionKey: string, repairHint: string) {
+    setPendingInstruction((prev) => ({ ...prev, [sectionKey]: repairHint }));
+    scrollToSection(sectionKey);
   }
 
   const isTerminal = status === "ready" || status === "canceled" || status === "failed";
@@ -1243,8 +1280,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
         {orderedSections.map((s) => {
           const displayHeading = s.section.heading || s.heading;
+          const highlighted = highlightSectionKey === s.sectionKey;
           return (
-          <div key={s.sectionKey} className="rounded-lg border border-[var(--cc-line)] p-4">
+          <div
+            key={s.sectionKey}
+            id={`section-card-${s.sectionKey}`}
+            className={`rounded-lg border p-4 ${
+              highlighted
+                ? "border-[var(--cc-accent)] ring-2 ring-[var(--cc-accent)]/30"
+                : "border-[var(--cc-line)]"
+            }`}
+          >
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold text-[var(--cc-ink)]">{displayHeading}</h2>
               {s.job ? (
@@ -1262,7 +1308,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
             <SectionBody section={s.section} depth={0} rootHeading={displayHeading} />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--cc-line)] pt-3">
+            <div className="mt-3 border-t border-[var(--cc-line)] pt-3">
+              <p className="text-xs font-semibold text-[var(--cc-ink)]">Edit this section</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 placeholder="Optional instruction…"
@@ -1276,9 +1324,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 <button
                   key={action}
                   type="button"
-                  onClick={() => runCanvasAction(s.sectionKey, action)}
+                  onClick={() => void runCanvasAction(s.sectionKey, action)}
                   disabled={pendingSectionKey === s.sectionKey}
-                  className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+                  className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
                 >
                   <ButtonBusyLabel
                     busy={pendingSectionKey === s.sectionKey}
@@ -1287,6 +1335,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   />
                 </button>
               ))}
+              </div>
             </div>
           </div>
           );
@@ -1379,7 +1428,18 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </div>
               ) : null}
               {report.outstandingIssues ? (
-                <p className="font-semibold text-amber-700">Outstanding issues remain after repair.</p>
+                <div className="rounded-md bg-amber-50 p-2 text-amber-900">
+                  <p className="font-semibold">Outstanding issues remain after repair</p>
+                  {outstandingBlockers.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-4">
+                      {outstandingBlockers.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1">Ship ready is still no — see overlap hits and scores above.</p>
+                  )}
+                </div>
               ) : null}
               {status === "ready" && hasReadinessFailures ? (
                 <div className="mt-2 flex flex-col gap-2">

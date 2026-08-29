@@ -16,17 +16,17 @@ export const CONTENT_TYPES = [
 
 export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
 
-/** Long-form Primary draft options — default Pillar. */
+/** Long-form Primary draft options — default Pillar. Tool = keyword overview + partner pages. */
 export const PRIMARY_DRAFT_TYPES = [
   { value: "pillar", label: "Pillar" },
   { value: "blog", label: "Blog" },
+  { value: "tool", label: "Tool pages" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
 
 export type PrimaryDraftType = (typeof PRIMARY_DRAFT_TYPES)[number]["value"];
 
-/** Short-form Also draft types. Image prompts auto-spawn per job when ready — see plan §3.1. */
+/** Short-form Also draft types (excludes tool — tool is primary long-form or Also with pillar/blog). */
 export const ALSO_DRAFT_SHORT_TYPES = [
-  { value: "tool", label: "Tool page" },
   { value: "email", label: "Email" },
   { value: "social", label: "Social" },
   { value: "ads", label: "Ads" },
@@ -36,11 +36,19 @@ export const ALSO_DRAFT_SHORT_TYPES = [
 export function alsoDraftOptionsFor(
   primary: PrimaryDraftType,
 ): ReadonlyArray<{ value: ContentType; label: string }> {
+  if (primary === "tool") {
+    return [
+      { value: "pillar", label: "Pillar" },
+      { value: "blog", label: "Blog" },
+      ...ALSO_DRAFT_SHORT_TYPES,
+    ];
+  }
+
   const otherLong: { value: ContentType; label: string } =
     primary === "pillar"
       ? { value: "blog", label: "Blog" }
       : { value: "pillar", label: "Pillar" };
-  return [otherLong, ...ALSO_DRAFT_SHORT_TYPES];
+  return [otherLong, { value: "tool", label: "Tool page" }, ...ALSO_DRAFT_SHORT_TYPES];
 }
 
 export function labelForContentType(value: string): string {

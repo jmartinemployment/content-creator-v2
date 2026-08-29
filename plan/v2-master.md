@@ -3,7 +3,7 @@
 **Path:** `/Users/jeffmartin/development/content-creator-v2/plan/v2-master.md`  
 **Replaces:** `content-creator-v2.md`, `remaining-work.md`, and session Cursor plans for multi-draft/export.
 
-**Related:** [`executor.md`](./executor.md) (build rules), [`workflow-discrepancies.md`](./workflow-discrepancies.md) (v2 vs Content Writer audit — not shipping scope), [`architecture.md`](../architecture.md) (platform map + **copy / call / do not reuse**).
+**Related:** [`executor.md`](./executor.md) (build rules), [`tool-pages-v2.md`](./tool-pages-v2.md) (tool page generation — planned), [`workflow-discrepancies.md`](./workflow-discrepancies.md) (v2 vs Content Writer audit — not shipping scope), [`architecture.md`](../architecture.md) (platform map + **copy / call / do not reuse**).
 
 **Correctness over expediency.**
 
@@ -84,7 +84,7 @@ Image-prompt jobs skip VALIDATE; worker sets `writeOnly: true` and goes straight
 | Type | Pipeline | How operator gets it |
 |------|----------|----------------------|
 | Pillar / Blog | Full + outline gate | Primary draft |
-| Tool page | Full + outline gate | Also draft checkbox |
+| Tool page | Keyword overview + N partner pages (planned — [`tool-pages-v2.md`](./tool-pages-v2.md)); today: one stub job | Also draft checkbox |
 | Email / Social / Ads | Short-form; auto-write after brand kit | Also draft checkbox |
 | Image prompts | Write-only jobs (§3.1) | Auto-spawned when **any** draft job reaches `ready` — not Also draft, not Re-Purpose |
 | Re-Purpose pack | Transform (`GcwRepurposeCatalog`) | Optional Canvas button on **any** ready generate job tab (`pillar`, `blog`, `tool`, `email`, `social`, `ads`); same channel mix for every source type; **not in ZIP** |
@@ -347,8 +347,11 @@ Omit any tag whose bound value is empty. `twitter:card` falls back to `summary` 
 | | Partner tools | Competitors |
 |---|---------------|-------------|
 | Outline must-mention | `recommendedTools[].name` only | — |
-| WRITE inline href | On-site `/tools/…` only | Research only — no rival CTAs |
-| Operator URLs | Crawl excerpts only — never in outline or hrefs | Same polite crawl pattern |
+| WRITE inline href | On-site `/tools/…` only (pillar + keyword overview tools index) | Research only — no rival CTAs |
+| Operator URLs | Crawl/extract for research; pillar and keyword overview **never** use operator URLs in hrefs | Same polite crawl pattern |
+| Partner tool page body | After [`tool-pages-v2.md`](./tool-pages-v2.md): `<blockquote cite="{sourceUrl}">` + optional **Visit {name}** outbound link — see that plan | N/A |
+
+**Today (tool WRITE not yet implemented):** checking Tool page produces one job that treats the target keyword as a faux product name — not v1 per-partner pages. See [`tool-pages-v2.md`](./tool-pages-v2.md).
 
 ---
 
@@ -445,6 +448,29 @@ After approving requested job, list siblings on same create. For each in `awaiti
 
 **Tests:** republish same create+type updates same `externalPostId`; slug collision handled; short-form publish rejected.
 
+### 5.7 Tool pages v2 (planned — not shipped)
+
+**Authority:** [`tool-pages-v2.md`](./tool-pages-v2.md)
+
+When **Tool page** is checked, target behavior (replacing today's keyword-as-product stub):
+
+| Output | Export | Notes |
+|--------|--------|-------|
+| **Keyword overview** (1 job at generate) | `tools/{keyword-slug}.html` | Use-case page + tools index: richer per-partner blurbs, on-site links to partner pages |
+| **Partner tool pages** (N jobs spawned after pillar `ready`) | `tools/marketing/{tool-slug}.html` each | Full page per partner — extract + rewrite from operator URL (`partnerResearch`) |
+| **Not produced** | — | v1 "Top AI Tools for {keyword}" hub |
+
+**Implementation rules:**
+
+- Copy workflow tool logic into `GeekAPI/Services/ContentCreatorV2/ToolPages/*` — **do not** call `IToolPageGenerator` or `IContentPromptBuilder` tool methods.
+- **`GccV2ToolPageSpawnService`** — after pillar `ready`, spawn one job per `recommendedTools` entry (pattern: `GccV2ImagePromptSpawnService`).
+- Partner page body: pipeline-built **`<blockquote cite="{sourceUrl}"><p>…</p></blockquote>`**; optional separate outbound visit link.
+- Overview WRITE waits for pillar excerpt + shared extraction; partner jobs start at `write`.
+
+**Image prompts after ship:** each tool job (overview + each partner) spawns one `image-prompt` companion when that job reaches `ready` (§3.1) — expect **1 + N** tool-related image tabs when N partners resolve.
+
+**Frontend:** partner draft tabs labeled **Tool · {name}**; preflight copy updated; hub reload on `ToolPageSpawnCompleted`.
+
 ---
 
 ## 6. Verification gate (required before marking done)
@@ -453,7 +479,7 @@ E2E on phi after deploy (`63b813d` GeekAPI + `afba0b0` phi, 2026-08-28):
 
 1. New brief — all Also draft checked
 2. Generate → brand kit → **one** outline approve
-3. Tabs show Pillar · Blog · Tool · Email · Social · Ads · **Image prompt** (one tab per spawned job); running tabs show spinners; `LoadingRow` when active tab is `ready` but siblings generate
+3. Tabs show Pillar · Blog · Tool (overview + **Tool · {partner}** when [`tool-pages-v2.md`](./tool-pages-v2.md) shipped) · Email · Social · Ads · **Image prompt** (one tab per spawned job); running tabs show spinners; `LoadingRow` when active tab is `ready` but siblings generate
 4. **New pillar brief:** first H2 appears once (lede only) — not lede + duplicate outline section card
 5. Export ZIP contains `.html` + `.txt` (email/social/ads + image prompts) under correct §3.1 folders
 6. Export UI reports exported vs skipped counts
@@ -596,9 +622,11 @@ These steps **take v1 offline**. Do not ship §5 fixes without scheduling §7 un
 
 ## 8. Future backlog (not this sprint)
 
+- **Tool pages v2** — [`tool-pages-v2.md`](./tool-pages-v2.md): keyword overview + N partner pages, URL extract, `<blockquote cite="…">`; replaces keyword-as-product stub
 - **Export parity** — close gaps in §3 export table (JSON+LD, meta variants, image `.txt` folder/body, keywords)
 - **Site Analyzer UI in phi** — copy v1 `site-analyzer` patterns: URL-first entry, `/site-analyzer` route, section-context handoff, `Writing for:` on Canvas; no optional profile-only create
-- **Partner tools on create** — `OperatorToolsJson` on `GccV2Create`, `GET /creates/{id}/partner-tools`, Canvas partner-tools panel (paste survives reopen)
+- **Partner tools preflight on create** — shipped: paste URLs, `GET /creates/{id}/partner-tools/preflight`, confirm step ([`v2-master.md`](./v2-master.md) §4)
+- **Tool pages generation** — [`tool-pages-v2.md`](./tool-pages-v2.md) (not shipped): wire preflight data into N partner tool jobs + keyword overview
 - Backfill image prompts on existing creates (optional repair endpoint)
 - Re-Purpose variants in ZIP (non-goal for now)
 - Read-only v1 create view — see §7.4 legacy decision

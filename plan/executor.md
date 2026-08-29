@@ -3,7 +3,7 @@
 **Correctness over expediency.**
 
 **Workspace (only):** `/Users/jeffmartin/development/content-creator-v2`  
-**Design authority:** [`v2-master.md`](./v2-master.md) + [`../architecture.md`](../architecture.md) (platform map; **§8 copy / call / do not reuse** is canonical for v1 dependency boundaries).
+**Design authority:** [`v2-master.md`](./v2-master.md) + [`tool-pages-v2.md`](./tool-pages-v2.md) (tool generation) + [`../architecture.md`](../architecture.md) (platform map; **§8 copy / call / do not reuse** is canonical for v1 dependency boundaries).
 
 **This file is what an executor follows.** Do not invent sibling repos. Use existing GeekOAuth as IdP (client only — never duplicate that service).
 
@@ -115,7 +115,9 @@
 
 ## Phase 6 — Remaining types + guardrails
 
-Tool, social, image, ads, email; transforms; DB guardrail rules as hard gate. Spike evaluate prompts (go/no-go).
+Tool pages v2 ([`tool-pages-v2.md`](./tool-pages-v2.md)): keyword overview + N partner pages, URL extract, `<blockquote cite="…">`, spawn after pillar `ready` — **copy** into `ContentCreatorV2/ToolPages/*`, do not call workflow `ToolPageGenerator`.
+
+Social, image, ads, email; transforms; DB guardrail rules as hard gate. Spike evaluate prompts (go/no-go).
 
 ---
 

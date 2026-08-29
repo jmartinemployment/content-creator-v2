@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { labelForContentType } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
+import type { JobSnapshot } from "@/app/creates/job-snapshot";
 import {
   isJobQueued,
   isJobRunning,
@@ -20,6 +21,11 @@ type CreateDraftTabsProps = {
 
 function isAwaitingGate(status: string): boolean {
   return status === "awaiting_brandkit_approval" || status === "awaiting_outline_approval";
+}
+
+function draftTabLabel(job: JobSnapshot): string {
+  if (job.tabLabel?.trim()) return job.tabLabel.trim();
+  return labelForContentType(job.contentType ?? "");
 }
 
 function truncateError(error: string, max = 80): string {
@@ -78,7 +84,7 @@ export function CreateDraftTabs({ createId, activeJobId }: CreateDraftTabsProps)
       <nav className="mt-4 flex flex-wrap gap-2" aria-label="Drafts for this create">
         {jobs.map((j) => {
           const active = j.id === activeJobId;
-          const label = labelForContentType(j.contentType ?? "");
+          const label = draftTabLabel(j);
           const running = isJobRunning(j.status);
           const failed = j.status === "failed";
           const stuck = isJobQueued(j.status) && isJobStuckPending(j.updatedAtUtc);
@@ -166,7 +172,7 @@ export function CreateDraftTabs({ createId, activeJobId }: CreateDraftTabsProps)
               .filter((j) => j.status !== "ready" && !isAwaitingGate(j.status))
               .map((j) => (
                 <li key={j.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-[var(--cc-ink)]">{labelForContentType(j.contentType ?? "")}</span>
+                  <span className="text-[var(--cc-ink)]">{draftTabLabel(j)}</span>
                   <span>· {j.status}</span>
                   {j.error ? <span className="text-red-700">· {truncateError(j.error, 120)}</span> : null}
                   {(j.status === "failed" || (isJobQueued(j.status) && isJobStuckPending(j.updatedAtUtc))) &&

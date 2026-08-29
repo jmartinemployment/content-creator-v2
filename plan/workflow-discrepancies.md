@@ -7,7 +7,7 @@
 
 **v2 surface:** `GeekAPI/Services/ContentCreatorV2/*`, phi BFF (`content-creator-v2`).
 
-**Related:** [`v2-master.md`](./v2-master.md) (what ships), [`executor.md`](./executor.md) (isolation rules).
+**Related:** [`v2-master.md`](./v2-master.md) (what ships), [`tool-pages-v2.md`](./tool-pages-v2.md) (tool page target — planned), [`executor.md`](./executor.md) (isolation rules).
 
 ---
 
@@ -113,6 +113,24 @@ Workflow refreshes pillar JSON+LD after tools and blog complete (cross-links + t
 
 ---
 
+## Tool pages (planned — [`tool-pages-v2.md`](./tool-pages-v2.md))
+
+**Target** when Also draft **Tool page** is checked (not shipped):
+
+| | Workflow (v1) | v2 today | v2 target (`tool-pages-v2.md`) |
+|--|---------------|----------|--------------------------------|
+| Cardinality | N partner pages + hub roundup | **1** job — keyword as faux product | **1** keyword overview + **N** partner pages; **no** hub |
+| Tool discovery | SA trees / `HierarchyToolsByHeading` | `recommendedTools` in brief (pillar only) | Same brief data; spawn N partner jobs after pillar `ready` |
+| Research | `extractedToolResearchJson` in body prompt | `partnerResearch` on brief; **not wired into tool WRITE** | Per-partner LLM extract from operator URL |
+| Metadata | `BuildToolMetadataPrompt` → 9 fields | `BuildArticleMetadataPrompt` stub | Copied tool metadata prompt in v2-owned files |
+| Source citation | (implicit in research) | None | `<blockquote cite="{sourceUrl}"><p>…</p></blockquote>` on partner pages only |
+| Outbound partner link | On tool page body | None | Optional **Visit {name}** `<a>` on partner pages only |
+| Pillar / overview hrefs | On-site `/tools/…` | Pillar: on-site; tool stub: wrong slug | Unchanged pillar rules; overview links to on-site partner slugs |
+
+**Copy rule:** logic copied into `ContentCreatorV2/ToolPages/*` — do not call `IToolPageGenerator` or `IContentPromptBuilder` tool methods.
+
+---
+
 ## `ResultJson` shape
 
 ### v2 today (worker)
@@ -165,7 +183,8 @@ v1 Content Creator HTTP API is **not** the same as the workflow export path. Not
 | Area | v1 GCC | v2 |
 |------|--------|-----|
 | Generate model | Single-shot per content type in one request | Job pipeline per type |
-| Image prompts (pillar/blog) | `GenerateSectionImagePromptsAsync` in same generate flow | Planned: spawned jobs ([`v2-master.md` §3.1](./v2-master.md)) |
+| Tool pages | N pages via `ToolPageGenerator` after pillar | **1** stub tool job (keyword as product) — see [`tool-pages-v2.md`](./tool-pages-v2.md) |
+| Image prompts (pillar/blog) | `GenerateSectionImagePromptsAsync` in same generate flow | Spawned jobs ([`v2-master.md` §3.1](./v2-master.md)) |
 | Image prompt standalone | `GenerateImagePromptJsonAsync` | `WriteImagePromptAsync` |
 
 Do not treat v1 GCC as the export/metadata source of truth — **workflow `HtmlExportService`** is.
@@ -179,7 +198,7 @@ Do not treat v1 GCC as the export/metadata source of truth — **workflow `HtmlE
 | 1 | Outline approve sibling cascade | Multi-draft (§5.1) |
 | 2 | Image-prompt spawn + WRITE + `.txt` export | Export (§5.2) |
 | 3 | `keywords` + JSON+LD on `ResultJson` + export HTML | Export + CMS |
-| 4 | Tool `BuildToolMetadataPrompt` + summary fields | WRITE |
+| 4 | Tool pages v2 — metadata, N partner pages, overview, blockquote cite | WRITE — [`tool-pages-v2.md`](./tool-pages-v2.md) / [`v2-master.md` §5.7](./v2-master.md) |
 | 5 | Export meta richness | Export |
 | 6 | CMS upsert pillar/blog/tool + `JsonLdOverride` + per-job publish | CMS (§5.6) |
 | — | email / social / ads / image-prompt | **Export only** — not CMS |

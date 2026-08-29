@@ -145,7 +145,7 @@ export function CreateJobHubProvider({
   const dispatchEvent = useCallback(
     (evt: GccV2JobEvent) => {
       applyEventToJobs(evt);
-      if (evt.type === "ImagePromptSpawnCompleted") {
+      if (evt.type === "ImagePromptSpawnCompleted" || evt.type === "ToolPageSpawnCompleted") {
         void reloadAllJobs();
       }
       void ensureJobKnown(evt.jobId);
