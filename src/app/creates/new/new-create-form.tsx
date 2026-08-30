@@ -61,18 +61,6 @@ type PartnerToolsPreflight = {
   siteHierarchy?: SiteHierarchy | null;
 };
 
-type ToolSourceCrawlStatus = {
-  status: string;
-  runId?: string;
-  errorSummary?: string | null;
-  hosts?: Array<{
-    origin?: string;
-    pagesAttempted?: number;
-    pagesWithHtml?: number;
-    quotePages?: number;
-  }> | null;
-};
-
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
 const inputClass = selectClass;
@@ -189,8 +177,6 @@ export function NewCreateForm() {
   const [error, setError] = useState<string | null>(null);
   const [pendingCreateId, setPendingCreateId] = useState<string | null>(null);
   const [toolsPreflight, setToolsPreflight] = useState<PartnerToolsPreflight | null>(null);
-  const [toolSourceCrawl, setToolSourceCrawl] = useState<ToolSourceCrawlStatus | null>(null);
-  const [crawlBusy, setCrawlBusy] = useState(false);
   const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
@@ -361,56 +347,6 @@ export function NewCreateForm() {
       },
     };
   }
-
-  async function refreshToolSourceCrawl(createId: string) {
-    const res = await fetch(`/api/gcc-v2/creates/${createId}/tool-sources/crawl`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return;
-    const body = (await res.json()) as ToolSourceCrawlStatus;
-    setToolSourceCrawl(body);
-  }
-
-  async function startToolSourceCrawl(createId: string, force = false) {
-    if (parseOperatorTools(operatorToolsText).length === 0) return;
-    setCrawlBusy(true);
-    try {
-      const { brief } = buildBriefPayload();
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/tool-sources/crawl`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief, force }),
-      });
-      const body = (await res.json().catch(() => null)) as ToolSourceCrawlStatus & {
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(body?.error || `tool source crawl failed: HTTP ${res.status}`);
-      }
-      setToolSourceCrawl(body);
-    } finally {
-      setCrawlBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    if (step !== "tools" || !pendingCreateId) return;
-    if (parseOperatorTools(operatorToolsText).length === 0) {
-      setToolSourceCrawl(null);
-      return;
-    }
-    void startToolSourceCrawl(pendingCreateId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- kick off once when entering confirm-tools step
-  }, [step, pendingCreateId]);
-
-  useEffect(() => {
-    if (!pendingCreateId || !toolSourceCrawl) return;
-    if (toolSourceCrawl.status !== "pending" && toolSourceCrawl.status !== "running") return;
-    const id = window.setInterval(() => {
-      void refreshToolSourceCrawl(pendingCreateId);
-    }, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [pendingCreateId, toolSourceCrawl?.status]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -762,7 +698,7 @@ export function NewCreateForm() {
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="operatorTools">
-              Tool source URLs
+              Partner tool URLs
             </label>
             <textarea
               id="operatorTools"
@@ -774,8 +710,8 @@ export function NewCreateForm() {
               }
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Optional. Vendor pages for verbatim blockquote excerpts — crawl starts on the next step.
-              Tools to promote come from your site hierarchy. Prefer Name | URL.
+              Optional. Destination pages for weave excerpts — not the tool list. Tools come from
+              the site hierarchy for this use case. Prefer Name | URL.
             </p>
           </div>
 
@@ -949,7 +885,7 @@ export function NewCreateForm() {
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="operatorToolsRecheck">
-              Tool source URLs (edit &amp; re-check)
+              Partner tool URLs (edit &amp; re-check)
             </label>
             <textarea
               id="operatorToolsRecheck"
@@ -962,53 +898,9 @@ export function NewCreateForm() {
               disabled={busy}
             />
             <p className="text-xs text-[var(--cc-muted)]">
-              Attaches vendor URLs to crawl tools for blockquote source text. Does not add new tools.
+              Attaches excerpt destinations to crawl tools. Does not add new tools.
             </p>
           </div>
-
-          {parseOperatorTools(operatorToolsText).length > 0 ? (
-            <div className="rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-semibold text-[var(--cc-ink)]">Tool source crawl</h3>
-                <button
-                  type="button"
-                  disabled={busy || crawlBusy || !pendingCreateId}
-                  onClick={() => pendingCreateId && void startToolSourceCrawl(pendingCreateId, true)}
-                  className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--cc-ink)] disabled:opacity-60"
-                >
-                  {crawlBusy ? "Starting…" : "Crawl tool sources"}
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                Fetches vendor sites in the background (robots-gated). Tool pages wait for this to
-                finish; pillar/blog can generate while it runs.
-              </p>
-              {toolSourceCrawl ? (
-                <div className="mt-2 text-xs text-[var(--cc-ink)]">
-                  <p>
-                    Status:{" "}
-                    <span className="font-medium">{toolSourceCrawl.status}</span>
-                    {toolSourceCrawl.status === "running" || toolSourceCrawl.status === "pending"
-                      ? " — polling…"
-                      : null}
-                  </p>
-                  {toolSourceCrawl.errorSummary ? (
-                    <p className="mt-1 text-red-700">{toolSourceCrawl.errorSummary}</p>
-                  ) : null}
-                  {toolSourceCrawl.hosts && toolSourceCrawl.hosts.length > 0 ? (
-                    <ul className="mt-2 flex flex-col gap-1 text-[var(--cc-muted)]">
-                      {toolSourceCrawl.hosts.map((h) => (
-                        <li key={h.origin ?? "host"}>
-                          {h.origin}: {h.pagesWithHtml ?? 0} page(s) HTML, {h.quotePages ?? 0}{" "}
-                          quoteable
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="flex flex-wrap gap-3">
             <button
