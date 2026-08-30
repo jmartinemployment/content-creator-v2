@@ -2,7 +2,6 @@ import { ACCESS_COOKIE } from "@/app/auth/cookies";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { HealthCheckButton } from "./health-check-button";
-import { HomeSiteCrawl } from "./home-site-crawl";
 import { HomeVendorCrawl } from "./home-vendor-crawl";
 
 export default async function HomePage() {
@@ -18,10 +17,9 @@ export default async function HomePage() {
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-[var(--cc-ink)]">Signed in</h1>
           <p className="mt-2 text-sm text-[var(--cc-muted)]">
-            Start site crawl and vendor research early, then open a content brief when ready.
+            Start vendor research early, then open a content brief when ready.
           </p>
         </div>
-        <HomeSiteCrawl />
         <HomeVendorCrawl />
         <Link
           href="/creates/new"
