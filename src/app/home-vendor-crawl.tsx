@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { ButtonBusyLabel } from "@/app/components/loading-indicator";
 import {
   crawlStatusLabel,
@@ -23,23 +24,19 @@ export function HomeVendorCrawl() {
   const [crawlError, setCrawlError] = useState<string | null>(null);
   const [toolSourceCrawl, setToolSourceCrawl] = useState<ToolSourceCrawlStatus | null>(null);
 
-  const operatorTools = useMemo(
-    () => parseOperatorTools(operatorToolsText),
-    [operatorToolsText],
-  );
+  const operatorTools = parseOperatorTools(operatorToolsText);
 
   const refreshStatus = useCallback(() => {
-    const tools = parseOperatorTools(operatorToolsText);
-    if (tools.length === 0) {
+    if (operatorTools.length === 0) {
       setToolSourceCrawl(null);
       return;
     }
-    void fetchToolSourceCrawlStatus(tools)
+    void fetchToolSourceCrawlStatus(operatorTools)
       .then((run) => setToolSourceCrawl(run))
       .catch((err: unknown) => {
         setCrawlError(err instanceof Error ? err.message : "Could not load crawl status.");
       });
-  }, [operatorToolsText]);
+  }, [operatorTools]);
 
   useToolSourceCrawlHub(toolSourceCrawl, setToolSourceCrawl, refreshStatus);
 
@@ -64,6 +61,8 @@ export function HomeVendorCrawl() {
     }
   }
 
+  const crawlComplete = toolSourceCrawl?.status === "complete";
+
   return (
     <div className="flex flex-col gap-6">
       <div className={fieldClass}>
@@ -78,7 +77,8 @@ export function HomeVendorCrawl() {
           placeholder={"Name | URL per line\nPipedrive | https://www.pipedrive.com/"}
         />
         <p className="text-xs text-[var(--cc-muted)]">
-          Long-running crawl of external tool sites. One name and URL per line.
+          Long-running crawl — start here before opening a content brief. Same URLs as the brief
+          tools field.
         </p>
       </div>
 
@@ -126,6 +126,20 @@ export function HomeVendorCrawl() {
           ) : null}
         </div>
       ) : null}
+
+      {crawlComplete ? (
+        <Link
+          href="/creates/new"
+          className="inline-flex w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--cc-accent-hover)]"
+        >
+          New content brief
+        </Link>
+      ) : (
+        <p className="text-xs text-[var(--cc-muted)]">
+          New content brief unlocks when vendor research is complete (or skip and open anyway from
+          the link below).
+        </p>
+      )}
     </div>
   );
 }
