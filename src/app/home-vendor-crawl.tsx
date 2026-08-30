@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ButtonBusyLabel } from "@/app/components/loading-indicator";
 import {
   crawlStatusLabel,
-  fetchToolSourceCrawlByRunId,
   fetchToolSourceCrawlStatus,
   isCrawlActive,
-  mergeCrawlStatus,
   parseOperatorTools,
   startToolSourceCrawlRequest,
   type ToolSourceCrawlStatus,
@@ -18,12 +16,8 @@ const inputClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
 const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
 const fieldClass = "flex flex-col gap-1.5";
-const STATUS_POLL_MS = 3000;
 
 export function HomeVendorCrawl() {
-  const statusSeqRef = useRef(0);
-  const activeRunIdRef = useRef<string | null>(null);
-
   const [operatorToolsText, setOperatorToolsText] = useState("");
   const [crawlBusy, setCrawlBusy] = useState(false);
   const [crawlError, setCrawlError] = useState<string | null>(null);
@@ -34,73 +28,35 @@ export function HomeVendorCrawl() {
     [operatorToolsText],
   );
 
-  const applyCrawlStatus = useCallback((next: ToolSourceCrawlStatus | null) => {
-    setToolSourceCrawl((prev) => mergeCrawlStatus(prev, next));
-    if (next?.runId) {
-      activeRunIdRef.current = next.runId;
+  const refreshStatus = useCallback(() => {
+    const tools = parseOperatorTools(operatorToolsText);
+    if (tools.length === 0) {
+      setToolSourceCrawl(null);
+      return;
     }
-  }, []);
+    void fetchToolSourceCrawlStatus(tools)
+      .then((run) => setToolSourceCrawl(run))
+      .catch((err: unknown) => {
+        setCrawlError(err instanceof Error ? err.message : "Could not load crawl status.");
+      });
+  }, [operatorToolsText]);
 
-  const refreshStatus = useCallback(async () => {
-    const requestSeq = statusSeqRef.current;
-    const runId = activeRunIdRef.current;
-
-    try {
-      if (runId) {
-        const run = await fetchToolSourceCrawlByRunId(runId);
-        if (requestSeq !== statusSeqRef.current) return;
-        applyCrawlStatus(run);
-        return;
-      }
-
-      const tools = parseOperatorTools(operatorToolsText);
-      if (tools.length === 0) {
-        if (requestSeq === statusSeqRef.current) {
-          setToolSourceCrawl(null);
-        }
-        return;
-      }
-
-      const run = await fetchToolSourceCrawlStatus(tools);
-      if (requestSeq !== statusSeqRef.current) return;
-      applyCrawlStatus(run);
-    } catch (err: unknown) {
-      if (requestSeq !== statusSeqRef.current) return;
-      setCrawlError(err instanceof Error ? err.message : "Could not load crawl status.");
-    }
-  }, [applyCrawlStatus, operatorToolsText]);
-
-  useToolSourceCrawlHub(toolSourceCrawl, applyCrawlStatus);
+  useToolSourceCrawlHub(toolSourceCrawl, setToolSourceCrawl, refreshStatus);
 
   useEffect(() => {
-    activeRunIdRef.current = null;
-    statusSeqRef.current += 1;
-    void refreshStatus();
+    refreshStatus();
   }, [refreshStatus]);
-
-  useEffect(() => {
-    if (!toolSourceCrawl || !isCrawlActive(toolSourceCrawl.status)) return;
-
-    const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, STATUS_POLL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [refreshStatus, toolSourceCrawl?.runId, toolSourceCrawl?.status]);
 
   async function onStart(force = false) {
     if (operatorTools.length === 0) {
-      setCrawlError("Enter at least one valid tool URL (https://… or domain.com).");
+      setCrawlError("Enter at least one operator tool URL.");
       return;
     }
-    statusSeqRef.current += 1;
     setCrawlError(null);
     setCrawlBusy(true);
     try {
       const run = await startToolSourceCrawlRequest(operatorTools, force);
-      activeRunIdRef.current = run.runId ?? null;
-      statusSeqRef.current += 1;
-      applyCrawlStatus(run);
+      setToolSourceCrawl(run);
     } catch (err: unknown) {
       setCrawlError(err instanceof Error ? err.message : "Could not start vendor crawl.");
     } finally {
@@ -156,9 +112,6 @@ export function HomeVendorCrawl() {
       {toolSourceCrawl ? (
         <div className="rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
           <p className="font-medium text-[var(--cc-ink)]">{crawlStatusLabel(toolSourceCrawl)}</p>
-          {toolSourceCrawl.runId ? (
-            <p className="mt-1 font-mono text-xs text-[var(--cc-muted)]">Run {toolSourceCrawl.runId}</p>
-          ) : null}
           {toolSourceCrawl.errorSummary ? (
             <p className="mt-1 text-red-700">{toolSourceCrawl.errorSummary}</p>
           ) : null}
@@ -172,8 +125,6 @@ export function HomeVendorCrawl() {
             </ul>
           ) : null}
         </div>
-      ) : operatorTools.length > 0 ? (
-        <p className="text-xs text-[var(--cc-muted)]">Loading crawl status…</p>
       ) : null}
     </div>
   );

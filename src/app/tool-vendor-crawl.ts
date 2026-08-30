@@ -33,92 +33,28 @@ export function parseOperatorTools(text: string): Array<{ name?: string; url: st
       const pipe = line.indexOf("|");
       if (pipe >= 0) {
         const name = line.slice(0, pipe).trim();
-        const url = normalizeToolUrl(line.slice(pipe + 1).trim());
+        const url = line.slice(pipe + 1).trim();
         if (!url) return null;
         return name ? { name, url } : { url };
       }
-      const url = normalizeToolUrl(line);
-      if (!url) return null;
-      return { url };
+      return { url: line };
     })
     .filter((row): row is { name?: string; url: string } => row !== null);
-}
-
-/** Match backend seed normalization — bare domains get https://. */
-export function normalizeToolUrl(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const uri = new URL(withProto);
-    if (uri.protocol !== "http:" && uri.protocol !== "https:") return null;
-    if (!uri.hostname) return null;
-    let url = uri.origin + uri.pathname + uri.search;
-    if (uri.pathname === "/" || uri.pathname === "") {
-      url = url.replace(/\/$/, "");
-    }
-    return url;
-  } catch {
-    return null;
-  }
 }
 
 export function isCrawlActive(status: string | undefined): boolean {
   return status === "pending" || status === "running";
 }
 
-function pickString(body: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = body[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return undefined;
-}
-
 export function mapCrawlApiBody(body: Record<string, unknown>): ToolSourceCrawlStatus {
-  const hosts = body.hosts ?? body.Hosts;
-  const runIdRaw = body.runId ?? body.RunId ?? body.id ?? body.Id;
-  const runId =
-    typeof runIdRaw === "string"
-      ? runIdRaw.trim() || undefined
-      : typeof runIdRaw === "number"
-        ? String(runIdRaw)
-        : undefined;
+  const hosts = body.hosts;
   return {
-    runId,
-    status: pickString(body, "status", "Status") ?? "unknown",
-    errorSummary: (pickString(body, "errorSummary", "ErrorSummary") ?? null) as string | null,
-    currentOrigin: (pickString(body, "currentOrigin", "CurrentOrigin") ?? null) as string | null,
+    runId: typeof body.runId === "string" ? body.runId : undefined,
+    status: String(body.status ?? "unknown"),
+    errorSummary: (body.errorSummary ?? null) as string | null,
+    currentOrigin: (body.currentOrigin ?? null) as string | null,
     hosts: Array.isArray(hosts) ? (hosts as ToolSourceCrawlStatus["hosts"]) : null,
   };
-}
-
-/** Prefer run id once a crawl has started — avoids seed-hash lookup misses on status. */
-export async function fetchToolSourceCrawlByRunId(runId: string): Promise<ToolSourceCrawlStatus> {
-  const res = await fetch(`/api/gcc-v2/tool-sources/crawl/${encodeURIComponent(runId)}`, {
-    cache: "no-store",
-  });
-  const body = (await res.json().catch(() => null)) as Record<string, unknown> & { error?: string };
-  if (!res.ok) {
-    throw new Error(body?.error || `Could not load crawl (HTTP ${res.status})`);
-  }
-  return mapCrawlApiBody(body ?? {});
-}
-
-export function mergeCrawlStatus(
-  prev: ToolSourceCrawlStatus | null,
-  next: ToolSourceCrawlStatus | null,
-): ToolSourceCrawlStatus | null {
-  if (!next) return prev;
-  if (!prev) return next;
-  if (
-    prev.runId &&
-    isCrawlActive(prev.status) &&
-    next.status === "not_started"
-  ) {
-    return prev;
-  }
-  return next;
 }
 
 export function mapCrawlEvent(evt: GccV2CrawlEvent): ToolSourceCrawlStatus {
@@ -147,7 +83,7 @@ export function crawlStatusLabel(crawl: ToolSourceCrawlStatus): string {
     return `Vendor research ready — ${quotes} quoteable page(s)`;
   }
   if (crawl.status === "failed") return "Crawl failed";
-  if (crawl.status === "not_started") return "No crawl yet for these URLs — click Start.";
+  if (crawl.status === "not_started") return "No vendor crawl for these URLs yet — start from home.";
   return crawl.status;
 }
 
@@ -165,8 +101,7 @@ export async function fetchToolSourceCrawlStatus(
   if (!res.ok) {
     throw new Error(body?.error || `Could not load crawl status (HTTP ${res.status})`);
   }
-  const status = pickString(body ?? {}, "status", "Status");
-  if (status === "not_started") return { status: "not_started" };
+  if (body?.status === "not_started") return { status: "not_started" };
   return mapCrawlApiBody(body ?? {});
 }
 
@@ -183,18 +118,7 @@ export async function startToolSourceCrawlRequest(
   if (!res.ok) {
     throw new Error(body?.error || `tool source crawl failed: HTTP ${res.status}`);
   }
-  const status = pickString(body ?? {}, "status", "Status");
-  if (status === "not_started") {
-    throw new Error("Server did not start a crawl for these URLs.");
-  }
-  const mapped = mapCrawlApiBody(body ?? {});
-  if (mapped.status === "unknown") {
-    throw new Error("Unexpected crawl response from server.");
-  }
-  if (isCrawlActive(mapped.status) && !mapped.runId) {
-    throw new Error("Crawl started but server did not return a run id.");
-  }
-  return mapped;
+  return mapCrawlApiBody(body ?? {});
 }
 
 export function useToolSourceCrawlHub(
