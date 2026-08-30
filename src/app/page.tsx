@@ -2,7 +2,6 @@ import { ACCESS_COOKIE } from "@/app/auth/cookies";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { HealthCheckButton } from "./health-check-button";
-import { HomeVendorCrawl } from "./home-vendor-crawl";
 
 export default async function HomePage() {
   const jar = await cookies();
@@ -10,23 +9,27 @@ export default async function HomePage() {
 
   if (signedIn) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 px-6 py-10">
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 px-6">
         <div>
           <p className="text-sm font-medium tracking-wide text-[var(--cc-accent)]">
             Content Creator v2
           </p>
-          <h1 className="mt-2 text-3xl font-semibold text-[var(--cc-ink)]">Signed in</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-[var(--cc-ink)]">
+            Signed in
+          </h1>
           <p className="mt-2 text-sm text-[var(--cc-muted)]">
-            Start vendor research early, then open a content brief when ready.
+            Start from a project site URL — crawl → brief → BrandKit → outline → write.
           </p>
         </div>
-        <HomeVendorCrawl />
         <Link
           href="/creates/new"
-          className="inline-flex w-fit text-sm font-medium text-[var(--cc-accent)] underline-offset-2 hover:underline"
+          className="inline-flex w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--cc-accent-hover)]"
         >
-          New content brief (skip vendor wait)
+          New content brief
         </Link>
+        <p className="text-xs text-[var(--cc-muted)]">
+          Creates require a crawled site URL with pages — use New content brief (URL-first).
+        </p>
         <Link
           href="/creates"
           className="inline-flex w-fit text-sm font-medium text-[var(--cc-accent)] underline-offset-2 hover:underline"
