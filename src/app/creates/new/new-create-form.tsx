@@ -87,6 +87,7 @@ type PartnerToolsPreflight = {
   toolsFound: boolean;
   tools: PartnerToolRow[];
   message?: string;
+  partnerResearchWarning?: string | null;
   siteHierarchy?: SiteHierarchy | null;
 };
 
@@ -851,6 +852,11 @@ export function NewCreateForm() {
                   ? `Found ${toolsPreflight.toolCount} partner tool(s). Each gets a full tool page from its supplied URL, plus a keyword overview page linking to them on-site.`
                   : "No partner tools found.")}
             </p>
+            {toolsPreflight.partnerResearchWarning ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {toolsPreflight.partnerResearchWarning}
+              </p>
+            ) : null}
             <p className="text-xs text-[var(--cc-muted)]">
               Destination URLs (Name | URL) are fetched for excerpts when weaving tool text into a
               paragraph.
