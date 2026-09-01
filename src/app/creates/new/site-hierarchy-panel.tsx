@@ -88,47 +88,75 @@ function HierarchyNodeView({ node }: { node: SiteHierarchyNode }) {
   );
 }
 
+function HierarchyPageView({ page }: { page: SiteHierarchyPage }) {
+  const roots = page.roots ?? [];
+  const nodeCount = countNodes(roots);
+  const linkCount = countLinks(roots);
+
+  return (
+    <section className="flex flex-col gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[var(--cc-muted)]">
+        <a
+          href={page.pageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-[var(--cc-accent)] underline-offset-2 hover:underline"
+        >
+          {page.pageUrl}
+        </a>
+        <span>
+          · {nodeCount} heading{nodeCount === 1 ? "" : "s"} · {linkCount} anchor
+          {linkCount === 1 ? "" : "s"}
+        </span>
+      </div>
+      {roots.length === 0 ? (
+        <p className="text-xs text-[var(--cc-muted)]">No headings on this page.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {roots.map((node, i) => (
+            <HierarchyNodeView key={`${node.level}-${node.headingText}-${i}`} node={node} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function SiteHierarchyPanel({ hierarchy }: { hierarchy: SiteHierarchy | null | undefined }) {
   if (!hierarchy) {
     return (
       <div className="flex flex-col gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
         <h3 className="text-sm font-semibold text-amber-950">Site hierarchy</h3>
         <p className="text-xs text-amber-900">
-          Mobile homepage hierarchy was not attached (browser unavailable or fetch soft-failed). Partner
-          tools may still come from the project-site crawl hierarchy.
+          Mobile hierarchy was not attached (browser unavailable or fetch soft-failed). Partner
+          tools may still come from the project-site crawl.
         </p>
       </div>
     );
   }
 
-  const roots = hierarchy.pages?.flatMap((p) => p.roots ?? []) ?? [];
-  const nodeCount = countNodes(roots);
-  const linkCount = countLinks(roots);
-  const pageUrl = hierarchy.pages?.[0]?.pageUrl ?? hierarchy.homepageUrl;
+  const pages = hierarchy.pages ?? [];
+  const totalNodes = pages.reduce((sum, p) => sum + countNodes(p.roots ?? []), 0);
+  const totalLinks = pages.reduce((sum, p) => sum + countLinks(p.roots ?? []), 0);
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-1">
         <h3 className="text-sm font-semibold text-[var(--cc-ink)]">Site hierarchy (mobile crawl)</h3>
         <p className="text-xs text-[var(--cc-muted)]">
-          Confirm this matches the mobile homepage outline. Intentional differences from desktop (e.g.
-          no hero) are expected.
+          Per-page heading trees with anchors kept under their headings — used for partner-tool
+          matching. Intentional mobile vs desktop differences (e.g. no hero) are expected.
         </p>
         <p className="text-xs text-[var(--cc-muted)]">
           <span className="font-medium text-[var(--cc-ink)]">{hierarchy.viewport || "mobile"}</span>
           {" · "}
-          <a
-            href={pageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[var(--cc-accent)] underline-offset-2 hover:underline"
-          >
-            {pageUrl}
-          </a>
+          <span className="font-medium text-[var(--cc-ink)]">{hierarchy.homepageUrl}</span>
           {" · "}
-          {nodeCount} heading{nodeCount === 1 ? "" : "s"}
+          {pages.length} page{pages.length === 1 ? "" : "s"}
           {" · "}
-          {linkCount} link{linkCount === 1 ? "" : "s"}
+          {totalNodes} heading{totalNodes === 1 ? "" : "s"}
+          {" · "}
+          {totalLinks} anchor{totalLinks === 1 ? "" : "s"}
           {hierarchy.builtAtUtc ? (
             <>
               {" · "}
@@ -138,16 +166,16 @@ export function SiteHierarchyPanel({ hierarchy }: { hierarchy: SiteHierarchy | n
         </p>
       </div>
 
-      {roots.length === 0 ? (
+      {pages.length === 0 ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Hierarchy attached but no headings were found in the mobile HTML.
+          Hierarchy attached but no tool-relevant pages were found in the crawl.
         </p>
       ) : (
-        <ul className="max-h-72 overflow-y-auto rounded-md border border-[var(--cc-line)] bg-white p-3">
-          {roots.map((node, i) => (
-            <HierarchyNodeView key={`${node.level}-${node.headingText}-${i}`} node={node} />
+        <div className="flex max-h-72 flex-col gap-3 overflow-y-auto">
+          {pages.map((page) => (
+            <HierarchyPageView key={page.pageUrl} page={page} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
