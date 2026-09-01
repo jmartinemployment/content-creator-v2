@@ -1,4 +1,4 @@
-/** Site Analyzer section context — mirrors GeekContentCreator `lib/types.ts`. */
+/** Project-site crawl section context — mirrors GeekAPI SiteSectionContextDto. */
 
 export type Heading = {
   level: number;
@@ -19,7 +19,7 @@ export type InformationGainNote = {
 };
 
 export type SiteSectionContext = {
-  siteAnalysisProfileId: string;
+  projectSiteCrawlRunId: string;
   gapTopic: string;
   gapSectionPath: string | null;
   relatedPages: RelatedPage[];
@@ -30,7 +30,7 @@ export type SiteSectionContext = {
 /** Body shape GeekAPI CreateCreate expects for siteSection. */
 export function siteSectionForApi(section: SiteSectionContext) {
   return {
-    siteAnalysisProfileId: section.siteAnalysisProfileId,
+    projectSiteCrawlRunId: section.projectSiteCrawlRunId,
     gapTopic: section.gapTopic,
     gapSectionPath: section.gapSectionPath,
     relatedPages: section.relatedPages.map((p) => ({
@@ -46,7 +46,7 @@ export function siteSectionForApi(section: SiteSectionContext) {
 
 /** Build site section from crawled pages for this URL (no content-gap picker). */
 export function siteSectionFromCrawlPages(
-  profileId: string,
+  runId: string,
   siteUrl: string,
   pages: RelatedPage[],
 ): SiteSectionContext {
@@ -63,7 +63,7 @@ export function siteSectionFromCrawlPages(
   const neighbors = relatedPages.map((p) => p.title).filter(Boolean);
 
   return {
-    siteAnalysisProfileId: profileId,
+    projectSiteCrawlRunId: runId,
     gapTopic: hostFromSiteUrl(siteUrl) || siteUrl,
     gapSectionPath: null,
     relatedPages,
@@ -108,7 +108,7 @@ export function normalizeCrawlPage(raw: Record<string, unknown>): RelatedPage | 
   };
 }
 
-/** Strip protocol / trailing slash for by-domain lookups. */
+/** Strip protocol / trailing slash for display. */
 export function hostFromSiteUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
@@ -131,7 +131,7 @@ export function normalizeSiteUrl(input: string): string {
   return `https://${trimmed}`.replace(/\/$/, "");
 }
 
-export function isProfileReady(status: string | null | undefined): boolean {
+export function isCrawlRunReady(status: string | null | undefined): boolean {
   if (!status) return false;
-  return /^complete|ready$/i.test(status);
+  return /^complete$/i.test(status);
 }

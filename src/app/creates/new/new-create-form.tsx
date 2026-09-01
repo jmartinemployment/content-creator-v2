@@ -19,7 +19,7 @@ import {
 } from "../content-types";
 import {
   hostFromSiteUrl,
-  isProfileReady,
+  isCrawlRunReady,
   normalizeCrawlPage,
   normalizeSiteUrl,
   siteSectionForApi,
@@ -27,21 +27,50 @@ import {
   type SiteSectionContext,
 } from "../site-section";
 import {
+  createProjectSiteHubConnection,
+  joinProjectSiteCrawl,
+  onProjectSiteCrawlEvent,
+  onProjectSiteHubReconnected,
+  type ProjectSiteCrawlEvent,
+} from "@/app/auth/project-site-hub";
+import {
   normalizeSiteHierarchy,
   SiteHierarchyPanel,
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
 
-type SiteProfileOption = {
-  id: string;
-  domain: string;
-  status: string | null;
-  analyzedAt: string | null;
-  primaryFocus: string | null;
-};
+const selectClass =
+  "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
+const inputClass = selectClass;
+const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
+const fieldClass = "flex flex-col gap-1.5";
 
-type Step = "url" | "analyzing" | "brief" | "tools";
+const CRAWL_WAIT_MS = 15 * 60 * 1000;
+
+async function loadSectionFromCrawlRun(
+  runId: string,
+  resolvedSiteUrl: string,
+): Promise<SiteSectionContext> {
+  const res = await fetch(`/api/gcc-v2/project-site/runs/${encodeURIComponent(runId)}/pages`, {
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof body.error === "string" ? body.error : `Could not load crawl pages (HTTP ${res.status})`,
+    );
+  }
+  const rawPages = (body.pages ?? body.Pages ?? []) as Record<string, unknown>[];
+  const pages = rawPages.map(normalizeCrawlPage).filter((p): p is NonNullable<typeof p> => p !== null);
+  const section = siteSectionFromCrawlPages(runId, resolvedSiteUrl, pages);
+  if (section.relatedPages.length === 0) {
+    throw new Error(
+      "This crawl has no site pages yet — wait for the crawl to finish or start a new one.",
+    );
+  }
+  return section;
+}
 
 type PartnerToolRow = {
   name: string;
@@ -61,75 +90,7 @@ type PartnerToolsPreflight = {
   siteHierarchy?: SiteHierarchy | null;
 };
 
-const selectClass =
-  "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
-const inputClass = selectClass;
-const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
-const fieldClass = "flex flex-col gap-1.5";
-
-const POLL_MS = 3000;
-const POLL_MAX_MS = 10 * 60 * 1000;
-
-function normalizeProfiles(body: unknown): SiteProfileOption[] {
-  if (!Array.isArray(body)) return [];
-  return body
-    .map((raw) => {
-      const p = raw as Record<string, unknown>;
-      const id = String(p.id ?? p.Id ?? "").trim();
-      if (!id) return null;
-      return {
-        id,
-        domain: String(p.domain ?? p.Domain ?? "").trim(),
-        status: (p.status ?? p.Status ?? null) as string | null,
-        analyzedAt: (p.analyzedAt ?? p.AnalyzedAt ?? null) as string | null,
-        primaryFocus: (p.primaryFocus ?? p.PrimaryFocus ?? null) as string | null,
-      };
-    })
-    .filter((p): p is SiteProfileOption => p !== null);
-}
-
-function pickReadyProfile(list: SiteProfileOption[]): SiteProfileOption | null {
-  return list.find((p) => isProfileReady(p.status)) ?? null;
-}
-
-async function fetchProfilesByDomain(domain: string): Promise<SiteProfileOption[]> {
-  const res = await fetch(
-    `/api/site-analyzer/profiles/by-domain?domain=${encodeURIComponent(domain)}&limit=50`,
-    { cache: "no-store" },
-  );
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(
-      typeof body?.error === "string" ? body.error : `Could not list profiles (HTTP ${res.status})`,
-    );
-  }
-  return normalizeProfiles(body);
-}
-
-/** Load crawled pages for this profile and build site section (relatedPages from the URL). */
-async function loadSectionFromSite(
-  profileId: string,
-  resolvedSiteUrl: string,
-): Promise<SiteSectionContext> {
-  const res = await fetch(`/api/site-analyzer/${encodeURIComponent(profileId)}`, {
-    cache: "no-store",
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(
-      typeof body.error === "string" ? body.error : `Could not load crawl (HTTP ${res.status})`,
-    );
-  }
-  const rawPages = (body.pages ?? body.Pages ?? []) as Record<string, unknown>[];
-  const pages = rawPages.map(normalizeCrawlPage).filter((p): p is NonNullable<typeof p> => p !== null);
-  const section = siteSectionFromCrawlPages(profileId, resolvedSiteUrl, pages);
-  if (section.relatedPages.length === 0) {
-    throw new Error(
-      "This crawl has no site pages yet — force a new crawl, or wait for the analysis to finish.",
-    );
-  }
-  return section;
-}
+type Step = "url" | "analyzing" | "brief" | "tools";
 
 function parseOperatorTools(text: string): Array<{ name?: string; url: string }> {
   return text
@@ -151,15 +112,16 @@ function parseOperatorTools(text: string): Array<{ name?: string; url: string }>
 
 export function NewCreateForm() {
   const router = useRouter();
-  const pollAbortRef = useRef<AbortController | null>(null);
+  const crawlAbortRef = useRef<AbortController | null>(null);
+  const hubRef = useRef<ReturnType<typeof createProjectSiteHubConnection> | null>(null);
 
   const [step, setStep] = useState<Step>("url");
   const [siteUrlInput, setSiteUrlInput] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
-  const [forceReanalyze, setForceReanalyze] = useState(false);
+  const [forceRecrawl, setForceRecrawl] = useState(false);
   const [analyzingLabel, setAnalyzingLabel] = useState<string | null>(null);
 
-  const [siteAnalysisProfileId, setSiteAnalysisProfileId] = useState<string | null>(null);
+  const [projectSiteCrawlRunId, setProjectSiteCrawlRunId] = useState<string | null>(null);
   const [section, setSection] = useState<SiteSectionContext | null>(null);
 
   const [title, setTitle] = useState("");
@@ -183,22 +145,21 @@ export function NewCreateForm() {
 
   useEffect(() => {
     return () => {
-      pollAbortRef.current?.abort();
+      crawlAbortRef.current?.abort();
+      void hubRef.current?.stop();
     };
   }, []);
 
-  async function loadSiteHierarchy(resolvedSiteUrl: string) {
+  async function loadSiteHierarchyFromRun(runId: string) {
     setHierarchyLoading(true);
     setHierarchyError(null);
     try {
-      const res = await fetch("/api/gcc-v2/site-hierarchy", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ siteUrl: resolvedSiteUrl }),
-      });
+      const res = await fetch(
+        `/api/gcc-v2/project-site/runs/${encodeURIComponent(runId)}/site-hierarchy`,
+        { cache: "no-store" },
+      );
       const body = (await res.json().catch(() => null)) as {
         siteHierarchy?: unknown;
-        message?: string;
         error?: string;
       } | null;
       if (!res.ok) {
@@ -207,10 +168,7 @@ export function NewCreateForm() {
       const normalized = normalizeSiteHierarchy(body?.siteHierarchy);
       setSiteHierarchy(normalized);
       if (!normalized) {
-        setHierarchyError(
-          body?.message ||
-            "Mobile hierarchy was not attached (browser unavailable or fetch soft-failed).",
-        );
+        setHierarchyError("Mobile hierarchy was not attached from the project-site crawl.");
       }
     } catch (err) {
       setSiteHierarchy(null);
@@ -220,102 +178,165 @@ export function NewCreateForm() {
     }
   }
 
-  const applyReadyProfile = useCallback(async (profileId: string, resolvedSiteUrl: string) => {
+  const applyReadyCrawl = useCallback(async (runId: string, resolvedSiteUrl: string) => {
     setAnalyzingLabel("Loading pages from this site…");
-    const loaded = await loadSectionFromSite(profileId, resolvedSiteUrl);
-    setSiteAnalysisProfileId(profileId);
+    const loaded = await loadSectionFromCrawlRun(runId, resolvedSiteUrl);
+    setProjectSiteCrawlRunId(runId);
     setSiteUrl(resolvedSiteUrl);
     setSection(loaded);
     setStep("brief");
     setAnalyzingLabel("Loading mobile site hierarchy…");
     setBusy(false);
-    // Hierarchy is independent of Find tools — show on brief as soon as site is ready.
-    void loadSiteHierarchy(resolvedSiteUrl).finally(() => setAnalyzingLabel(null));
+    void loadSiteHierarchyFromRun(runId).finally(() => setAnalyzingLabel(null));
   }, []);
 
-  async function pollUntilReady(domain: string, signal: AbortSignal): Promise<SiteProfileOption> {
+  async function waitForCrawlComplete(
+    runId: string,
+    resolvedSiteUrl: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     const started = Date.now();
-    while (!signal.aborted) {
-      const list = await fetchProfilesByDomain(domain);
-      const ready = pickReadyProfile(list);
-      if (ready) return ready;
-      if (Date.now() - started > POLL_MAX_MS) {
-        throw new Error("Site analysis timed out — try again or re-analyze.");
-      }
-      setAnalyzingLabel("Waiting for crawl to finish…");
-      await new Promise<void>((resolve, reject) => {
-        const t = window.setTimeout(resolve, POLL_MS);
-        signal.addEventListener(
-          "abort",
-          () => {
-            window.clearTimeout(t);
-            reject(new DOMException("Aborted", "AbortError"));
-          },
-          { once: true },
+    return new Promise((resolve, reject) => {
+      const connection = createProjectSiteHubConnection();
+      hubRef.current = connection;
+
+      const cleanup = () => {
+        offEvent();
+        offReconnect();
+        void connection.stop();
+        hubRef.current = null;
+      };
+
+      const finishReady = () => {
+        cleanup();
+        resolve();
+      };
+
+      const finishError = (message: string) => {
+        cleanup();
+        reject(new Error(message));
+      };
+
+      const handleEvent = (evt: ProjectSiteCrawlEvent) => {
+        if (evt.runId !== runId) return;
+        if (isCrawlRunReady(evt.status)) {
+          void applyReadyCrawl(runId, resolvedSiteUrl).then(finishReady).catch(reject);
+          return;
+        }
+        if (/^failed$/i.test(evt.status)) {
+          finishError(evt.errorSummary || "Project-site crawl failed.");
+          return;
+        }
+        setAnalyzingLabel(
+          typeof evt.pageCount === "number" && evt.pageCount > 0
+            ? `Crawling… ${evt.pageCount} page(s) so far`
+            : "Crawling project site…",
         );
-      });
-    }
-    throw new DOMException("Aborted", "AbortError");
+        if (Date.now() - started > CRAWL_WAIT_MS) {
+          finishError("Project-site crawl timed out — try again.");
+        }
+      };
+
+      const offEvent = onProjectSiteCrawlEvent(connection, handleEvent);
+      const offReconnect = onProjectSiteHubReconnected(connection, () => runId);
+
+      signal.addEventListener(
+        "abort",
+        () => {
+          cleanup();
+          reject(new DOMException("Aborted", "AbortError"));
+        },
+        { once: true },
+      );
+
+      void (async () => {
+        try {
+          await joinProjectSiteCrawl(connection, runId);
+          const snapRes = await fetch(
+            `/api/gcc-v2/project-site/runs/${encodeURIComponent(runId)}`,
+            { cache: "no-store", signal },
+          );
+          const snap = (await snapRes.json().catch(() => ({}))) as ProjectSiteCrawlEvent;
+          if (isCrawlRunReady(snap.status)) {
+            await applyReadyCrawl(runId, resolvedSiteUrl);
+            finishReady();
+          } else if (/^failed$/i.test(snap.status ?? "")) {
+            finishError(snap.errorSummary || "Project-site crawl failed.");
+          }
+        } catch (err) {
+          if (!(err instanceof DOMException && err.name === "AbortError")) {
+            cleanup();
+            reject(err);
+          }
+        }
+      })();
+    });
   }
 
   async function resolveSite(force: boolean) {
     setError(null);
     const normalized = normalizeSiteUrl(siteUrlInput);
-    const domain = hostFromSiteUrl(siteUrlInput);
-    if (!domain) {
+    if (!normalized) {
       setError("Enter a site URL or domain (required).");
       return;
     }
 
-    pollAbortRef.current?.abort();
+    crawlAbortRef.current?.abort();
     const ac = new AbortController();
-    pollAbortRef.current = ac;
+    crawlAbortRef.current = ac;
 
     setBusy(true);
     setStep("analyzing");
     setAnalyzingLabel(force ? "Starting a new crawl…" : "Looking up existing crawl…");
     setSection(null);
-    setSiteAnalysisProfileId(null);
+    setProjectSiteCrawlRunId(null);
     setSiteHierarchy(null);
     setHierarchyError(null);
     setToolsPreflight(null);
 
     try {
       if (!force) {
-        const existing = await fetchProfilesByDomain(domain);
-        const ready = pickReadyProfile(existing);
-        if (ready) {
-          await applyReadyProfile(ready.id, normalized);
-          return;
+        const latestRes = await fetch(
+          `/api/gcc-v2/project-site/runs/latest?siteUrl=${encodeURIComponent(normalized)}`,
+          { cache: "no-store", signal: ac.signal },
+        );
+        if (latestRes.ok) {
+          const latest = (await latestRes.json()) as { runId?: string };
+          if (latest.runId) {
+            await applyReadyCrawl(latest.runId, normalized);
+            return;
+          }
         }
       }
 
-      setAnalyzingLabel("Starting site analysis…");
-      const analyzeRes = await fetch("/api/site-analyzer/analyze", {
+      setAnalyzingLabel("Starting project-site crawl…");
+      const crawlRes = await fetch("/api/gcc-v2/project-site/crawl", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domain, force }),
+        body: JSON.stringify({ siteUrl: normalized }),
         signal: ac.signal,
       });
-      const analyzeBody = await analyzeRes.json().catch(() => ({}));
-      if (!analyzeRes.ok) {
+      const crawlBody = await crawlRes.json().catch(() => ({}));
+      if (!crawlRes.ok) {
         throw new Error(
-          typeof analyzeBody.error === "string"
-            ? analyzeBody.error
-            : `Analyze failed (HTTP ${analyzeRes.status})`,
+          typeof crawlBody.error === "string"
+            ? crawlBody.error
+            : `Crawl start failed (HTTP ${crawlRes.status})`,
         );
       }
 
-      setAnalyzingLabel("Crawl queued — polling for ready profile…");
-      const ready = await pollUntilReady(domain, ac.signal);
-      await applyReadyProfile(ready.id, normalized);
+      const runId = String(crawlBody.runId ?? crawlBody.RunId ?? "").trim();
+      if (!runId) throw new Error("Crawl start returned no runId");
+
+      setAnalyzingLabel("Crawling project site…");
+      await waitForCrawlComplete(runId, normalized, ac.signal);
     } catch (err) {
       if (ac.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         setStep("url");
         setAnalyzingLabel(null);
         return;
       }
-      setError(err instanceof Error ? err.message : "Site analysis failed");
+      setError(err instanceof Error ? err.message : "Project-site crawl failed");
       setStep("url");
       setAnalyzingLabel(null);
     } finally {
@@ -352,7 +373,7 @@ export function NewCreateForm() {
     e.preventDefault();
     setError(null);
 
-    if (!siteAnalysisProfileId || !section || !section.relatedPages.length) {
+    if (!projectSiteCrawlRunId || !section || !section.relatedPages.length) {
       setError("Resolve a project site URL with crawled pages first.");
       return;
     }
@@ -386,7 +407,7 @@ export function NewCreateForm() {
         body: JSON.stringify({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
-          siteAnalysisProfileId,
+          projectSiteCrawlRunId,
         }),
       });
       if (!preRes.ok) {
@@ -412,7 +433,7 @@ export function NewCreateForm() {
   }
 
   async function confirmAndGenerate() {
-    if (!pendingCreateId || !siteAnalysisProfileId) {
+    if (!pendingCreateId || !projectSiteCrawlRunId) {
       setError("Missing create — go back to the brief and try again.");
       return;
     }
@@ -426,7 +447,7 @@ export function NewCreateForm() {
         body: JSON.stringify({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
-          siteAnalysisProfileId,
+          projectSiteCrawlRunId,
           contentTypes,
           partnerToolsConfirmed: true,
         }),
@@ -446,7 +467,7 @@ export function NewCreateForm() {
   }
 
   async function recheckTools() {
-    if (!pendingCreateId || !siteAnalysisProfileId) return;
+    if (!pendingCreateId || !projectSiteCrawlRunId) return;
     setError(null);
     setBusy(true);
     try {
@@ -457,7 +478,7 @@ export function NewCreateForm() {
         body: JSON.stringify({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
-          siteAnalysisProfileId,
+          projectSiteCrawlRunId,
         }),
       });
       if (!preRes.ok) {
@@ -527,11 +548,11 @@ export function NewCreateForm() {
           <label className="flex items-center gap-2 text-sm text-[var(--cc-ink)]">
             <input
               type="checkbox"
-              checked={forceReanalyze}
-              onChange={(e) => setForceReanalyze(e.target.checked)}
+              checked={forceRecrawl}
+              onChange={(e) => setForceRecrawl(e.target.checked)}
               disabled={busy || step === "analyzing"}
             />
-            Force new crawl (ignore existing ready profile)
+            Force new crawl (ignore existing complete run)
           </label>
 
           {step === "analyzing" && analyzingLabel ? (
@@ -542,7 +563,7 @@ export function NewCreateForm() {
             <button
               type="button"
               disabled={busy || !siteUrlInput.trim()}
-              onClick={() => void resolveSite(forceReanalyze)}
+              onClick={() => void resolveSite(forceRecrawl)}
               className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               <ButtonBusyLabel
@@ -555,7 +576,7 @@ export function NewCreateForm() {
               <button
                 type="button"
                 onClick={() => {
-                  pollAbortRef.current?.abort();
+                  crawlAbortRef.current?.abort();
                   setStep("url");
                   setAnalyzingLabel(null);
                   setBusy(false);
@@ -584,7 +605,7 @@ export function NewCreateForm() {
               onClick={() => {
                 setStep("url");
                 setSection(null);
-                setSiteAnalysisProfileId(null);
+                setProjectSiteCrawlRunId(null);
                 setSiteHierarchy(null);
                 setHierarchyError(null);
                 setToolsPreflight(null);

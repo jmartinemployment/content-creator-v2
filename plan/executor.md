@@ -1,9 +1,9 @@
 # Content Creator v2 — Executor Plan
 
-**Correctness over expediency.**
+**Correctness over expediency.** See [`plan/rules.md`](./plan/rules.md).
 
 **Workspace (only):** `/Users/jeffmartin/development/content-creator-v2`  
-**Design authority:** [`v2-master.md`](./v2-master.md) + [`tool-pages-v2.md`](./tool-pages-v2.md) (tool generation) + [`../architecture.md`](../architecture.md) (platform map; **§8 copy / call / do not reuse** is canonical for v1 dependency boundaries).
+**Design authority:** [`rules.md`](./rules.md) (hard rules) + [`crawl-architecture.md`](./crawl-architecture.md) (crawl domains) + [`crawl-implementation.md`](./crawl-implementation.md) (crawl build phases) + [`v2-master.md`](./v2-master.md) + [`tool-pages-v2.md`](./tool-pages-v2.md) (tool generation) + [`../architecture.md`](../architecture.md) (platform map; **§8 copy / call / do not reuse** is canonical for v1 dependency boundaries).
 
 **This file is what an executor follows.** Do not invent sibling repos. Use existing GeekOAuth as IdP (client only — never duplicate that service).
 
@@ -17,7 +17,7 @@
    - `GeekRepository` Content Creator (non-V2) tables/controllers
    - Geek-SEO hubs / crawlers (read-only from v2)
 2. **No polling.** No `usePollJob`, no `setInterval` on job URLs, no worker `SELECT pending` sleep loop.
-3. **No second crawler.** Brand/site facts come from existing Geek-SEO analysis (read).
+3. **Three crawl domains** ([`crawl-architecture.md`](./crawl-architecture.md)): project site = gcc-v2 owned copy; partner/tools + competitors = read Geek-Crawler; no Site Analyzer runtime; no inline partner crawl in generate.
 4. **Content Brief** fields and catalogs live in `brief-catalog.ts` (this app owns them; do not call v1 for brief data or replace with blank Infobase forms).
 5. **Next.js = standard App Router.** Routes under `src/app`. Auth colocated under `src/app/auth/` (next to callback) + `src/app/api/auth/` route handlers. **Do not** invent a top-level `server/` tree. **Do not** put GeekAPI/BFF fetch clients in a folder named `lib`.
 6. **Use existing GeekOAuth — do not duplicate it.** This app is an **OAuth client** of the already-running GeekOAuth service. Distinct client id + cookies from v1. Do not copy the GeekOAuth repo or stand up a second IdP.
@@ -90,13 +90,13 @@
 **Do:**
 
 1. Copy **brief catalogs/fields** from v1 into this app (UI form only) — not auth.
-2. Require crawl id (same gate spirit as v1 Generate).
-3. `GccV2BrandKitBuilder`: map crawl → competitor Infobase/Brand Voice fields ([`v2-master.md`](./v2-master.md) §1). Review UI; provisional voice.
+2. Require **project-site crawl run id** (replaces Site Analyzer profile gate) — non-empty `relatedPages` on create.
+3. `GccV2BrandKitBuilder`: map **owned project-site crawl** → Infobase/Brand Voice fields ([`v2-master.md`](./v2-master.md) §1). Review UI; provisional voice.
 4. Hierarchy-match (read-only) → outline children; partition must-mentions; research allocation map.
 5. Outline approval gate before WRITE.
-6. CC-owned site hierarchy crawl when building structured `siteHierarchy`: **mobile-only** (Pixel 7 / Google-style), same as Site Analyzer — shipped in v2 (see [`v2-master.md`](./v2-master.md) §4). Do not desktop-crawl or dual-crawl.
+6. **Project-site** hierarchy: mobile-only (Pixel 7), part of owned project-site crawl — extend BFS beyond homepage-only when project-site service ships ([`crawl-architecture.md`](./crawl-architecture.md)). Do not desktop-crawl or dual-crawl.
 
-**Do not:** blank Infobase; edit Geek-SEO; invent SERP children; treat intentional mobile/desktop twin differences (e.g. no hero on mobile) as crawl bugs; flatten hierarchy to markdown for storage/retrieval.
+**Do not:** blank Infobase; call Site Analyzer for project facts; inline-crawl partner/competitor URLs (read Geek-Crawler); invent SERP children; treat intentional mobile/desktop twin differences (e.g. no hero on mobile) as crawl bugs; flatten hierarchy to markdown for storage/retrieval.
 
 ---
 

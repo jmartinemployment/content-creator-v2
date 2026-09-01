@@ -109,11 +109,11 @@ Canonical shape lives in Content Writer v2 / GeekAPI shared types; Content Creat
 |---------|---------|
 | **User** | GeekOAuth identity |
 | **Client** (or account) | Brand / customer the content is for |
-| **Site** | URL / property under analysis (Site Analyzer) |
-| **Create** | One writing effort: starting content choice, optional site analysis + **site section context**, artifacts, versions |
+| **Site** | **Project site** — URL/property bound to a create; grounds `relatedPages` and BrandKit |
+| **Create** | One writing effort: project-site crawl + **site section context**, artifacts, versions |
 | **Artifact / version** | One output (blog, email, tool page, image prompt, …) with version history |
 
-Every create binds to a **client**. Site Analyzer attaches a **site** (and analysis id). Generate with Site Analyzer must carry **site section context** for that site + gap — not an unbound home keyword.
+Every create binds to a **client** (account). The **project site** is the crawled property for that create. Today that is often the operator’s client website; **do not assume** it will always be “the client’s site.” Generate requires non-empty **site section context** from the owned project-site crawl — not an unbound home keyword. See [`plan/crawl-architecture.md`](./plan/crawl-architecture.md).
 
 Workspaces (if reused from Geek Content Workflow patterns) group clients; confirm when wiring — do not block v1 on a novel tenancy invent.
 
@@ -147,6 +147,8 @@ UI must show **running / failed / ready** and not double-submit. Prefer GeekAPI 
 
 ## 8. Copy, call, do not reuse
 
+**Crawl domains:** [`plan/crawl-architecture.md`](./plan/crawl-architecture.md). **Project site** = gcc-v2 owned (copy Geek-Crawler patterns). **Partner/tools + competitors** = read Geek-Crawler (`geek_crawler`). **Site Analyzer** = retire as runtime dependency for project site — copy behavior, do not reuse APIs.
+
 **Hard rule for v2** (also in [`plan/executor.md`](./plan/executor.md), GeekBackend `AGENTS.md`):
 
 | Action | What | Why |
@@ -163,19 +165,22 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
 |------|-------------|
 | Brief catalogs (UI) | `src/app/creates/new/brief-catalog.ts` |
 | Context translation | `GccV2ContextAdapter` (shape from `BuildMinimalContext`) |
-| Site hierarchy crawl | `GccV2SiteHierarchyService` (CC-owned mobile crawl) |
+| Site hierarchy (interim) | `GccV2SiteHierarchyService` — homepage-only until full project-site BFS ships |
 | Realtime | `gcc-v2-realtime` hub (patterns copied; new files) |
 | Jobs, export, brand kit, validate/repair | `ContentCreatorV2/*`, `HttpGccV2Repository` |
 | Tool pages (planned) | [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md) → `ContentCreatorV2/ToolPages/*` |
+| Project-site crawl (planned) | `ContentCreatorV2/ProjectSite/*` — copy Geek-Crawler BFS; `content_creator_v2` storage |
+| Geek-Crawler read bridge (planned) | Query `partner` / `competitors` pages at generate — no duplicate HTML in CC schema |
 
-### v1 cutover status (2026-08-28)
+### v1 cutover / crawl migration status
 
 | Dependency | Status |
 |------------|--------|
-| Site Analyzer BFF | **Done** — all `src/app/api/site-analyzer/*` → `api/geek-content-creator-v2/site-analyzer/*` |
+| Site Analyzer BFF (phi) | **Retire** — replace with project-site crawl API |
 | Section helpers | **Done** — `GccV2SiteSection.cs` |
-| Partner / polite crawl | **Done** — `ContentCreatorV2/Partner`, `ContentCreatorV2/Polite` |
-| SEO client | **Done** — `Services/GeekSeo/HttpGeekSeoSiteAnalyzerClient` |
+| Partner/competitor inline crawl | **Retire** — read Geek-Crawler; drop `gcc_v2_partner_research_records` |
+| Site Analyzer client (BrandKit) | **Retire** — BrandKit from owned project-site crawl |
+| `tool_source_crawl_*` tables | **Dropped** |
 | Legacy read | **Keep** — `GccV2LegacyController` + `HttpGccRepository` |
 | v1 API routes | **Retired** — `GccController` removed; v2 prefix only for new work |
 
@@ -186,10 +191,11 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
 
 ### Do not delete yet
 
-- Geek-SEO / Site Analyzer crawl backend (read-only source of truth)
 - Shared prompt/review/analyzer assemblies v2 calls in-process
 - `HttpGccRepository` while `/legacy` is kept
 - `GccGenerateService` static helpers still used by Workflow (`ContentGenerationOrchestrator`, tests)
+
+**Retire (do not treat as long-term source of truth):** Geek-SEO Site Analyzer for project-site facts; `gcc_v2_partner_research_records`; brief JSON blobs duplicating Geek-Crawler HTML.
 
 **Decommission gate:** v2 E2E on phi passes ([`v2-master.md` §6](./plan/v2-master.md)).
 

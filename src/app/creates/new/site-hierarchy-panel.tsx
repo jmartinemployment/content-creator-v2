@@ -95,7 +95,7 @@ export function SiteHierarchyPanel({ hierarchy }: { hierarchy: SiteHierarchy | n
         <h3 className="text-sm font-semibold text-amber-950">Site hierarchy</h3>
         <p className="text-xs text-amber-900">
           Mobile homepage hierarchy was not attached (browser unavailable or fetch soft-failed). Partner
-          tools may still come from the Site Analyzer profile trees.
+          tools may still come from the project-site crawl hierarchy.
         </p>
       </div>
     );
