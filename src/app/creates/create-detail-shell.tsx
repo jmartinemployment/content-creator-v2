@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Canvas } from "@/app/creates/canvas";
 import { CreateDraftTabs } from "@/app/creates/create-draft-tabs";
 import { CreateJobHubProvider } from "@/app/creates/create-job-hub-provider";
@@ -12,6 +13,38 @@ type CreateDetailShellProps = {
   title: string;
   initialJobs: JobSnapshot[];
 };
+
+function PartnerResearchWarningsBanner({ createId }: { createId: string }) {
+  const [warnings, setWarnings] = useState<string[]>([]);
+
+  useEffect(() => {
+    const key = `gcc-v2-research-warnings:${createId}`;
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    sessionStorage.removeItem(key);
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+        setWarnings(parsed);
+      }
+    } catch {
+      // ignore malformed storage
+    }
+  }, [createId]);
+
+  if (warnings.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <p className="font-medium">Some external research was skipped</p>
+      <ul className="mt-1 list-disc pl-4">
+        {warnings.map((warning) => (
+          <li key={warning}>{warning}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function CreateDetailShell({ createId, jobId, title, initialJobs }: CreateDetailShellProps) {
   return (
@@ -25,6 +58,7 @@ export function CreateDetailShell({ createId, jobId, title, initialJobs }: Creat
             Content Creator v2
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">{title}</h1>
+          <PartnerResearchWarningsBanner createId={createId} />
           <p className="mt-2 text-sm text-[var(--cc-muted)]">
             Live Canvas — job status and content stream over the realtime hub (no polling).
           </p>

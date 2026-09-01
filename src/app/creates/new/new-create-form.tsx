@@ -87,7 +87,8 @@ type PartnerToolsPreflight = {
   toolsFound: boolean;
   tools: PartnerToolRow[];
   message?: string;
-  partnerResearchWarning?: string | null;
+  externalResearchNote?: string | null;
+  partnerResearchWarnings?: string[];
   siteHierarchy?: SiteHierarchy | null;
 };
 
@@ -457,9 +458,19 @@ export function NewCreateForm() {
         const body = (await genRes.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error || `generate failed: HTTP ${genRes.status}`);
       }
-      const data = (await genRes.json()) as { jobId?: string; jobIds?: string[] };
+      const data = (await genRes.json()) as {
+        jobId?: string;
+        jobIds?: string[];
+        partnerResearchWarnings?: string[];
+      };
       const jobId = data.jobId ?? data.jobIds?.[0];
       if (!jobId) throw new Error("generate returned no jobId");
+      if (data.partnerResearchWarnings && data.partnerResearchWarnings.length > 0) {
+        sessionStorage.setItem(
+          `gcc-v2-research-warnings:${pendingCreateId}`,
+          JSON.stringify(data.partnerResearchWarnings),
+        );
+      }
       router.push(`/creates/${pendingCreateId}?jobId=${jobId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start job");
@@ -852,10 +863,21 @@ export function NewCreateForm() {
                   ? `Found ${toolsPreflight.toolCount} partner tool(s). Each gets a full tool page from its supplied URL, plus a keyword overview page linking to them on-site.`
                   : "No partner tools found.")}
             </p>
-            {toolsPreflight.partnerResearchWarning ? (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                {toolsPreflight.partnerResearchWarning}
+            {toolsPreflight.externalResearchNote ? (
+              <p className="rounded-md border border-[var(--cc-line)] bg-[var(--cc-surface)] px-3 py-2 text-xs text-[var(--cc-muted)]">
+                <span className="font-medium text-[var(--cc-ink)]">External partner research — </span>
+                {toolsPreflight.externalResearchNote}
               </p>
+            ) : null}
+            {toolsPreflight.partnerResearchWarnings && toolsPreflight.partnerResearchWarnings.length > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <p className="font-medium">Some partner research was skipped</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {toolsPreflight.partnerResearchWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
             <p className="text-xs text-[var(--cc-muted)]">
               Destination URLs (Name | URL) are fetched for excerpts when weaving tool text into a
