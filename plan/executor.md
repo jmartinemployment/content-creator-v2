@@ -17,7 +17,7 @@
    - `GeekRepository` Content Creator (non-V2) tables/controllers
    - Geek-SEO hubs / crawlers (read-only from v2)
 2. **No polling.** No `usePollJob`, no `setInterval` on job URLs, no worker `SELECT pending` sleep loop.
-3. **Three crawl domains** ([`crawl-architecture.md`](./crawl-architecture.md)): project site = gcc-v2 owned copy; partner/tools + competitors = read Geek-Crawler; no Site Analyzer runtime; no inline partner crawl in generate.
+3. **Three crawl domains** ([`crawl-architecture.md`](./crawl-architecture.md)): project site = gcc-v2 owned copy; partner/tools + competitors = read Geek-Crawler; no Site Analyzer runtime; no inline partner crawl in generate. **External research:** notify-and-skip unavailable seeds (never block generate or Geek-Crawler page-limit UX from Creator).
 4. **Content Brief** fields and catalogs live in `brief-catalog.ts` (this app owns them; do not call v1 for brief data or replace with blank Infobase forms).
 5. **Next.js = standard App Router.** Routes under `src/app`. Auth colocated under `src/app/auth/` (next to callback) + `src/app/api/auth/` route handlers. **Do not** invent a top-level `server/` tree. **Do not** put GeekAPI/BFF fetch clients in a folder named `lib`.
 6. **Use existing GeekOAuth — do not duplicate it.** This app is an **OAuth client** of the already-running GeekOAuth service. Distinct client id + cookies from v1. Do not copy the GeekOAuth repo or stand up a second IdP.

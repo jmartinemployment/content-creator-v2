@@ -35,7 +35,7 @@ import {
   canRepurposeContentType,
   REPURPOSE_CHANNELS,
 } from "@/app/creates/repurpose-channels";
-import { isCmsPublishType, labelForContentType } from "@/app/creates/content-types";
+import { isCmsPublishType, isLongFormContentType, labelForContentType } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 
 type LogEntry = { seq: number; type: string; payload: unknown; atUtc: string };
@@ -399,6 +399,15 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [transformVariants, setTransformVariants] = useState<
     Array<{ channel: string; title: string; body: string; headline?: string | null }>
   >([]);
+  const [carouselBusy, setCarouselBusy] = useState(false);
+  const [carouselError, setCarouselError] = useState<string | null>(null);
+  const [carouselResult, setCarouselResult] = useState<{
+    slug: string;
+    slideCount: number;
+    caption: string;
+    pdfBase64: string;
+    suggestedFilename: string;
+  } | null>(null);
   const [publishBusy, setPublishBusy] = useState<"draft" | "live" | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [exportBusy, setExportBusy] = useState<"zip" | "commit" | null>(null);
@@ -844,6 +853,53 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  async function runLinkedInCarousel() {
+    setCarouselBusy(true);
+    setCarouselError(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-carousel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Carousel failed: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+      }
+      const data = (await res.json()) as {
+        slug?: string;
+        slideCount?: number;
+        caption?: string;
+        pdfBase64?: string;
+        suggestedFilename?: string;
+      };
+      if (!data.pdfBase64) throw new Error("Carousel response missing PDF.");
+      setCarouselResult({
+        slug: data.slug ?? "carousel",
+        slideCount: data.slideCount ?? 0,
+        caption: data.caption ?? "",
+        pdfBase64: data.pdfBase64,
+        suggestedFilename: data.suggestedFilename ?? data.slug ?? "carousel",
+      });
+    } catch (err) {
+      setCarouselError(err instanceof Error ? err.message : "Carousel failed");
+    } finally {
+      setCarouselBusy(false);
+    }
+  }
+
+  function downloadCarouselPdf() {
+    if (!carouselResult?.pdfBase64) return;
+    const bytes = Uint8Array.from(atob(carouselResult.pdfBase64), (c) => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${carouselResult.suggestedFilename}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function runTransform() {
     setTransformBusy(true);
     setTransformError(null);
@@ -996,6 +1052,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   const isTerminal = status === "ready" || status === "canceled" || status === "failed";
   const canRepurpose = status === "ready" && canRepurposeContentType(contentType);
+  const canLinkedInCarousel = status === "ready" && isLongFormContentType(contentType);
   const repurposeSourceLabel = labelForContentType(contentType);
   const showBrandKitPanel = awaitingBrandkit || status === "awaiting_brandkit_approval";
   // BrandKit Accept must complete before outline Approve — never show both gates together.
@@ -1563,6 +1620,50 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </li>
               ))}
             </ul>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">LinkedIn carousel</h2>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            Turn this ready long-form draft into a swipeable PDF (1080×1350 portrait) plus a feed
+            caption. Upload the PDF to LinkedIn as a document post.
+          </p>
+          {!isLongFormContentType(contentType) ? (
+            <p className="mt-2 text-xs text-amber-800">
+              Switch to a long-form tab (pillar, blog, case study, guide, etc.) to generate a carousel.
+            </p>
+          ) : status !== "ready" ? (
+            <p className="mt-2 text-xs text-[var(--cc-muted)]">
+              Carousel unlocks when this {repurposeSourceLabel} draft is ready.
+            </p>
+          ) : (
+            <button
+              type="button"
+              disabled={carouselBusy || !canLinkedInCarousel}
+              onClick={() => void runLinkedInCarousel()}
+              className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            >
+              <ButtonBusyLabel busy={carouselBusy} busyLabel="Generating…" idleLabel="Generate carousel PDF" />
+            </button>
+          )}
+          {carouselError ? <p className="mt-2 text-xs text-red-600">{carouselError}</p> : null}
+          {carouselResult ? (
+            <div className="mt-3 space-y-2 text-xs">
+              <p className="text-[var(--cc-muted)]">
+                {carouselResult.slideCount} slides · {carouselResult.suggestedFilename}.pdf
+              </p>
+              <button
+                type="button"
+                onClick={downloadCarouselPdf}
+                className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-[var(--cc-ink)]"
+              >
+                Download PDF
+              </button>
+              <p className="whitespace-pre-wrap rounded-md bg-black/5 p-2 text-[var(--cc-ink)]">
+                {carouselResult.caption}
+              </p>
+            </div>
           ) : null}
         </div>
 

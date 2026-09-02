@@ -62,20 +62,40 @@ Site Analyzer BFF remains **interim** until B + C ship ([`architecture.md`](../a
 
 ---
 
+## Shipped status (Sep 2026 audit)
+
+Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (outline save), `48ab411` (notify-and-skip **regression**); phi `dcaa377` (warnings UI).
+
+| Item | Status | Notes |
+|------|--------|-------|
+| **A1** `GccV2GeekCrawlerResearchResolver` | Shipped | Uses `ListPagesBySeedsAsync`; accepts partial/failed runs when seed HTML exists |
+| **A2** Wire generate + preflight | Partial | Generate merges research; preflight returns `externalResearchNote`. **Generate fail-closed regressed** in `48ab411` |
+| **A4** Resolver tests | Shipped | 11 tests; currently assert **throw** on missing external research (aligned with regression, not product spec) |
+| **B2–B3** Project-site crawl | Shipped | `ContentCreatorV2/ProjectSite/*`, SignalR on gcc-v2 hub |
+| **C2** Phi create flow cutover | Shipped | `new-create-form.tsx` — project-site crawl, no Site Analyzer poll |
+| **Outline PUT** `jobs/{id}/outline` | Fixed (`16fb679`) | No `OutlineReady` replay on manual save; hub push failures logged, not fatal |
+| **Notify-and-skip** | **Not shipped** | Restore warn-and-collect in resolver; see [`crawl-architecture.md`](./crawl-architecture.md) § implementation status |
+
+**Open fix:** In `MergePartnerResearchAsync` / `MergeCompetitorResearchAsync`, replace `throw new InvalidOperationException(warning)` with `warnings.Add(warning)` and remove aggregate throws when all external seeds miss. Remove generate `catch (InvalidOperationException)` or limit it to non-recoverable cases.
+
+---
+
 ## Phase A — Geek-Crawler read bridge (partner + competitors)
 
 **Goal:** Populate WRITE research from `geek_crawler` without inline polite crawl or Content Creator HTML storage.
 
-### A1. New service (GeekBackend)
+### A1. Research resolver (GeekBackend) — shipped, spec drift on skip policy
 
-Add `GeekAPI/Services/ContentCreatorV2/GeekCrawler/GccV2GeekCrawlerResearchResolver.cs`:
+`GeekAPI/Services/ContentCreatorV2/GeekCrawler/GccV2GeekCrawlerResearchResolver.cs`:
 
-- Inject `HttpGeekCrawlerRepository` (in-process on GeekAPI — not a new public HTTP client).
-- **Resolve run:** `GetLatestRunAsync(ownerUserId, crawlType, SerializeSeeds(NormalizeSeeds(urls)))` via `GeekApplication/Models/GeekCrawler/GeekCrawlerSeedNormalizer.cs`.
-- **Gate:** `status == "complete"`; else fail closed (“start crawl in Geek-Crawler, then retry”).
-- **Load pages:** paginate `ListPagesAsync(runId)`; filter by seed URLs.
+- Inject `IGccV2GeekCrawlerReadRepository` (wraps `HttpGeekCrawlerRepository`).
+- **Resolve run:** `GetLatestRunAsync` + `GetRunForSlotAsync` fallback — **any status** when seed HTML exists.
+- **Load pages:** `ListPagesBySeedsAsync(runId, seedUrls)` — **never** paginate full runs at generate (OOM-safe).
 - **Extract:** `GccV2ArticleHtmlExtractor.ExtractPartnerPage` → `GccQuoteablePage`.
 - **Merge:** `GccV2PartnerUrlResearchService.MergePartnerResearchIntoBriefJson` / `MergeCompetitorResearchIntoBriefJson`.
+- **Product policy:** notify-and-skip unavailable external seeds → `GccV2ExternalResearchMergeResult.PartnerResearchWarnings`. **Current code throws** (`48ab411`) — see [Shipped status](#shipped-status-sep-2026-audit).
+
+~~**Gate:** `status == "complete"`; else fail closed.~~ **Superseded** by notify-and-skip policy in [`crawl-architecture.md`](./crawl-architecture.md).
 
 Seed sources (existing static helpers on `GccV2PartnerUrlResearchService`):
 
@@ -84,16 +104,26 @@ Seed sources (existing static helpers on `GccV2PartnerUrlResearchService`):
 
 Register in `GeekAPI/Services/ContentCreatorV2/ServiceRegistration.cs`.
 
-### A2. Wire generate + preflight
+### A2. Wire generate + preflight — shipped
 
 In `GeekAPI/Controllers/ContentCreatorV2/GccV2Controller.cs`:
 
-| Entry point | Change |
-|-------------|--------|
-| `PreflightPartnerTools` | After hierarchy merge, resolve partner run; merge `partnerResearch` onto brief (optional preview in response) |
-| `Generate` | Before `CreateBriefAsync`, resolve partner + competitor runs; merge research onto `rawBriefJson` |
+| Entry point | Shipped behavior |
+|-------------|------------------|
+| `PreflightPartnerTools` | Hierarchy merge only (no research merge). Returns `externalResearchNote` (notify-and-skip copy). |
+| `Generate` | Merges partner + competitor + local research before `CreateBriefAsync`. Returns `partnerResearchWarnings[]` on skip paths; generate continues (`202`). |
 
-**Gap today:** `GccV2ToolPageSpawnService` reads empty `partnerResearch` — Phase A fixes tool spawn and `GccV2ToolResearchExtractor`.
+Phi (`dcaa377`): stores `partnerResearchWarnings` in `sessionStorage`; amber banner in `create-detail-shell.tsx` and tools preflight step.
+
+### A2b. Outline save (Canvas) — shipped (`16fb679`)
+
+| Route | Behavior |
+|-------|----------|
+| `PUT jobs/{id}/outline` | Persists outline + patches `HierarchyChildHeadingsJson`. **Does not** append `OutlineReady` (avoids ~60s hub hang / BFF 500). |
+| `POST jobs/{id}/regenerate-outline` | Still emits `OutlineReady` (server-driven replace). |
+| `GccV2JobEventWriter.TryPushAsync` | Hub push failures log warning; persistence succeeds. |
+
+Canvas uses PUT response body; `outlineDirtyRef` blocks hub `OutlineReady` while editing.
 
 ### A3. Delete Content Creator duplicate storage
 
@@ -107,16 +137,20 @@ In `GeekAPI/Controllers/ContentCreatorV2/GccV2Controller.cs`:
 
 `gcc_v2_tool_source_crawl_*` — already dropped; do not revive.
 
-### A4. Tests
+### A4. Tests — shipped (assert fail-closed today)
 
-- Resolver unit tests: seed normalization, complete run, missing/incomplete run fail-closed, HTML → `GccQuoteablePage`.
-- Location: `GeekBackend.Tests` (mock `HttpGeekCrawlerRepository`).
+- Resolver unit tests in `GeekBackend.Tests/ContentCreatorV2/GccV2GeekCrawlerResearchResolverTests.cs`.
+- Covers: by-seeds call count, partial failed run with HTML, on-site project crawl merge, missing/incomplete external run **throws** (matches current code, not product spec).
+- **When notify-and-skip is restored:** change `*_throws` tests back to `*_warns_and_skips`; assert non-empty `PartnerResearchWarnings`.
 
 ### Phase A — done when
 
-- [ ] Generate with completed Geek-Crawler `partner` run → non-empty `partnerResearch` on brief; tool spawn extracts quotes.
-- [ ] Generate with completed `competitors` run → competitor excerpts in WRITE context.
-- [ ] `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` on GeekBackend → empty after migration.
+- [x] Resolver + by-seeds reads (`ffc13ee`)
+- [x] Generate merges research when runs/pages available
+- [x] Phi warnings UI wired (`dcaa377`)
+- [ ] Notify-and-skip on missing external research (regressed — restore)
+- [ ] `partnerResearchWarnings` populated on skip paths
+- [ ] `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` on GeekBackend → empty after migration
 
 ---
 
@@ -255,16 +289,18 @@ rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v
 
 ## Task checklist
 
-- [ ] **A1** — `GccV2GeekCrawlerResearchResolver` + DI registration
-- [ ] **A2** — Wire preflight + generate in `GccV2Controller`
+- [x] **A1** — `GccV2GeekCrawlerResearchResolver` + DI registration
+- [x] **A2** — Wire preflight + generate in `GccV2Controller` (skip policy **open**)
+- [ ] **A2-fix** — Restore notify-and-skip in resolver; align tests + phi copy
 - [ ] **A3** — Drop `gcc_v2_partner_research_records` + repo/API surface
-- [ ] **A4** — Resolver unit tests
-- [ ] **B1** — Project-site schema + migration
-- [ ] **B2** — `ContentCreatorV2/ProjectSite/*` engine + worker
-- [ ] **B3** — `project-site/*` GeekAPI routes + SignalR
-- [ ] **B4** — `GccV2SiteSection` + `GccV2BrandKitBuilder` from owned crawl
-- [ ] **B5** — Replace `siteAnalysisProfileId` gate; deprecate site-analyzer routes
-- [ ] **C1** — Remove phi site-analyzer BFF
-- [ ] **C2** — Rewrite `new-create-form` + `site-section.ts`
-- [ ] **C3** — Copy cleanup
-- [ ] **Verify** — rg checks + manual E2E
+- [x] **A4** — Resolver unit tests
+- [x] **B1** — Project-site schema + migration
+- [x] **B2** — `ContentCreatorV2/ProjectSite/*` engine + worker
+- [x] **B3** — `project-site/*` GeekAPI routes + SignalR
+- [x] **B4** — `GccV2SiteSection` + BrandKit from owned crawl (Site Analyzer retired on path)
+- [x] **B5** — `ProjectSiteCrawlRunId` gate on generate
+- [x] **C1** — Remove phi site-analyzer BFF
+- [x] **C2** — Rewrite `new-create-form` + project-site crawl
+- [ ] **C3** — Copy cleanup (residual Site Analyzer refs if any)
+- [x] **Outline** — Silent PUT save + `TryPushAsync` (`16fb679`)
+- [ ] **Verify** — notify-and-skip E2E + rg checks

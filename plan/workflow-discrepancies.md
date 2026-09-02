@@ -7,7 +7,27 @@
 
 **v2 surface:** `GeekAPI/Services/ContentCreatorV2/*`, phi BFF (`content-creator-v2`).
 
-**Related:** [`v2-master.md`](./v2-master.md) (what ships), [`tool-pages-v2.md`](./tool-pages-v2.md) (tool page target — planned), [`executor.md`](./executor.md) (isolation rules).
+**Related:** [`v2-master.md`](./v2-master.md) (what ships), [`tool-pages-v2.md`](./tool-pages-v2.md) (tool page target — planned), [`executor.md`](./executor.md) (isolation rules), [`crawl-architecture.md`](./crawl-architecture.md) (external research policy).
+
+---
+
+## External research & outline (Sep 2026 audit)
+
+**Spec authority:** [`crawl-architecture.md`](./crawl-architecture.md) § external research policy.
+
+| Feature | Product spec | Shipped today | GeekBackend / phi reference |
+|---------|--------------|---------------|----------------------------|
+| External partner lookup | By-seeds only; no full-run pagination | **Yes** | `GccV2GeekCrawlerResearchResolver.ExtractQuoteableFromCrawlerPagesAsync` |
+| Partial/failed Geek-Crawler run with seed HTML | Merge and continue | **Yes** | `ffc13ee` |
+| Missing / empty external seed | Skip + `partnerResearchWarnings[]`; generate continues | **Yes** | `GccV2GeekCrawlerResearchResolver` warn-and-skip restored |
+| Preflight `externalResearchNote` | “Skipped partners; generate still runs” | Copy + behavior aligned | Phi banner active when warnings present |
+| Phi amber research banner | Show warnings after generate | UI + backend **Yes** | `create-detail-shell.tsx`, `sessionStorage` |
+| Geek-Crawler page-limit / operator config | Out of scope for Creator | N/A | Do not surface in phi or generate errors |
+| **Outline PUT save** | Fast persist; no hub replay | **Yes** (`16fb679`) | `PutOutline` — no `OutlineReady` append |
+| **Outline regenerate** | Hub `OutlineReady` to replace canvas | **Yes** | `RegenerateOutline` still appends event |
+| Hub push after other job events | Best-effort; don’t fail persistence | **Yes** | `GccV2JobEventWriter.TryPushAsync` |
+
+**Triage:** Notify-and-skip restored; tests use `*_warns_and_skips`.
 
 ---
 
@@ -28,12 +48,12 @@
 
 | Feature | Workflow | v2 today | GeekBackend reference |
 |---------|----------|----------|------------------------|
-| JSON+LD in `.html` | `TechnicalArticle` / `BlogPosting` / `SoftwareApplication` embedded via `SectionHtmlRenderer` | `jsonLdSchema: null` always | `GccV2HtmlExportService.cs` L81; `HtmlExportService.cs` L117–122 |
-| `<meta>` summary variants | `excerpt`, `mainSummary`, `heroSummary`, `homeSummary`, `blogSummary`, `advertisingSummary`, `tags`, `date` | `slug`, `department`, `keywords` only | `HtmlExportService.cs` L94–108 |
-| `keywords` meta | From WRITE metadata `row.Keywords` | Uses **create title** | `GccV2HtmlExportService.cs` L86 |
+| JSON+LD in `.html` | `TechnicalArticle` / `BlogPosting` / `SoftwareApplication` embedded via `SectionHtmlRenderer` | **Yes** — built at job `ready` via `GccV2JsonLdBuilder`, persisted on `ResultJson`, used at export/CMS | `GccV2JobWorker`, `GccV2HtmlExportService` |
+| `<meta>` summary variants | `excerpt`, `mainSummary`, `heroSummary`, `homeSummary`, `blogSummary`, `advertisingSummary`, `tags`, `date` | Tool pages + export meta wired; long-form uses `keywords` from WRITE metadata | `GccV2HtmlExportService`, tool WRITE |
+| `keywords` meta | From WRITE metadata `row.Keywords` | From `ResultJson.keywords` when present | `GccV2JobWorker`, `GccV2HtmlExportService` |
 | Pillar/blog/tool `.html` body | `SectionHtmlRenderer.RenderDocument` | Same renderer | Parity |
 | Canonical URLs | Base URL + department + slug | Same pattern | Parity |
-| Image `.txt` folder | `pillar/`, `blog/`, `sections/`, `social/facebook`, `social/linkedin` by row type | All → `image-prompts/sections/` | `GccV2HtmlExportService.cs` L153; `HtmlExportService.cs` L164–168 |
+| Image `.txt` folder | `pillar/`, `blog/`, `sections/`, `social/facebook`, `social/linkedin` by row type | Per-type folders for long-form heroes/sections (`image-prompts/comparison/`, etc.) | `GccV2HtmlExportService.ImagePromptFolderFor` |
 | Image `.txt` body | **Prompt string only** (first text paragraph in body) | Heading + prompt + notes (`PlainTextOf` full document) | `HtmlExportService.cs` L136–139; `GccV2HtmlExportService.cs` L106–114 |
 | Export approval gate | Can skip unapproved rows | Exports any job with parseable `ResultJson` | `HtmlExportService.cs` L172–178 |
 | Inline `section.ImagePrompt` | Secondary `.txt` per embedded prompt in body tree | Not extracted | `HtmlExportService.cs` L181–211 (rarely populated in workflow) |

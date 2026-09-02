@@ -46,8 +46,9 @@ Fail any change that touches:
 ## 3. Correctness — no silent failures
 
 - Jobs must reach **`ready`**, **`failed`** (with error), or an explicit **`awaiting_*`** state — never **`pending`** forever.
-- **Fail closed** when grounding fails: missing brief, empty `relatedPages`, failed research URL, missing partner crawl when required — surface errors to the operator.
-- **No silent fallbacks:** do not substitute guessed data, blank forms, or “good enough” success when a required step failed.
+- **Fail closed** when **project grounding** fails: missing brief, empty `relatedPages`, failed project-site crawl gate — surface errors to the operator.
+- **External partner/competitor research (Geek-Crawler):** **notify and skip** — append `partnerResearchWarnings`, generate continues. Never block generate or expose Geek-Crawler page-limit / operator config changes from Content Creator. See [`crawl-architecture.md`](./crawl-architecture.md).
+- **No silent fallbacks:** do not substitute guessed data, blank forms, or “good enough” success when a **required project-site** step failed.
 - **No timer polling as a fallback** when SignalR or push fails — fix hub/reconnect; do not add `setInterval` “just in case.”
 
 ---

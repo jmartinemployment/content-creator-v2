@@ -8,47 +8,77 @@ export const CONTENT_TYPES = [
   { value: "blog", label: "Blog" },
   { value: "pillar", label: "Pillar" },
   { value: "tool", label: "Tool page" },
+  { value: "comparison", label: "Comparison" },
+  { value: "case-study", label: "Case study" },
+  { value: "guide", label: "Guide / How-to" },
+  { value: "alternatives", label: "Alternatives" },
+  { value: "tech-article", label: "Tech article" },
+  { value: "listicle", label: "Listicle" },
+  { value: "service", label: "Service page" },
+  { value: "local", label: "Local landing" },
+  { value: "whitepaper", label: "Whitepaper" },
   { value: "email", label: "Email" },
   { value: "social", label: "Social" },
   { value: "image-prompt", label: "Image prompt" },
   { value: "ads", label: "Ads" },
+  { value: "linkedin-carousel", label: "LinkedIn carousel" },
 ] as const;
 
 export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
 
-/** Long-form Primary draft options — default Pillar. Tool = keyword overview + partner pages. */
+/** Long-form Primary draft options — default Pillar. */
 export const PRIMARY_DRAFT_TYPES = [
   { value: "pillar", label: "Pillar" },
   { value: "blog", label: "Blog" },
   { value: "tool", label: "Tool pages" },
+  { value: "comparison", label: "Comparison" },
+  { value: "case-study", label: "Case study" },
+  { value: "guide", label: "Guide / How-to" },
+  { value: "alternatives", label: "Alternatives" },
+  { value: "tech-article", label: "Tech article" },
+  { value: "listicle", label: "Listicle" },
+  { value: "service", label: "Service page" },
+  { value: "local", label: "Local landing" },
+  { value: "whitepaper", label: "Whitepaper" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
 
 export type PrimaryDraftType = (typeof PRIMARY_DRAFT_TYPES)[number]["value"];
+
+const LONG_FORM_TYPES = new Set<string>(PRIMARY_DRAFT_TYPES.map((t) => t.value));
+
+export function isLongFormContentType(value: string): boolean {
+  return LONG_FORM_TYPES.has(value.trim().toLowerCase());
+}
 
 /** Short-form Also draft types (excludes tool — tool is primary long-form or Also with pillar/blog). */
 export const ALSO_DRAFT_SHORT_TYPES = [
   { value: "email", label: "Email" },
   { value: "social", label: "Social" },
   { value: "ads", label: "Ads" },
+  { value: "linkedin-carousel", label: "LinkedIn carousel" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
+
+const OTHER_LONG_FORM: ReadonlyArray<{ value: ContentType; label: string }> = [
+  { value: "pillar", label: "Pillar" },
+  { value: "blog", label: "Blog" },
+  { value: "tool", label: "Tool page" },
+  { value: "comparison", label: "Comparison" },
+  { value: "case-study", label: "Case study" },
+  { value: "guide", label: "Guide / How-to" },
+  { value: "alternatives", label: "Alternatives" },
+  { value: "tech-article", label: "Tech article" },
+  { value: "listicle", label: "Listicle" },
+  { value: "service", label: "Service page" },
+  { value: "local", label: "Local landing" },
+  { value: "whitepaper", label: "Whitepaper" },
+];
 
 /** Also draft options for the current Primary — other long-form + short types. */
 export function alsoDraftOptionsFor(
   primary: PrimaryDraftType,
 ): ReadonlyArray<{ value: ContentType; label: string }> {
-  if (primary === "tool") {
-    return [
-      { value: "pillar", label: "Pillar" },
-      { value: "blog", label: "Blog" },
-      ...ALSO_DRAFT_SHORT_TYPES,
-    ];
-  }
-
-  const otherLong: { value: ContentType; label: string } =
-    primary === "pillar"
-      ? { value: "blog", label: "Blog" }
-      : { value: "pillar", label: "Pillar" };
-  return [otherLong, { value: "tool", label: "Tool page" }, ...ALSO_DRAFT_SHORT_TYPES];
+  const otherLong = OTHER_LONG_FORM.filter((o) => o.value !== primary);
+  return [...otherLong, ...ALSO_DRAFT_SHORT_TYPES];
 }
 
 export function labelForContentType(value: string): string {
@@ -56,8 +86,20 @@ export function labelForContentType(value: string): string {
   return hit?.label ?? value;
 }
 
-/** CMS upsert types — pillar, blog, tool only (§5.6). */
-export const CMS_PUBLISH_TYPES = ["pillar", "blog", "tool"] as const;
+/** CMS upsert types — long-form web pages (§5.6). Whitepaper is export-only. */
+export const CMS_PUBLISH_TYPES = [
+  "pillar",
+  "blog",
+  "tool",
+  "comparison",
+  "case-study",
+  "guide",
+  "alternatives",
+  "tech-article",
+  "listicle",
+  "service",
+  "local",
+] as const;
 
 export function isCmsPublishType(value: string): boolean {
   return (CMS_PUBLISH_TYPES as readonly string[]).includes(value.trim().toLowerCase());
@@ -65,5 +107,5 @@ export function isCmsPublishType(value: string): boolean {
 
 export function isExportOnlyType(value: string): boolean {
   const t = value.trim().toLowerCase();
-  return t === "email" || t === "social" || t === "ads" || t === "image-prompt";
+  return t === "email" || t === "social" || t === "ads" || t === "image-prompt" || t === "whitepaper" || t === "linkedin-carousel";
 }

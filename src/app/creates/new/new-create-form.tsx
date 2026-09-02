@@ -112,6 +112,35 @@ function parseOperatorTools(text: string): Array<{ name?: string; url: string }>
     .filter((row): row is { name?: string; url: string } => row !== null);
 }
 
+function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
+  switch (primary) {
+    case "tool":
+      return "Long-form tool pages: one keyword overview plus a full page per partner tool from supplied URLs. Optionally add pillar/blog under Also draft for a use-case article to ground the overview.";
+    case "comparison":
+      return "Side-by-side evaluation — outline gets one section per option (from partner tools and competitor URLs). Missing external crawls warn and skip; generate continues.";
+    case "alternatives":
+      return "Narrative alternatives page (one section per partner tool). Does not auto-spawn partner tool jobs — use Tool page under Also draft for full partner pages.";
+    case "case-study":
+      return "Proof-led story: context, challenge, approach, implementation, results, and lessons. Optional FAQ when PAA questions are available.";
+    case "guide":
+      return "Step-by-step how-to with prerequisites and numbered steps. Uses site hierarchy headings when available.";
+    case "local":
+      return "Local landing page grounded in project site and Geek-Crawler local runs (crawlType: local). Start local crawls in Geek-Crawler — not inline here.";
+    case "whitepaper":
+      return "Long-form report (export-only — HTML in whitepapers/ folder). Higher word floor at VALIDATE.";
+    case "tech-article":
+      return "Architecture and implementation depth — article-like WRITE path with TechnicalArticle JSON-LD.";
+    case "listicle":
+      return "Ranked or numbered picks with blurbs and a verdict section — blog-like WRITE path.";
+    case "service":
+      return "Commercial service page: shorter target length, CTA clarity emphasized at VALIDATE.";
+    case "blog":
+      return "Blog-style long-form. Check another long-form under Also draft to write both. Re-Purpose remixes ready drafts into channel packs.";
+    default:
+      return "Long-form WRITE path (default Pillar). Check other long-form types under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab into channel packs — not image prompts.";
+  }
+}
+
 export function NewCreateForm() {
   const router = useRouter();
   const crawlAbortRef = useRef<AbortController | null>(null);
@@ -676,9 +705,7 @@ export function NewCreateForm() {
               ))}
             </select>
             <p className="text-xs text-[var(--cc-muted)]">
-              {primaryDraft === "tool"
-                ? "Long-form tool pages: one keyword overview plus a full page per partner tool from supplied URLs. Optionally add pillar/blog under Also draft for a use-case article to ground the overview."
-                : "Long-form WRITE path (default Pillar). Check the other long-form under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab (pillar, blog, tool, email, social, ads) into channel packs — not image prompts."}
+              {primaryDraftHelperCopy(primaryDraft)}
             </p>
           </div>
 

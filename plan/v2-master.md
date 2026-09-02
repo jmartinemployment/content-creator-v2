@@ -81,13 +81,17 @@ Image-prompt jobs skip VALIDATE; worker sets `writeOnly: true` and goes straight
 
 ### Content types
 
+Full catalog (Tier 1–3 long-form types, export paths, CMS scope): [`long-form-content-types.md`](./long-form-content-types.md).
+
 | Type | Pipeline | How operator gets it |
 |------|----------|----------------------|
 | Pillar / Blog | Full + outline gate | Primary draft |
-| Tool page | Keyword overview + N partner pages (planned — [`tool-pages-v2.md`](./tool-pages-v2.md)); today: one stub job | Also draft checkbox |
+| Comparison / Case study / Guide / Alternatives | Full + outline gate (type-specific templates) | Primary draft |
+| Tech article / Listicle / Service / Local / Whitepaper | Full + outline gate | Primary draft (`whitepaper` export-only for CMS) |
+| Tool page | Keyword overview + N partner pages ([`tool-pages-v2.md`](./tool-pages-v2.md)) | Primary or Also draft |
 | Email / Social / Ads | Short-form; auto-write after brand kit | Also draft checkbox |
 | Image prompts | Write-only jobs (§3.1) | Auto-spawned when **any** draft job reaches `ready` — not Also draft, not Re-Purpose |
-| Re-Purpose pack | Transform (`GcwRepurposeCatalog`) | Optional Canvas button on **any** ready generate job tab (`pillar`, `blog`, `tool`, `email`, `social`, `ads`); same channel mix for every source type; **not in ZIP** |
+| Re-Purpose pack | Transform (`GcwRepurposeCatalog`) | Optional Canvas button on **any** ready generate job tab (all long-form + email/social/ads); same channel mix for every source type; **not in ZIP** |
 
 ### Re-Purpose (channel pack)
 
@@ -115,6 +119,8 @@ Image-prompt jobs skip VALIDATE; worker sets `writeOnly: true` and goes straight
 | `social` | Yes — same 6 channels | 1 companion |
 | `ads` | Yes — same 6 channels | 1 companion |
 | `image-prompt` | **No** — sidecar only | N/A (is the prompt job) |
+
+**LinkedIn document carousel (PDF):** separate from Re-Purpose — `POST creates/{createId}/transform/linkedin-carousel` with `{ jobId }` on any **ready long-form** tab. Renders 1080×1350 QuestPDF + caption; export under `social/linkedin/carousels/`. Also draft `linkedin-carousel` spawns an editable job after long-form reaches `ready`. See [`linkedin-carousel.md`](./linkedin-carousel.md).
 
 ### 3.1 Image prompts
 

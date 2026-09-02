@@ -61,5 +61,19 @@ export function isRoleLocked(section: OutlineSectionView, index: number): boolea
 
 export function supportsAdvanceOutlineRows(contentType: string): boolean {
   const t = contentType.trim().toLowerCase();
-  return t === "pillar" || t === "blog" || t === "tool";
+  return (
+    t === "pillar" ||
+    t === "blog" ||
+    t === "tool" ||
+    t === "comparison" ||
+    t === "case-study" ||
+    t === "guide" ||
+    t === "alternatives" ||
+    t === "tech-article" ||
+    t === "listicle" ||
+    t === "service" ||
+    t === "local" ||
+    t === "whitepaper" ||
+    t === "linkedin-carousel"
+  );
 }

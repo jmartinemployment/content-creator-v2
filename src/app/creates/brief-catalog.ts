@@ -582,6 +582,60 @@ export const CONTENT_LENGTH_TARGETS = {
     definition:
       "Comprehensive single-platform guides — deep implementation context, capabilities, and when to use it.",
   },
+  comparison: {
+    min: 2200,
+    max: 3500,
+    label: "2,200–3,500",
+    definition: "Side-by-side evaluation of options with criteria, tradeoffs, and a clear recommendation.",
+  },
+  "case-study": {
+    min: 1800,
+    max: 2800,
+    label: "1,800–2,800",
+    definition: "Proof-led narrative: challenge, approach, implementation, results, and lessons.",
+  },
+  guide: {
+    min: 2500,
+    max: 4000,
+    label: "2,500–4,000",
+    definition: "Step-by-step procedural content with prerequisites and troubleshooting.",
+  },
+  alternatives: {
+    min: 2000,
+    max: 3200,
+    label: "2,000–3,200",
+    definition: "Alternative tools or approaches with per-option summaries and when to choose each.",
+  },
+  "tech-article": {
+    min: 2800,
+    max: 4500,
+    label: "2,800–4,500",
+    definition: "Architecture and implementation depth for technical audiences.",
+  },
+  listicle: {
+    min: 2000,
+    max: 3200,
+    label: "2,000–3,200",
+    definition: "Ranked or numbered picks with blurbs and a concluding verdict.",
+  },
+  service: {
+    min: 1200,
+    max: 2200,
+    label: "1,200–2,200",
+    definition: "Commercial service page: who it's for, deliverables, process, proof, and CTA.",
+  },
+  local: {
+    min: 1500,
+    max: 2500,
+    label: "1,500–2,500",
+    definition: "Local landing page grounded in service area, offer, and local proof.",
+  },
+  whitepaper: {
+    min: 4000,
+    max: 6500,
+    label: "4,000–6,500",
+    definition: "Long-form report with executive summary, methodology, findings, and recommendations.",
+  },
   imagePrompt: {
     min: 20,
     max: 400,

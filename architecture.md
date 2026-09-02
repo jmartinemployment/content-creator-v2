@@ -169,18 +169,21 @@ GeekBackend `AGENTS.md` states the same boundary for content-writer repos: **cop
 | Realtime | `gcc-v2-realtime` hub (patterns copied; new files) |
 | Jobs, export, brand kit, validate/repair | `ContentCreatorV2/*`, `HttpGccV2Repository` |
 | Tool pages (planned) | [`plan/tool-pages-v2.md`](plan/tool-pages-v2.md) → `ContentCreatorV2/ToolPages/*` |
-| Project-site crawl (planned) | `ContentCreatorV2/ProjectSite/*` — copy Geek-Crawler BFS; `content_creator_v2` storage |
-| Geek-Crawler read bridge (planned) | Query `partner` / `competitors` pages at generate — no duplicate HTML in CC schema |
+| Project-site crawl | **Shipped** — `ContentCreatorV2/ProjectSite/*`; `content_creator_v2` storage |
+| Geek-Crawler read bridge | **Partial** — by-seeds + partial-run merge shipped; notify-and-skip **regressed** (`48ab411`) |
+| Outline manual save | **Shipped** — `PUT outline` silent (no `OutlineReady` replay); `16fb679` |
 
 ### v1 cutover / crawl migration status
 
 | Dependency | Status |
 |------------|--------|
-| Site Analyzer BFF (phi) | **Retire** — replace with project-site crawl API |
+| Site Analyzer BFF (phi) | **Retired** — project-site crawl API |
 | Section helpers | **Done** — `GccV2SiteSection.cs` |
-| Partner/competitor inline crawl | **Retire** — read Geek-Crawler; drop `gcc_v2_partner_research_records` |
-| Site Analyzer client (BrandKit) | **Retire** — BrandKit from owned project-site crawl |
+| Partner/competitor inline crawl | **Retired** — read Geek-Crawler; drop `gcc_v2_partner_research_records` (pending) |
+| Geek-Crawler read at generate | **Partial** — by-seeds + partial HTML OK; **notify-and-skip regressed** — see [`plan/crawl-architecture.md`](plan/crawl-architecture.md) |
+| Site Analyzer client (BrandKit) | **Retired** — BrandKit from owned project-site crawl |
 | `tool_source_crawl_*` tables | **Dropped** |
+| Outline PUT timeout (hub replay) | **Fixed** — `16fb679` |
 | Legacy read | **Keep** — `GccV2LegacyController` + `HttpGccRepository` |
 | v1 API routes | **Retired** — `GccController` removed; v2 prefix only for new work |
 

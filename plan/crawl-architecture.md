@@ -58,11 +58,35 @@ Full product spec: [`geek-crawler.md`](./geek-crawler.md) and `/Users/jeffmartin
 At **preflight**, **generate**, and **tool spawn**, gcc-v2 **queries** Geek-Crawler — it does **not** re-crawl partner or competitor URLs inline.
 
 1. Resolve seeds from brief (partner tool rows → `partner`; `competitorUrls` → `competitors`).
-2. Find a completed run: `GET /api/geek-crawler/crawls/latest?crawlType=…&seeds=…` or list pages for a known `runId`.
-3. Extract from `crawl_pages.Html` using owned extractors (`GccV2ArticleHtmlExtractor`, quote helpers) into shapes WRITE already uses (`GccQuoteablePage`, blockquote attribution).
-4. **Fail closed** when a required external crawl is missing — surface error to operator (start crawl in Geek-Crawler, then retry).
+2. Find the latest run for seeds (`GetLatestRunAsync` / slot lookup) — **any status** is acceptable when seed HTML exists.
+3. Load pages with **seed-targeted lookup** (`ListPagesBySeedsAsync`) — never paginate an entire large run into memory.
+4. Extract from stored `Html` using owned extractors (`GccV2ArticleHtmlExtractor`, quote helpers) into shapes WRITE already uses (`GccQuoteablePage`, blockquote attribution).
+5. **Notify and skip** when external research is unavailable — generate **continues**; return `partnerResearchWarnings[]` to phi. Do **not** block generate or ask the operator to change Geek-Crawler page limits from Content Creator.
 
 Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF or crawl UI in content-creator-v2 `src/`.
+
+### External research policy (product)
+
+| Scenario | Behavior |
+|----------|----------|
+| Completed run with extractable seed HTML | Merge research into brief |
+| Failed / incomplete run **with** stored seed HTML | Use partial HTML; log; continue |
+| Missing run or run with no extractable seed HTML | **Skip** that seed; append human-readable warning; **generate still runs** |
+| On-site partner URLs (project-site host) | Resolve from **project-site crawl** pages, not Geek-Crawler |
+
+**Out of scope for Content Creator:** tuning Geek-Crawler `maxPages`, operator page-limit changes, or inline polite HTTP fetch as a fallback for external partners.
+
+### Implementation status (Sep 2026)
+
+| Area | Shipped | Gap |
+|------|---------|-----|
+| `GccV2GeekCrawlerResearchResolver` + by-seeds reads | Yes (`ffc13ee`) | — |
+| Partial/failed runs when seed HTML exists | Yes | — |
+| Notify-and-skip at generate | **Yes** — `warnings.Add(warning)`; generate returns `202` + `partnerResearchWarnings[]` | — |
+| Local research read (`crawlType: local`) | Yes — project site URL + `localBusinessUrls[]`; same warn-and-skip policy | — |
+| `partnerResearchWarnings` on generate response | Yes | — |
+| Phi preflight `externalResearchNote` + amber banner | Yes (`dcaa377`) | — |
+| Phi amber banner (`sessionStorage`) | UI shipped (`dcaa377`) | Never fires until warnings flow again |
 
 ---
 
@@ -86,7 +110,7 @@ Geek-Crawler is the **single store** for partner/tool and competitor HTML. Remov
 
 ---
 
-## Migration direction (code — not yet shipped)
+## Migration direction (code — shipped Sep 2026)
 
 ```mermaid
 flowchart TB
