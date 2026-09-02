@@ -48,16 +48,16 @@ Built at job `ready` via `GccV2JsonLdBuilder` and persisted on `ResultJson.jsonL
 
 All long-form types plus `email`, `social`, `ads` are valid Re-Purpose sources (`GccV2RepurposeSourceTypes`, `repurpose-channels.ts`).
 
-## LinkedIn document carousel (PDF)
+## LinkedIn document (PDF)
 
-Not a long-form web page — export-only channel type. See [`linkedin-carousel.md`](./linkedin-carousel.md).
+Not a long-form web page — export-only channel type. See [`linkedin-document.md`](./linkedin-document.md).
 
-- **Canvas:** Generate carousel PDF from any ready long-form tab  
-- **Also draft:** `linkedin-carousel` spawns after the first long-form job on the create reaches `ready`  
+- **Canvas:** Generate PDF from any ready long-form tab  
+- **Also draft:** `linkedin-document` spawns after the first long-form job on the create reaches `ready`  
 - **Export:** `social/linkedin/carousels/{slug}.pdf` + caption + slides JSON  
 
 ## Phi operator notes
 
-- **Primary draft** dropdown lists all long-form types; **Also draft** offers the remaining long-form types plus email/social/ads/**LinkedIn carousel**.
+- **Primary draft** dropdown lists all long-form types; **Also draft** offers the remaining long-form types plus email/social/ads/**LinkedIn document**.
 - Amber banner for `partnerResearchWarnings` appears in create detail when external partner/competitor/local crawls are missing.
 - Local crawls are started in **Geek-Crawler** (`crawlType: local`), not from Content Creator.

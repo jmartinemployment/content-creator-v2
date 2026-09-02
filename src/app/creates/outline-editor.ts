@@ -74,6 +74,6 @@ export function supportsAdvanceOutlineRows(contentType: string): boolean {
     t === "service" ||
     t === "local" ||
     t === "whitepaper" ||
-    t === "linkedin-carousel"
+    t === "linkedin-document" || t === "linkedin-carousel"
   );
 }

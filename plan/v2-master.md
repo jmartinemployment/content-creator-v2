@@ -120,7 +120,7 @@ Full catalog (Tier 1–3 long-form types, export paths, CMS scope): [`long-form-
 | `ads` | Yes — same 6 channels | 1 companion |
 | `image-prompt` | **No** — sidecar only | N/A (is the prompt job) |
 
-**LinkedIn document carousel (PDF):** separate from Re-Purpose — `POST creates/{createId}/transform/linkedin-carousel` with `{ jobId }` on any **ready long-form** tab. Renders 1080×1350 QuestPDF + caption; export under `social/linkedin/carousels/`. Also draft `linkedin-carousel` spawns an editable job after long-form reaches `ready`. See [`linkedin-carousel.md`](./linkedin-carousel.md).
+**LinkedIn document (PDF):** separate from Re-Purpose — `POST creates/{createId}/transform/linkedin-document` with `{ jobId }` on any **ready long-form** tab. Renders 1080×1350 QuestPDF + caption; export under `social/linkedin/carousels/`. Also draft `linkedin-document` spawns an editable job after long-form reaches `ready`. See [`linkedin-document.md`](./linkedin-document.md).
 
 ### 3.1 Image prompts
 

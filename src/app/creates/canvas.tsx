@@ -857,7 +857,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setCarouselBusy(true);
     setCarouselError(null);
     try {
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-carousel`, {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-document`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jobId }),

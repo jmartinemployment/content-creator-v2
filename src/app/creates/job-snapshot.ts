@@ -81,7 +81,7 @@ export const GENERATE_TYPE_ORDER = [
   "service",
   "local",
   "whitepaper",
-  "linkedin-carousel",
+  "linkedin-document",
   "email",
   "social",
   "ads",

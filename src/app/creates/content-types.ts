@@ -21,7 +21,7 @@ export const CONTENT_TYPES = [
   { value: "social", label: "Social" },
   { value: "image-prompt", label: "Image prompt" },
   { value: "ads", label: "Ads" },
-  { value: "linkedin-carousel", label: "LinkedIn carousel" },
+  { value: "linkedin-document", label: "LinkedIn document" },
 ] as const;
 
 export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
@@ -55,7 +55,7 @@ export const ALSO_DRAFT_SHORT_TYPES = [
   { value: "email", label: "Email" },
   { value: "social", label: "Social" },
   { value: "ads", label: "Ads" },
-  { value: "linkedin-carousel", label: "LinkedIn carousel" },
+  { value: "linkedin-document", label: "LinkedIn document" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
 
 const OTHER_LONG_FORM: ReadonlyArray<{ value: ContentType; label: string }> = [
@@ -107,5 +107,5 @@ export function isCmsPublishType(value: string): boolean {
 
 export function isExportOnlyType(value: string): boolean {
   const t = value.trim().toLowerCase();
-  return t === "email" || t === "social" || t === "ads" || t === "image-prompt" || t === "whitepaper" || t === "linkedin-carousel";
+  return t === "email" || t === "social" || t === "ads" || t === "image-prompt" || t === "whitepaper" || t === "linkedin-document";
 }

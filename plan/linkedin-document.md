@@ -1,4 +1,4 @@
-# LinkedIn document carousel (PDF)
+# LinkedIn document (PDF)
 
 Turn a **ready long-form draft** into a **multi-page PDF** for LinkedIn document posts — swipeable slides at **1080×1350** portrait (4:5).
 
@@ -6,9 +6,9 @@ Turn a **ready long-form draft** into a **multi-page PDF** for LinkedIn document
 
 | Path | When |
 |------|------|
-| **Canvas → Generate carousel PDF** | Any ready long-form tab (pillar, blog, case-study, guide, …) |
-| **Also draft → LinkedIn carousel** | Checked at create; job spawns when the first long-form job on that create reaches `ready` |
-| **Export ZIP** | Includes carousel artifacts from transform or carousel jobs |
+| **Canvas → Generate PDF** | Any ready long-form tab (pillar, blog, case-study, guide, …) |
+| **Also draft → LinkedIn document** | Checked at create; job spawns when the first long-form job on that create reaches `ready` |
+| **Export ZIP** | Includes document artifacts from transform or document jobs |
 
 Tool pages, email, social, and ads are **not** valid carousel sources.
 
@@ -43,9 +43,9 @@ Plus a **caption** (150–250 words) for the feed post that accompanies the PDF 
 
 ## Backend
 
-- `GeekBackend/GeekAPI/Services/ContentCreatorV2/Carousel/` — models, parser, prompt, QuestPDF renderer, transform service, spawn service  
-- `POST .../transform/linkedin-carousel` — sync transform from ready long-form job  
-- `ResultJson.linkedInCarousel` — persisted slide JSON on source job after transform  
+- `GeekBackend/GeekAPI/Services/ContentCreatorV2/LinkedInDocument/` — models, parser, prompt, QuestPDF renderer, transform service, spawn service  
+- `POST .../transform/linkedin-document` — sync transform from ready long-form job  
+- `ResultJson.linkedInDocument` — persisted slide JSON on source job after transform  
 
 ## QuestPDF license
 
