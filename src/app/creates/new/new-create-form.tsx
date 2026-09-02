@@ -691,11 +691,7 @@ export function NewCreateForm() {
               onChange={(e) => {
                 const next = e.target.value as PrimaryDraftType;
                 setPrimaryDraft(next);
-                setAlsoDrafts((prev) => {
-                  const cleaned = new Set(prev);
-                  cleaned.delete(next);
-                  return cleaned;
-                });
+                setAlsoDrafts(new Set());
               }}
             >
               {PRIMARY_DRAFT_TYPES.map((o) => (
