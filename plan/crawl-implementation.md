@@ -64,19 +64,18 @@ Site Analyzer BFF remains **interim** until B + C ship ([`architecture.md`](../a
 
 ## Shipped status (Sep 2026 audit)
 
-Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (outline save), `48ab411` (notify-and-skip **regression**); phi `dcaa377` (warnings UI).
+Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (outline save); phi `dcaa377` (warnings UI). Mongo read path verified via `MongoGeekCrawlerPartnerCompetitorReadTests`.
 
 | Item | Status | Notes |
 |------|--------|-------|
 | **A1** `GccV2GeekCrawlerResearchResolver` | Shipped | Uses `ListPagesBySeedsAsync`; accepts partial/failed runs when seed HTML exists |
-| **A2** Wire generate + preflight | Partial | Generate merges research; preflight returns `externalResearchNote`. **Generate fail-closed regressed** in `48ab411` |
-| **A4** Resolver tests | Shipped | 11 tests; currently assert **throw** on missing external research (aligned with regression, not product spec) |
+| **A2** Wire generate + preflight | Shipped | Generate merges research; preflight returns `externalResearchNote`; notify-and-skip restored |
+| **A4** Resolver tests | Shipped | Assert **warn-and-skip** on missing external research |
+| **Mongo partner/competitor reads** | Verified | EphemeralMongo (or `MONGO_CRAWLER_URL`) smoke: latest-run + by-seeds + resolver merge |
 | **B2–B3** Project-site crawl | Shipped | `ContentCreatorV2/ProjectSite/*`, SignalR on gcc-v2 hub |
 | **C2** Phi create flow cutover | Shipped | `new-create-form.tsx` — project-site crawl, no Site Analyzer poll |
 | **Outline PUT** `jobs/{id}/outline` | Fixed (`16fb679`) | No `OutlineReady` replay on manual save; hub push failures logged, not fatal |
-| **Notify-and-skip** | **Not shipped** | Restore warn-and-collect in resolver; see [`crawl-architecture.md`](./crawl-architecture.md) § implementation status |
-
-**Open fix:** In `MergePartnerResearchAsync` / `MergeCompetitorResearchAsync`, replace `throw new InvalidOperationException(warning)` with `warnings.Add(warning)` and remove aggregate throws when all external seeds miss. Remove generate `catch (InvalidOperationException)` or limit it to non-recoverable cases.
+| **Notify-and-skip** | Shipped | `warnings.Add(warning)` in partner/competitor/local merge; generate continues |
 
 ---
 
@@ -93,7 +92,8 @@ Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (o
 - **Load pages:** `ListPagesBySeedsAsync(runId, seedUrls)` — **never** paginate full runs at generate (OOM-safe).
 - **Extract:** `GccV2ArticleHtmlExtractor.ExtractPartnerPage` → `GccQuoteablePage`.
 - **Merge:** `GccV2PartnerUrlResearchService.MergePartnerResearchIntoBriefJson` / `MergeCompetitorResearchIntoBriefJson`.
-- **Product policy:** notify-and-skip unavailable external seeds → `GccV2ExternalResearchMergeResult.PartnerResearchWarnings`. **Current code throws** (`48ab411`) — see [Shipped status](#shipped-status-sep-2026-audit).
+- **Product policy:** notify-and-skip unavailable external seeds → `GccV2ExternalResearchMergeResult.PartnerResearchWarnings` (shipped).
+- **Storage:** Mongo DB `geek_crawler` via `MongoGeekCrawlerService` (`MONGO_CRAWLER_URL`).
 
 ~~**Gate:** `status == "complete"`; else fail closed.~~ **Superseded** by notify-and-skip policy in [`crawl-architecture.md`](./crawl-architecture.md).
 
@@ -137,19 +137,19 @@ Canvas uses PUT response body; `outlineDirtyRef` blocks hub `OutlineReady` while
 
 `gcc_v2_tool_source_crawl_*` — already dropped; do not revive.
 
-### A4. Tests — shipped (assert fail-closed today)
+### A4. Tests — shipped
 
-- Resolver unit tests in `GeekBackend.Tests/ContentCreatorV2/GccV2GeekCrawlerResearchResolverTests.cs`.
-- Covers: by-seeds call count, partial failed run with HTML, on-site project crawl merge, missing/incomplete external run **throws** (matches current code, not product spec).
-- **When notify-and-skip is restored:** change `*_throws` tests back to `*_warns_and_skips`; assert non-empty `PartnerResearchWarnings`.
+- Resolver unit tests in `GeekBackend.Tests/ContentCreatorV2/GccV2GeekCrawlerResearchResolverTests.cs` — `*_warns_and_skips` for missing/incomplete external research.
+- Mongo smoke in `GeekBackend.Tests/ContentCreatorV2/MongoGeekCrawlerPartnerCompetitorReadTests.cs` — `GetLatestRunAsync` + `ListPagesBySeedsAsync` + resolver merge for `partner` and `competitors` (EphemeralMongo; honors `MONGO_CRAWLER_URL` when set).
 
 ### Phase A — done when
 
 - [x] Resolver + by-seeds reads (`ffc13ee`)
 - [x] Generate merges research when runs/pages available
 - [x] Phi warnings UI wired (`dcaa377`)
-- [ ] Notify-and-skip on missing external research (regressed — restore)
-- [ ] `partnerResearchWarnings` populated on skip paths
+- [x] Notify-and-skip on missing external research
+- [x] `partnerResearchWarnings` populated on skip paths
+- [x] Mongo partner/competitor read path verified
 - [ ] `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` on GeekBackend → empty after migration
 
 ---
@@ -290,10 +290,10 @@ rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v
 ## Task checklist
 
 - [x] **A1** — `GccV2GeekCrawlerResearchResolver` + DI registration
-- [x] **A2** — Wire preflight + generate in `GccV2Controller` (skip policy **open**)
-- [ ] **A2-fix** — Restore notify-and-skip in resolver; align tests + phi copy
+- [x] **A2** — Wire preflight + generate in `GccV2Controller` (notify-and-skip)
+- [x] **A2-fix** — Notify-and-skip restored; resolver + Mongo smoke tests green
 - [ ] **A3** — Drop `gcc_v2_partner_research_records` + repo/API surface
-- [x] **A4** — Resolver unit tests
+- [x] **A4** — Resolver unit tests + Mongo partner/competitor read smoke
 - [x] **B1** — Project-site schema + migration
 - [x] **B2** — `ContentCreatorV2/ProjectSite/*` engine + worker
 - [x] **B3** — `project-site/*` GeekAPI routes + SignalR
@@ -303,4 +303,5 @@ rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v
 - [x] **C2** — Rewrite `new-create-form` + project-site crawl
 - [ ] **C3** — Copy cleanup (residual Site Analyzer refs if any)
 - [x] **Outline** — Silent PUT save + `TryPushAsync` (`16fb679`)
-- [ ] **Verify** — notify-and-skip E2E + rg checks
+- [x] **Verify** — Mongo partner/competitor read path + notify-and-skip unit/smoke
+- [ ] **Verify** — `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` empty after A3

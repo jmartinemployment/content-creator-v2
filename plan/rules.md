@@ -144,7 +144,7 @@ Write the full term before an acronym once per section (e.g. “Hypertext Markup
 | Item | Value |
 |------|-------|
 | **Repo (UI)** | `/Users/jeffmartin/development/Geek-Crawler` |
-| **Engine + DB** | GeekBackend `GeekAPI/Services/GeekCrawler/*`, `GeekRepository/.../GeekCrawler/*`, schema `geek_crawler` |
+| **Engine + DB** | GeekBackend `GeekAPI/Services/GeekCrawler/*`, `MongoGeekCrawlerService` → Mongo DB `geek_crawler` (`MONGO_CRAWLER_URL`) |
 | **Auth** | GeekOAuth on public API; machine JWT GeekAPI → GeekRepository only |
 | **Progress** | SignalR `/hubs/geek-crawler-realtime` on GeekAPI |
 | **Phi** | No crawl start UI, BFF, or hub — operator URLs on brief only |

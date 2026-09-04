@@ -31,8 +31,8 @@ async function hubAccessToken(): Promise<string> {
 export function createProjectSiteHubConnection(): HubConnection {
   return new HubConnectionBuilder()
     .withUrl(hubUrl(), { accessTokenFactory: hubAccessToken })
-    .withAutomaticReconnect([0, 1000, 3000, 5000, 10000])
-    .configureLogging(LogLevel.Warning)
+    .withAutomaticReconnect([0, 2000, 5000, 10000, 20000, 30000])
+    .configureLogging(LogLevel.Error)
     .build();
 }
 

@@ -54,15 +54,25 @@ Crawl **start** is operator-driven in Geek-Crawler UI — not from Content Creat
 
 | Field | When populated |
 |-------|----------------|
-| `partnerResearchWarnings` | Per skipped external partner/competitor seed (intended). **Currently empty** when resolver throws before merge completes (`48ab411` regression). |
+| `partnerResearchWarnings` | Per skipped external partner/competitor/local seed (notify-and-skip). Verified via resolver + Mongo smoke tests. |
 
 Phi surfaces warnings via `sessionStorage` → amber banner on create detail (`create-detail-shell.tsx`). Preflight returns `externalResearchNote` explaining notify-and-skip — must stay aligned with backend behavior.
+
+### Storage (Mongo)
+
+| Item | Value |
+|------|-------|
+| Connection | `MONGO_CRAWLER_URL` (default `mongodb://localhost:27017`) |
+| Database | `geek_crawler` |
+| Collections | `crawl_runs`, `crawl_pages`, `crawl_links`, `crawl_schedules` |
+| Partner vs competitors | Same collections; filter `CrawlType` = `"partner"` \| `"competitors"` |
+| Service | `GeekRepository/Services/MongoGeekCrawlerService.cs` |
 
 ---
 
 ## Tables to remove from Content Creator (partner + competitors)
 
-Single source of truth for external tool/competitor HTML: **`geek_crawler`**.
+Single source of truth for external tool/competitor HTML: **Mongo `geek_crawler`**.
 
 - `gcc_v2_tool_source_crawl_*` — already dropped; do not revive.
 - `gcc_v2_partner_research_records` — remove after read path ships.
@@ -87,13 +97,18 @@ GeekBackend/
   GeekApplication/Models/GeekCrawler/CrawlTypes.cs
   GeekAPI/Services/GeekCrawler/
   GeekAPI/Controllers/GeekCrawler/
+  GeekAPI/Services/ContentCreatorV2/GeekCrawler/GccV2GeekCrawlerResearchResolver.cs
+  GeekRepository/Services/MongoGeekCrawlerService.cs
   GeekRepository/Data/Entities/GeekCrawler/
+  GeekBackend.Tests/ContentCreatorV2/MongoGeekCrawlerPartnerCompetitorReadTests.cs
 ```
 
 Wrong long-term placement for **product** UI: crawl start UI in content-creator-v2. Wrong duplicate: partner/competitor HTML in `content_creator_v2`.
 
 ---
 
-## Implementation gap (Sep 2026 audit)
+## Verification (Sep 2026)
 
-Product spec = notify-and-skip (above). **Current GeekBackend** throws on missing external seeds → generate **400** (`48ab411` regression). Phi warnings UI is wired but inactive until restored. Details: [`crawl-architecture.md`](./crawl-architecture.md) § implementation status, [`crawl-implementation.md`](./crawl-implementation.md) § shipped status.
+- Resolver unit tests: warn-and-skip for missing partner/competitor/local seeds.
+- Mongo smoke: `MongoGeekCrawlerPartnerCompetitorReadTests` — `GetLatestRunAsync` + `ListPagesBySeedsAsync` round-trip for `partner` and `competitors`; resolver merge populates `partnerResearch` / `competitorResearch`; missing competitor seed returns warning.
+- Runtime path: GeekRepository crawl controllers use `IMongoGeekCrawlerService` (not EF) for reads.

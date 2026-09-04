@@ -12,9 +12,9 @@ Crawling is **not** one product. Three separate domains share similar engine pat
 
 | Domain | Product / owner | Storage | Typical seeds | Consumed for |
 |--------|-----------------|---------|---------------|--------------|
-| **Partner / Tools** | Geek-Crawler | PostgreSQL schema `geek_crawler`, `crawlType: "partner"` | Operator tool URLs, partner marketing sites | Tool page blockquotes, extraction, WRITE research excerpts |
-| **Competitors** | Geek-Crawler | `geek_crawler`, `crawlType: "competitors"` | Rival URLs from brief `competitorUrls` | Differentiation notes in WRITE — research only, no rival CTAs |
-| **Local / regional** (future) | Geek-Crawler | `geek_crawler`, `crawlType: "local"` | Local or South Florida business sites | Standalone Geek-Crawler product scope — **not** Content Creator project grounding |
+| **Partner / Tools** | Geek-Crawler | Mongo DB `geek_crawler` (`crawl_runs` / `crawl_pages`), `crawlType: "partner"` | Operator tool URLs, partner marketing sites | Tool page blockquotes, extraction, WRITE research excerpts |
+| **Competitors** | Geek-Crawler | Same Mongo DB, `crawlType: "competitors"` | Rival URLs from brief `competitorUrls` | Differentiation notes in WRITE — research only, no rival CTAs |
+| **Local / regional** (future) | Geek-Crawler | Same Mongo DB, `crawlType: "local"` | Local or South Florida business sites | Standalone Geek-Crawler product scope — **not** Content Creator project grounding |
 | **Project site** | **gcc-v2 (owned)** | `content_creator_v2` project-site crawl tables (TBD name) | URL bound to the create / project | `relatedPages`, BrandKit, `siteHierarchy` |
 
 **`partner` = Tools** — one crawl type, one query path. UI copy may say “partner tool URLs”; API and database use `crawlType: "partner"`.
@@ -45,7 +45,7 @@ Geek-Crawler’s **primary purpose** is crawling **external** sites: competitors
 | Item | Value |
 |------|-------|
 | Repo (UI) | `/Users/jeffmartin/development/Geek-Crawler` |
-| Engine + data | GeekBackend `GeekAPI/Services/GeekCrawler/*`, `GeekRepository/.../GeekCrawler/*`, schema `geek_crawler` |
+| Engine + data | GeekBackend `GeekAPI/Services/GeekCrawler/*`, `GeekRepository/Services/MongoGeekCrawlerService.cs` → Mongo DB `geek_crawler` (`MONGO_CRAWLER_URL`) |
 | Start crawls | Geek-Crawler UI (or API) — **not** inline during gcc-v2 generate |
 | Progress | SignalR `/hubs/geek-crawler-realtime` on GeekAPI |
 
@@ -83,10 +83,11 @@ Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF or crawl U
 | `GccV2GeekCrawlerResearchResolver` + by-seeds reads | Yes (`ffc13ee`) | — |
 | Partial/failed runs when seed HTML exists | Yes | — |
 | Notify-and-skip at generate | **Yes** — `warnings.Add(warning)`; generate returns `202` + `partnerResearchWarnings[]` | — |
-| Local research read (`crawlType: local`) | Yes — project site URL + `localBusinessUrls[]`; same warn-and-skip policy | — |
+| Mongo partner + competitor read path | **Verified** — `MongoGeekCrawlerPartnerCompetitorReadTests` (EphemeralMongo; uses `MONGO_CRAWLER_URL` when set) | — |
+| Local research read (`crawlType: local`) | Yes — on-site via project-site crawl; external via `localBusinessUrls[]` + Geek-Crawler | — |
 | `partnerResearchWarnings` on generate response | Yes | — |
 | Phi preflight `externalResearchNote` + amber banner | Yes (`dcaa377`) | — |
-| Phi amber banner (`sessionStorage`) | UI shipped (`dcaa377`) | Never fires until warnings flow again |
+| Phi amber banner (`sessionStorage`) | UI shipped (`dcaa377`) | Fires when generate returns warnings |
 
 ---
 
