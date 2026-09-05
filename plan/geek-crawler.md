@@ -8,6 +8,8 @@ Geek-Crawler is a **standalone crawl product**. This doc is the **Content Creato
 
 **Geek-Crawler product spec (UI repo):** `/Users/jeffmartin/development/Geek-Crawler/plans/geek-crawler.md`
 
+**Corpus RAG (separate product):** `/Users/jeffmartin/development/Geek-Crawler-Rag` (`architecture.md`, `plans/geek-crawler-rag.md`). gcc-v2 **consumes** retrieval; does not own the indexer.
+
 ---
 
 ## Scope
@@ -28,10 +30,10 @@ Geek-Crawler does **not** crawl the **project site** (the property bound to a cr
 
 | gcc-v2 **does** | gcc-v2 **does not** |
 |-----------------|---------------------|
-| Query Geek-Crawler for `partner` and `competitors` runs + **seed-targeted** pages at generate/preflight/tool spawn | Start partner/competitor crawls inline or store raw HTML in `content_creator_v2` |
-| Extract quoteable text from stored `Html` into WRITE prompts | Host Geek-Crawler UI, BFF, or SignalR hub in phi |
+| Query Geek-Crawler for `partner` and `competitors` runs; **prefer Geek-Crawler-Rag** chunks (topic-aware need) for WRITE grounding; fall back to seed-targeted pages | Start partner/competitor crawls inline or store raw HTML in `content_creator_v2` |
+| Inject RAG chunks / extracted quoteable text into WRITE prompts (`GccQuoteablePage`) | Host Geek-Crawler or Geek-Crawler-Rag UI; own Qdrant/embed/index |
 | **Notify and skip** when external research is missing — return `partnerResearchWarnings[]`; generate continues | Block generate, surface Geek-Crawler page-limit errors, or ask operators to change crawl config from Creator |
-| Accept partial/failed runs when by-seeds lookup returns extractable seed HTML | Paginate entire runs (`ListPagesAsync`) for research merge |
+| Soft-warn when RAG index is still building; accept partial/failed runs when by-seeds lookup returns extractable seed HTML | Paginate entire runs (`ListPagesAsync`) for research merge; implement RAG inside phi |
 
 Operator tool URLs stay on the brief (`operator-tools` / recommended tools). Crawl execution happens in **Geek-Crawler**; gcc-v2 **reads** results.
 
@@ -109,6 +111,9 @@ Wrong long-term placement for **product** UI: crawl start UI in content-creator-
 
 ## Verification (Sep 2026)
 
-- Resolver unit tests: warn-and-skip for missing partner/competitor/local seeds.
+- Resolver unit tests: warn-and-skip for missing partner/competitor/local seeds; topic-aware `BuildRagNeed`; prefer RAG when index `complete`; soft-warn + seed HTML when index `pending`/`running`.
 - Mongo smoke: `MongoGeekCrawlerPartnerCompetitorReadTests` — `GetLatestRunAsync` + `ListPagesBySeedsAsync` round-trip for `partner` and `competitors`; resolver merge populates `partnerResearch` / `competitorResearch`; missing competitor seed returns warning.
 - Runtime path: GeekRepository crawl controllers use `IMongoGeekCrawlerService` (not EF) for reads.
+- Partner research records table dropped; no `GetFreshPartnerResearchAsync`.
+- Corpus RAG: `/Users/jeffmartin/development/Geek-Crawler-Rag` (separate product; not implemented in phi). GeekAPI consumes via `IGeekCrawlerRagClient` when `GEEK_CRAWLER_RAG_URL` is set.
+- Operator path: Geek-Crawler run **complete** → RAG index **complete** (SignalR `GeekCrawlerRagIndexEvent`) → generate in content-creator-v2.

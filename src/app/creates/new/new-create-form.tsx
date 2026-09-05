@@ -19,6 +19,7 @@ import {
 } from "../content-types";
 import {
   hostFromSiteUrl,
+  isCrawlRunInProgress,
   isCrawlRunReady,
   normalizeCrawlPage,
   normalizeSiteUrl,
@@ -47,6 +48,87 @@ const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
 const fieldClass = "flex flex-col gap-1.5";
 
 const CRAWL_WAIT_MS = 15 * 60 * 1000;
+/** Persist in-progress new-create wizard so a hard refresh resumes instead of wiping state. */
+const NEW_CREATE_DRAFT_KEY = "gcc-v2-new-create-draft";
+
+type Step = "url" | "analyzing" | "brief" | "tools";
+
+type NewCreateDraft = {
+  siteUrlInput: string;
+  siteUrl: string;
+  step: Step;
+  projectSiteCrawlRunId: string | null;
+  title: string;
+  primaryDraft: PrimaryDraftType;
+  alsoDrafts: ContentType[];
+  targetKeyword: string;
+  operatorToolsText: string;
+  paaQuestionsText: string;
+  competitorUrlsText: string;
+  primaryIntent: PrimaryIntent | "";
+  buyingStage: BuyingStage | "";
+  toneOfVoice: ToneOfVoice | "";
+  pendingCreateId: string | null;
+};
+
+function readNewCreateDraft(): NewCreateDraft | null {
+  try {
+    const raw = sessionStorage.getItem(NEW_CREATE_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<NewCreateDraft>;
+    if (!parsed || typeof parsed !== "object") return null;
+    const step: Step =
+      parsed.step === "analyzing" ||
+      parsed.step === "brief" ||
+      parsed.step === "tools" ||
+      parsed.step === "url"
+        ? parsed.step
+        : "url";
+    return {
+      siteUrlInput: typeof parsed.siteUrlInput === "string" ? parsed.siteUrlInput : "",
+      siteUrl: typeof parsed.siteUrl === "string" ? parsed.siteUrl : "",
+      step,
+      projectSiteCrawlRunId:
+        typeof parsed.projectSiteCrawlRunId === "string" ? parsed.projectSiteCrawlRunId : null,
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      primaryDraft:
+        typeof parsed.primaryDraft === "string" &&
+        PRIMARY_DRAFT_TYPES.some((t) => t.value === parsed.primaryDraft)
+          ? (parsed.primaryDraft as PrimaryDraftType)
+          : "pillar",
+      alsoDrafts: Array.isArray(parsed.alsoDrafts)
+        ? parsed.alsoDrafts.filter((v): v is ContentType => typeof v === "string")
+        : [],
+      targetKeyword: typeof parsed.targetKeyword === "string" ? parsed.targetKeyword : "",
+      operatorToolsText: typeof parsed.operatorToolsText === "string" ? parsed.operatorToolsText : "",
+      paaQuestionsText: typeof parsed.paaQuestionsText === "string" ? parsed.paaQuestionsText : "",
+      competitorUrlsText:
+        typeof parsed.competitorUrlsText === "string" ? parsed.competitorUrlsText : "",
+      primaryIntent: (parsed.primaryIntent as PrimaryIntent | "") || "",
+      buyingStage: (parsed.buyingStage as BuyingStage | "") || "",
+      toneOfVoice: (parsed.toneOfVoice as ToneOfVoice | "") || "",
+      pendingCreateId: typeof parsed.pendingCreateId === "string" ? parsed.pendingCreateId : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeNewCreateDraft(draft: NewCreateDraft): void {
+  try {
+    sessionStorage.setItem(NEW_CREATE_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function clearNewCreateDraft(): void {
+  try {
+    sessionStorage.removeItem(NEW_CREATE_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 async function loadSectionFromCrawlRun(
   runId: string,
@@ -91,8 +173,6 @@ type PartnerToolsPreflight = {
   partnerResearchWarnings?: string[];
   siteHierarchy?: SiteHierarchy | null;
 };
-
-type Step = "url" | "analyzing" | "brief" | "tools";
 
 function parseOperatorTools(text: string): Array<{ name?: string; url: string }> {
   return text
@@ -173,6 +253,7 @@ export function NewCreateForm() {
   const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -180,6 +261,48 @@ export function NewCreateForm() {
       void hubRef.current?.stop();
     };
   }, []);
+
+  useEffect(() => {
+    // Wait until session draft hydrate finishes — otherwise the empty initial state clears a saved draft.
+    if (!restoredRef.current) return;
+    if (step === "url" && !siteUrlInput.trim() && !projectSiteCrawlRunId) {
+      clearNewCreateDraft();
+      return;
+    }
+    writeNewCreateDraft({
+      siteUrlInput,
+      siteUrl,
+      step,
+      projectSiteCrawlRunId,
+      title,
+      primaryDraft,
+      alsoDrafts: [...alsoDrafts],
+      targetKeyword,
+      operatorToolsText,
+      paaQuestionsText,
+      competitorUrlsText,
+      primaryIntent,
+      buyingStage,
+      toneOfVoice,
+      pendingCreateId,
+    });
+  }, [
+    step,
+    siteUrlInput,
+    siteUrl,
+    projectSiteCrawlRunId,
+    title,
+    primaryDraft,
+    alsoDrafts,
+    targetKeyword,
+    operatorToolsText,
+    paaQuestionsText,
+    competitorUrlsText,
+    primaryIntent,
+    buyingStage,
+    toneOfVoice,
+    pendingCreateId,
+  ]);
 
   async function loadSiteHierarchyFromRun(runId: string) {
     setHierarchyLoading(true);
@@ -332,10 +455,19 @@ export function NewCreateForm() {
           { cache: "no-store", signal: ac.signal },
         );
         if (latestRes.ok) {
-          const latest = (await latestRes.json()) as { runId?: string };
+          const latest = (await latestRes.json()) as { runId?: string; status?: string };
           if (latest.runId) {
-            await applyReadyCrawl(latest.runId, normalized);
-            return;
+            if (isCrawlRunReady(latest.status)) {
+              await applyReadyCrawl(latest.runId, normalized);
+              return;
+            }
+            if (isCrawlRunInProgress(latest.status)) {
+              setProjectSiteCrawlRunId(latest.runId);
+              setSiteUrl(normalized);
+              setAnalyzingLabel("Resuming project-site crawl…");
+              await waitForCrawlComplete(latest.runId, normalized, ac.signal);
+              return;
+            }
           }
         }
       }
@@ -359,6 +491,8 @@ export function NewCreateForm() {
       const runId = String(crawlBody.runId ?? crawlBody.RunId ?? "").trim();
       if (!runId) throw new Error("Crawl start returned no runId");
 
+      setProjectSiteCrawlRunId(runId);
+      setSiteUrl(normalized);
       setAnalyzingLabel("Crawling project site…");
       await waitForCrawlComplete(runId, normalized, ac.signal);
     } catch (err) {
@@ -374,6 +508,130 @@ export function NewCreateForm() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const draft = readNewCreateDraft();
+    if (!draft) return;
+
+    setSiteUrlInput(draft.siteUrlInput);
+    setSiteUrl(draft.siteUrl);
+    setTitle(draft.title);
+    setPrimaryDraft(draft.primaryDraft);
+    setAlsoDrafts(new Set(draft.alsoDrafts));
+    setTargetKeyword(draft.targetKeyword);
+    setOperatorToolsText(draft.operatorToolsText);
+    setPaaQuestionsText(draft.paaQuestionsText);
+    setCompetitorUrlsText(draft.competitorUrlsText);
+    setPrimaryIntent(draft.primaryIntent);
+    setBuyingStage(draft.buyingStage);
+    setToneOfVoice(draft.toneOfVoice);
+    setPendingCreateId(draft.pendingCreateId);
+
+    const resolvedUrl = draft.siteUrl || normalizeSiteUrl(draft.siteUrlInput) || "";
+    const resumeStep = draft.step;
+    const runId = draft.projectSiteCrawlRunId;
+
+    if (!runId || !resolvedUrl) {
+      setStep("url");
+      return;
+    }
+
+    const ac = new AbortController();
+    crawlAbortRef.current = ac;
+    setBusy(true);
+    setError(null);
+
+    void (async () => {
+      try {
+        const snapRes = await fetch(`/api/gcc-v2/project-site/runs/${encodeURIComponent(runId)}`, {
+          cache: "no-store",
+          signal: ac.signal,
+        });
+        const snap = (await snapRes.json().catch(() => ({}))) as {
+          status?: string;
+          errorSummary?: string | null;
+        };
+
+        if (!snapRes.ok) {
+          setStep("url");
+          setProjectSiteCrawlRunId(null);
+          setAnalyzingLabel(null);
+          return;
+        }
+
+        if (isCrawlRunReady(snap.status)) {
+          await applyReadyCrawl(runId, resolvedUrl);
+          if (resumeStep === "tools" && draft.pendingCreateId) {
+            setAnalyzingLabel("Restoring partner tools…");
+            const also = alsoDraftOptionsFor(draft.primaryDraft)
+              .map((o) => o.value)
+              .filter((v) => draft.alsoDrafts.includes(v));
+            const brief = {
+              briefVersion: BRIEF_VERSION,
+              title: draft.title.trim(),
+              primaryDraft: draft.primaryDraft,
+              contentTypes: [draft.primaryDraft, ...also],
+              primaryIntent: draft.primaryIntent,
+              buyingStage: draft.buyingStage,
+              toneOfVoice: draft.toneOfVoice,
+              operatorTools: parseOperatorTools(draft.operatorToolsText),
+              paaQuestions: draft.paaQuestionsText,
+              competitorUrls: draft.competitorUrlsText,
+            };
+            const preRes = await fetch(
+              `/api/gcc-v2/creates/${draft.pendingCreateId}/partner-tools/preflight`,
+              {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  targetKeyword: draft.targetKeyword.trim() || undefined,
+                  brief,
+                  projectSiteCrawlRunId: runId,
+                }),
+                signal: ac.signal,
+              },
+            );
+            if (preRes.ok) {
+              const preflight = (await preRes.json()) as PartnerToolsPreflight;
+              const hierarchyFromPre = normalizeSiteHierarchy(preflight.siteHierarchy);
+              if (hierarchyFromPre) setSiteHierarchy(hierarchyFromPre);
+              setToolsPreflight({
+                ...preflight,
+                createId: draft.pendingCreateId,
+                siteHierarchy: hierarchyFromPre,
+              });
+              setStep("tools");
+            }
+            setAnalyzingLabel(null);
+          }
+          return;
+        }
+
+        if (isCrawlRunInProgress(snap.status)) {
+          setProjectSiteCrawlRunId(runId);
+          setSiteUrl(resolvedUrl);
+          setStep("analyzing");
+          setAnalyzingLabel("Resuming project-site crawl…");
+          await waitForCrawlComplete(runId, resolvedUrl, ac.signal);
+          return;
+        }
+
+        setStep("url");
+        setProjectSiteCrawlRunId(null);
+        setAnalyzingLabel(null);
+        if (snap.errorSummary) setError(snap.errorSummary);
+      } catch (err) {
+        if (ac.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+        setError(err instanceof Error ? err.message : "Could not resume create draft");
+        setStep("url");
+        setAnalyzingLabel(null);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [applyReadyCrawl]);
 
   function buildBriefPayload() {
     const also = alsoDraftOptionsFor(primaryDraft)
@@ -500,6 +758,7 @@ export function NewCreateForm() {
           JSON.stringify(data.partnerResearchWarnings),
         );
       }
+      clearNewCreateDraft();
       router.push(`/creates/${pendingCreateId}?jobId=${jobId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start job");
@@ -888,7 +1147,7 @@ export function NewCreateForm() {
             </p>
             {toolsPreflight.externalResearchNote ? (
               <p className="rounded-md border border-[var(--cc-line)] bg-[var(--cc-surface)] px-3 py-2 text-xs text-[var(--cc-muted)]">
-                <span className="font-medium text-[var(--cc-ink)]">External partner research — </span>
+                <span className="font-medium text-[var(--cc-ink)]">External research — </span>
                 {toolsPreflight.externalResearchNote}
               </p>
             ) : null}

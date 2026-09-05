@@ -51,25 +51,31 @@ Geek-Crawler’s **primary purpose** is crawling **external** sites: competitors
 
 Full product spec: [`geek-crawler.md`](./geek-crawler.md) and `/Users/jeffmartin/development/Geek-Crawler/plans/geek-crawler.md`.
 
+**Corpus RAG:** `/Users/jeffmartin/development/Geek-Crawler-Rag` — full-run English index per `runId` for `partner` + `competitors`; gcc-v2 is a **consumer** only (see that repo’s plan). **Shipped:** generate prefers Geek-Crawler-Rag chunks (topic-aware `need`, filter `runId` / `host` / `crawlType`); seed-targeted Mongo HTML remains the fallback when the index is building or empty.
+
 ---
 
 ## gcc-v2 reads Geek-Crawler (partner + competitors only)
 
-At **preflight**, **generate**, and **tool spawn**, gcc-v2 **queries** Geek-Crawler — it does **not** re-crawl partner or competitor URLs inline.
+At **preflight**, **generate**, and **tool spawn**, gcc-v2 **queries** Geek-Crawler storage and **Geek-Crawler-Rag** — it does **not** re-crawl partner or competitor URLs inline.
 
 1. Resolve seeds from brief (partner tool rows → `partner`; `competitorUrls` → `competitors`).
 2. Find the latest run for seeds (`GetLatestRunAsync` / slot lookup) — **any status** is acceptable when seed HTML exists.
-3. Load pages with **seed-targeted lookup** (`ListPagesBySeedsAsync`) — never paginate an entire large run into memory.
-4. Extract from stored `Html` using owned extractors (`GccV2ArticleHtmlExtractor`, quote helpers) into shapes WRITE already uses (`GccQuoteablePage`, blockquote attribution).
-5. **Notify and skip** when external research is unavailable — generate **continues**; return `partnerResearchWarnings[]` to phi. Do **not** block generate or ask the operator to change Geek-Crawler page limits from Content Creator.
+3. **Preferred:** retrieve chunks via Geek-Crawler-Rag (`POST /v1/query`) with a topic-aware `need` (create title, target keyword, brief fields) and filters `runId` / `host` / `crawlType`. **Fallback:** seed-targeted Mongo lookup (`ListPagesBySeedsAsync`) — never paginate an entire large run into memory.
+4. Inject into shapes WRITE already uses (`GccQuoteablePage`, blockquote attribution).
+5. **Notify and skip** when external research is unavailable — generate **continues**; return `partnerResearchWarnings[]` to phi (includes soft warnings when the RAG index is still `pending`/`running`). Do **not** block generate or ask the operator to change Geek-Crawler page limits from Content Creator.
 
-Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF or crawl UI in content-creator-v2 `src/`.
+**Operator flow:** finish Geek-Crawler `partner`/`competitors` runs → wait for RAG index **`complete`** (SignalR `GeekCrawlerRagIndexEvent` in Geek-Crawler UI) → generate in content-creator-v2.
+
+Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF, crawl UI, or RAG indexer in content-creator-v2 `src/`.
 
 ### External research policy (product)
 
 | Scenario | Behavior |
 |----------|----------|
-| Completed run with extractable seed HTML | Merge research into brief |
+| Indexed run (`complete`) with RAG hits | Merge RAG chunks into brief |
+| Index still `pending`/`running` | Soft warning; use seed HTML if available; generate continues |
+| Completed run with extractable seed HTML (RAG miss / disabled) | Merge seed HTML research into brief |
 | Failed / incomplete run **with** stored seed HTML | Use partial HTML; log; continue |
 | Missing run or run with no extractable seed HTML | **Skip** that seed; append human-readable warning; **generate still runs** |
 | On-site partner URLs (project-site host) | Resolve from **project-site crawl** pages, not Geek-Crawler |
@@ -87,6 +93,8 @@ Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF or crawl U
 | Local research read (`crawlType: local`) | Yes — on-site via project-site crawl; external via `localBusinessUrls[]` + Geek-Crawler | — |
 | `partnerResearchWarnings` on generate response | Yes | — |
 | Phi preflight `externalResearchNote` + amber banner | Yes (`dcaa377`) | — |
+| Geek-Crawler-Rag indexer + query API | Yes (sibling repo + Hostinger) | Scale verify ~12k-page runs |
+| GeekAPI WRITE consumer (`IGeekCrawlerRagClient`, topic-aware need, index soft-warn) | Yes | — |
 | Phi amber banner (`sessionStorage`) | UI shipped (`dcaa377`) | Fires when generate returns warnings |
 
 ---
@@ -98,7 +106,7 @@ Geek-Crawler is the **single store** for partner/tool and competitor HTML. Remov
 | Storage | Action |
 |---------|--------|
 | `gcc_v2_tool_source_crawl_runs` / `gcc_v2_tool_source_crawl_pages` | **Dropped** — do not revive |
-| `gcc_v2_partner_research_records` | **Delete** after generate reads Geek-Crawler |
+| `gcc_v2_partner_research_records` | **Dropped** (migration) — do not revive |
 | Brief JSON `partnerResearch` / `competitorResearch` as HTML blobs | **Stop writing** at crawl time; prefer run pointers or derive at generate from Geek-Crawler pages only |
 
 **Keep** project-site artifacts: `gcc_v2_creates.SiteSectionJson`, BrandKit rows keyed to project-site run, brief `siteHierarchy` from owned crawl.
@@ -145,21 +153,22 @@ flowchart TB
 
 **Reference code to copy (read-only):** `GeekBackend/GeekAPI/Services/GeekCrawler/*`, `GccV2SiteHierarchyService`, `GccV2PageFetcher`, `GccV2SameOriginBfsCrawler` patterns cited in Geek-Crawler plan.
 
-**Bridge to add:** `HttpGeekCrawlerApiClient` (or thin resolver) in `ContentCreatorV2/*` for read-only partner/competitor page fetch — not a second crawl engine in gcc-v2 for those types.
+**Bridge + RAG:** `GccV2GeekCrawlerResearchResolver` + `HttpGeekCrawlerRagClient` (prefer RAG) with `HttpGeekCrawlerRepository` seed HTML fallback — not a second crawl engine in gcc-v2.
+
+**Retrieval product:** `/Users/jeffmartin/development/Geek-Crawler-Rag` (Python + Qdrant); phi/GeekAPI call query API only.
 
 ---
 
 ## Verification
 
 ```bash
-# No inline partner crawl tables (after migration)
-rg 'gcc_v2_partner_research_records|tool_source_crawl' /Users/jeffmartin/development/GeekBackend
+# Partner research table dropped (historical migrations may still mention the name)
+rg 'GetFreshPartnerResearchAsync' /Users/jeffmartin/development/GeekBackend
 
-# No Site Analyzer runtime on project-site path (target)
-rg 'HttpGeekSeoSiteAnalyzerClient|site-analyzer/analyze' \
-  /Users/jeffmartin/development/content-creator-v2/src \
-  /Users/jeffmartin/development/GeekBackend/GeekAPI/Services/ContentCreatorV2
+# No Site Analyzer runtime on project-site path in phi
+rg 'site-analyzer|pollUntilReady|POLL_MS' \
+  /Users/jeffmartin/development/content-creator-v2/src
 
-# No Geek-Crawler UI in phi
-rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v2/src
+# No Geek-Crawler / RAG impl in phi
+rg -i 'qdrant|GeekCrawler-Rag' /Users/jeffmartin/development/content-creator-v2/src
 ```

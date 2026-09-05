@@ -70,12 +70,15 @@ Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (o
 |------|--------|-------|
 | **A1** `GccV2GeekCrawlerResearchResolver` | Shipped | Uses `ListPagesBySeedsAsync`; accepts partial/failed runs when seed HTML exists |
 | **A2** Wire generate + preflight | Shipped | Generate merges research; preflight returns `externalResearchNote`; notify-and-skip restored |
+| **A3** Drop partner research records | Shipped | Table dropped; `GetFreshPartnerResearchAsync` gone |
 | **A4** Resolver tests | Shipped | Assert **warn-and-skip** on missing external research |
 | **Mongo partner/competitor reads** | Verified | EphemeralMongo (or `MONGO_CRAWLER_URL`) smoke: latest-run + by-seeds + resolver merge |
 | **B2–B3** Project-site crawl | Shipped | `ContentCreatorV2/ProjectSite/*`, SignalR on gcc-v2 hub |
 | **C2** Phi create flow cutover | Shipped | `new-create-form.tsx` — project-site crawl, no Site Analyzer poll |
+| **C3** Phi Site Analyzer cleanup | Shipped | No site-analyzer BFF/poll in `src/` (legacy field on old list only) |
 | **Outline PUT** `jobs/{id}/outline` | Fixed (`16fb679`) | No `OutlineReady` replay on manual save; hub push failures logged, not fatal |
 | **Notify-and-skip** | Shipped | `warnings.Add(warning)` in partner/competitor/local merge; generate continues |
+| **Geek-Crawler-Rag consumer** | Shipped | Prefer RAG chunks (topic-aware need); seed HTML fallback; index `pending`/`running` soft-warn |
 
 ---
 
@@ -87,13 +90,14 @@ Commits referenced: GeekBackend `ffc13ee` (read bridge + by-seeds), `16fb679` (o
 
 `GeekAPI/Services/ContentCreatorV2/GeekCrawler/GccV2GeekCrawlerResearchResolver.cs`:
 
-- Inject `IGccV2GeekCrawlerReadRepository` (wraps `HttpGeekCrawlerRepository`).
+- Inject `IGccV2GeekCrawlerReadRepository` (wraps `HttpGeekCrawlerRepository`) + `IGeekCrawlerRagClient`.
 - **Resolve run:** `GetLatestRunAsync` + `GetRunForSlotAsync` fallback — **any status** when seed HTML exists.
-- **Load pages:** `ListPagesBySeedsAsync(runId, seedUrls)` — **never** paginate full runs at generate (OOM-safe).
-- **Extract:** `GccV2ArticleHtmlExtractor.ExtractPartnerPage` → `GccQuoteablePage`.
+- **Preferred load:** Geek-Crawler-Rag `QueryAsync` with topic-aware `need` (create title, keyword, brief); filter `runId` / `host` / `crawlType`. Soft-warn when index is `pending`/`running`.
+- **Fallback load:** `ListPagesBySeedsAsync(runId, seedUrls)` — **never** paginate full runs at generate (OOM-safe).
+- **Extract:** RAG chunks mapped to `GccQuoteablePage`, or `GccV2ArticleHtmlExtractor.ExtractPartnerPage` from seed HTML.
 - **Merge:** `GccV2PartnerUrlResearchService.MergePartnerResearchIntoBriefJson` / `MergeCompetitorResearchIntoBriefJson`.
 - **Product policy:** notify-and-skip unavailable external seeds → `GccV2ExternalResearchMergeResult.PartnerResearchWarnings` (shipped).
-- **Storage:** Mongo DB `geek_crawler` via `MongoGeekCrawlerService` (`MONGO_CRAWLER_URL`).
+- **Storage:** Mongo DB `geek_crawler` via `MongoGeekCrawlerService` (`MONGO_CRAWLER_URL`); vectors via Geek-Crawler-Rag / Qdrant.
 
 ~~**Gate:** `status == "complete"`; else fail closed.~~ **Superseded** by notify-and-skip policy in [`crawl-architecture.md`](./crawl-architecture.md).
 
@@ -125,17 +129,19 @@ Phi (`dcaa377`): stores `partnerResearchWarnings` in `sessionStorage`; amber ban
 
 Canvas uses PUT response body; `outlineDirtyRef` blocks hub `OutlineReady` while editing.
 
-### A3. Delete Content Creator duplicate storage
+### A3. Delete Content Creator duplicate storage — shipped
 
 | Artifact | Action |
 |----------|--------|
-| `gcc_v2_partner_research_records` | Migration `DropPartnerResearchRecords` |
-| `GccV2PartnerResearchRecordsController` | Remove |
-| `HttpGccV2Repository` `GetFreshPartnerResearchAsync` / `CreatePartnerResearchRecordAsync` | Remove |
+| `gcc_v2_partner_research_records` | **Dropped** — migration `ProjectSiteCrawlAndDropPartnerResearch` |
+| `GccV2PartnerResearchRecordsController` | Removed |
+| `HttpGccV2Repository` `GetFreshPartnerResearchAsync` / `CreatePartnerResearchRecordAsync` | Removed |
 | `GccPartnerUrlResearchService` (v1) | Keep only if v1 still references; zero V2 call sites |
 | Brief `partnerResearch` / `competitorResearch` blobs | Not source of truth — derive at generate from Geek-Crawler (may persist merged slice on brief for child jobs) |
 
 `gcc_v2_tool_source_crawl_*` — already dropped; do not revive.
+
+Note: historical EF migration *source files* still contain the table name string; runtime API/surface is gone (`rg GetFreshPartnerResearchAsync` → empty).
 
 ### A4. Tests — shipped
 
@@ -150,8 +156,7 @@ Canvas uses PUT response body; `outlineDirtyRef` blocks hub `OutlineReady` while
 - [x] Notify-and-skip on missing external research
 - [x] `partnerResearchWarnings` populated on skip paths
 - [x] Mongo partner/competitor read path verified
-- [ ] `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` on GeekBackend → empty after migration
-
+- [x] `GetFreshPartnerResearchAsync` gone; partner research table dropped (migration history may still mention the name)
 ---
 
 ## Phase B — Owned project-site crawl
@@ -274,14 +279,15 @@ rg 'setInterval|POLL_MS' /Users/jeffmartin/development/content-creator-v2/src
 rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v2/src
 ```
 
-**Manual E2E:** project-site crawl → create with `relatedPages`; Geek-Crawler `partner` + `competitors` runs complete → generate → tool blockquotes + competitor differentiation in WRITE.
+**Manual E2E:** project-site crawl → create with `relatedPages`; Geek-Crawler `partner` + `competitors` runs **complete** → RAG index **complete** → generate → tool blockquotes + competitor differentiation in WRITE.
 
 ---
 
 ## Out of scope
 
 - Geek-Crawler UI (operator starts external crawls in `/Users/jeffmartin/development/Geek-Crawler`)
-- `crawlType: local` (South Florida / regional product scope)
+- **Geek-Crawler-Rag implementation** (sibling repo `/Users/jeffmartin/development/Geek-Crawler-Rag` — indexer/Qdrant stay there; gcc-v2 consumer glue is shipped)
+- `crawlType: local` as a Geek-Crawler product expansion beyond current external `localBusinessUrls` bridge
 - v1 `GccPartnerUrlResearchService` deletion unless v1 fully retired
 - Geek-SEO repo edits
 
@@ -292,7 +298,7 @@ rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v
 - [x] **A1** — `GccV2GeekCrawlerResearchResolver` + DI registration
 - [x] **A2** — Wire preflight + generate in `GccV2Controller` (notify-and-skip)
 - [x] **A2-fix** — Notify-and-skip restored; resolver + Mongo smoke tests green
-- [ ] **A3** — Drop `gcc_v2_partner_research_records` + repo/API surface
+- [x] **A3** — Drop `gcc_v2_partner_research_records` + repo/API surface
 - [x] **A4** — Resolver unit tests + Mongo partner/competitor read smoke
 - [x] **B1** — Project-site schema + migration
 - [x] **B2** — `ContentCreatorV2/ProjectSite/*` engine + worker
@@ -301,7 +307,8 @@ rg -i 'geek-crawler|GeekCrawler' /Users/jeffmartin/development/content-creator-v
 - [x] **B5** — `ProjectSiteCrawlRunId` gate on generate
 - [x] **C1** — Remove phi site-analyzer BFF
 - [x] **C2** — Rewrite `new-create-form` + project-site crawl
-- [ ] **C3** — Copy cleanup (residual Site Analyzer refs if any)
+- [x] **C3** — Phi free of site-analyzer poll/BFF (`src/` clean; legacy list may still show `siteAnalysisProfileId` field)
 - [x] **Outline** — Silent PUT save + `TryPushAsync` (`16fb679`)
 - [x] **Verify** — Mongo partner/competitor read path + notify-and-skip unit/smoke
-- [ ] **Verify** — `rg 'GetFreshPartnerResearchAsync|gcc_v2_partner_research'` empty after A3
+- [x] **Verify** — `GetFreshPartnerResearchAsync` absent; partner research records dropped
+- [x] **RAG consumer** — WRITE research prefers Geek-Crawler-Rag (`IGeekCrawlerRagClient`); topic-aware need; index soft-warn; seed HTML fallback

@@ -13,6 +13,7 @@ Authoritative rules for **content-creator-v2** (phi), executors, and agents. Whe
 | [`crawl-architecture.md`](./crawl-architecture.md) | Three crawl domains — project site vs Geek-Crawler |
 | [`crawl-implementation.md`](./crawl-implementation.md) | Phased build — Geek-Crawler read, project-site crawl, phi cutover |
 | [`geek-crawler.md`](./geek-crawler.md) | Geek-Crawler ↔ gcc-v2 read boundary |
+| **Geek-Crawler-Rag** | Separate repo: `/Users/jeffmartin/development/Geek-Crawler-Rag` — corpus RAG; phi **consumes** only |
 | [`../architecture.md`](../architecture.md) | Platform map, copy / call / do not reuse |
 
 ---
@@ -24,6 +25,7 @@ Authoritative rules for **content-creator-v2** (phi), executors, and agents. Whe
 | **Phi workspace** | `/Users/jeffmartin/development/content-creator-v2` only — app at repo root, not `web/`, `frontend/`, or sibling `GeekContentCreatorV2` |
 | **Preserve** | `plan/` and `architecture.md` at repo root |
 | **Geek-Crawler** | **Separate repo:** `/Users/jeffmartin/development/Geek-Crawler` — not inside GeekBackend, **not** in content-creator-v2 `src/` |
+| **Geek-Crawler-Rag** | **Separate repo:** `/Users/jeffmartin/development/Geek-Crawler-Rag` — Python + Qdrant over Mongo `geek_crawler`; **not** in phi `src/`, **not** a GeekAPI feature |
 | **Do not invent repos** | No new sibling products without owner approval |
 
 ---
@@ -78,13 +80,15 @@ See [`crawl-architecture.md`](./crawl-architecture.md). Three domains — do not
 | **Project site crawl** | **gcc-v2 owned** — copy Geek-Crawler engine patterns into `ContentCreatorV2/ProjectSite/*`; store in `content_creator_v2`. Powers `relatedPages`, BrandKit, `siteHierarchy`. **Not** a Geek-Crawler `crawlType`. |
 | **Project site ≠ always “client’s site”** | Say **project site** (URL bound to a create). Often a client property today; do not hard-code that assumption in APIs or tenancy. |
 | **No Site Analyzer runtime** | Copy former Site Analyzer **behavior** into owned project-site crawl — do **not** call Geek-SEO analyze APIs or keep `siteAnalysisProfileId` as permanent gate. |
-| **Partner / Tools crawl** | **Geek-Crawler** (`crawlType: "partner"`) — start in Geek-Crawler UI; gcc-v2 **reads** `geek_crawler` pages at generate, does not inline-crawl |
-| **Competitors crawl** | **Geek-Crawler** (`crawlType: "competitors"`) — same read-only rule |
+| **Partner / Tools crawl** | **Geek-Crawler** (`crawlType: "partner"`) — start in Geek-Crawler UI; gcc-v2 **reads** via **Geek-Crawler-Rag** (preferred) with seed HTML fallback — does not inline-crawl |
+| **Competitors crawl** | **Geek-Crawler** (`crawlType: "competitors"`) — same read-only / RAG-consume rule |
 | **Local / regional crawl** | **Geek-Crawler** (`crawlType: "local"`) — future South Florida / local business scope; not project site |
+| **External research RAG** | **Geek-Crawler-Rag** owns index/query — phi/GeekAPI are thin consumers only. See that repo’s `architecture.md` / `plans/geek-crawler-rag.md` |
 | **Mobile-only** | Pixel 7 viewport for all BFS crawls — never desktop |
 | **No crawl UI in phi** | No Geek-Crawler BFF, hub, or start-crawl UI in content-creator-v2 `src/` |
+| **No RAG impl in phi** | No Qdrant, embed, or indexer under `src/` |
 
-**Do not use:** `gcc_v2_tool_source_crawl_*`, `gcc_v2_partner_research_records` (delete after GC read path), `api/geek-content-creator-v2/tool-sources/crawl*`, `tool-vendor-crawl`, **vendor crawl**, **vendor research**, `ai-tools` — use **partner crawl** / **`crawlType: "partner"`**.
+**Do not use:** `gcc_v2_tool_source_crawl_*`, `gcc_v2_partner_research_records` (dropped), `api/geek-content-creator-v2/tool-sources/crawl*`, `tool-vendor-crawl`, **vendor crawl**, **vendor research**, `ai-tools` — use **partner crawl** / **`crawlType: "partner"`**.
 
 ---
 
@@ -200,8 +204,9 @@ GeekBackend changes: `dotnet build` + targeted `dotnet test` for touched areas.
 [ ] No GeekAPI BFF clients under lib/
 [ ] No job/crawl/analysis timer polling
 [ ] Geek-Crawler code only in Geek-Crawler repo
+[ ] Geek-Crawler-Rag only in Geek-Crawler-Rag repo (phi consumes)
 [ ] Partner naming — not “vendor crawl”
-[ ] Crawl split — project site owned; partner/competitors read Geek-Crawler only
+[ ] Crawl split — project site owned; partner/competitors read Geek-Crawler only (RAG via Geek-Crawler-Rag)
 ```
 
 ---

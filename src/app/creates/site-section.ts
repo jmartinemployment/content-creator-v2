@@ -135,3 +135,8 @@ export function isCrawlRunReady(status: string | null | undefined): boolean {
   if (!status) return false;
   return /^complete$/i.test(status);
 }
+
+export function isCrawlRunInProgress(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return /^(pending|running)$/i.test(status);
+}
