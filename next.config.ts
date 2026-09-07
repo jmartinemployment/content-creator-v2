@@ -5,6 +5,7 @@ const NOINDEX = [{ key: "X-Robots-Tag", value: "noindex, nofollow" }];
 const SECURED = ["/app/:path*", "/auth/:path*", "/api/:path*"];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   async headers() {
     const secured = SECURED.map((source) => ({ source, headers: NOINDEX }));
     return process.env.ALLOW_INDEXING === "true"

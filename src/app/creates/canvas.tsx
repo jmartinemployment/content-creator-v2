@@ -1276,6 +1276,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="text"
+                      aria-label={`Outline section ${i + 1} heading`}
                       value={s.heading}
                       onChange={(e) => {
                         outlineDirtyRef.current = true;
@@ -1327,6 +1328,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   <label className="flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
                     <span>Must mention (one per line)</span>
                     <textarea
+                      aria-label={`Outline section ${i + 1} must mention`}
                       rows={Math.min(6, Math.max(2, s.hierarchyChildHeadings.length + 1))}
                       value={s.hierarchyChildHeadings.join("\n")}
                       onChange={(e) => {
