@@ -1,4 +1,4 @@
-import type { RagGenerateRequest, RagGenerateResponse, RagGenerateStatus } from "./types";
+import type { RagAdTemplate, RagGenerateRequest, RagGenerateResponse, RagGenerateStatus } from "./types";
 
 async function ragFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`/api/rag/${path.replace(/^\//, "")}`, {
@@ -36,4 +36,15 @@ export async function generateRagDraft(
     return { ok: false, error, status: res.status };
   }
   return { ok: true, data: (await res.json()) as RagGenerateResponse };
+}
+
+export async function indexRagAdTemplates(
+  templates: RagAdTemplate[],
+): Promise<{ upserted: number; warning?: string | null } | null> {
+  const res = await ragFetch("templates", {
+    method: "POST",
+    body: JSON.stringify(templates),
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as { upserted: number; warning?: string | null };
 }

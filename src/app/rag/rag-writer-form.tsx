@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { DEFAULT_AD_TEMPLATES, loadAdTemplates, saveAdTemplates } from "./ad-templates";
 import { RAG_SAMPLE_TOPICS, RAG_WRITING_INTENTS } from "./intents";
-import { fetchRagStatus, generateRagDraft } from "./rag-generate-client";
+import { fetchRagStatus, generateRagDraft, indexRagAdTemplates } from "./rag-generate-client";
 import type {
   RagAdTemplate,
   RagGenerateResponse,
@@ -110,6 +110,7 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
     const merged = [...templates, next].slice(0, 40);
     setTemplates(merged);
     saveAdTemplates(merged);
+    void indexRagAdTemplates([next]);
     setSelectedTemplateIds((prev) => [...prev, next.id].slice(0, 3));
     setNewTemplateBody("");
     setNewTemplateName("");
