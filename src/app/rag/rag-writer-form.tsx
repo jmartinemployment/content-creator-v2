@@ -471,6 +471,38 @@ function ResultPanel({ result }: { result: RagGenerateResponse }) {
         </div>
       ) : null}
 
+      {result.citations && result.citations.length > 0 ? (
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--cc-ink)]">Citations</h3>
+          <ul className="mt-2 flex flex-col gap-3">
+            {result.citations.map((c, i) => (
+              <li key={`${c.url}-${i}`} className="text-sm">
+                <blockquote className="border-l-2 border-[var(--cc-accent)] pl-3 text-[var(--cc-ink)]">
+                  <p className="italic">&ldquo;{c.quote}&rdquo;</p>
+                </blockquote>
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                  {c.url.startsWith("http") ? (
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[var(--cc-accent)] underline-offset-2 hover:underline"
+                    >
+                      {c.title || c.url}
+                    </a>
+                  ) : (
+                    <span>{c.title || c.url}</span>
+                  )}
+                  {[c.sectionTitle, c.crawlType].filter(Boolean).length > 0
+                    ? ` · ${[c.sectionTitle, c.crawlType].filter(Boolean).join(" · ")}`
+                    : null}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div>
         <h3 className="text-sm font-semibold text-[var(--cc-ink)]">Sources</h3>
         {result.sources.length === 0 ? (

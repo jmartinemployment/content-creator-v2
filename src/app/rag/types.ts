@@ -31,6 +31,16 @@ export type RagGenerateSource = {
   entity?: string | null;
   crawlType?: string | null;
   kind?: string | null;
+  pageId?: string | null;
+};
+
+export type RagCitation = {
+  pageId?: string | null;
+  url: string;
+  title?: string | null;
+  sectionTitle?: string | null;
+  quote: string;
+  crawlType?: string | null;
 };
 
 export type RagThemeSource = {
@@ -53,6 +63,7 @@ export type RagGenerateResponse = {
   variations?: string[] | null;
   battlecard?: RagBattlecard | null;
   sources: RagGenerateSource[];
+  citations?: RagCitation[] | null;
   themeSources?: RagThemeSource[] | null;
   appliedTemplates?: RagAdTemplate[] | null;
   warnings?: string[];
@@ -72,4 +83,5 @@ export type RagGenerateStatus = {
   shortFormModel?: string;
   graphRetrievalAvailable?: boolean;
   adTemplateIndexAvailable?: boolean;
+  citeableGenerateAvailable?: boolean;
 };

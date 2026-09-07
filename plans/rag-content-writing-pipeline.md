@@ -7,17 +7,17 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 
 - Operator UX for choosing **writing intent** (long-form vs short-form vs battlecard vs slides/strategy)
 - Calling GeekAPI to generate drafts grounded on partner + competitor crawl RAG
-- Displaying citations/sources (entity, URL, themes, applied templates)
+- Displaying citations/sources (entity, URL, **verbatim quotes**, themes, applied templates)
 - **Ad template corpus** get/apply/manage (local seed + operator saves) for few-shot short-form
 - Later: multi-step outline→fill agent (D4)
 
 ## Today
 
 - Content Creator v2 talks to GeekAPI for research / WRITE flows **and** intent-routed RAG generate
-- GeekAPI calls RAG `v1/query` via `HttpGeekCrawlerRagClient` (research resolver + `/api/rag/generate`)
-- Writer model: **OpenAI** — long-form **o1/o3** via GeekAPI Phase F; short/battlecard/slides on GPT-class
+- GeekAPI calls RAG `v1/query` / `v1/generate` / `v1/pages` via `HttpGeekCrawlerRagClient`
+- Writer for `/rag`: prefer Rag citeable multi-step generate; GeekAPI one-shot is fallback
 - Soft-disable: when RAG URL unset or `GEEK_RAG_GENERATE_ENABLED=false` → UI falls back to create → research resolver WRITE
-- GraphRAG + Rag ad-template index: soft-off until Rag ships; UI still works (parent hybrid + local templates)
+- GraphRAG + Rag ad-template index + citeable generate: status flags from GeekAPI
 
 ## Product content matrix
 
