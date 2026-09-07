@@ -40,6 +40,7 @@ import {
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
+import { RagGenerateFallbackBanner } from "@/app/rag/rag-generate-fallback-banner";
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -924,6 +925,11 @@ export function NewCreateForm() {
           {hierarchyError && !siteHierarchy ? (
             <p className="text-xs text-amber-800">{hierarchyError}</p>
           ) : null}
+
+          <RagGenerateFallbackBanner
+            compact
+            topic={targetKeyword.trim() || title.trim()}
+          />
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="title">

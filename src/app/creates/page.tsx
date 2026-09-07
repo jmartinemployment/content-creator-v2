@@ -47,6 +47,12 @@ export default async function CreatesListPage() {
       >
         New content brief
       </Link>
+      <Link
+        href="/rag"
+        className="inline-flex w-fit text-sm font-medium text-[var(--cc-accent)] underline-offset-2 hover:underline"
+      >
+        RAG writing (partner + competitor)
+      </Link>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

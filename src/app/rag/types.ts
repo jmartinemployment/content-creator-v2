@@ -1,0 +1,75 @@
+/** Types for GeekAPI POST /api/rag/generate (content-creator-v2 client). */
+
+export type RagWritingIntent =
+  | "Technical Article"
+  | "Case Study"
+  | "Social Ad"
+  | "Short Form"
+  | "Competitive Battlecard"
+  | "Pitch Slides"
+  | "Strategy Theme";
+
+export type RagAdTemplate = {
+  id: string;
+  name: string;
+  channel?: string;
+  framework?: string;
+  body: string;
+};
+
+export type RagGenerateRequest = {
+  writingIntent: RagWritingIntent;
+  topic: string;
+  targetEntities?: string[];
+  adTemplates?: RagAdTemplate[];
+  templateIds?: string[];
+};
+
+export type RagGenerateSource = {
+  url: string;
+  title?: string | null;
+  entity?: string | null;
+  crawlType?: string | null;
+  kind?: string | null;
+};
+
+export type RagThemeSource = {
+  label: string;
+  relationship?: string | null;
+  entity?: string | null;
+  url?: string | null;
+};
+
+export type RagBattlecard = {
+  partnerSummary: string;
+  competitorSummary: string;
+  differentiators: string[];
+  risks: string[];
+};
+
+export type RagGenerateResponse = {
+  intent: string;
+  content?: string | null;
+  variations?: string[] | null;
+  battlecard?: RagBattlecard | null;
+  sources: RagGenerateSource[];
+  themeSources?: RagThemeSource[] | null;
+  appliedTemplates?: RagAdTemplate[] | null;
+  warnings?: string[];
+  softDisabled?: boolean;
+  modelUsed?: string | null;
+  retrievalMode?: string | null;
+};
+
+export type RagGenerateStatus = {
+  available: boolean;
+  ragClientEnabled: boolean;
+  generateEnabled: boolean;
+  reason?: string | null;
+  writingIntents: string[];
+  entitySeeds: string[];
+  longFormModel?: string;
+  shortFormModel?: string;
+  graphRetrievalAvailable?: boolean;
+  adTemplateIndexAvailable?: boolean;
+};

@@ -59,5 +59,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/creates/:path*", "/legacy/:path*", "/api/gcc-v2/:path*"],
+  matcher: [
+    "/",
+    "/creates/:path*",
+    "/legacy/:path*",
+    "/rag",
+    "/rag/:path*",
+    "/api/gcc-v2/:path*",
+    "/api/rag/:path*",
+  ],
 };
