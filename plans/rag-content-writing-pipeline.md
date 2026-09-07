@@ -1,6 +1,6 @@
 # RAG-backed content writing (content-creator-v2 scope)
 
-Status: **Phase C + D1–D3 shipped** (GraphRAG / Rag ad-template index soft-off until Rag D1/D2).  
+Status: **Phase C + D1–D4 implemented**.  
 Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query), GeekBackend (`POST /api/rag/generate`).
 
 ## This app owns
@@ -9,7 +9,7 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 - Calling GeekAPI to generate drafts grounded on partner + competitor crawl RAG
 - Displaying citations/sources (entity, URL, **verbatim quotes**, themes, applied templates)
 - **Ad template corpus** get/apply/manage (local seed + operator saves) for few-shot short-form
-- Later: multi-step outline→fill agent (D4)
+- Multi-step outline→fill agent UX (D4)
 
 ## Today
 
@@ -17,7 +17,7 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 - GeekAPI calls RAG `v1/query` / `v1/generate` / `v1/pages` via `HttpGeekCrawlerRagClient`
 - Writer for `/rag`: prefer Rag citeable multi-step generate; GeekAPI one-shot is fallback
 - Soft-disable: when RAG URL unset or `GEEK_RAG_GENERATE_ENABLED=false` → UI falls back to create → research resolver WRITE
-- GraphRAG + Rag ad-template index + citeable generate: status flags from GeekAPI
+- GraphRAG + Rag ad-template index + citeable generate: shipped; status flags from GeekAPI
 
 ## Product content matrix
 
@@ -40,7 +40,7 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 
 ## Phase C — **shipped**
 
-## Phase D — **shipped in this app** (Rag backends soft-off)
+## Phase D — **shipped**
 
 ### D1. Slides / strategy
 
@@ -59,9 +59,14 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 - Status line shows `longFormModel` / `shortFormModel` from GeekAPI
 - Result shows `modelUsed`
 
-### D4. Optional later
+### D4. Guided outline → sections
 
-- Multi-step “outline → fill sections” agent UX
+- Long-form toggle on `/rag` generates a structured outline first
+- Operator can edit section headings and briefs before writing
+- Write or retry one section at a time, or write all remaining sequentially
+- Every section uses the Rag citeable workflow: hybrid retrieval → full Mongo Markdown → draft → quote verification
+- Completed section summaries are passed to later sections to reduce repetition
+- Assembles and copies the finished Markdown client-side; generation remains owned by Rag
 
 ## Success criteria
 
@@ -71,4 +76,4 @@ Sibling plans: Geek-Crawler-v2 (crawl markdown), Geek-Crawler-Rag (index/query),
 - [x] Phase D1: slide/strategy flow (GraphRAG soft-off → hybrid + theme sources)
 - [x] Phase D2: short-form can get/apply few-shot ad templates via generate
 - [x] Phase D3: long-form generate uses GeekAPI o1/o3 path when enabled (UI surfaces model)
-- [ ] Phase D4: optional multi-step agent UX
+- [x] Phase D4: guided outline → independently citeable section drafting

@@ -23,6 +23,18 @@ export type RagGenerateRequest = {
   targetEntities?: string[];
   adTemplates?: RagAdTemplate[];
   templateIds?: string[];
+  generationStage?: "complete" | "outline" | "section";
+  outline?: RagOutlineSection[];
+  sectionKey?: string;
+  sectionHeading?: string;
+  sectionBrief?: string;
+  completedSectionSummaries?: string[];
+};
+
+export type RagOutlineSection = {
+  key: string;
+  heading: string;
+  brief: string;
 };
 
 export type RagGenerateSource = {
@@ -65,6 +77,7 @@ export type RagGenerateResponse = {
   sources: RagGenerateSource[];
   citations?: RagCitation[] | null;
   themeSources?: RagThemeSource[] | null;
+  outline?: RagOutlineSection[] | null;
   appliedTemplates?: RagAdTemplate[] | null;
   warnings?: string[];
   softDisabled?: boolean;

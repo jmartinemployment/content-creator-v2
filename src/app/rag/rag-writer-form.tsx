@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { DEFAULT_AD_TEMPLATES, loadAdTemplates, saveAdTemplates } from "./ad-templates";
 import { RAG_SAMPLE_TOPICS, RAG_WRITING_INTENTS } from "./intents";
 import { fetchRagStatus, generateRagDraft, indexRagAdTemplates } from "./rag-generate-client";
+import { GuidedRagWriter } from "./guided-rag-writer";
 import type {
   RagAdTemplate,
   RagGenerateResponse,
@@ -37,6 +38,7 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
   const [newTemplateBody, setNewTemplateBody] = useState("");
   const [newTemplateName, setNewTemplateName] = useState("");
   const [result, setResult] = useState<RagGenerateResponse | null>(null);
+  const [guidedMode, setGuidedMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -71,6 +73,8 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
   );
 
   const available = status?.available === true;
+  const guidedAvailable =
+    available && status?.citeableGenerateAvailable !== false;
   const isShort = intentMeta?.family === "short";
   const isLong = intentMeta?.family === "long";
   const isSlides = intentMeta?.family === "slides";
@@ -179,6 +183,8 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
           GraphRAG {status.graphRetrievalAvailable ? "on" : "soft-off"}
           {" · "}
           Ad-template index {status.adTemplateIndexAvailable ? "on" : "soft-off (local templates OK)"}
+          {" · "}
+          Citeable workflow {status.citeableGenerateAvailable ? "on" : "soft-off"}
         </p>
       ) : null}
 
@@ -191,7 +197,16 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
             id="ragIntent"
             className={selectClass}
             value={intent}
-            onChange={(e) => setIntent(e.target.value as RagWritingIntent)}
+            onChange={(e) => {
+              const next = e.target.value as RagWritingIntent;
+              setIntent(next);
+              if (
+                next !== "Technical Article" &&
+                next !== "Case Study"
+              ) {
+                setGuidedMode(false);
+              }
+            }}
           >
             {RAG_WRITING_INTENTS.map((i) => (
               <option key={i.value} value={i.value}>
@@ -339,18 +354,51 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        disabled={pending || topic.trim().length < 3 || !available}
-        onClick={onGenerate}
-        className="inline-flex w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        {pending ? "Generating…" : "Generate from RAG"}
-      </button>
+      {isLong ? (
+        <label className="flex items-start gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={guidedMode}
+            onChange={(event) => {
+              setGuidedMode(event.target.checked);
+              setResult(null);
+              setError(null);
+            }}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-semibold text-[var(--cc-ink)]">
+              Guided outline → sections
+            </span>
+            <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+              Plan first, edit the outline, then draft or retry each section
+              with independently verified citations.
+            </span>
+          </span>
+        </label>
+      ) : null}
+
+      {guidedMode && isLong ? (
+        <GuidedRagWriter
+          intent={intent}
+          topic={topic}
+          targetEntities={selectedEntities}
+          disabled={!guidedAvailable}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={pending || topic.trim().length < 3 || !available}
+          onClick={onGenerate}
+          className="inline-flex w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {pending ? "Generating…" : "Generate from RAG"}
+        </button>
+      )}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      {result && !result.softDisabled ? (
+      {!guidedMode && result && !result.softDisabled ? (
         <ResultPanel result={result} />
       ) : null}
     </div>
