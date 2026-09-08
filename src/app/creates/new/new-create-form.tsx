@@ -18,7 +18,6 @@ import {
   PRIMARY_DRAFT_TYPES,
 } from "../content-types";
 import {
-  hostFromSiteUrl,
   isCrawlRunInProgress,
   isCrawlRunReady,
   normalizeCrawlPage,
@@ -40,7 +39,14 @@ import {
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
-import { RagGenerateFallbackBanner } from "@/app/rag/rag-generate-fallback-banner";
+import { fetchRagStatus } from "@/app/rag/rag-generate-client";
+import { DEFAULT_AD_TEMPLATES, loadAdTemplates } from "@/app/rag/ad-templates";
+import type { RagAdTemplate } from "@/app/rag/types";
+import {
+  ragCapabilitiesFor,
+  type ModelPolicySelection,
+  type RagReadiness,
+} from "../rag-contract";
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -69,6 +75,9 @@ type NewCreateDraft = {
   primaryIntent: PrimaryIntent | "";
   buyingStage: BuyingStage | "";
   toneOfVoice: ToneOfVoice | "";
+  targetEntities: string[];
+  selectedTemplateIds: string[];
+  modelPolicy: ModelPolicySelection;
   pendingCreateId: string | null;
 };
 
@@ -108,6 +117,16 @@ function readNewCreateDraft(): NewCreateDraft | null {
       primaryIntent: (parsed.primaryIntent as PrimaryIntent | "") || "",
       buyingStage: (parsed.buyingStage as BuyingStage | "") || "",
       toneOfVoice: (parsed.toneOfVoice as ToneOfVoice | "") || "",
+      targetEntities: Array.isArray(parsed.targetEntities)
+        ? parsed.targetEntities.filter((value): value is string => typeof value === "string")
+        : [],
+      selectedTemplateIds: Array.isArray(parsed.selectedTemplateIds)
+        ? parsed.selectedTemplateIds.filter((value): value is string => typeof value === "string")
+        : [],
+      modelPolicy:
+        parsed.modelPolicy?.preset === "o3-only" || parsed.modelPolicy?.preset === "custom"
+          ? parsed.modelPolicy
+          : { version: "content-model-policy.v1", preset: "best-quality" },
       pendingCreateId: typeof parsed.pendingCreateId === "string" ? parsed.pendingCreateId : null,
     };
   } catch {
@@ -217,12 +236,37 @@ function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
       return "Commercial service page: shorter target length, CTA clarity emphasized at VALIDATE.";
     case "blog":
       return "Blog-style long-form. Check another long-form under Also draft to write both. Re-Purpose remixes ready drafts into channel packs.";
+    case "ads":
+    case "social":
+    case "email":
+      return "Short-form RAG drafting with verified evidence, optional approved templates, and variations available in Canvas.";
+    case "linkedin-document":
+      return "Slide-oriented drafting with strategy themes and GraphRAG relationships when available; Canvas preserves PDF and caption workflows.";
+    case "image-prompt":
+      return "A specialized visual brief grounded in the same brand, topic, and source evidence as prose jobs.";
     default:
       return "Long-form WRITE path (default Pillar). Check other long-form types under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab into channel packs — not image prompts.";
   }
 }
 
-export function NewCreateForm() {
+const RAG_CAPABILITY_LABELS = {
+  "guided-outline": "Guided evidence outline",
+  battlecard: "Partner / competitor battlecard",
+  "ad-templates": "Short-form template variations",
+  slides: "Slide preview",
+  "strategy-theme": "GraphRAG strategy themes",
+  "visual-brief": "Evidence-grounded visual brief",
+} as const;
+
+type NewCreateFormProps = {
+  initialTopic?: string;
+  initialContentType?: ContentType;
+};
+
+export function NewCreateForm({
+  initialTopic = "",
+  initialContentType = "pillar",
+}: NewCreateFormProps) {
   const router = useRouter();
   const crawlAbortRef = useRef<AbortController | null>(null);
   const hubRef = useRef<ReturnType<typeof createProjectSiteHubConnection> | null>(null);
@@ -236,8 +280,8 @@ export function NewCreateForm() {
   const [projectSiteCrawlRunId, setProjectSiteCrawlRunId] = useState<string | null>(null);
   const [section, setSection] = useState<SiteSectionContext | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraftType>("pillar");
+  const [title, setTitle] = useState(initialTopic);
+  const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraftType>(initialContentType);
   const [alsoDrafts, setAlsoDrafts] = useState<Set<ContentType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
   const [operatorToolsText, setOperatorToolsText] = useState("");
@@ -246,6 +290,15 @@ export function NewCreateForm() {
   const [primaryIntent, setPrimaryIntent] = useState<PrimaryIntent | "">("");
   const [buyingStage, setBuyingStage] = useState<BuyingStage | "">("");
   const [toneOfVoice, setToneOfVoice] = useState<ToneOfVoice | "">("");
+  const [ragStatus, setRagStatus] = useState<RagReadiness | null>(null);
+  const [ragStatusLoading, setRagStatusLoading] = useState(true);
+  const [targetEntities, setTargetEntities] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<RagAdTemplate[]>(DEFAULT_AD_TEMPLATES);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [modelPolicy, setModelPolicy] = useState<ModelPolicySelection>({
+    version: "content-model-policy.v1",
+    preset: "best-quality",
+  });
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +313,23 @@ export function NewCreateForm() {
     return () => {
       crawlAbortRef.current?.abort();
       void hubRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setTemplates(loadAdTemplates());
+    });
+    void fetchRagStatus()
+      .then((status) => {
+        if (!cancelled) setRagStatus(status);
+      })
+      .finally(() => {
+        if (!cancelled) setRagStatusLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -285,6 +355,9 @@ export function NewCreateForm() {
       primaryIntent,
       buyingStage,
       toneOfVoice,
+      targetEntities,
+      selectedTemplateIds,
+      modelPolicy,
       pendingCreateId,
     });
   }, [
@@ -302,6 +375,9 @@ export function NewCreateForm() {
     primaryIntent,
     buyingStage,
     toneOfVoice,
+    targetEntities,
+    selectedTemplateIds,
+    modelPolicy,
     pendingCreateId,
   ]);
 
@@ -528,6 +604,9 @@ export function NewCreateForm() {
     setPrimaryIntent(draft.primaryIntent);
     setBuyingStage(draft.buyingStage);
     setToneOfVoice(draft.toneOfVoice);
+    setTargetEntities(draft.targetEntities);
+    setSelectedTemplateIds(draft.selectedTemplateIds);
+    setModelPolicy(draft.modelPolicy);
     setPendingCreateId(draft.pendingCreateId);
 
     const resolvedUrl = draft.siteUrl || normalizeSiteUrl(draft.siteUrlInput) || "";
@@ -577,6 +656,8 @@ export function NewCreateForm() {
               primaryIntent: draft.primaryIntent,
               buyingStage: draft.buyingStage,
               toneOfVoice: draft.toneOfVoice,
+              targetEntities: draft.targetEntities,
+              modelPolicy: draft.modelPolicy,
               operatorTools: parseOperatorTools(draft.operatorToolsText),
               paaQuestions: draft.paaQuestionsText,
               competitorUrls: draft.competitorUrlsText,
@@ -640,6 +721,9 @@ export function NewCreateForm() {
       .filter((v) => alsoDrafts.has(v));
     const contentTypes = [primaryDraft, ...also];
     const operatorTools = parseOperatorTools(operatorToolsText);
+    const selectedTemplates = templates.filter((template) =>
+      selectedTemplateIds.includes(template.id),
+    );
     return {
       contentTypes,
       brief: {
@@ -650,6 +734,15 @@ export function NewCreateForm() {
         primaryIntent,
         buyingStage,
         toneOfVoice,
+        targetEntities,
+        ragCapabilities: ragCapabilitiesFor(primaryDraft),
+        modelPolicy,
+        ...(selectedTemplates.length > 0
+          ? {
+              ragAdTemplates: selectedTemplates,
+              ragAdTemplateIds: selectedTemplates.map((template) => template.id),
+            }
+          : {}),
         operatorTools,
         paaQuestions: paaQuestionsText,
         competitorUrls: competitorUrlsText,
@@ -669,6 +762,10 @@ export function NewCreateForm() {
     }
     if (!title.trim()) {
       setError("Title is required");
+      return;
+    }
+    if (modelPolicy.preset !== "best-quality" && !modelPolicy.downgradeConfirmed) {
+      setError("Confirm the model-policy quality tradeoff before continuing.");
       return;
     }
 
@@ -727,6 +824,13 @@ export function NewCreateForm() {
       setError("Missing create — go back to the brief and try again.");
       return;
     }
+    if (ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false) {
+      setError(
+        ragStatus?.reason ||
+          "Citeable RAG must be ready before this content job can start.",
+      );
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -740,6 +844,7 @@ export function NewCreateForm() {
           projectSiteCrawlRunId,
           contentTypes,
           partnerToolsConfirmed: true,
+          modelPolicy,
         }),
       });
       if (!genRes.ok) {
@@ -926,10 +1031,47 @@ export function NewCreateForm() {
             <p className="text-xs text-amber-800">{hierarchyError}</p>
           ) : null}
 
-          <RagGenerateFallbackBanner
-            compact
-            topic={targetKeyword.trim() || title.trim()}
-          />
+          <section
+            className={`rounded-lg border p-4 ${
+              ragStatus?.available && ragStatus.citeableGenerateAvailable !== false
+                ? "border-green-200 bg-green-50/60"
+                : "border-amber-200 bg-amber-50"
+            }`}
+            aria-label="Research and evidence readiness"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--cc-ink)]">
+                Research &amp; evidence
+              </h2>
+              <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs">
+                {ragStatusLoading
+                  ? "Checking…"
+                  : ragStatus?.available && ragStatus.citeableGenerateAvailable !== false
+                    ? "Ready"
+                    : "Blocked"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-[var(--cc-muted)]">
+              The persisted job uses hybrid RAG evidence through PLAN, WRITE, and validation. Citation
+              verification and quality gates remain enabled for every model policy.
+            </p>
+            {!ragStatusLoading &&
+            (!ragStatus?.available || ragStatus.citeableGenerateAvailable === false) ? (
+              <p className="mt-2 text-xs font-medium text-amber-900">
+                {ragStatus?.reason || "Citeable RAG is not ready. Generation may be rejected by the backend."}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+              {ragCapabilitiesFor(primaryDraft).map((capability) => (
+                <span key={capability} className="rounded-full bg-white px-2 py-1 text-[var(--cc-ink)]">
+                  {RAG_CAPABILITY_LABELS[capability]}
+                </span>
+              ))}
+              <span className="rounded-full bg-white px-2 py-1 text-[var(--cc-ink)]">
+                {ragStatus?.graphRetrievalAvailable ? "GraphRAG ready" : "Hybrid retrieval"}
+              </span>
+            </div>
+          </section>
 
           <div className={fieldClass}>
             <label className={labelClass} htmlFor="title">
@@ -969,6 +1111,212 @@ export function NewCreateForm() {
               {primaryDraftHelperCopy(primaryDraft)}
             </p>
           </div>
+
+          {(ragStatus?.entitySeeds?.length ?? 0) > 0 ? (
+            <fieldset className={fieldClass}>
+              <legend className={labelClass}>Target entities</legend>
+              <div className="flex flex-wrap gap-2">
+                {ragStatus!.entitySeeds!.map((entity) => (
+                  <label
+                    key={entity}
+                    className="flex cursor-pointer items-center gap-2 rounded-full border border-[var(--cc-line)] bg-white px-3 py-1.5 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={targetEntities.includes(entity)}
+                      onChange={() =>
+                        setTargetEntities((current) =>
+                          current.includes(entity)
+                            ? current.filter((value) => value !== entity)
+                            : [...current, entity],
+                        )
+                      }
+                    />
+                    {entity}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-[var(--cc-muted)]">
+                Entity seeds focus retrieval; they do not replace the full brief or source evidence.
+              </p>
+            </fieldset>
+          ) : null}
+
+          {ragCapabilitiesFor(primaryDraft).includes("ad-templates") ? (
+            <fieldset className={fieldClass}>
+              <legend className={labelClass}>Short-form evidence templates</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {templates.map((template) => (
+                  <label
+                    key={template.id}
+                    className="flex cursor-pointer gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTemplateIds.includes(template.id)}
+                      onChange={() =>
+                        setSelectedTemplateIds((current) =>
+                          current.includes(template.id)
+                            ? current.filter((value) => value !== template.id)
+                            : [...current, template.id],
+                        )
+                      }
+                    />
+                    <span>
+                      <span className="block font-semibold text-[var(--cc-ink)]">{template.name}</span>
+                      <span className="text-[var(--cc-muted)]">
+                        {[template.channel, template.framework].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+
+          <details className="rounded-lg border border-[var(--cc-line)] bg-black/[0.02] p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
+              Advanced model policy — {modelPolicy.preset === "best-quality"
+                ? "Best quality"
+                : modelPolicy.preset === "o3-only"
+                  ? "o3 only"
+                  : "Custom"}
+            </summary>
+            <fieldset className="mt-3 flex flex-col gap-3">
+              <legend className="sr-only">Model policy</legend>
+              <label className="flex gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="model-policy"
+                  value="best-quality"
+                  checked={modelPolicy.preset === "best-quality"}
+                  onChange={() =>
+                    setModelPolicy({ version: "content-model-policy.v1", preset: "best-quality" })
+                  }
+                />
+                <span>
+                  <strong>Best quality (recommended)</strong>
+                  <span className="block text-xs text-[var(--cc-muted)]">
+                    o1-pro for deep strategy and synthesis; o3 for evidence work and drafting.
+                  </span>
+                </span>
+              </label>
+              <label className="flex gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="model-policy"
+                  value="o3-only"
+                  checked={modelPolicy.preset === "o3-only"}
+                  onChange={() =>
+                    setModelPolicy({ version: "content-model-policy.v1", preset: "o3-only" })
+                  }
+                />
+                <span>
+                  <strong>o3 only</strong>
+                  <span className="block text-xs text-[var(--cc-muted)]">
+                    Lower latency/cost, but may reduce strategic depth and whole-document synthesis.
+                  </span>
+                </span>
+              </label>
+              {ragStatus?.approvedStageModels &&
+              Object.keys(ragStatus.approvedStageModels).length > 0 ? (
+                <label className="flex gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="model-policy"
+                    value="custom"
+                    checked={modelPolicy.preset === "custom"}
+                    onChange={() =>
+                      setModelPolicy({
+                        version: "content-model-policy.v1",
+                        preset: "custom",
+                        stageModels: Object.fromEntries(
+                          Object.entries(ragStatus.approvedStageModels ?? {}).map(
+                            ([policyStage, models]) => [policyStage, models[0] ?? ""],
+                          ),
+                        ),
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>Custom approved models</strong>
+                    <span className="block text-xs text-[var(--cc-muted)]">
+                      Choose only models the backend policy approves for each stage.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+
+              {modelPolicy.preset === "custom" && ragStatus?.approvedStageModels ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {Object.entries(ragStatus.approvedStageModels).map(([policyStage, models]) => (
+                    <label key={policyStage} className="flex flex-col gap-1 text-xs">
+                      <span className="font-medium uppercase text-[var(--cc-muted)]">{policyStage}</span>
+                      <select
+                        aria-label={`${policyStage} model`}
+                        className={selectClass}
+                        value={modelPolicy.stageModels?.[policyStage] ?? models[0] ?? ""}
+                        onChange={(event) =>
+                          setModelPolicy((current) => ({
+                            ...current,
+                            stageModels: {
+                              ...current.stageModels,
+                              [policyStage]: event.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        {models.map((model) => (
+                          <option key={model} value={model}>{model}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+
+              {modelPolicy.preset !== "best-quality" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">Confirm model downgrade</p>
+                  <p className="mt-1">
+                    Evidence, citation verification, and validation standards stay unchanged. Only the
+                    requested model policy changes.
+                  </p>
+                  <label className="mt-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={modelPolicy.downgradeConfirmed === true}
+                      onChange={(event) =>
+                        setModelPolicy((current) => ({
+                          ...current,
+                          downgradeConfirmed: event.target.checked,
+                          downgradeReason: current.downgradeReason ?? "operator",
+                        }))
+                      }
+                    />
+                    I understand and accept the quality tradeoff.
+                  </label>
+                  <select
+                    aria-label="Model downgrade reason"
+                    className={`${selectClass} mt-2`}
+                    value={modelPolicy.downgradeReason ?? "operator"}
+                    onChange={(event) =>
+                      setModelPolicy((current) => ({
+                        ...current,
+                        downgradeReason: event.target.value as ModelPolicySelection["downgradeReason"],
+                      }))
+                    }
+                  >
+                    <option value="operator">Operator choice</option>
+                    <option value="availability">Availability</option>
+                    <option value="quota">Quota</option>
+                    <option value="latency">Latency</option>
+                    <option value="cost">Cost</option>
+                  </select>
+                </div>
+              ) : null}
+            </fieldset>
+          </details>
 
           <fieldset className={fieldClass}>
             <legend className={labelClass}>Also draft</legend>
@@ -1261,7 +1609,12 @@ export function NewCreateForm() {
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={
+                busy ||
+                ragStatusLoading ||
+                !ragStatus?.available ||
+                ragStatus.citeableGenerateAvailable === false
+              }
               onClick={() => void confirmAndGenerate()}
               className="rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >

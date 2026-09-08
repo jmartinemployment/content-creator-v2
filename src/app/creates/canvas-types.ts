@@ -7,6 +7,11 @@
  * `.../Validate/GccV2ValidateService.cs`). Kept separate from `content-types.ts`, which is about the
  * *create*'s content type (blog/pillar/...), not a drafted document's shape.
  */
+import type {
+  RagCitation,
+  RagProvenance,
+  ResearchEvidenceManifest,
+} from "./rag-contract";
 
 export type ContentRun = {
   text: string;
@@ -47,6 +52,8 @@ export type CanvasSection = {
   section: SectionNode;
   wordCount: number;
   usedFallbackStub: boolean;
+  citations: RagCitation[];
+  provenance?: RagProvenance | null;
 };
 
 /** A named, paraphrase-level duplicate problem/solution pair — `GccV2OverlapGate.OverlapHit`
@@ -144,6 +151,11 @@ export type SectionEventPayload = {
   documentJson: string;
   wordCount: number;
   usedFallbackStub: boolean;
+  citations?: RagCitation[] | null;
+  provenance?: RagProvenance | null;
+  modelUsed?: string | null;
+  retrievalStrategy?: string | null;
+  evidenceIds?: string[];
 };
 
 /** `OutlineReady` job-event payload — the PLAN-stage outline Canvas approves before WRITE runs. */
@@ -152,11 +164,17 @@ export type OutlineSectionView = {
   heading: string;
   job: string;
   hierarchyChildHeadings: string[];
+  brief?: string;
+  plannedClaims?: string[];
+  evidenceIds?: string[];
+  successCriteria?: string[];
 };
 
 export type OutlineView = {
   sections: OutlineSectionView[];
   hierarchyChildHeadings: string[];
+  provenance?: RagProvenance | null;
+  evidenceManifest?: ResearchEvidenceManifest | null;
 };
 
 /** `BrandKitReady` job-event payload — provisional kit from the crawl for Accept/Reject. */

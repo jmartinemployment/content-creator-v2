@@ -31,12 +31,6 @@ export default async function HomePage() {
           Creates require a crawled site URL with pages — use New content brief (URL-first).
         </p>
         <Link
-          href="/rag"
-          className="inline-flex w-fit rounded-md border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-accent)]"
-        >
-          RAG writing
-        </Link>
-        <Link
           href="/creates"
           className="inline-flex w-fit text-sm font-medium text-[var(--cc-accent)] underline-offset-2 hover:underline"
         >

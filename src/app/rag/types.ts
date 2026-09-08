@@ -97,4 +97,7 @@ export type RagGenerateStatus = {
   graphRetrievalAvailable?: boolean;
   adTemplateIndexAvailable?: boolean;
   citeableGenerateAvailable?: boolean;
+  /** Additive unified-pipeline contract; absent on older GeekAPI deployments. */
+  modelPolicyVersion?: string | null;
+  approvedStageModels?: Record<string, string[]>;
 };

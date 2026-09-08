@@ -37,6 +37,15 @@ import {
 } from "@/app/creates/repurpose-channels";
 import { isCmsPublishType, isLongFormContentType, labelForContentType } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
+import { SectionCitations } from "@/app/creates/rag-citations";
+import {
+  modelPolicyLabel,
+  type ApprovedStageModels,
+  type ModelPolicySelection,
+  type RagCitation,
+  type RagProvenance,
+  type ResearchEvidenceManifest,
+} from "@/app/creates/rag-contract";
 
 type LogEntry = { seq: number; type: string; payload: unknown; atUtc: string };
 
@@ -271,18 +280,51 @@ type ExportSummary = {
   skipped: { jobId: string; contentType: string; reason: string }[];
 };
 
-function parseSourceAttributionFromResultJson(resultJson: string | null | undefined): string | null {
-  if (!resultJson?.trim()) return null;
+type ParsedJobResult = {
+  sourceAttributionHtml: string | null;
+  citations: RagCitation[];
+  sectionCitations: Record<string, RagCitation[]>;
+  provenance: RagProvenance | null;
+  evidenceManifest: ResearchEvidenceManifest | null;
+  modelPolicy: ModelPolicySelection | null;
+  approvedStageModels: ApprovedStageModels;
+};
+
+function parseJobResult(resultJson: string | null | undefined): ParsedJobResult {
+  const empty: ParsedJobResult = {
+    sourceAttributionHtml: null,
+    citations: [],
+    sectionCitations: {},
+    provenance: null,
+    evidenceManifest: null,
+    modelPolicy: null,
+    approvedStageModels: {},
+  };
+  if (!resultJson?.trim()) return empty;
   try {
     const parsed = JSON.parse(resultJson) as {
       sourceAttributionHtml?: string | null;
       toolPageKind?: string | null;
+      citations?: RagCitation[] | null;
+      sectionCitations?: Record<string, RagCitation[]> | null;
+      provenance?: RagProvenance | null;
+      evidenceManifest?: ResearchEvidenceManifest | null;
+      modelPolicy?: ModelPolicySelection | null;
+      approvedStageModels?: ApprovedStageModels | null;
     };
-    if (parsed.toolPageKind?.toLowerCase() !== "partner") return null;
     const html = parsed.sourceAttributionHtml?.trim();
-    return html ? html : null;
+    return {
+      sourceAttributionHtml:
+        parsed.toolPageKind?.toLowerCase() === "partner" && html ? html : null,
+      citations: Array.isArray(parsed.citations) ? parsed.citations : [],
+      sectionCitations: parsed.sectionCitations ?? {},
+      provenance: parsed.provenance ?? null,
+      evidenceManifest: parsed.evidenceManifest ?? null,
+      modelPolicy: parsed.modelPolicy ?? null,
+      approvedStageModels: parsed.approvedStageModels ?? {},
+    };
   } catch {
-    return null;
+    return empty;
   }
 }
 
@@ -422,12 +464,45 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [jobHydrating, setJobHydrating] = useState(true);
   const [contentType, setContentType] = useState<string>("blog");
   const [sourceAttributionHtml, setSourceAttributionHtml] = useState<string | null>(null);
+  const [jobCitations, setJobCitations] = useState<RagCitation[]>([]);
+  const [provenance, setProvenance] = useState<RagProvenance | null>(null);
+  const [evidenceManifest, setEvidenceManifest] = useState<ResearchEvidenceManifest | null>(null);
+  const [modelPolicy, setModelPolicy] = useState<ModelPolicySelection | null>(null);
+  const [approvedStageModels, setApprovedStageModels] = useState<ApprovedStageModels>({});
+  const [retryModel, setRetryModel] = useState("");
+  const [retryReason, setRetryReason] = useState("availability");
+  const [retryConfirmed, setRetryConfirmed] = useState(false);
+  const [retryBusy, setRetryBusy] = useState(false);
 
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
   statusRef.current = status;
   /** True while the operator has unsaved outline edits — blocks hub OutlineReady from clobbering them. */
   const outlineDirtyRef = useRef(false);
+
+  const applyParsedJobResult = useCallback((resultJson: string | null | undefined) => {
+    const parsed = parseJobResult(resultJson);
+    setSourceAttributionHtml(parsed.sourceAttributionHtml);
+    setJobCitations(parsed.citations);
+    setProvenance(parsed.provenance);
+    setEvidenceManifest(parsed.evidenceManifest);
+    setModelPolicy(parsed.modelPolicy);
+    setApprovedStageModels(parsed.approvedStageModels);
+    const stageModels =
+      parsed.approvedStageModels[parsed.provenance?.stage ?? ""] ??
+      Object.values(parsed.approvedStageModels)[0] ??
+      [];
+    setRetryModel((current) => current || stageModels[0] || "");
+    setSections((current) => {
+      if (Object.keys(parsed.sectionCitations).length === 0) return current;
+      const next = new Map(current);
+      for (const [sectionKey, citations] of Object.entries(parsed.sectionCitations)) {
+        const section = next.get(sectionKey);
+        if (section) next.set(sectionKey, { ...section, citations });
+      }
+      return next;
+    });
+  }, []);
 
   const applySectionEvent = useCallback((payload: SectionEventPayload) => {
     const section = safeParse(payload.documentJson) as SectionNode | null;
@@ -441,6 +516,16 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         section,
         wordCount: payload.wordCount,
         usedFallbackStub: payload.usedFallbackStub,
+        citations: payload.citations ?? [],
+        provenance:
+          payload.provenance ??
+          (payload.modelUsed || payload.retrievalStrategy || payload.evidenceIds
+            ? {
+                modelUsed: payload.modelUsed,
+                retrievalStrategy: payload.retrievalStrategy,
+                evidenceIds: payload.evidenceIds,
+              }
+            : null),
       });
       return next;
     });
@@ -504,6 +589,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           if (outlineDirtyRef.current) break;
           const next = payload as OutlineView;
           setOutline(next);
+          if (next.provenance) setProvenance(next.provenance);
+          if (next.evidenceManifest) setEvidenceManifest(next.evidenceManifest);
           setEditableSections(
             (next.sections ?? []).map((s) => ({
               ...s,
@@ -531,7 +618,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               const res = await fetch(`/api/gcc-v2/jobs/${jobId}`, { cache: "no-store" });
               if (!res.ok) return;
               const job = (await res.json()) as { resultJson?: string | null };
-              setSourceAttributionHtml(parseSourceAttributionFromResultJson(job.resultJson));
+              applyParsedJobResult(job.resultJson);
             } catch {
               /* best-effort */
             }
@@ -573,12 +660,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           }
       }
     },
-    [applySectionEvent, jobId],
+    [applyParsedJobResult, applySectionEvent, jobId],
   );
 
   useEffect(() => {
     lastSeqRef.current = 0;
     setSourceAttributionHtml(null);
+    setJobCitations([]);
+    setProvenance(null);
+    setEvidenceManifest(null);
+    setModelPolicy(null);
+    setApprovedStageModels({});
     void joinActiveJob(jobId, 0);
   }, [jobId, joinActiveJob]);
 
@@ -619,7 +711,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         if (job.status) setStatus(job.status);
         if (job.stage) setStage(job.stage);
         if (job.contentType) setContentType(job.contentType.trim().toLowerCase());
-        setSourceAttributionHtml(parseSourceAttributionFromResultJson(job.resultJson));
+        applyParsedJobResult(job.resultJson);
         if (job.status === "awaiting_brandkit_approval") {
           setAwaitingBrandkit(true);
           setAwaitingOutlineApproval(false);
@@ -636,7 +728,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [applyParsedJobResult, jobId]);
 
   const orderedSections = useMemo(() => Array.from(sections.values()), [sections]);
 
@@ -1050,6 +1142,35 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     scrollToSection(sectionKey);
   }
 
+  async function retryFailedStageWithModel() {
+    if (!retryModel || !retryConfirmed) return;
+    setRetryBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/jobs/${jobId}/retry-model`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          stage: provenance?.stage ?? stage,
+          model: retryModel,
+          reason: retryReason,
+          confirmed: true,
+          replacedAttemptId: provenance?.attemptId ?? undefined,
+        }),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error || `model retry failed: HTTP ${res.status}`);
+      }
+      setStatus("pending");
+      setRetryConfirmed(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not retry the failed stage");
+    } finally {
+      setRetryBusy(false);
+    }
+  }
+
   const isTerminal = status === "ready" || status === "canceled" || status === "failed";
   const canRepurpose = status === "ready" && canRepurposeContentType(contentType);
   const canLinkedInCarousel = status === "ready" && isLongFormContentType(contentType);
@@ -1062,6 +1183,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     (outline !== null || editableSections.length > 0);
   const showApproveOutline = !showBrandKitPanel && awaitingOutlineApproval;
   const showAddAdvanceOutline = showOutlinePanel && supportsAdvanceOutlineRows(contentType);
+  const retryStage = provenance?.stage ?? stage ?? "";
+  const retryModels =
+    approvedStageModels[retryStage] ??
+    approvedStageModels[retryStage.toLowerCase()] ??
+    Object.values(approvedStageModels)[0] ??
+    [];
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -1395,6 +1522,20 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             </div>
 
             <SectionBody section={s.section} depth={0} rootHeading={displayHeading} />
+            <SectionCitations citations={s.citations} />
+            {s.provenance ? (
+              <p className="mt-2 text-xs text-[var(--cc-muted)]">
+                {s.provenance.modelUsed || s.provenance.effectiveModel
+                  ? `Model: ${s.provenance.effectiveModel || s.provenance.modelUsed}`
+                  : null}
+                {s.provenance.retrievalStrategy || s.provenance.retrievalMode
+                  ? ` · Retrieval: ${s.provenance.retrievalStrategy || s.provenance.retrievalMode}`
+                  : null}
+                {s.provenance.evidenceIds?.length
+                  ? ` · ${s.provenance.evidenceIds.length} evidence item(s)`
+                  : null}
+              </p>
+            ) : null}
 
             <div className="mt-3 border-t border-[var(--cc-line)] pt-3">
               <p className="text-xs font-semibold text-[var(--cc-ink)]">Edit this section</p>
@@ -1429,6 +1570,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           );
         })}
 
+        {jobCitations.length > 0 ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <SectionCitations citations={jobCitations} />
+          </div>
+        ) : null}
+
         {sourceAttributionHtml ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
             <h2 className="text-lg font-semibold text-[var(--cc-ink)]">Sources</h2>
@@ -1456,6 +1603,82 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       </div>
 
       <aside className="flex flex-col gap-4">
+        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Evidence &amp; provenance</h2>
+          <div className="mt-2 flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
+            <p>Policy: {modelPolicyLabel(modelPolicy)}</p>
+            <p>
+              Model: {provenance?.effectiveModel || provenance?.modelUsed || "Awaiting backend provenance"}
+            </p>
+            <p>
+              Retrieval: {provenance?.retrievalStrategy || provenance?.retrievalMode || "Awaiting manifest"}
+            </p>
+            {provenance?.modelPolicyVersion ? <p>Policy version: {provenance.modelPolicyVersion}</p> : null}
+            {provenance?.promptVersion ? <p>Prompt version: {provenance.promptVersion}</p> : null}
+            {evidenceManifest ? (
+              <>
+                <p>
+                  Evidence: {evidenceManifest.sources?.length ?? 0} source(s) ·{" "}
+                  {evidenceManifest.ready === false ? "gaps require review" : "ready"}
+                </p>
+                {[...(evidenceManifest.evidenceGaps ?? []), ...(evidenceManifest.conflicts ?? []), ...(evidenceManifest.warnings ?? [])].length > 0 ? (
+                  <ul className="mt-1 list-disc pl-4 text-amber-800">
+                    {[...(evidenceManifest.evidenceGaps ?? []), ...(evidenceManifest.conflicts ?? []), ...(evidenceManifest.warnings ?? [])].map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+
+          {status === "failed" && retryModels.length > 0 ? (
+            <div className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs">
+              <p className="font-semibold text-[var(--cc-ink)]">Change model / retry failed stage</p>
+              <p className="mt-1 text-[var(--cc-muted)]">
+                Retries only {retryStage || "the failed stage"}. Approved output is preserved; evidence
+                and validation standards do not change.
+              </p>
+              <select
+                aria-label="Retry model"
+                value={retryModel || retryModels[0]}
+                onChange={(event) => setRetryModel(event.target.value)}
+                className="mt-2 w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5"
+              >
+                {retryModels.map((model) => <option key={model} value={model}>{model}</option>)}
+              </select>
+              <select
+                aria-label="Retry reason"
+                value={retryReason}
+                onChange={(event) => setRetryReason(event.target.value)}
+                className="mt-2 w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5"
+              >
+                <option value="availability">Availability</option>
+                <option value="quota">Quota</option>
+                <option value="latency">Latency</option>
+                <option value="cost">Cost</option>
+                <option value="operator">Operator choice</option>
+              </select>
+              <label className="mt-2 flex gap-2 text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={retryConfirmed}
+                  onChange={(event) => setRetryConfirmed(event.target.checked)}
+                />
+                Confirm the model tradeoff and regenerate this stage.
+              </label>
+              <button
+                type="button"
+                disabled={!retryConfirmed || retryBusy}
+                onClick={() => void retryFailedStageWithModel()}
+                className="mt-2 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 font-semibold text-white disabled:opacity-50"
+              >
+                <ButtonBusyLabel busy={retryBusy} busyLabel="Retrying…" idleLabel="Retry stage" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Validation</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">

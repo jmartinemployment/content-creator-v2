@@ -58,6 +58,20 @@ npm run build
 
 Configure GeekOAuth and GeekAPI using the variables documented in [`.env.example`](.env.example). Authentication tokens remain in secure HTTP-only cookies; infrastructure and LLM secrets are never exposed to the browser.
 
+### Unified RAG frontend contract
+
+`/creates/new → persisted job → Canvas` is the only creation path; `/rag` preserves `topic`,
+`intent`, and `contentType` while redirecting there. The frontend sends additive
+`brief.modelPolicy`, root `modelPolicy`, `brief.targetEntities`, `brief.ragCapabilities`, and
+optional `brief.ragAdTemplates` fields. Older GeekAPI deployments may ignore them.
+
+Canvas remains backward-compatible with old jobs. New job results may add `citations`,
+`sectionCitations`, `provenance`, `evidenceManifest`, `modelPolicy`, and
+`approvedStageModels`; section events may add `citations` and `provenance`. Canvas only exposes
+custom model choices or failed-stage retry when approved models are advertised. Retry uses
+`POST /jobs/{jobId}/retry-model` with `stage`, `model`, `reason`, `confirmed`, and optional
+`replacedAttemptId`; no automatic downgrade is attempted.
+
 ## Documentation
 
 | Doc | Role |

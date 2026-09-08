@@ -114,6 +114,16 @@ function sectionPayload() {
     job: "problem",
     wordCount: 12,
     usedFallbackStub: false,
+    citations: [ragCitation()],
+    provenance: {
+      stage: "WRITE",
+      modelUsed: "o3",
+      effectiveModel: "o3",
+      modelPolicyVersion: "content-model-policy.v1",
+      promptVersion: "write/v2",
+      retrievalStrategy: "hybrid",
+      evidenceIds: ["page-1"],
+    },
     documentJson: JSON.stringify({
       tag: "h2",
       heading: "Why reliability matters",
@@ -263,6 +273,22 @@ const server = http.createServer(async (req, res) => {
     job.resultJson = JSON.stringify({
       toolPageKind: "partner",
       sourceAttributionHtml: '<a href="https://example.test/reliable-content">Reliable content operations</a>',
+      citations: [ragCitation()],
+      sectionCitations: { problem: [ragCitation()] },
+      modelPolicy: { version: "content-model-policy.v1", preset: "best-quality" },
+      provenance: {
+        stage: "COMPLETE",
+        effectiveModel: "o1-pro",
+        modelPolicyVersion: "content-model-policy.v1",
+        promptVersion: "synthesis/v1",
+        retrievalStrategy: "hybrid",
+      },
+      evidenceManifest: {
+        ready: true,
+        sources: [{ pageId: "page-1", url: ragCitation().url, title: ragCitation().title, crawlType: "project" }],
+        warnings: [],
+      },
+      approvedStageModels: { WRITE: ["o3"], COMPLETE: ["o1-pro", "o3"] },
     });
     broadcast(event("OutlineApproved", {}));
     const drafted = event("SectionDrafted", sectionPayload());
@@ -281,7 +307,17 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === "/api/rag/status") {
     return send(res, 200, scenario.ragAvailable
-      ? { available: true, citeableGenerateAvailable: true, graphRetrievalAvailable: true, adTemplateIndexAvailable: true, entitySeeds: ["Evidence Engine"], longFormModel: "fake-o3", shortFormModel: "fake-4o" }
+      ? {
+          available: true,
+          citeableGenerateAvailable: true,
+          graphRetrievalAvailable: true,
+          adTemplateIndexAvailable: true,
+          entitySeeds: ["Evidence Engine"],
+          longFormModel: "o1-pro",
+          shortFormModel: "o3",
+          modelPolicyVersion: "content-model-policy.v1",
+          approvedStageModels: { PLAN: ["o1-pro", "o3"], WRITE: ["o3"], VALIDATE: ["o3"] },
+        }
       : { available: false, reason: "Deterministic RAG outage." });
   }
   if (url.pathname === "/api/rag/templates") return send(res, 200, { upserted: 1 });

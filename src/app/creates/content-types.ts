@@ -26,25 +26,25 @@ export const CONTENT_TYPES = [
 
 export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
 
-/** Long-form Primary draft options — default Pillar. */
-export const PRIMARY_DRAFT_TYPES = [
-  { value: "pillar", label: "Pillar" },
-  { value: "blog", label: "Blog" },
-  { value: "tool", label: "Tool pages" },
-  { value: "comparison", label: "Comparison" },
-  { value: "case-study", label: "Case study" },
-  { value: "guide", label: "Guide / How-to" },
-  { value: "alternatives", label: "Alternatives" },
-  { value: "tech-article", label: "Tech article" },
-  { value: "listicle", label: "Listicle" },
-  { value: "service", label: "Service page" },
-  { value: "local", label: "Local landing" },
-  { value: "whitepaper", label: "Whitepaper" },
-] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
+/** Every canonical type can be the primary persisted job. */
+export const PRIMARY_DRAFT_TYPES = CONTENT_TYPES;
 
-export type PrimaryDraftType = (typeof PRIMARY_DRAFT_TYPES)[number]["value"];
+export type PrimaryDraftType = ContentType;
 
-const LONG_FORM_TYPES = new Set<string>(PRIMARY_DRAFT_TYPES.map((t) => t.value));
+const LONG_FORM_TYPES = new Set<string>([
+  "blog",
+  "pillar",
+  "tool",
+  "comparison",
+  "case-study",
+  "guide",
+  "alternatives",
+  "tech-article",
+  "listicle",
+  "service",
+  "local",
+  "whitepaper",
+]);
 
 export function isLongFormContentType(value: string): boolean {
   return LONG_FORM_TYPES.has(value.trim().toLowerCase());
