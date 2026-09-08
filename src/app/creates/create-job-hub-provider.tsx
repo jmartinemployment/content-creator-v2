@@ -59,6 +59,7 @@ export function CreateJobHubProvider({
   children,
 }: CreateJobHubProviderProps) {
   const [jobs, setJobs] = useState<JobSnapshot[]>(() => sortJobs(initialJobs));
+  const [lastInitialJobs, setLastInitialJobs] = useState(initialJobs);
   const [hubError, setHubError] = useState<string | null>(null);
   const [hubConnected, setHubConnected] = useState(false);
 
@@ -68,7 +69,12 @@ export function CreateJobHubProvider({
   const joinedJobIdRef = useRef<string | null>(null);
   const activeLastSeqRef = useRef(0);
 
-  activeJobIdRef.current = activeJobId;
+  // Adjust during render when a server navigation supplies a fresh snapshot. React applies this
+  // before children render, avoiding the stale frame and cascading render of an Effect sync.
+  if (initialJobs !== lastInitialJobs) {
+    setLastInitialJobs(initialJobs);
+    setJobs(sortJobs(initialJobs));
+  }
 
   const applyEventToJobs = useCallback((evt: GccV2JobEvent) => {
     setJobs((prev) => {
@@ -179,8 +185,8 @@ export function CreateJobHubProvider({
   }, []);
 
   useEffect(() => {
-    setJobs(sortJobs(initialJobs));
-  }, [initialJobs]);
+    activeJobIdRef.current = activeJobId;
+  }, [activeJobId]);
 
   useEffect(() => {
     let cancelled = false;

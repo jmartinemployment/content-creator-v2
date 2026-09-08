@@ -1,16 +1,13 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GccV2JobEvent } from "@/app/auth/job-hub";
 import type {
   AiVisibilitySnapshotView,
   BrandKitReadyView,
   CanvasSection,
-  ContentRun,
   OutlineSectionView,
   OutlineView,
-  ParagraphNode,
   SectionEventPayload,
   SectionNode,
   ValidationReportView,
@@ -21,6 +18,7 @@ import {
   insertAdvanceSection,
   isProblemLocked,
   isRoleLocked,
+  OUTLINE_ROLE_OPTIONS,
   removeSectionAt,
   supportsAdvanceOutlineRows,
 } from "@/app/creates/outline-editor";
@@ -38,6 +36,8 @@ import {
 import { isCmsPublishType, isLongFormContentType, labelForContentType } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 import { SectionCitations } from "@/app/creates/rag-citations";
+import { WorkspaceSection, canvasSectionsToPlain, type CanvasAction } from "@/app/creates/workspace-section";
+import { WorkspaceTabs, type WorkspaceTab } from "@/app/creates/workspace-tabs";
 import {
   modelPolicyLabel,
   type ApprovedStageModels,
@@ -53,8 +53,6 @@ type CanvasProps = {
   createId: string;
   jobId: string;
 };
-
-type CanvasAction = "rewrite" | "expand" | "re-tone";
 
 type PublishResult = {
   status: string;
@@ -83,136 +81,6 @@ function safeParse(json: string): unknown {
   } catch {
     return null;
   }
-}
-
-function runsToPlain(runs: ContentRun[]): string {
-  return runs.map((r) => r.text).join("");
-}
-
-function paragraphToPlain(p: ParagraphNode): string {
-  if (p.type === "list") {
-    return p.items.map((item) => `• ${runsToPlain(item)}`).join("\n");
-  }
-  return runsToPlain(p.runs);
-}
-
-function normalizeHeadingText(text: string): string {
-  return text.trim().replace(/:+$/, "").trim().toLowerCase();
-}
-
-function headingsEqual(a: string, b: string): boolean {
-  if (!a.trim() || !b.trim()) return false;
-  return normalizeHeadingText(a) === normalizeHeadingText(b);
-}
-
-/** Models often repeat an H2 as an all-bold paragraph or nested child with the same text. */
-function paragraphRepeatsHeading(paragraph: ParagraphNode, heading: string): boolean {
-  if (paragraph.type !== "text" || paragraph.runs.length === 0) return false;
-  if (!paragraph.runs.every((run) => run.bold)) return false;
-  return headingsEqual(paragraphToPlain(paragraph), heading);
-}
-
-function sectionToPlain(
-  section: SectionNode,
-  options: { depth?: number; rootHeading?: string } = {},
-): string {
-  const depth = options.depth ?? 0;
-  const rootHeading = options.rootHeading ?? (depth === 0 ? section.heading : undefined);
-  const parts: string[] = [];
-  if (depth > 0 && section.heading) parts.push(section.heading);
-  for (const p of section.paragraphs) {
-    if (depth === 0 && rootHeading && paragraphRepeatsHeading(p, rootHeading)) continue;
-    parts.push(paragraphToPlain(p));
-  }
-  for (const child of section.children) {
-    if (rootHeading && headingsEqual(child.heading, rootHeading)) continue;
-    parts.push(sectionToPlain(child, { depth: depth + 1, rootHeading }));
-  }
-  return parts.filter(Boolean).join("\n\n");
-}
-
-function canvasSectionsToPlain(sections: CanvasSection[]): string {
-  return sections
-    .map((s) => {
-      const displayHeading = s.section.heading || s.heading;
-      const body = sectionToPlain(s.section, { rootHeading: displayHeading });
-      return body.startsWith(displayHeading) ? body : `${displayHeading}\n\n${body}`;
-    })
-    .join("\n\n---\n\n");
-}
-
-function runText(run: ContentRun): ReactNode {
-  let node: ReactNode = run.text;
-  if (run.bold) node = <strong>{node}</strong>;
-  if (run.italic) node = <em>{node}</em>;
-  if (run.href) node = <a href={run.href} className="underline">{node}</a>;
-  return node;
-}
-
-function ParagraphView({ paragraph, index }: { paragraph: ParagraphNode; index: number }) {
-  if (paragraph.type === "list") {
-    const Tag = paragraph.ordered ? "ol" : "ul";
-    return (
-      <Tag className={paragraph.ordered ? "list-decimal pl-5" : "list-disc pl-5"}>
-        {paragraph.items.map((runs, i) => (
-          <li key={i}>
-            {runs.map((run, j) => (
-              <Fragment key={j}>{runText(run)} </Fragment>
-            ))}
-          </li>
-        ))}
-      </Tag>
-    );
-  }
-
-  return (
-    <p key={index} className="leading-relaxed">
-      {paragraph.runs.map((run, i) => (
-        <Fragment key={i}>{runText(run)} </Fragment>
-      ))}
-    </p>
-  );
-}
-
-function SectionBody({
-  section,
-  depth,
-  rootHeading,
-}: {
-  section: SectionNode;
-  depth: number;
-  rootHeading?: string;
-}) {
-  const HeadingTag = (section.tag && /^h[1-6]$/.test(section.tag) ? section.tag : "h3") as
-    | "h1"
-    | "h2"
-    | "h3"
-    | "h4"
-    | "h5"
-    | "h6";
-  const cardHeading = rootHeading ?? (depth === 0 ? section.heading : undefined);
-  const visibleParagraphs = section.paragraphs.filter(
-    (p) => !(depth === 0 && cardHeading && paragraphRepeatsHeading(p, cardHeading)),
-  );
-  const visibleChildren = section.children.filter(
-    (child) => !(cardHeading && headingsEqual(child.heading, cardHeading)),
-  );
-
-  return (
-    <div className={depth > 0 ? "mt-4 border-l-2 border-[var(--cc-line)] pl-4" : undefined}>
-      {depth > 0 ? (
-        <HeadingTag className="text-base font-semibold text-[var(--cc-ink)]">{section.heading}</HeadingTag>
-      ) : null}
-      <div className="mt-2 flex flex-col gap-2 text-sm text-[var(--cc-ink)]">
-        {visibleParagraphs.map((p, i) => (
-          <ParagraphView key={i} paragraph={p} index={i} />
-        ))}
-      </div>
-      {visibleChildren.map((child, i) => (
-        <SectionBody key={i} section={child} depth={depth + 1} rootHeading={cardHeading} />
-      ))}
-    </div>
-  );
 }
 
 async function callCanvasAction(
@@ -280,6 +148,22 @@ type ExportSummary = {
   skipped: { jobId: string; contentType: string; reason: string }[];
 };
 
+type LinkedInCarouselArtifact = {
+  slug: string;
+  generatedAtUtc?: string;
+  pdfBase64?: string;
+  caption: string;
+  hashtags?: string[];
+  suggestedFilename: string;
+  slides: Array<{
+    index: number;
+    role: string;
+    title: string;
+    subtitle?: string | null;
+    bullets?: string[];
+  }>;
+};
+
 type ParsedJobResult = {
   sourceAttributionHtml: string | null;
   citations: RagCitation[];
@@ -288,6 +172,7 @@ type ParsedJobResult = {
   evidenceManifest: ResearchEvidenceManifest | null;
   modelPolicy: ModelPolicySelection | null;
   approvedStageModels: ApprovedStageModels;
+  linkedInCarousel: LinkedInCarouselArtifact | null;
 };
 
 function parseJobResult(resultJson: string | null | undefined): ParsedJobResult {
@@ -299,6 +184,7 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
     evidenceManifest: null,
     modelPolicy: null,
     approvedStageModels: {},
+    linkedInCarousel: null,
   };
   if (!resultJson?.trim()) return empty;
   try {
@@ -311,6 +197,7 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       evidenceManifest?: ResearchEvidenceManifest | null;
       modelPolicy?: ModelPolicySelection | null;
       approvedStageModels?: ApprovedStageModels | null;
+      linkedInCarousel?: LinkedInCarouselArtifact | null;
     };
     const html = parsed.sourceAttributionHtml?.trim();
     return {
@@ -322,6 +209,7 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       evidenceManifest: parsed.evidenceManifest ?? null,
       modelPolicy: parsed.modelPolicy ?? null,
       approvedStageModels: parsed.approvedStageModels ?? {},
+      linkedInCarousel: parsed.linkedInCarousel ?? null,
     };
   } catch {
     return empty;
@@ -415,6 +303,7 @@ async function callFixReadiness(createId: string, jobId: string): Promise<FixRea
  */
 export function Canvas({ createId, jobId }: CanvasProps) {
   const { subscribeJobEvents, joinActiveJob, hubError, jobs } = useCreateJobHub();
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("canvas");
   const [status, setStatus] = useState<string>("pending");
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -447,9 +336,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     slug: string;
     slideCount: number;
     caption: string;
-    pdfBase64: string;
+    pdfBase64?: string;
     suggestedFilename: string;
+    generatedAtUtc?: string;
   } | null>(null);
+  const [captionCopied, setCaptionCopied] = useState(false);
   const [publishBusy, setPublishBusy] = useState<"draft" | "live" | null>(null);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [exportBusy, setExportBusy] = useState<"zip" | "commit" | null>(null);
@@ -476,9 +367,13 @@ export function Canvas({ createId, jobId }: CanvasProps) {
 
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
-  statusRef.current = status;
+  const workspaceTabTouchedRef = useRef(false);
   /** True while the operator has unsaved outline edits — blocks hub OutlineReady from clobbering them. */
   const outlineDirtyRef = useRef(false);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   const applyParsedJobResult = useCallback((resultJson: string | null | undefined) => {
     const parsed = parseJobResult(resultJson);
@@ -488,6 +383,18 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setEvidenceManifest(parsed.evidenceManifest);
     setModelPolicy(parsed.modelPolicy);
     setApprovedStageModels(parsed.approvedStageModels);
+    if (parsed.linkedInCarousel) {
+      setCarouselResult({
+        slug: parsed.linkedInCarousel.slug,
+        slideCount: parsed.linkedInCarousel.slides.length,
+        caption: parsed.linkedInCarousel.caption,
+        pdfBase64: parsed.linkedInCarousel.pdfBase64,
+        suggestedFilename: parsed.linkedInCarousel.suggestedFilename,
+        generatedAtUtc: parsed.linkedInCarousel.generatedAtUtc,
+      });
+    } else {
+      setCarouselResult(null);
+    }
     const stageModels =
       parsed.approvedStageModels[parsed.provenance?.stage ?? ""] ??
       Object.values(parsed.approvedStageModels)[0] ??
@@ -532,6 +439,20 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setPendingSectionKey((current) => (current === payload.sectionKey ? null : current));
   }, []);
 
+  const runAiVisibilityRefresh = useCallback(async () => {
+    setAiVisibilityBusy(true);
+    setAiVisibilityError(null);
+    try {
+      const snapshot = await refreshAiVisibility(createId);
+      setAiVisibility(snapshot);
+      if (!snapshot.ready) setAiVisibilityError(snapshot.message);
+    } catch (err) {
+      setAiVisibilityError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      setAiVisibilityBusy(false);
+    }
+  }, [createId]);
+
   const appendEvent = useCallback(
     (evt: GccV2JobEvent) => {
       if (evt.jobId !== jobId) return;
@@ -568,12 +489,14 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           setAwaitingBrandkit(true);
           setAwaitingOutlineApproval(false);
           setStatus("awaiting_brandkit_approval");
+          if (!workspaceTabTouchedRef.current) setActiveTab("brief");
           break;
         }
         case "BrandKitAccepted":
           setAwaitingBrandkit(false);
           setAwaitingOutlineApproval(true);
           setStatus("awaiting_outline_approval");
+          if (!workspaceTabTouchedRef.current) setActiveTab("outline");
           setKitNotice(null);
           break;
         case "BrandKitRejected":
@@ -583,6 +506,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           setKitNotice(
             "Acceptance cleared — edit description/positioning if needed, then Accept to continue.",
           );
+          if (!workspaceTabTouchedRef.current) setActiveTab("brief");
           setError(null);
           break;
         case "OutlineReady": {
@@ -606,6 +530,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           break;
         case "ValidationReport":
           setReport(payload as ValidationReportView);
+          break;
+        case "ValidationInvalidated":
+          setReport(null);
           break;
         case "JobCompleted": {
           const p = payload as { status?: string };
@@ -660,17 +587,19 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           }
       }
     },
-    [applyParsedJobResult, applySectionEvent, jobId],
+    [applyParsedJobResult, applySectionEvent, jobId, runAiVisibilityRefresh],
   );
 
   useEffect(() => {
     lastSeqRef.current = 0;
-    setSourceAttributionHtml(null);
-    setJobCitations([]);
-    setProvenance(null);
-    setEvidenceManifest(null);
-    setModelPolicy(null);
-    setApprovedStageModels({});
+    void Promise.resolve().then(() => {
+      setSourceAttributionHtml(null);
+      setJobCitations([]);
+      setProvenance(null);
+      setEvidenceManifest(null);
+      setModelPolicy(null);
+      setApprovedStageModels({});
+    });
     void joinActiveJob(jobId, 0);
   }, [jobId, joinActiveJob]);
 
@@ -715,9 +644,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         if (job.status === "awaiting_brandkit_approval") {
           setAwaitingBrandkit(true);
           setAwaitingOutlineApproval(false);
+          if (!workspaceTabTouchedRef.current) setActiveTab("brief");
         } else if (job.status === "awaiting_outline_approval") {
           setAwaitingBrandkit(false);
           setAwaitingOutlineApproval(true);
+          if (!workspaceTabTouchedRef.current) setActiveTab("outline");
         }
       } catch {
         /* hub events remain primary */
@@ -745,30 +676,6 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       cancelled = true;
     };
   }, [createId]);
-
-  async function loadAiVisibility() {
-    try {
-      const snapshot = await fetchAiVisibility(createId);
-      setAiVisibility(snapshot);
-      setAiVisibilityError(null);
-    } catch (err) {
-      setAiVisibilityError(err instanceof Error ? err.message : "Could not load AI visibility");
-    }
-  }
-
-  async function runAiVisibilityRefresh() {
-    setAiVisibilityBusy(true);
-    setAiVisibilityError(null);
-    try {
-      const snapshot = await refreshAiVisibility(createId);
-      setAiVisibility(snapshot);
-      if (!snapshot.ready) setAiVisibilityError(snapshot.message);
-    } catch (err) {
-      setAiVisibilityError(err instanceof Error ? err.message : "Refresh failed");
-    } finally {
-      setAiVisibilityBusy(false);
-    }
-  }
 
   async function persistOutline(): Promise<boolean> {
     if (editableSections.length === 0) return true;
@@ -853,6 +760,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       setAwaitingBrandkit(false);
       setAwaitingOutlineApproval(true);
       setStatus("awaiting_outline_approval");
+      setActiveTab("outline");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not accept brand kit");
     } finally {
@@ -875,6 +783,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       setKitNotice(
         "Acceptance cleared — edit description/positioning if needed, then Accept to continue.",
       );
+      setActiveTab("brief");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reject brand kit");
     } finally {
@@ -949,7 +858,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setCarouselBusy(true);
     setCarouselError(null);
     try {
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-document`, {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-carousel`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jobId }),
@@ -964,6 +873,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         caption?: string;
         pdfBase64?: string;
         suggestedFilename?: string;
+        generatedAtUtc?: string;
       };
       if (!data.pdfBase64) throw new Error("Carousel response missing PDF.");
       setCarouselResult({
@@ -972,6 +882,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         caption: data.caption ?? "",
         pdfBase64: data.pdfBase64,
         suggestedFilename: data.suggestedFilename ?? data.slug ?? "carousel",
+        generatedAtUtc: data.generatedAtUtc,
       });
     } catch (err) {
       setCarouselError(err instanceof Error ? err.message : "Carousel failed");
@@ -990,6 +901,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     a.download = `${carouselResult.suggestedFilename}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function copyCarouselCaption() {
+    if (!carouselResult?.caption) return;
+    try {
+      await navigator.clipboard.writeText(carouselResult.caption);
+      setCaptionCopied(true);
+      window.setTimeout(() => setCaptionCopied(false), 2000);
+    } catch (err) {
+      setCarouselError(err instanceof Error ? err.message : "Could not copy caption");
+    }
   }
 
   async function runTransform() {
@@ -1129,9 +1051,60 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
   }
 
+  async function saveExactSection(sectionKey: string, exactContent: string) {
+    setPendingSectionKey(sectionKey);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/canvas/section`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jobId, sectionKey, exactContent }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        sectionKey?: string;
+        heading?: string;
+        job?: string | null;
+        section?: SectionNode;
+        wordCount?: number;
+        usedFallbackStub?: boolean;
+        citations?: RagCitation[];
+        provenance?: RagProvenance | null;
+      } | null;
+      if (!res.ok || !data?.section) {
+        throw new Error(data?.error || `save content failed: HTTP ${res.status}`);
+      }
+      setSections((previous) => {
+        const current = previous.get(sectionKey);
+        if (!current) return previous;
+        const next = new Map(previous);
+        next.set(sectionKey, {
+          ...current,
+          heading: data.heading ?? current.heading,
+          job: data.job ?? current.job,
+          section: data.section!,
+          wordCount: data.wordCount ?? current.wordCount,
+          usedFallbackStub: data.usedFallbackStub ?? false,
+          citations: data.citations ?? current.citations,
+          provenance: data.provenance ?? current.provenance,
+        });
+        return next;
+      });
+      setReport(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save section content");
+      throw err;
+    } finally {
+      setPendingSectionKey((current) => (current === sectionKey ? null : current));
+    }
+  }
+
   function scrollToSection(sectionKey: string) {
+    setActiveTab("canvas");
     setHighlightSectionKey(sectionKey);
-    document.getElementById(`section-card-${sectionKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      document.getElementById(`section-card-${sectionKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
     window.setTimeout(() => {
       setHighlightSectionKey((current) => (current === sectionKey ? null : current));
     }, 4000);
@@ -1189,70 +1162,67 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     approvedStageModels[retryStage.toLowerCase()] ??
     Object.values(approvedStageModels)[0] ??
     [];
+  const reviewCount =
+    outstandingBlockers.length
+    + (report?.overlapHits.length ?? 0)
+    + (report?.seoChecks?.filter((check) => !check.passed).length ?? 0)
+    + (report?.geoChecks?.filter((check) => !check.passed).length ?? 0);
+  const assetCount =
+    jobs.length + transformVariants.length + (carouselResult ? 1 : 0) + (publishResult ? 1 : 0);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         {siteUrl ? (
           <p className="text-sm text-[var(--cc-ink)]">
             Writing for: <span className="font-medium">{siteUrl}</span>
           </p>
         ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cc-line)] p-3 text-xs text-[var(--cc-muted)]">
-          <span className="rounded-full bg-black/5 px-2 py-1 font-mono">job {jobId}</span>
-          <span className="rounded-full bg-black/5 px-2 py-1">status: {status}</span>
-          {stage ? <span className="rounded-full bg-black/5 px-2 py-1">stage: {stage}</span> : null}
-
-          {showApproveOutline ? (
-            <button
-              type="button"
-              onClick={approveOutline}
-              disabled={busy}
-              className="ml-auto rounded-md bg-[var(--cc-accent)] px-3 py-1.5 font-semibold text-white disabled:opacity-60"
-            >
-              <ButtonBusyLabel busy={busy} busyLabel="Saving…" idleLabel="Save & approve outline" />
-            </button>
-          ) : null}
-
-          {orderedSections.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => void copyAllSections()}
-              className={`rounded-md border border-[var(--cc-line)] px-3 py-1.5 font-semibold text-[var(--cc-ink)] ${
-                showApproveOutline ? "" : "ml-auto"
-              }`}
-            >
-              {copyAllDone ? "Copied" : "Copy all"}
-            </button>
-          ) : null}
-
-          {!isTerminal ? (
-            <button
-              type="button"
-              onClick={cancelJob}
-              disabled={busy}
-              className={`rounded-md border border-[var(--cc-line)] px-3 py-1.5 font-semibold text-[var(--cc-ink)] disabled:opacity-60 ${
-                showApproveOutline || orderedSections.length > 0 ? "" : "ml-auto"
-              }`}
-            >
-              Cancel
-            </button>
-          ) : null}
-        </div>
-
-        {error ? <p className="text-xs text-red-600">{error}</p> : null}
-        {hubError ? (
-          <p className="text-xs text-red-600" role="alert">
-            {hubError}
-          </p>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+          status === "ready" ? "bg-green-50 text-green-700" : status === "failed" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"
+        }`}>
+          {status === "ready" ? "Ready" : status === "failed" ? "Needs attention" : "In progress"}
+        </span>
+        {orderedSections.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => void copyAllSections()}
+            className="ml-auto rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)]"
+          >
+            {copyAllDone ? "Copied" : "Copy draft"}
+          </button>
         ) : null}
+        {!isTerminal ? (
+          <button
+            type="button"
+            onClick={cancelJob}
+            disabled={busy}
+            className="rounded-md border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        ) : null}
+      </div>
 
-        {jobHydrating ? <LoadingRow label="Connecting to job…" /> : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {hubError ? <p className="text-xs text-red-600" role="alert">{hubError}</p> : null}
+      {jobHydrating ? <LoadingRow label="Connecting to job…" /> : null}
 
-        <ProcessBanner status={status} stage={stage} />
+      <WorkspaceTabs
+        active={activeTab}
+        onChange={(tab) => {
+          workspaceTabTouchedRef.current = true;
+          setActiveTab(tab);
+        }}
+        reviewCount={reviewCount}
+        assetCount={assetCount}
+      />
 
-        {showBrandKitPanel ? (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex flex-col gap-4">
+        {activeTab === "canvas" ? <ProcessBanner status={status} stage={stage} /> : null}
+
+        {activeTab === "brief" && showBrandKitPanel ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
             <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Brand kit awaiting approval</h2>
             <p className="mt-1 text-xs text-[var(--cc-muted)]">
@@ -1351,7 +1321,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           </div>
         ) : null}
 
-        {showOutlinePanel ? (
+        {activeTab === "outline" && showOutlinePanel ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Outline awaiting approval</h2>
@@ -1371,12 +1341,20 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               >
                 <ButtonBusyLabel busy={busy} busyLabel="Regenerating…" idleLabel="Regenerate" />
               </button>
+              {showApproveOutline ? (
+                <button
+                  type="button"
+                  onClick={() => void approveOutline()}
+                  disabled={busy}
+                  className="rounded-md bg-[var(--cc-accent)] px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  <ButtonBusyLabel busy={busy} busyLabel="Approving…" idleLabel="Save & approve" />
+                </button>
+              ) : null}
             </div>
             <p className="mt-2 text-xs text-[var(--cc-muted)]">
-              Assign each section a role (<strong>problem</strong> establishes the pain once;{" "}
-              <strong>advance</strong> moves past it). Must-mentions apply only to that section at write
-              time. <strong>Save</strong> persists edits; <strong>Save &amp; approve outline</strong> in the
-              bar above continues generation.
+              Shape the order and purpose of the draft before writing. Required points apply only to
+              that section. Save keeps the outline editable; Save &amp; approve continues generation.
               {showAddAdvanceOutline ? (
                 <>
                   {" "}
@@ -1393,7 +1371,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   disabled={busy}
                   className="rounded-md border border-[var(--cc-line)] px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
                 >
-                  Add Advance section
+                  Add core section
                 </button>
               </div>
             ) : null}
@@ -1431,8 +1409,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                     ) : null}
                   </div>
                   <label className="flex flex-wrap items-center gap-2 text-xs text-[var(--cc-muted)]">
-                    <span>Role</span>
+                    <span>Purpose</span>
                     <select
+                      aria-label={`Outline section ${i + 1} purpose`}
                       value={isProblemLocked(i) ? "problem" : s.job}
                       disabled={isRoleLocked(s, i)}
                       onChange={(e) => {
@@ -1444,16 +1423,16 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                       }}
                       className="rounded-md border border-[var(--cc-line)] bg-white px-2 py-1 text-xs text-[var(--cc-ink)] disabled:opacity-60"
                     >
-                      <option value="problem">problem</option>
-                      <option value="advance">advance</option>
-                      <option value="faq">faq</option>
+                      {OUTLINE_ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                     {isProblemLocked(i) ? (
-                      <span>Lede — establishes the problem once.</span>
+                      <span>The opening establishes context once.</span>
                     ) : null}
                   </label>
                   <label className="flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
-                    <span>Must mention (one per line)</span>
+                    <span>Required points (one per line)</span>
                     <textarea
                       aria-label={`Outline section ${i + 1} must mention`}
                       rows={Math.min(6, Math.max(2, s.hierarchyChildHeadings.length + 1))}
@@ -1480,7 +1459,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           </div>
         ) : null}
 
-        {orderedSections.length === 0 &&
+        {activeTab === "canvas" && orderedSections.length === 0 &&
         !awaitingOutlineApproval &&
         !awaitingBrandkit &&
         status !== "awaiting_brandkit_approval" ? (
@@ -1493,90 +1472,28 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           )
         ) : null}
 
-        {orderedSections.map((s) => {
-          const displayHeading = s.section.heading || s.heading;
-          const highlighted = highlightSectionKey === s.sectionKey;
-          return (
-          <div
-            key={s.sectionKey}
-            id={`section-card-${s.sectionKey}`}
-            className={`rounded-lg border p-4 ${
-              highlighted
-                ? "border-[var(--cc-accent)] ring-2 ring-[var(--cc-accent)]/30"
-                : "border-[var(--cc-line)]"
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-[var(--cc-ink)]">{displayHeading}</h2>
-              {s.job ? (
-                <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-[var(--cc-muted)]">
-                  {s.job}
-                </span>
-              ) : null}
-              <span className="text-xs text-[var(--cc-muted)]">{s.wordCount} words</span>
-              {s.usedFallbackStub ? (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                  fallback stub
-                </span>
-              ) : null}
-            </div>
+        {activeTab === "canvas" ? orderedSections.map((section) => (
+          <WorkspaceSection
+            key={section.sectionKey}
+            item={section}
+            highlighted={highlightSectionKey === section.sectionKey}
+            instruction={pendingInstruction[section.sectionKey] ?? ""}
+            pending={pendingSectionKey === section.sectionKey}
+            onInstructionChange={(value) =>
+              setPendingInstruction((previous) => ({ ...previous, [section.sectionKey]: value }))
+            }
+            onAction={(action) => void runCanvasAction(section.sectionKey, action)}
+            onSaveExact={(exactContent) => saveExactSection(section.sectionKey, exactContent)}
+          />
+        )) : null}
 
-            <SectionBody section={s.section} depth={0} rootHeading={displayHeading} />
-            <SectionCitations citations={s.citations} />
-            {s.provenance ? (
-              <p className="mt-2 text-xs text-[var(--cc-muted)]">
-                {s.provenance.modelUsed || s.provenance.effectiveModel
-                  ? `Model: ${s.provenance.effectiveModel || s.provenance.modelUsed}`
-                  : null}
-                {s.provenance.retrievalStrategy || s.provenance.retrievalMode
-                  ? ` · Retrieval: ${s.provenance.retrievalStrategy || s.provenance.retrievalMode}`
-                  : null}
-                {s.provenance.evidenceIds?.length
-                  ? ` · ${s.provenance.evidenceIds.length} evidence item(s)`
-                  : null}
-              </p>
-            ) : null}
-
-            <div className="mt-3 border-t border-[var(--cc-line)] pt-3">
-              <p className="text-xs font-semibold text-[var(--cc-ink)]">Edit this section</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                placeholder="Optional instruction…"
-                value={pendingInstruction[s.sectionKey] ?? ""}
-                onChange={(e) =>
-                  setPendingInstruction((prev) => ({ ...prev, [s.sectionKey]: e.target.value }))
-                }
-                className="min-w-0 flex-1 rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs"
-              />
-              {(["rewrite", "expand", "re-tone"] as const).map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => void runCanvasAction(s.sectionKey, action)}
-                  disabled={pendingSectionKey === s.sectionKey}
-                  className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-1 text-xs font-semibold text-[var(--cc-ink)] disabled:opacity-60"
-                >
-                  <ButtonBusyLabel
-                    busy={pendingSectionKey === s.sectionKey}
-                    busyLabel="Working…"
-                    idleLabel={action}
-                  />
-                </button>
-              ))}
-              </div>
-            </div>
-          </div>
-          );
-        })}
-
-        {jobCitations.length > 0 ? (
+        {activeTab === "canvas" && jobCitations.length > 0 ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
             <SectionCitations citations={jobCitations} />
           </div>
         ) : null}
 
-        {sourceAttributionHtml ? (
+        {activeTab === "canvas" && sourceAttributionHtml ? (
           <div className="rounded-lg border border-[var(--cc-line)] p-4">
             <h2 className="text-lg font-semibold text-[var(--cc-ink)]">Sources</h2>
             <div
@@ -1586,26 +1503,111 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           </div>
         ) : null}
 
-        <details className="rounded-lg border border-[var(--cc-line)] p-3 text-xs">
-          <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">
-            Event log ({log.length})
-          </summary>
-          <ul className="mt-2 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md bg-black/5 p-2 font-mono">
-            {log.map((entry) => (
-              <li key={entry.seq}>
-                <span className="text-[var(--cc-accent)]">#{entry.seq}</span>{" "}
-                <span className="font-semibold">{entry.type}</span>{" "}
-                <span className="text-[var(--cc-muted)]">{JSON.stringify(entry.payload)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+        {activeTab === "outline" && !showOutlinePanel ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Approved outline</h2>
+            {editableSections.length > 0 ? (
+              <ol className="mt-3 space-y-2">
+                {editableSections.map((section, index) => (
+                  <li key={section.key} className="flex gap-3 rounded-md bg-black/[0.025] p-3 text-sm">
+                    <span className="text-[var(--cc-muted)]">{index + 1}</span>
+                    <div>
+                      <p className="font-medium text-[var(--cc-ink)]">{section.heading}</p>
+                      <p className="text-xs text-[var(--cc-muted)]">
+                        {OUTLINE_ROLE_OPTIONS.find((option) => option.value === section.job)?.label ?? section.job}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-2 text-sm text-[var(--cc-muted)]">The outline will appear when planning completes.</p>
+            )}
+          </div>
+        ) : null}
+
+        {activeTab === "assets" ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Drafts and generated outputs</h2>
+            <p className="mt-1 text-xs text-[var(--cc-muted)]">
+              Every draft, image prompt, and companion output for this content item stays together here.
+            </p>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {jobs.map((job) => (
+                <li key={job.id} className="rounded-md border border-[var(--cc-line)] p-3 text-xs">
+                  <p className="font-semibold text-[var(--cc-ink)]">
+                    {job.tabLabel?.trim() || labelForContentType(job.contentType ?? "draft")}
+                  </p>
+                  <p className="mt-1 text-[var(--cc-muted)]">
+                    {job.status === "ready" ? "Ready" : job.status === "failed" ? "Needs attention" : "In progress"}
+                    {job.id === jobId ? " · Active draft" : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {activeTab === "review" ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4 lg:hidden">
+            <p className="text-sm text-[var(--cc-muted)]">Quality checks and repair actions are shown below.</p>
+          </div>
+        ) : null}
+
+        {activeTab === "brief" && !showBrandKitPanel ? (
+          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+            <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Content brief</h2>
+            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Format</dt>
+                <dd className="font-medium text-[var(--cc-ink)]">{repurposeSourceLabel}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Writing for</dt>
+                <dd className="font-medium text-[var(--cc-ink)]">{siteUrl || "Current project"}</dd>
+              </div>
+              {brandKit?.companyName ? (
+                <div>
+                  <dt className="text-xs text-[var(--cc-muted)]">Company</dt>
+                  <dd className="font-medium text-[var(--cc-ink)]">{brandKit.companyName}</dd>
+                </div>
+              ) : null}
+              {brandKit?.positioningOneLiner ? (
+                <div>
+                  <dt className="text-xs text-[var(--cc-muted)]">Positioning</dt>
+                  <dd className="text-[var(--cc-ink)]">{brandKit.positioningOneLiner}</dd>
+                </div>
+              ) : null}
+            </dl>
+            <p className="mt-4 text-xs text-[var(--cc-muted)]">
+              The current backend read contract does not return the complete persisted brief, so this view shows the brief context available on the create and active job.
+            </p>
+          </div>
+        ) : null}
+
       </div>
 
       <aside className="flex flex-col gap-4">
         <div className="rounded-lg border border-[var(--cc-line)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Evidence &amp; provenance</h2>
-          <div className="mt-2 flex flex-col gap-1 text-xs text-[var(--cc-muted)]">
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">
+            {activeTab === "canvas" ? "Draft context" : activeTab === "outline" ? "Planning context" : activeTab === "assets" ? "Output context" : activeTab === "review" ? "Review context" : "Brief context"}
+          </h2>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            {activeTab === "canvas"
+              ? `${orderedSections.length} section${orderedSections.length === 1 ? "" : "s"} · ${jobCitations.length} verified citation${jobCitations.length === 1 ? "" : "s"}`
+              : activeTab === "outline"
+                ? `${editableSections.length} planned section${editableSections.length === 1 ? "" : "s"}`
+                : activeTab === "assets"
+                  ? `${assetCount} draft or output item${assetCount === 1 ? "" : "s"}`
+                  : activeTab === "review"
+                    ? reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} to review` : "No open quality issues"
+                    : evidenceManifest ? `${evidenceManifest.sources?.length ?? 0} research source(s)` : "Brief and brand context"}
+          </p>
+          <details className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs">
+            <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">Technical details</summary>
+          <div className="mt-2 flex flex-col gap-1 text-[var(--cc-muted)]">
+            <p className="font-mono">Job {jobId}</p>
+            <p>Status: {status}{stage ? ` · Stage: ${stage}` : ""}</p>
             <p>Policy: {modelPolicyLabel(modelPolicy)}</p>
             <p>
               Model: {provenance?.effectiveModel || provenance?.modelUsed || "Awaiting backend provenance"}
@@ -1631,6 +1633,19 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               </>
             ) : null}
           </div>
+            <details className="mt-3">
+              <summary className="cursor-pointer">Event log ({log.length})</summary>
+              <ul className="mt-2 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md bg-black/5 p-2 font-mono">
+                {log.map((entry) => (
+                  <li key={entry.seq}>
+                    <span className="text-[var(--cc-accent)]">#{entry.seq}</span>{" "}
+                    <span className="font-semibold">{entry.type}</span>{" "}
+                    <span className="text-[var(--cc-muted)]">{JSON.stringify(entry.payload)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </details>
 
           {status === "failed" && retryModels.length > 0 ? (
             <div className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs">
@@ -1679,7 +1694,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "review" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Validation</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             SEO and GEO scores are an AI-visibility readiness checklist — advisory only, not a content
@@ -1785,7 +1800,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           )}
         </div>
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "review" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">
             Overlap hits {report ? `(${report.overlapHits.length})` : ""}
           </h2>
@@ -1798,6 +1813,22 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                   </p>
                   <p className="mt-1">{hit.sharedClaim}</p>
                   <p className="mt-1 text-red-700">{hit.repairHint}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection(hit.sectionKeyA)}
+                      className="rounded-md border border-red-200 bg-white px-2 py-1 font-medium"
+                    >
+                      Focus {hit.headingA}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => prepareOverlapFix(hit.sectionKeyB, hit.repairHint)}
+                      className="rounded-md bg-red-900 px-2 py-1 font-medium text-white"
+                    >
+                      Repair {hit.headingB}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1806,7 +1837,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           )}
         </div>
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "assets" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Re-Purpose</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Remix the active <span className="font-medium text-[var(--cc-ink)]">{repurposeSourceLabel}</span>{" "}
@@ -1848,7 +1879,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "assets" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">LinkedIn carousel</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Turn this ready long-form draft into a swipeable PDF (1080×1350 portrait) plus a feed
@@ -1869,7 +1900,11 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               onClick={() => void runLinkedInCarousel()}
               className="mt-3 rounded-md bg-[var(--cc-accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              <ButtonBusyLabel busy={carouselBusy} busyLabel="Generating…" idleLabel="Generate carousel PDF" />
+              <ButtonBusyLabel
+                busy={carouselBusy}
+                busyLabel="Generating…"
+                idleLabel={carouselResult?.pdfBase64 ? "Regenerate PDF" : carouselResult ? "Generate downloadable PDF" : "Generate carousel PDF"}
+              />
             </button>
           )}
           {carouselError ? <p className="mt-2 text-xs text-red-600">{carouselError}</p> : null}
@@ -1878,13 +1913,28 @@ export function Canvas({ createId, jobId }: CanvasProps) {
               <p className="text-[var(--cc-muted)]">
                 {carouselResult.slideCount} slides · {carouselResult.suggestedFilename}.pdf
               </p>
-              <button
-                type="button"
-                onClick={downloadCarouselPdf}
-                className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-[var(--cc-ink)]"
-              >
-                Download PDF
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {carouselResult.pdfBase64 ? (
+                  <button
+                    type="button"
+                    onClick={downloadCarouselPdf}
+                    className="rounded-md bg-[var(--cc-accent)] px-2 py-1 font-medium text-white"
+                  >
+                    Download PDF
+                  </button>
+                ) : (
+                  <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">
+                    This older artifact has no persisted PDF bytes. Generate it once to make the download durable.
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void copyCarouselCaption()}
+                  className="rounded-md border border-[var(--cc-line)] px-2 py-1 text-[var(--cc-ink)]"
+                >
+                  {captionCopied ? "Caption copied" : "Copy caption"}
+                </button>
+              </div>
               <p className="whitespace-pre-wrap rounded-md bg-black/5 p-2 text-[var(--cc-ink)]">
                 {carouselResult.caption}
               </p>
@@ -1892,7 +1942,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "assets" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Export</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Download or commit finished drafts for all jobs on this create — pillar, blog, tool, email,
@@ -1965,7 +2015,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         {isCmsPublishType(contentType) ? (
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "assets" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Publish to site</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Sync this {labelForContentType(contentType)} draft into the Geek blog CMS. Draft keeps it
@@ -2034,7 +2084,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
         ) : null}
 
-        <div className="rounded-lg border border-[var(--cc-line)] p-4">
+        <div className={`${activeTab === "review" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-[var(--cc-ink)]">AI visibility</h2>
             <button
@@ -2111,6 +2161,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           )}
         </div>
       </aside>
+    </div>
     </div>
   );
 }

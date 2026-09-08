@@ -22,52 +22,49 @@ export default async function CreatesListPage() {
   if (res.ok) {
     creates = await res.json();
   } else {
-    error = `Could not load creates (HTTP ${res.status}).`;
+    error = `Could not load your content (HTTP ${res.status}).`;
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10">
-      <div>
-        <Link href="/" className="text-sm text-[var(--cc-accent)]">
-          ← Home
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-8 sm:px-8 lg:px-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-[var(--cc-accent)]">Content</p>
+          <h1 className="mt-1 text-3xl font-semibold text-[var(--cc-ink)]">Content library</h1>
+          <p className="mt-2 text-sm text-[var(--cc-muted)]">
+            Find drafts, continue reviews, and open finished work.
+          </p>
+        </div>
+        <Link
+          href="/creates/new"
+          className="inline-flex rounded-lg bg-[var(--cc-accent)] px-4 py-2.5 text-sm font-semibold text-white"
+        >
+          New content
         </Link>
-        <p className="mt-2 text-sm font-medium tracking-wide text-[var(--cc-accent)]">
-          Content Creator v2
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">Your creates</h1>
-        <p className="mt-2 text-sm text-[var(--cc-muted)]">
-          v2 creates for this account — open one to view its Canvas or start a new brief. Use Also
-          draft on a new brief to generate tool, email, social, or ads jobs alongside pillar/blog.
-        </p>
       </div>
-
-      <Link
-        href="/creates/new"
-        className="inline-flex w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white"
-      >
-        New content brief
-      </Link>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {creates.length === 0 && !error ? (
-        <p className="text-sm text-[var(--cc-muted)]">No v2 creates yet.</p>
+        <div className="rounded-xl border border-dashed border-[var(--cc-line)] bg-white p-10 text-center">
+          <p className="font-medium text-[var(--cc-ink)]">No content yet</p>
+          <p className="mt-1 text-sm text-[var(--cc-muted)]">Start a guided workflow to fill your library.</p>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {creates.map((c) => {
             const jobTypes =
               c.jobContentTypes && c.jobContentTypes.length > 0
                 ? c.jobContentTypes
                 : [c.contentType];
             return (
-              <li key={c.id} className="rounded-lg border border-[var(--cc-line)] p-4">
+              <li key={c.id} className="rounded-xl border border-[var(--cc-line)] bg-white p-4">
                 <Link href={`/creates/${c.id}`} className="font-semibold text-[var(--cc-ink)] hover:underline">
                   {c.title}
                 </Link>
                 <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                  Drafts:{" "}
-                  {jobTypes.map((t) => labelForContentType(t)).join(" · ")} · created{" "}
-                  {new Date(c.createdAtUtc).toLocaleString()}
+                  {jobTypes.map((t) => labelForContentType(t)).join(" · ")} ·{" "}
+                  {new Date(c.updatedAtUtc ?? c.createdAtUtc).toLocaleDateString()}
                 </p>
               </li>
             );

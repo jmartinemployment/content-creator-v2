@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { DEFAULT_AD_TEMPLATES, loadAdTemplates, saveAdTemplates } from "./ad-templates";
+import { loadAdTemplates, saveAdTemplates } from "./ad-templates";
 import { RAG_SAMPLE_TOPICS, RAG_WRITING_INTENTS } from "./intents";
 import { fetchRagStatus, generateRagDraft, indexRagAdTemplates } from "./rag-generate-client";
 import { GuidedRagWriter } from "./guided-rag-writer";
@@ -33,7 +33,7 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
   const [entitySeeds, setEntitySeeds] = useState<string[]>([]);
   const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
   const [freeEntity, setFreeEntity] = useState("");
-  const [templates, setTemplates] = useState<RagAdTemplate[]>(DEFAULT_AD_TEMPLATES);
+  const [templates, setTemplates] = useState<RagAdTemplate[]>(loadAdTemplates);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [newTemplateBody, setNewTemplateBody] = useState("");
   const [newTemplateName, setNewTemplateName] = useState("");
@@ -41,10 +41,6 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
   const [guidedMode, setGuidedMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setTemplates(loadAdTemplates());
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

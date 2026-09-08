@@ -26,7 +26,11 @@ type JobRunnerProps = {
  * Event-driven job viewer: create → generate → hub replay/stream → approve outline
  * → write/validate → done. No polling anywhere — all state comes from hub pushes.
  */
-export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}) {
+export function JobRunner(props: JobRunnerProps = {}) {
+  return <JobRunnerSession key={props.jobId ?? "manual"} {...props} />;
+}
+
+function JobRunnerSession({ jobId: initialJobId, createId }: JobRunnerProps) {
   const [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState<string | null>(initialJobId ?? null);
   const [status, setStatus] = useState<string | null>(initialJobId ? "pending" : null);
@@ -34,6 +38,7 @@ export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}
   const [log, setLog] = useState<LogEntry[]>([]);
   const [awaitingApproval, setAwaitingApproval] = useState(false);
   const connectionRef = useRef<HubConnection | null>(null);
+  const offEventsRef = useRef<(() => void) | null>(null);
   const lastSeqRef = useRef(0);
 
   const appendEvent = useCallback((evt: GccV2JobEvent) => {
@@ -70,10 +75,8 @@ export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}
       if (!connection) {
         connection = createJobHubConnection();
         connectionRef.current = connection;
-        onJobEvent(connection, appendEvent);
+        offEventsRef.current = onJobEvent(connection, appendEvent);
       }
-      lastSeqRef.current = 0;
-      setLog([]);
       await joinJob(connection, id, 0);
     },
     [appendEvent],
@@ -84,9 +87,17 @@ export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}
     connectToJob(initialJobId).catch((err) => {
       setError(err instanceof Error ? err.message : "Could not connect to job");
     });
-    // Intentionally only reruns if the job id itself changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialJobId]);
+  }, [connectToJob, initialJobId]);
+
+  useEffect(() => {
+    return () => {
+      offEventsRef.current?.();
+      offEventsRef.current = null;
+      const connection = connectionRef.current;
+      connectionRef.current = null;
+      if (connection) void connection.stop();
+    };
+  }, []);
 
   async function startJob() {
     setBusy(true);
@@ -116,6 +127,8 @@ export function JobRunner({ jobId: initialJobId, createId }: JobRunnerProps = {}
 
       setJobId(newJobId);
       setStatus("pending");
+      lastSeqRef.current = 0;
+      setLog([]);
       await connectToJob(newJobId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start job");

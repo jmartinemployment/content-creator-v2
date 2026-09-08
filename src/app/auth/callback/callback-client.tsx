@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export function AuthCallbackClient() {
+  const router = useRouter();
   const params = useSearchParams();
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   // An authorization code is single-use. Exchange exactly once per code.
@@ -36,12 +37,12 @@ export function AuthCallbackClient() {
           setExchangeError(body?.error || "Sign-in failed");
           return;
         }
-        window.location.assign("/");
+        router.replace("/");
       } catch {
         setExchangeError("Sign-in failed — could not reach the server.");
       }
     })();
-  }, [code, oauthError]);
+  }, [code, oauthError, router]);
 
   const error = paramError ?? exchangeError;
 

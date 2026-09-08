@@ -59,6 +59,16 @@ export function isRoleLocked(section: OutlineSectionView, index: number): boolea
   return isProblemLocked(index) || isFaqSection(section);
 }
 
+export const OUTLINE_ROLE_OPTIONS = [
+  { value: "problem", label: "Opening context" },
+  { value: "advance", label: "Core section" },
+  { value: "faq", label: "Common questions" },
+] as const;
+
+export function outlineRoleLabel(value: string): string {
+  return OUTLINE_ROLE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
 export function supportsAdvanceOutlineRows(contentType: string): boolean {
   const t = contentType.trim().toLowerCase();
   return (

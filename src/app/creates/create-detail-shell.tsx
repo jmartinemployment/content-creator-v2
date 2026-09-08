@@ -25,7 +25,7 @@ function PartnerResearchWarningsBanner({ createId }: { createId: string }) {
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
-        setWarnings(parsed);
+        void Promise.resolve().then(() => setWarnings(parsed));
       }
     } catch {
       // ignore malformed storage
@@ -52,24 +52,22 @@ export function CreateDetailShell({ createId, jobId, title, initialJobs }: Creat
       <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
         <div>
           <Link href="/creates" className="text-sm text-[var(--cc-accent)]">
-            ← Your creates
+            ← Content library
           </Link>
           <p className="mt-2 text-sm font-medium tracking-wide text-[var(--cc-accent)]">
-            Content Creator v2
+            Content workspace
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">{title}</h1>
           <PartnerResearchWarningsBanner createId={createId} />
           <p className="mt-2 text-sm text-[var(--cc-muted)]">
-            Live Canvas — job status and content stream over the realtime hub (no polling).
+            Follow progress, review sources, and shape your draft.
           </p>
           {initialJobs.length > 0 ? (
             <CreateDraftTabs createId={createId} activeJobId={jobId} />
           ) : null}
           {initialJobs.length <= 1 ? (
             <p className="mt-3 text-xs text-[var(--cc-muted)]">
-              Need tool, email, social, or ads drafts? Start a new brief and check types under Also
-              draft — each checked type gets its own job tab here. Image prompts auto-spawn when each
-              draft is ready.
+              Need another format? Start a new workflow and add companion drafts under Outputs.
             </p>
           ) : null}
         </div>

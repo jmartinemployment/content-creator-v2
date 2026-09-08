@@ -222,6 +222,45 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/rag/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/skills") {
+    return send(res, 200, {
+      catalogVersion: "gcc-safe-skills.2026-09-08",
+      envelopeVersion: "gcc-skill-envelope.v1",
+      selectionMode: "automatic-read-only",
+      customizationAvailable: false,
+      activeSkillIds: [],
+      skills: [
+        {
+          id: "citation-discipline",
+          name: "Citation Discipline",
+          version: "1.0.0",
+          contribution: "Return verbatim quote citations for factual claims.",
+          reviewStatus: "Approved",
+          reviewer: "Content Platform",
+          supportedStages: ["researchPlanning", "outline", "section", "validation", "repair"],
+          supportedContentTypes: ["pillar", "blog"],
+        },
+        {
+          id: "technical-depth",
+          name: "Technical Depth",
+          version: "1.0.0",
+          contribution: "Include supported constraints, tradeoffs, and implementation decisions.",
+          reviewStatus: "Approved",
+          reviewer: "Content Platform",
+          supportedStages: ["outline", "section", "validation", "repair"],
+          supportedContentTypes: ["pillar", "tech-article"],
+        },
+      ],
+      recommendedBundles: [
+        {
+          id: "technical-authority",
+          name: "Technical authority",
+          goal: "Explain implementation decisions, constraints, and tradeoffs precisely.",
+          skillIds: ["citation-discipline", "technical-depth"],
+        },
+      ],
+    });
+  }
 
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/latest") {
     return send(res, 200, { runId: "crawl-1", status: "complete" });
@@ -301,8 +340,66 @@ const server = http.createServer(async (req, res) => {
     broadcast(event("JobCompleted", { status: "ready" }));
     return send(res, 200, { ok: true });
   }
+  if (
+    url.pathname === "/api/geek-content-creator-v2/creates/create-1/canvas/section"
+    && req.method === "PUT"
+  ) {
+    const body = JSON.parse(rawBody || "{}");
+    if (!body.exactContent?.trim()) return send(res, 400, { error: "exactContent is required" });
+    const current = sectionPayload();
+    const edited = {
+      ...current,
+      documentJson: JSON.stringify({
+        ...JSON.parse(current.documentJson),
+        paragraphs: [{ type: "text", runs: [{ text: body.exactContent.trim() }] }],
+      }),
+      wordCount: body.exactContent.trim().split(/\s+/).length,
+      usedFallbackStub: false,
+      editKind: "operator-exact-replacement",
+      aiGenerated: false,
+      validationInvalidated: true,
+    };
+    broadcast(event("SectionEdited", edited));
+    broadcast(event("ValidationInvalidated", {
+      reason: "operator-section-edit",
+      sectionKey: body.sectionKey,
+      requiresRevalidation: true,
+    }));
+    return send(res, 200, {
+      ...edited,
+      section: JSON.parse(edited.documentJson),
+      validationInvalidated: true,
+    });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/ai-visibility/refresh") {
     return send(res, 200, { ready: true, createId: "create-1", score: 94, report: { seoScore: 95, geoScore: 94, geoChecks: [], publishedUrls: [] } });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/transform/linkedin-carousel") {
+    const artifact = {
+      slug: "reliable-content-operations",
+      generatedAtUtc: new Date().toISOString(),
+      caption: "A reliable content workflow keeps evidence, approvals, and publishing connected.",
+      hashtags: ["#ContentOperations"],
+      suggestedFilename: "Reliable_Content_Operations",
+      slides: [
+        { index: 0, role: "hook", title: "Reliable content operations", bullets: [] },
+        { index: 1, role: "teach", title: "Keep evidence connected", bullets: ["Verify every claim"] },
+      ],
+    };
+    const parsed = JSON.parse(job.resultJson || "{}");
+    const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+    job.resultJson = JSON.stringify({
+      ...parsed,
+      linkedInCarousel: { ...artifact, pdfBase64 },
+    });
+    return send(res, 200, {
+      slug: artifact.slug,
+      slideCount: artifact.slides.length,
+      caption: artifact.caption,
+      suggestedFilename: artifact.suggestedFilename,
+      pdfBase64,
+      slides: artifact.slides,
+    });
   }
 
   if (url.pathname === "/api/rag/status") {

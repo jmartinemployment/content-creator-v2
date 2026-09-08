@@ -198,4 +198,5 @@ export const SECTION_EVENT_TYPES = [
   "SectionRewritten",
   "SectionExpanded",
   "SectionRetoned",
+  "SectionEdited",
 ] as const;

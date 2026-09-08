@@ -56,12 +56,12 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
     return (
       <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
         <Link href="/creates" className="text-sm text-[var(--cc-accent)]">
-          ← Your creates
+          ← Content library
         </Link>
         <p className="text-sm text-red-600">
-          No job found for this create —{" "}
+          No draft was found for this item —{" "}
           <Link href="/creates/new" className="underline">
-            start a new brief
+            start new content
           </Link>
           .
         </p>

@@ -48,9 +48,9 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
   if (res.status === 404) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <p className="text-sm text-red-600">v1 create not found.</p>
+        <p className="text-sm text-red-600">Archived content not found.</p>
         <Link href="/legacy" className="mt-4 inline-block text-sm text-[var(--cc-accent)]">
-          ← Back to v1 list
+          ← Back to archive
         </Link>
       </main>
     );
@@ -59,7 +59,7 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
   if (!res.ok) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <p className="text-sm text-red-600">Could not load v1 create (HTTP {res.status}).</p>
+        <p className="text-sm text-red-600">Could not load archived content (HTTP {res.status}).</p>
       </main>
     );
   }
@@ -71,9 +71,9 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
       <div>
         <Link href="/legacy" className="text-sm text-[var(--cc-accent)]">
-          ← v1 creates
+          ← Legacy archive
         </Link>
-        <p className="mt-2 text-xs uppercase tracking-wide text-amber-700">Read-only · v1</p>
+        <p className="mt-2 text-xs uppercase tracking-wide text-amber-700">Read-only archive</p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">{create.topic}</h1>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
           {create.contentType} · {create.status} · updated {new Date(create.updatedAtUtc).toLocaleString()}
@@ -100,7 +100,7 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
       <section className="rounded-lg border border-[var(--cc-line)] p-4">
         <h2 className="text-sm font-semibold text-[var(--cc-ink)]">Artifacts ({artifacts.length})</h2>
         {artifacts.length === 0 ? (
-          <p className="mt-2 text-xs text-[var(--cc-muted)]">No artifacts on this create.</p>
+          <p className="mt-2 text-xs text-[var(--cc-muted)]">No saved files for this item.</p>
         ) : (
           <ul className="mt-3 flex flex-col gap-4">
             {artifacts.map((a) => (
@@ -122,7 +122,7 @@ export default async function LegacyCreateDetailPage({ params }: PageProps) {
       </section>
 
       <p className="text-xs text-[var(--cc-muted)]">
-        Historical v1 create — read-only. New work uses Content Creator v2 (<Link href="/creates" className="text-[var(--cc-accent)]">creates</Link>).
+        Historical content — read only. Open the <Link href="/creates" className="text-[var(--cc-accent)]">content library</Link> for current work.
       </p>
     </main>
   );

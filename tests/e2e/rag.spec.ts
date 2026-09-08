@@ -15,37 +15,36 @@ test("legacy RAG URL redirects to canonical Create and migrates topic and intent
   );
   await page.getByLabel("Project site URL").fill("example.test");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("Title")).toHaveValue("Reliable content operations");
-  await expect(page.getByLabel("Primary draft")).toHaveValue("tech-article");
+  await expect(page.getByLabel("Working title")).toHaveValue("Reliable content operations");
+  await expect(page.getByLabel("Main format")).toHaveValue("tech-article");
 });
 
 test("canonical Create offers all 17 content types and relevant RAG capabilities", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("Primary draft").locator("option")).toHaveCount(17);
-  await page.getByLabel("Primary draft").selectOption("ads");
-  await expect(page.getByText("Short-form template variations")).toBeVisible();
-  await expect(page.getByText("Short-form evidence templates")).toBeVisible();
-  await page.getByLabel("Primary draft").selectOption("comparison");
-  await expect(page.getByText("Partner / competitor battlecard")).toBeVisible();
-  await page.getByLabel("Primary draft").selectOption("linkedin-document");
-  await expect(page.getByText("Slide preview")).toBeVisible();
-  await expect(page.getByText("GraphRAG strategy themes")).toBeVisible();
+  await expect(page.getByLabel("Main format").locator("option")).toHaveCount(17);
+  await page.getByLabel("Main format").selectOption("ads");
+  await expect(page.getByText(/Short-form drafting with verified evidence/)).toBeVisible();
+  await page.getByLabel("Main format").selectOption("linkedin-document");
+  await expect(page.getByText(/Slide-oriented drafting with connected strategy themes/)).toBeVisible();
 });
 
 test("o3-only policy requires explicit quality-tradeoff confirmation", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Title").fill("Explicit model policy");
-  await page.getByText(/Advanced model policy/).click();
-  await page.getByRole("radio", { name: /o3 only/ }).check();
-  await page.getByRole("button", { name: "Find partner tools" }).click();
-  await expect(page.getByText("Confirm the model-policy quality tradeoff")).toBeVisible();
-  await page.getByLabel("I understand and accept the quality tradeoff.").check();
-  await page.getByRole("button", { name: "Find partner tools" }).click();
-  await expect(page.getByRole("heading", { name: "Confirm partner tools" })).toBeVisible();
+  await page.getByLabel("Working title").fill("Explicit model policy");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Review" }).click();
+  await page.getByText(/Advanced run settings/).click();
+  await page.getByRole("radio", { name: /Faster run/ }).check();
+  await expect(page.getByText("I understand the quality tradeoff.")).toBeVisible();
+  await page.getByText("I understand the quality tradeoff.").click();
+  await expect(page.getByRole("checkbox", { name: "I understand the quality tradeoff." })).toBeChecked();
+  await expect(page.getByText("Advanced run settings · Quality: Custom")).toBeVisible();
 });
 
 test("RAG unavailable state is an inline canonical quality gate", async ({ page, request }) => {
@@ -53,6 +52,9 @@ test("RAG unavailable state is an inline canonical quality gate", async ({ page,
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("Research and evidence readiness")).toContainText("Blocked");
+  await page.getByLabel("Working title").fill("Unavailable research");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByLabel("Research readiness")).toContainText("Research is temporarily unavailable");
   await expect(page.getByText("Deterministic RAG outage.")).toBeVisible();
 });

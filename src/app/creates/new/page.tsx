@@ -27,15 +27,12 @@ export default async function NewCreatePage({
   const initialTopic = typeof params.topic === "string" ? params.topic : "";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 py-8 sm:px-8 lg:px-10">
       <div>
-        <p className="text-sm font-medium tracking-wide text-[var(--cc-accent)]">
-          Content Creator v2
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold text-[var(--cc-ink)]">New content brief</h1>
+        <p className="text-sm font-medium text-[var(--cc-accent)]">New content</p>
+        <h1 className="mt-1 text-3xl font-semibold text-[var(--cc-ink)]">Create with confidence</h1>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
-          Enter the project site URL — we crawl it and use its pages for grounding and links, then
-          you fill the brief. BrandKit and outline gates run on the canvas.
+          Tell us what you need. We will guide you from source to a ready-to-review draft.
         </p>
       </div>
       <NewCreateForm initialTopic={initialTopic} initialContentType={initialContentType} />
