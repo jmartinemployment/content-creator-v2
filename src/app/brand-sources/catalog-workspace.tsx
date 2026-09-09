@@ -26,6 +26,16 @@ import {
   type StyleGuideTermRule,
 } from "./style-guide-policy";
 import {
+  EMPTY_AUDIENCE_POLICY,
+  multilineFromLines,
+  normalizeAudiencePolicy,
+  validateAudiencePolicy,
+  type AudienceObjectionResponse,
+  type AudiencePolicy,
+  type AudienceReadingLevel,
+  type AudienceValueProposition,
+} from "./audience-policy";
+import {
   EMPTY_PRODUCT_SCHEMA,
   emptyProductSchemaField,
   normalizeProductFieldValues,
@@ -111,6 +121,296 @@ function GrammarToggle({
       />
       {label}
     </label>
+  );
+}
+
+function AudienceListField({
+  label,
+  ariaLabel,
+  values,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <label className="block text-xs font-semibold">
+      {label}
+      <textarea
+        aria-label={ariaLabel}
+        className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+        value={multilineFromLines(values)}
+        onChange={(event) => onChange(linesFromMultiline(event.target.value))}
+      />
+    </label>
+  );
+}
+
+function AudiencePolicyEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: AudiencePolicy;
+  busy: boolean;
+  onChange: (next: AudiencePolicy) => void;
+  onSave: () => void;
+}) {
+  const updateValueProp = (index: number, patch: Partial<AudienceValueProposition>) => {
+    onChange({
+      ...policy,
+      valuePropositions: policy.valuePropositions.map((entry, entryIndex) =>
+        (entryIndex === index ? { ...entry, ...patch } : entry)),
+    });
+  };
+
+  const updateObjection = (index: number, patch: Partial<AudienceObjectionResponse>) => {
+    onChange({
+      ...policy,
+      objectionResponses: policy.objectionResponses.map((entry, entryIndex) =>
+        (entryIndex === index ? { ...entry, ...patch } : entry)),
+    });
+  };
+
+  return (
+    <section aria-label="Audience policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Typed audience policy</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Persona identity, language preferences, and topical bans for generation.
+          Saving always creates a new immutable version.
+        </p>
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Summary
+        <textarea
+          aria-label="Audience summary"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.summary}
+          onChange={(event) => onChange({ ...policy, summary: event.target.value })}
+        />
+      </label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs font-semibold">
+          Locale
+          <input
+            aria-label="Audience locale"
+            className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+            value={policy.locale}
+            onChange={(event) => onChange({ ...policy, locale: event.target.value })}
+          />
+        </label>
+        <label className="block text-xs font-semibold">
+          Reading level
+          <select
+            aria-label="Audience reading level"
+            className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+            value={policy.readingLevel ?? ""}
+            onChange={(event) => onChange({
+              ...policy,
+              readingLevel: (event.target.value || null) as AudienceReadingLevel | null,
+            })}
+          >
+            <option value="">Unspecified</option>
+            <option value="general">General</option>
+            <option value="professional">Professional</option>
+            <option value="expert">Expert</option>
+            <option value="executive">Executive</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Positioning statement
+        <textarea
+          aria-label="Audience positioning statement"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.positioningStatement}
+          onChange={(event) => onChange({ ...policy, positioningStatement: event.target.value })}
+        />
+      </label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AudienceListField
+          label="Industries (one per line)"
+          ariaLabel="Audience industries"
+          values={policy.industries}
+          onChange={(industries) => onChange({ ...policy, industries })}
+        />
+        <AudienceListField
+          label="Roles (one per line)"
+          ariaLabel="Audience roles"
+          values={policy.roles}
+          onChange={(roles) => onChange({ ...policy, roles })}
+        />
+        <AudienceListField
+          label="Pains (one per line)"
+          ariaLabel="Audience pains"
+          values={policy.pains}
+          onChange={(pains) => onChange({ ...policy, pains })}
+        />
+        <AudienceListField
+          label="Goals (one per line)"
+          ariaLabel="Audience goals"
+          values={policy.goals}
+          onChange={(goals) => onChange({ ...policy, goals })}
+        />
+        <AudienceListField
+          label="Buying triggers (one per line)"
+          ariaLabel="Audience buying triggers"
+          values={policy.buyingTriggers}
+          onChange={(buyingTriggers) => onChange({ ...policy, buyingTriggers })}
+        />
+        <AudienceListField
+          label="Use cases (one per line)"
+          ariaLabel="Audience use cases"
+          values={policy.useCases}
+          onChange={(useCases) => onChange({ ...policy, useCases })}
+        />
+        <AudienceListField
+          label="Preferred language (one per line)"
+          ariaLabel="Audience preferred language"
+          values={policy.preferredLanguage}
+          onChange={(preferredLanguage) => onChange({ ...policy, preferredLanguage })}
+        />
+        <AudienceListField
+          label="Banned topics (one per line)"
+          ariaLabel="Audience banned topics"
+          values={policy.bannedTopics}
+          onChange={(bannedTopics) => onChange({ ...policy, bannedTopics })}
+        />
+        <AudienceListField
+          label="Avoid phrases (one per line)"
+          ariaLabel="Audience avoid phrases"
+          values={policy.avoidPhrases}
+          onChange={(avoidPhrases) => onChange({ ...policy, avoidPhrases })}
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-semibold text-[var(--cc-muted)]">Value propositions</h4>
+          <button
+            type="button"
+            className="text-xs font-semibold text-[var(--cc-accent)]"
+            onClick={() => onChange({
+              ...policy,
+              valuePropositions: [...policy.valuePropositions, { title: "", description: "" }],
+            })}
+          >
+            Add value proposition
+          </button>
+        </div>
+        <ul className="mt-2 space-y-2">
+          {policy.valuePropositions.map((entry, index) => (
+            <li key={`vp-${index}`} className="grid gap-2 rounded-md border border-[var(--cc-line)] p-3 sm:grid-cols-[1fr_1fr_auto]">
+              <label className="text-xs font-semibold">
+                Title
+                <input
+                  aria-label={`Value proposition ${index + 1} title`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={entry.title}
+                  onChange={(event) => updateValueProp(index, { title: event.target.value })}
+                />
+              </label>
+              <label className="text-xs font-semibold">
+                Description
+                <input
+                  aria-label={`Value proposition ${index + 1} description`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={entry.description}
+                  onChange={(event) => updateValueProp(index, { description: event.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className="self-end text-xs font-semibold text-red-700"
+                onClick={() => onChange({
+                  ...policy,
+                  valuePropositions: policy.valuePropositions.filter((_, entryIndex) => entryIndex !== index),
+                })}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-semibold text-[var(--cc-muted)]">Objection responses</h4>
+          <button
+            type="button"
+            className="text-xs font-semibold text-[var(--cc-accent)]"
+            onClick={() => onChange({
+              ...policy,
+              objectionResponses: [...policy.objectionResponses, { objection: "", response: "" }],
+            })}
+          >
+            Add objection
+          </button>
+        </div>
+        <ul className="mt-2 space-y-2">
+          {policy.objectionResponses.map((entry, index) => (
+            <li key={`obj-${index}`} className="grid gap-2 rounded-md border border-[var(--cc-line)] p-3 sm:grid-cols-[1fr_1fr_auto]">
+              <label className="text-xs font-semibold">
+                Objection
+                <input
+                  aria-label={`Objection ${index + 1}`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={entry.objection}
+                  onChange={(event) => updateObjection(index, { objection: event.target.value })}
+                />
+              </label>
+              <label className="text-xs font-semibold">
+                Response
+                <input
+                  aria-label={`Objection response ${index + 1}`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={entry.response}
+                  onChange={(event) => updateObjection(index, { response: event.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className="self-end text-xs font-semibold text-red-700"
+                onClick={() => onChange({
+                  ...policy,
+                  objectionResponses: policy.objectionResponses.filter((_, entryIndex) => entryIndex !== index),
+                })}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Custom instructions
+        <textarea
+          aria-label="Audience custom instructions"
+          className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.customInstructions}
+          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
+        />
+      </label>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
   );
 }
 
@@ -510,6 +810,7 @@ export function CatalogWorkspace() {
   const [ingestionEvents, setIngestionEvents] = useState<IngestionEvent[]>([]);
   const [showActivity, setShowActivity] = useState(false);
   const [stylePolicy, setStylePolicy] = useState<StyleGuidePolicy>(EMPTY_STYLE_GUIDE_POLICY);
+  const [audiencePolicy, setAudiencePolicy] = useState<AudiencePolicy>(EMPTY_AUDIENCE_POLICY);
   const [productSchemaPolicy, setProductSchemaPolicy] = useState<ProductSchemaPolicy>({
     ...EMPTY_PRODUCT_SCHEMA,
     fields: [emptyProductSchemaField()],
@@ -607,6 +908,11 @@ export function CatalogWorkspace() {
   }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
 
   useEffect(() => {
+    if (active.kind !== "audience") return;
+    setAudiencePolicy(normalizeAudiencePolicy(selectedVersion?.data));
+  }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
+
+  useEffect(() => {
     if (active.kind !== "product-schema") return;
     const normalized = normalizeProductSchemaPolicy(selectedVersion?.data);
     setProductSchemaPolicy(normalized.fields.length
@@ -700,14 +1006,21 @@ export function CatalogWorkspace() {
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || `Draft creation failed (HTTP ${response.status}).`);
       const catalogId = typeof body?.id === "string" ? body.id : null;
-      if ((active.kind === "style-guide" || active.kind === "product-schema") && catalogId) {
+      if ((active.kind === "style-guide" || active.kind === "product-schema" || active.kind === "audience")
+        && catalogId) {
         const payload = active.kind === "style-guide"
           ? EMPTY_STYLE_GUIDE_POLICY
-          : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] };
+          : active.kind === "audience"
+            ? EMPTY_AUDIENCE_POLICY
+            : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] };
         const versionResponse = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(catalogId)}/versions`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ payload, schemaVersion: 1, locale: "en" }),
+          body: JSON.stringify({
+            payload,
+            schemaVersion: 1,
+            locale: active.kind === "audience" ? EMPTY_AUDIENCE_POLICY.locale : "en",
+          }),
         });
         const versionBody = await versionResponse.json().catch(() => null);
         if (!versionResponse.ok) {
@@ -746,6 +1059,38 @@ export function CatalogWorkspace() {
       if (typeof body?.id === "string") setSelectedVersionId(body.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Style Guide version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function saveAudienceVersion() {
+    if (!selected) return;
+    const validation = validateAudiencePolicy(audiencePolicy);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setActionBusy("save-audience");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(selected.id)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          payload: audiencePolicy,
+          schemaVersion: 1,
+          locale: audiencePolicy.locale || "en",
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Audience version.`);
+      await loadCatalog(active);
+      if (typeof body?.id === "string") setSelectedVersionId(body.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Audience version save failed.");
     } finally {
       setActionBusy(null);
     }
@@ -886,6 +1231,14 @@ export function CatalogWorkspace() {
               <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-xs font-semibold">Exact version<select aria-label="Exact version" className="mt-1 block rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" value={selectedVersion.id} onChange={(event) => setSelectedVersionId(event.target.value)}>{[...selected.versions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => <option key={version.id} value={version.id}>Version {version.versionNumber} · {version.lifecycle}</option>)}</select></label>{active.kind !== "brand-kit" ? ["review", "approve", "deprecate", "revoke"].map((action) => <button key={action} type="button" disabled={actionBusy !== null || selectedVersion.lifecycle === "revoked"} onClick={() => void lifecycleAction(action)} className="rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold capitalize disabled:opacity-40">{actionBusy === action ? "Working…" : action}</button>) : null}</div>
               {selected.versions.length > 1 ? <p className="mt-3 text-xs text-[var(--cc-muted)]">Compare versions by selecting an immutable revision. Approved content is never edited in place.</p> : null}
               <dl><VersionDetail version={selectedVersion} /></dl>
+              {active.kind === "audience" ? (
+                <AudiencePolicyEditor
+                  policy={audiencePolicy}
+                  busy={actionBusy === "save-audience"}
+                  onChange={setAudiencePolicy}
+                  onSave={() => void saveAudienceVersion()}
+                />
+              ) : null}
               {active.kind === "style-guide" ? (
                 <StyleGuidePolicyEditor
                   policy={stylePolicy}

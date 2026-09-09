@@ -13,18 +13,46 @@ type ResultRendererProps = {
 function ScorecardView({ payload }: { payload: ArtifactPayload }) {
   const score = payload.overallScore;
   const numeric = typeof score === "number" ? score : Number(score);
+  const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+  const fixes = Array.isArray(payload.prioritizedFixes) ? payload.prioritizedFixes : [];
   return (
     <div className="mt-2">
       <p className="text-sm text-[var(--cc-muted)]">Overall readiness</p>
       <p className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]" style={{ fontSize: "clamp(2.75rem, 6vw, 4.5rem)", lineHeight: 1 }}>
         {Number.isFinite(numeric) ? numeric : "—"}
       </p>
-      {Array.isArray(payload.prioritizedFixes) && payload.prioritizedFixes.length > 0 ? (
-        <ul className="mt-6 space-y-2">
-          {payload.prioritizedFixes.slice(0, 5).map((fix) => {
+      {dimensions.length ? (
+        <ul className="mt-6 grid gap-2 sm:grid-cols-2" aria-label="Readiness dimensions">
+          {dimensions.map((entry) => {
+            const row = entry as { dimension?: string; score?: number | null; explanation?: string };
+            const dimScore = typeof row.score === "number" ? row.score : Number(row.score);
+            return (
+              <li key={row.dimension} className="border-l-2 border-[var(--cc-line)] pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{row.dimension}</span>
+                <span className="ml-2 tabular-nums text-[var(--cc-muted)]">
+                  {Number.isFinite(dimScore) ? dimScore : "—"}
+                </span>
+                {row.explanation ? (
+                  <span className="mt-0.5 block text-xs text-[var(--cc-muted)]">{row.explanation}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {fixes.length ? (
+        <ul className="mt-6 space-y-2" aria-label="Prioritized fixes">
+          {fixes.slice(0, 5).map((fix, index) => {
+            if (typeof fix === "string") {
+              return (
+                <li key={fix} className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm">
+                  <span className="font-semibold text-[var(--cc-ink)]">{fix}</span>
+                </li>
+              );
+            }
             const row = fix as { title?: string; summary?: string };
             return (
-              <li key={row.title || row.summary} className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm">
+              <li key={row.title || row.summary || index} className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm">
                 <span className="font-semibold text-[var(--cc-ink)]">{row.title || "Fix"}</span>
                 {row.summary ? <span className="mt-0.5 block text-[var(--cc-muted)]">{row.summary}</span> : null}
               </li>
@@ -32,6 +60,202 @@ function ScorecardView({ payload }: { payload: ArtifactPayload }) {
           })}
         </ul>
       ) : null}
+    </div>
+  );
+}
+
+function ClaimAuditView({ payload }: { payload: ArtifactPayload }) {
+  const score = payload.overallScore;
+  const numeric = typeof score === "number" ? score : Number(score);
+  const sections = Array.isArray(payload.sections) ? payload.sections : [];
+  const claims = Array.isArray(payload.claims) ? payload.claims : [];
+  const unsupportedIds = new Set(
+    (Array.isArray(payload.unsupportedClaimIds) ? payload.unsupportedClaimIds : [])
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const unsupported = claims.filter((claim) => {
+    const row = claim as { claimId?: string; verificationStatus?: string };
+    return row.verificationStatus === "unsupported"
+      || (row.claimId != null && unsupportedIds.has(row.claimId));
+  });
+
+  return (
+    <div className="mt-2">
+      <p className="text-sm text-[var(--cc-muted)]">Fact density</p>
+      <p className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]" style={{ fontSize: "clamp(2.75rem, 6vw, 4.5rem)", lineHeight: 1 }}>
+        {Number.isFinite(numeric) ? numeric : "—"}
+      </p>
+      {unsupported.length ? (
+        <aside
+          aria-label="Unsupported claims"
+          className="mt-5 border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3"
+          data-testid="unsupported-claims"
+        >
+          <p className="text-sm font-semibold text-amber-950">Unsupported specific claims</p>
+          <ul className="mt-2 space-y-2">
+            {unsupported.slice(0, 8).map((claim) => {
+              const row = claim as { claimId?: string; text?: string; claimText?: string };
+              return (
+                <li key={row.claimId || row.text || row.claimText} className="text-sm text-amber-950/90">
+                  {row.text || row.claimText}
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      ) : null}
+      {sections.length ? (
+        <ul className="mt-6 space-y-3" aria-label="Section density">
+          {sections.map((section) => {
+            const row = section as {
+              sectionId?: string;
+              heading?: string;
+              score?: number | null;
+              specificFactCount?: number;
+              supportedFactCount?: number;
+              sentenceCount?: number;
+            };
+            const sectionScore = typeof row.score === "number" ? row.score : Number(row.score);
+            return (
+              <li key={row.sectionId || row.heading} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{row.heading || "Section"}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {[
+                    Number.isFinite(sectionScore) ? `score ${sectionScore}` : null,
+                    row.specificFactCount != null ? `${row.specificFactCount} specific` : null,
+                    row.supportedFactCount != null ? `${row.supportedFactCount} supported` : null,
+                    row.sentenceCount != null ? `${row.sentenceCount} sentences` : null,
+                  ].filter(Boolean).join(" · ")}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function EntityGraphView({ payload }: { payload: ArtifactPayload }) {
+  const entities = Array.isArray(payload.entities) ? payload.entities : [];
+  const relationships = Array.isArray(payload.relationships) ? payload.relationships : [];
+  const nameById = new Map(
+    entities.map((entry) => {
+      const row = entry as { entityId?: string; canonicalName?: string };
+      return [row.entityId ?? "", row.canonicalName ?? row.entityId ?? ""] as const;
+    }),
+  );
+
+  return (
+    <div className="mt-4">
+      <ul className="space-y-4" aria-label="Canonical entities">
+        {entities.map((entry) => {
+          const row = entry as {
+            entityId?: string;
+            canonicalName?: string;
+            entityType?: string;
+            confidence?: number;
+            aliases?: string[];
+          };
+          return (
+            <li key={row.entityId || row.canonicalName} className="border-l-2 border-[var(--cc-accent)] pl-3">
+              <p className="font-semibold text-[var(--cc-ink)]">{row.canonicalName}</p>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                {[row.entityType, row.confidence != null ? `confidence ${row.confidence}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              {Array.isArray(row.aliases) && row.aliases.length ? (
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                  Aliases: {row.aliases.join(", ")}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {relationships.length ? (
+        <ul className="mt-6 space-y-2" aria-label="Entity relationships">
+          {relationships.map((entry) => {
+            const row = entry as {
+              relationshipId?: string;
+              sourceEntityId?: string;
+              targetEntityId?: string;
+              relation?: string;
+              confidence?: number;
+            };
+            const source = nameById.get(row.sourceEntityId ?? "") || row.sourceEntityId;
+            const target = nameById.get(row.targetEntityId ?? "") || row.targetEntityId;
+            return (
+              <li key={row.relationshipId || `${source}-${target}`} className="text-sm text-[var(--cc-ink)]">
+                <span className="font-semibold">{source}</span>
+                <span className="mx-2 text-[var(--cc-muted)]">{row.relation || "related to"}</span>
+                <span className="font-semibold">{target}</span>
+                {row.confidence != null ? (
+                  <span className="ml-2 text-xs text-[var(--cc-muted)]">{row.confidence}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function JsonLdView({ payload }: { payload: ArtifactPayload }) {
+  const nodes = Array.isArray(payload.jsonLd) ? payload.jsonLd : [];
+  const validation = Array.isArray(payload.validation) ? payload.validation : [];
+  return (
+    <div className="mt-4 space-y-5">
+      {validation.length ? (
+        <ul className="space-y-2" aria-label="Schema validation">
+          {validation.map((entry, index) => {
+            const row = entry as {
+              code?: string;
+              schemaType?: string;
+              valid?: boolean;
+              detail?: string;
+            };
+            return (
+              <li
+                key={`${row.code || "finding"}-${index}`}
+                className={`border-l-2 pl-3 text-sm ${row.valid === false ? "border-amber-600" : "border-[var(--cc-accent)]/40"}`}
+                data-schema-valid={row.valid === false ? "false" : "true"}
+              >
+                <span className="font-semibold text-[var(--cc-ink)]">
+                  {row.schemaType || "Schema"}{row.code ? ` · ${row.code}` : ""}
+                </span>
+                {row.detail ? (
+                  <span className="mt-0.5 block text-[var(--cc-muted)]">{row.detail}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {nodes.length ? (
+        <ul className="space-y-3" aria-label="Generated JSON-LD">
+          {nodes.map((node, index) => {
+            const row = node as { "@type"?: string; name?: string };
+            const typeLabel = Array.isArray(row["@type"])
+              ? row["@type"].join(", ")
+              : row["@type"] || "Node";
+            return (
+              <li key={`${typeLabel}-${index}`} className="rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)]">
+                <p className="border-b border-[var(--cc-line)] px-3 py-2 text-sm font-semibold text-[var(--cc-ink)]">
+                  {typeLabel}{row.name ? ` · ${row.name}` : ""}
+                </p>
+                <pre className="max-h-48 overflow-auto p-3 font-mono text-[0.7rem] leading-relaxed text-[var(--cc-ink)]">
+                  {JSON.stringify(node, null, 2)}
+                </pre>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--cc-muted)]">No JSON-LD nodes were generated from visible content.</p>
+      )}
     </div>
   );
 }
@@ -188,6 +412,15 @@ function OutlineView({ payload }: { payload: ArtifactPayload }) {
 
 function resolveKind(kind: string | undefined, payload: ArtifactPayload): string {
   if (kind) return kind;
+  if (Array.isArray(payload.jsonLd)) return "json-ld";
+  if (Array.isArray(payload.entities)) return "entity-graph";
+  if (Array.isArray(payload.unsupportedClaimIds) || (
+    Array.isArray(payload.claims)
+    && Array.isArray(payload.sections)
+    && "overallScore" in payload
+  )) {
+    return "claim-audit";
+  }
   if ("overallScore" in payload) return "scorecard";
   if ("pairs" in payload) return "faq-list";
   if ("claims" in payload) return "claim-ledger";
@@ -218,6 +451,9 @@ export function TaskAgentResultRenderer({
         ) : null}
       </p>
       {resolved === "scorecard" ? <ScorecardView payload={payload} /> : null}
+      {resolved === "claim-audit" ? <ClaimAuditView payload={payload} /> : null}
+      {resolved === "entity-graph" ? <EntityGraphView payload={payload} /> : null}
+      {resolved === "json-ld" ? <JsonLdView payload={payload} /> : null}
       {resolved === "faq-list" ? <FaqListView payload={payload} /> : null}
       {resolved === "claim-ledger" ? <ClaimLedgerView payload={payload} /> : null}
       {resolved === "query-plan" ? <QueryPlanView payload={payload} /> : null}

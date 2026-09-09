@@ -91,7 +91,28 @@ function reset() {
   contextCatalogs = {
     knowledge: [item("knowledge-1", "knowledge", "Editorial Handbook", "knowledge-version-1")],
     "brand-kits": [item("brand-1", "brand-kit", "Example Systems", "brand-version-1")],
-    audiences: [item("audience-1", "audience", "Technical Leaders", "audience-version-1")],
+    audiences: [item("audience-1", "audience", "Technical Leaders", "audience-version-1", {
+      definitionJson: {
+        schemaVersion: 1,
+        summary: "Technical buyers evaluating evidence systems.",
+        locale: "en",
+        industries: ["software"],
+        roles: ["VP Engineering", "Staff Engineer"],
+        pains: ["ungrounded AI claims"],
+        goals: ["citeable drafts"],
+        buyingTriggers: ["audit pressure"],
+        useCases: ["content ops"],
+        readingLevel: "professional",
+        preferredLanguage: ["specific", "operational"],
+        bannedTopics: ["hype"],
+        avoidPhrases: ["synergy"],
+        positioningStatement: "Evidence first.",
+        valuePropositions: [{ title: "Proof", description: "Every claim cites a source." }],
+        objectionResponses: [{ objection: "Too slow", response: "Review gates are bounded." }],
+        additionalCharacteristics: [{ key: "region", value: "NA" }],
+        customInstructions: "Prefer concrete systems over slogans.",
+      },
+    })],
     "style-guides": [item("style-1", "style-guide", "Clear Technical Style", "style-version-1", {
       policyJson: {
         schemaVersion: 1,
@@ -883,6 +904,7 @@ const server = http.createServer(async (req, res) => {
         findings: [],
         audit: [],
         policyJson: catalogName === "style-guides" ? (body.payload || body.data || {}) : undefined,
+        definitionJson: catalogName === "audiences" ? (body.payload || body.data || {}) : undefined,
         fieldsJson: catalogName === "product-schemas" ? (body.payload || body.data || {}) : undefined,
       }],
     });
@@ -912,6 +934,35 @@ const server = http.createServer(async (req, res) => {
         return send(res, 400, { error: "Style Guide policy must be a JSON object." });
       }
     }
+    if (collection === "audiences") {
+      const payload = body.payload || {};
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return send(res, 400, { error: "Audience policy must be a JSON object." });
+      }
+      const allowedLevels = new Set(["general", "professional", "expert", "executive"]);
+      if (payload.readingLevel != null
+        && (typeof payload.readingLevel !== "string" || !allowedLevels.has(payload.readingLevel))) {
+        return send(res, 400, {
+          error: "Audience readingLevel must be general, professional, expert, or executive.",
+        });
+      }
+      if (Array.isArray(payload.bannedTopics)) {
+        const seen = new Set();
+        for (const topic of payload.bannedTopics) {
+          const key = String(topic).trim().toLowerCase();
+          if (!key) continue;
+          if (seen.has(key)) {
+            return send(res, 400, { error: "Audience bannedTopics must be unique." });
+          }
+          seen.add(key);
+        }
+      }
+      for (const entry of Array.isArray(payload.valuePropositions) ? payload.valuePropositions : []) {
+        if (!entry?.title?.trim()) {
+          return send(res, 400, { error: "Each Audience valuePropositions entry needs a non-empty title." });
+        }
+      }
+    }
     if (collection === "product-schemas") {
       const payload = body.payload || {};
       const fields = Array.isArray(payload.fields) ? payload.fields : [];
@@ -938,6 +989,7 @@ const server = http.createServer(async (req, res) => {
       findings: [],
       audit: [],
       policyJson: collection === "style-guides" ? (body.payload || {}) : undefined,
+      definitionJson: collection === "audiences" ? (body.payload || {}) : undefined,
       fieldsJson: collection === "product-schemas" ? (body.payload || {}) : undefined,
       fieldValuesJson: collection === "products" ? (body.payload || {}) : undefined,
       productSchemaVersionId: body.productSchemaVersionId,
@@ -1705,6 +1757,39 @@ const server = http.createServer(async (req, res) => {
           facets: { category: "analysis" },
         },
         {
+          id: "fact-density",
+          definitionId: "task-agent-10",
+          displayName: "Fact Density Audit",
+          description: "Find specific claims, measure support density, and identify unsupported statements.",
+          versionId: "task-agent-version-10",
+          version: "1.0.0",
+          digest: "n".repeat(64),
+          workflowGroup: "diagnostic",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "entity-mapper",
+          definitionId: "task-agent-11",
+          displayName: "Entity Mapper",
+          description: "Build an evidence-linked map of canonical entities and co-occurrence relationships.",
+          versionId: "task-agent-version-11",
+          version: "1.0.0",
+          digest: "o".repeat(64),
+          workflowGroup: "diagnostic",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "schema-markup",
+          definitionId: "task-agent-12",
+          displayName: "Schema Markup Generator",
+          description: "Generate and validate JSON-LD from visible page content only.",
+          versionId: "task-agent-version-12",
+          version: "1.0.0",
+          digest: "p".repeat(64),
+          workflowGroup: "diagnostic",
+          facets: { category: "analysis" },
+        },
+        {
           id: "query-planner",
           definitionId: "task-agent-2",
           displayName: "Query Planner",
@@ -1817,6 +1902,69 @@ const server = http.createServer(async (req, res) => {
         },
       },
       resultRenderer: { kind: "scorecard", artifactType: "readinessScore.v1" },
+    });
+  }
+  const documentDiagnosticUi = {
+    fields: [
+      { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
+      { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
+    ],
+  };
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/fact-density" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "fact-density",
+        displayName: "Fact Density Audit",
+        description: "Find specific claims, measure support density, and identify unsupported statements.",
+        versionId: "task-agent-version-10",
+        version: "1.0.0",
+        digest: "n".repeat(64),
+      },
+      workflow: {
+        endpoint: "fact-density",
+        artifactType: "factDensityReport.v1",
+        uiSchema: documentDiagnosticUi,
+      },
+      resultRenderer: { kind: "claim-audit", artifactType: "factDensityReport.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/entity-mapper" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "entity-mapper",
+        displayName: "Entity Mapper",
+        description: "Build an evidence-linked map of canonical entities and co-occurrence relationships.",
+        versionId: "task-agent-version-11",
+        version: "1.0.0",
+        digest: "o".repeat(64),
+      },
+      workflow: {
+        endpoint: "entity-map",
+        artifactType: "entityMap.v1",
+        uiSchema: documentDiagnosticUi,
+      },
+      resultRenderer: { kind: "entity-graph", artifactType: "entityMap.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/schema-markup" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "schema-markup",
+        displayName: "Schema Markup Generator",
+        description: "Generate and validate JSON-LD from visible page content only.",
+        versionId: "task-agent-version-12",
+        version: "1.0.0",
+        digest: "p".repeat(64),
+      },
+      workflow: {
+        endpoint: "schema-markup",
+        artifactType: "schemaMarkup.v1",
+        uiSchema: documentDiagnosticUi,
+      },
+      resultRenderer: { kind: "json-ld", artifactType: "schemaMarkup.v1" },
     });
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner" && req.method === "GET") {
@@ -1980,6 +2128,18 @@ const server = http.createServer(async (req, res) => {
     const created = createTaskRun("ai-readiness", "task-run-1", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/fact-density/runs" && req.method === "POST") {
+    const created = createTaskRun("fact-density", "task-run-10", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/entity-mapper/runs" && req.method === "POST") {
+    const created = createTaskRun("entity-mapper", "task-run-11", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/schema-markup/runs" && req.method === "POST") {
+    const created = createTaskRun("schema-markup", "task-run-12", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/runs" && req.method === "POST") {
     const created = createTaskRun("query-planner", "task-run-2", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
@@ -2039,6 +2199,139 @@ const server = http.createServer(async (req, res) => {
             { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
           ],
           rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
+        }));
+      }
+      if (runId === "task-run-10") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "fact-density", displayName: "Fact Density Audit", objective: "Measure claim support density." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-10",
+            artifactType: "factDensityReport.v1",
+            versions: [{
+              id: "artifact-version-10",
+              payloadJson: JSON.stringify({
+                artifactType: "factDensityReport.v1",
+                overallScore: 64,
+                sections: [{
+                  sectionId: "sec-1",
+                  heading: "Proof",
+                  sentenceCount: 2,
+                  specificFactCount: 1,
+                  supportedFactCount: 0,
+                  score: 50,
+                }],
+                claims: [{
+                  claimId: "sec-1-claim-1",
+                  sectionId: "sec-1",
+                  text: "Trusted by 500 customer teams worldwide.",
+                  classification: "specificFact",
+                  verificationStatus: "unsupported",
+                }],
+                unsupportedClaimIds: ["sec-1-claim-1"],
+                warnings: ["Specific claims without verified supplied evidence are marked unsupported."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "q".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+          ],
+          rerun: { capabilityId: "fact-density", versionId: "task-agent-version-10", retryOfRunId: "task-run-10" },
+        }));
+      }
+      if (runId === "task-run-11") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "entity-mapper", displayName: "Entity Mapper", objective: "Map canonical entities." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-11",
+            artifactType: "entityMap.v1",
+            versions: [{
+              id: "artifact-version-11",
+              payloadJson: JSON.stringify({
+                artifactType: "entityMap.v1",
+                entities: [
+                  {
+                    entityId: "entity-acme",
+                    canonicalName: "Acme Cloud",
+                    entityType: "brand",
+                    aliases: ["Acme"],
+                    confidence: 0.9,
+                    evidenceIds: ["ev-1"],
+                  },
+                  {
+                    entityId: "entity-evidence",
+                    canonicalName: "Evidence Engine",
+                    entityType: "product",
+                    aliases: [],
+                    confidence: 0.85,
+                    evidenceIds: ["ev-2"],
+                  },
+                ],
+                relationships: [{
+                  relationshipId: "rel-1",
+                  sourceEntityId: "entity-acme",
+                  targetEntityId: "entity-evidence",
+                  relation: "coOccursWith",
+                  confidence: 0.75,
+                  evidenceIds: ["ev-3"],
+                }],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "r".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+          ],
+          rerun: { capabilityId: "entity-mapper", versionId: "task-agent-version-11", retryOfRunId: "task-run-11" },
+        }));
+      }
+      if (runId === "task-run-12") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "schema-markup", displayName: "Schema Markup Generator", objective: "Generate JSON-LD." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-12",
+            artifactType: "schemaMarkup.v1",
+            versions: [{
+              id: "artifact-version-12",
+              payloadJson: JSON.stringify({
+                artifactType: "schemaMarkup.v1",
+                jsonLd: [{
+                  "@context": "https://schema.org",
+                  "@type": "Article",
+                  headline: "Reliable AI content",
+                  name: "Reliable AI content",
+                }],
+                validation: [{
+                  code: "article.ok",
+                  schemaType: "Article",
+                  valid: true,
+                  detail: "Article has a headline from visible content.",
+                }],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "s".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+          ],
+          rerun: { capabilityId: "schema-markup", versionId: "task-agent-version-12", retryOfRunId: "task-run-12" },
         }));
       }
       if (runId === "task-run-2") {

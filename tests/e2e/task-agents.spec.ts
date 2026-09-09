@@ -22,8 +22,7 @@ test("task-agent catalog runs a diagnostic and renders its durable result", asyn
 });
 
 test("query planner intelligence agent keeps demand as heuristic", async ({ page }) => {
-  await openAuthenticated(page, "/task-agents");
-  await page.getByRole("link", { name: "Open agent" }).nth(1).click();
+  await openAuthenticated(page, "/task-agents/query-planner");
   await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
   await expect(page.getByText("Runnable intelligence")).toBeVisible();
   await expect(page.getByLabel("Task agent input form")).toBeVisible();
@@ -67,6 +66,46 @@ test("citable claims content agent never invents unsupported statistics", async 
   await expect(page.getByTestId("contradiction-summary")).toContainText("Possible contradictions");
   await expect(page.locator('[data-contradiction="possible"]').first()).toBeVisible();
   await expect(page.getByText(/claimLedger\.v1 · valid/)).toBeVisible();
+});
+
+test("fact density diagnostic renders claim-audit unsupported claims", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/fact-density");
+  await expect(page.getByRole("heading", { name: "Fact Density Audit" })).toBeVisible();
+  await page.getByLabel("Visible page content").fill(
+    "# Proof\n\nTrusted by 500 customer teams worldwide.",
+  );
+  await page.getByRole("button", { name: "Run Fact Density Audit" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="claim-audit"]')).toBeVisible();
+  await expect(page.getByTestId("unsupported-claims")).toContainText("Trusted by 500 customer teams worldwide.");
+  await expect(page.getByText(/factDensityReport\.v1 · valid/)).toBeVisible();
+});
+
+test("entity mapper diagnostic renders entity-graph relationships", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/entity-mapper");
+  await expect(page.getByRole("heading", { name: "Entity Mapper" })).toBeVisible();
+  await page.getByLabel("Visible page content").fill(
+    "# Acme Cloud\n\nAcme Cloud ships Evidence Engine for citeable drafts.",
+  );
+  await page.getByRole("button", { name: "Run Entity Mapper" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="entity-graph"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Canonical entities" })).toContainText("Acme Cloud");
+  await expect(page.getByRole("list", { name: "Entity relationships" })).toContainText("coOccursWith");
+  await expect(page.getByText(/entityMap\.v1 · valid/)).toBeVisible();
+});
+
+test("schema markup diagnostic renders json-ld nodes", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/schema-markup");
+  await expect(page.getByRole("heading", { name: "Schema Markup Generator" })).toBeVisible();
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers.",
+  );
+  await page.getByRole("button", { name: "Run Schema Markup Generator" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="json-ld"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Generated JSON-LD" })).toContainText("Article");
+  await expect(page.getByText(/schemaMarkup\.v1 · valid/)).toBeVisible();
 });
 
 test("task agent pins governed context digest on the result shell", async ({ page }) => {

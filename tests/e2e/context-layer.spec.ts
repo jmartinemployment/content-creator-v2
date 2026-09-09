@@ -77,6 +77,38 @@ test("Style Guide policy editor saves an immutable typed version", async ({ page
   });
 });
 
+test("Audience policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Audiences" }).click();
+  await expect(page.getByRole("heading", { name: "Technical Leaders" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Audience policy" })).toBeVisible();
+  await expect(page.getByLabel("Audience summary")).toHaveValue(
+    "Technical buyers evaluating evidence systems.",
+  );
+  await expect(page.getByLabel("Audience roles")).toHaveValue("VP Engineering\nStaff Engineer");
+  await page.getByLabel("Audience banned topics").fill("hype\nunverified claims");
+  await page.getByLabel("Audience custom instructions").fill(
+    "Prefer concrete systems and citeable outcomes.",
+  );
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Technical Leaders as a new Audience version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/audiences/audience-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate.body)).toMatchObject({
+    schemaVersion: 1,
+    locale: "en",
+    payload: {
+      schemaVersion: 1,
+      bannedTopics: ["hype", "unverified claims"],
+      customInstructions: "Prefer concrete systems and citeable outcomes.",
+    },
+  });
+});
+
 test("Product Schema and Product IQ editors save typed versions with claims", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Product Schemas" }).click();
