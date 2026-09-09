@@ -59,6 +59,20 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
   ],
   "query-planner": [
     {
+      id: "seoProjectId",
+      label: "SEO project ID (GSC)",
+      type: "shortText",
+      required: false,
+      placeholder: "Guid of a Geek SEO project with GSC connected",
+    },
+    {
+      id: "observedQueries",
+      label: "Observed GSC queries",
+      type: "longText",
+      required: false,
+      placeholder: "Loaded from Google Search Console (one per line)",
+    },
+    {
       id: "hypothesisTopics",
       label: "Hypothesis topics",
       type: "longText",
@@ -157,17 +171,33 @@ export function adaptTaskAgentInput(
   }
   if (capabilityId === "query-planner") {
     const topics = lines(values.hypothesisTopics);
-    const queries = lines(values.importedQueries).map((query) => ({
+    const sourceId = (values.gscSourceId ?? "").trim() || "gsc:manual";
+    const observed = lines(values.observedQueries).map((query) => ({
+      query,
+      origin: "observed",
+      sourceId,
+      observedAtUtc: (values.gscFetchedAtUtc ?? "").trim() || undefined,
+    }));
+    const imported = lines(values.importedQueries).map((query) => ({
       query,
       origin: "imported",
       sourceReference: "manual-import",
     }));
+    const queries = [...observed, ...imported];
     if (topics.length === 0 && queries.length === 0) return null;
+    const sources = observed.length
+      ? [{
+        sourceId,
+        url: (values.gscSiteUrl ?? "").trim() || undefined,
+        title: "Google Search Console",
+        retrievedAtUtc: (values.gscFetchedAtUtc ?? "").trim() || undefined,
+      }]
+      : [];
     return {
       contractVersion,
       queries,
       hypothesisTopics: topics,
-      sources: [],
+      sources,
       maxGeneratedQueries: 20,
     };
   }
@@ -230,7 +260,9 @@ export function schemaFormCanStart(
   values: Record<string, string>,
 ): boolean {
   if (capabilityId === "query-planner") {
-    return lines(values.hypothesisTopics).length > 0 || lines(values.importedQueries).length > 0;
+    return lines(values.hypothesisTopics).length > 0
+      || lines(values.importedQueries).length > 0
+      || lines(values.observedQueries).length > 0;
   }
   if (capabilityId === "faq-generator") {
     const topic = (values.topic ?? "").trim();

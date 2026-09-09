@@ -2056,12 +2056,47 @@ const server = http.createServer(async (req, res) => {
         artifactType: "queryPlan.v1",
         uiSchema: {
           fields: [
+            { id: "seoProjectId", label: "SEO project ID (GSC)", type: "shortText", required: false },
+            { id: "observedQueries", label: "Observed GSC queries", type: "longText", required: false },
             { id: "hypothesisTopics", label: "Hypothesis topics", type: "longText", required: false },
             { id: "importedQueries", label: "Imported queries", type: "longText", required: false },
           ],
         },
       },
       resultRenderer: { kind: "query-plan", artifactType: "queryPlan.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/observed-queries" && req.method === "GET") {
+    const seoProjectId = url.searchParams.get("seoProjectId") || "seo-project-1";
+    return send(res, 200, {
+      contractVersion: "gcc-query-planner-observed.v1",
+      seoProjectId,
+      siteUrl: "sc-domain:example.test",
+      startDate: "2026-06-01",
+      endDate: "2026-09-01",
+      fetchedAtUtc: "2026-09-09T12:00:00.000Z",
+      source: {
+        sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+        kind: "google-search-console",
+        label: "sc-domain:example.test",
+        siteUrl: "sc-domain:example.test",
+      },
+      demandDisclaimer: "Observed GSC queries are first-party search analytics, not traffic, volume, ranking, or demand scores for planning heuristics.",
+      queries: [
+        {
+          query: "AI content readiness checklist",
+          origin: "observed",
+          sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+          observedAtUtc: "2026-09-09T12:00:00.000Z",
+        },
+        {
+          query: "how to measure AI readiness",
+          origin: "observed",
+          sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+          observedAtUtc: "2026-09-09T12:00:00.000Z",
+        },
+      ],
+      queryCount: 2,
     });
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/faq-generator" && req.method === "GET") {

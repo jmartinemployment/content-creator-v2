@@ -136,6 +136,8 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [competitorName, setCompetitorName] = useState("Competitor");
   const [competitorContent, setCompetitorContent] = useState("");
   const [schemaValues, setSchemaValues] = useState<Record<string, string>>({});
+  const [gscLoadBusy, setGscLoadBusy] = useState(false);
+  const [gscNotice, setGscNotice] = useState<string | null>(null);
   const [contextSelection, setContextSelection] = useState<ContextSelectionRequest>(EMPTY_CONTEXT_SELECTION);
   const [contextPreview, setContextPreview] = useState<ResolvedContextPreview | null>(null);
   const [contextUploadProcessing, setContextUploadProcessing] = useState(false);
@@ -207,6 +209,48 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       window.clearInterval(timer);
     };
   }, [run]);
+
+  async function loadObservedQueries() {
+    const seoProjectId = (schemaValues.seoProjectId ?? "").trim();
+    if (!seoProjectId) {
+      setError("Enter an SEO project ID with Google Search Console connected.");
+      return;
+    }
+    setGscLoadBusy(true);
+    setGscNotice(null);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/gcc-v2/task-agents/query-planner/observed-queries?seoProjectId=${encodeURIComponent(seoProjectId)}&rowLimit=100`,
+        { cache: "no-store" },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `GSC load failed (HTTP ${response.status}).`);
+      }
+      const queries = Array.isArray(body?.queries)
+        ? body.queries
+          .map((entry: { query?: string }) => (typeof entry?.query === "string" ? entry.query.trim() : ""))
+          .filter(Boolean)
+        : [];
+      setSchemaValues((current) => ({
+        ...current,
+        observedQueries: queries.join("\n"),
+        gscSourceId: typeof body?.source?.sourceId === "string" ? body.source.sourceId : "",
+        gscSiteUrl: typeof body?.siteUrl === "string" ? body.siteUrl : "",
+        gscFetchedAtUtc: typeof body?.fetchedAtUtc === "string" ? body.fetchedAtUtc : "",
+      }));
+      setGscNotice(
+        queries.length
+          ? `Loaded ${queries.length} observed GSC quer${queries.length === 1 ? "y" : "ies"} from ${body?.siteUrl || "Search Console"}. Metrics are not used for planning scores.`
+          : "No observed queries were returned for this SEO project and date range.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load GSC observed queries.");
+    } finally {
+      setGscLoadBusy(false);
+    }
+  }
 
   function canStart() {
     if (useSchemaDrivenForm) {
@@ -560,12 +604,33 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
 
       <section className="mt-6 rounded-xl border border-[var(--cc-line)] bg-white p-5">
         {useSchemaDrivenForm ? (
-          <SchemaForm
-            fields={schemaFields}
-            values={schemaValues}
-            onChange={setSchemaValues}
-            disabled={running}
-          />
+          <>
+            <SchemaForm
+              fields={schemaFields}
+              values={schemaValues}
+              onChange={setSchemaValues}
+              disabled={running}
+            />
+            {isQueryPlanner ? (
+              <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3">
+                <p className="text-xs text-[var(--cc-muted)]">
+                  Load first-party Google Search Console queries as <span className="font-semibold text-[var(--cc-ink)]">observed</span> provenance.
+                  Impressions and position are not used for planner priority scores.
+                </p>
+                <button
+                  type="button"
+                  disabled={running || gscLoadBusy}
+                  onClick={() => void loadObservedQueries()}
+                  className="mt-3 rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {gscLoadBusy ? "Loading GSC…" : "Load GSC observed queries"}
+                </button>
+                {gscNotice ? (
+                  <p role="status" className="mt-2 text-xs text-[var(--cc-muted)]">{gscNotice}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </>
         ) : isQueryPlanner ? (
           <>
             <label className="block text-sm font-semibold" htmlFor="hypothesisTopics">

@@ -34,6 +34,38 @@ test("query planner intelligence agent keeps demand as heuristic", async ({ page
   await expect(page.getByText(/queryPlan\.v1 · valid/)).toBeVisible();
 });
 
+test("query planner loads observed GSC queries with provenance", async ({ page, request }) => {
+  await openAuthenticated(page, "/task-agents/query-planner");
+  await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
+  await page.getByLabel("SEO project ID (GSC)").fill("11111111-1111-4111-8111-111111111111");
+  await page.getByRole("button", { name: "Load GSC observed queries" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Loaded 2 observed GSC/ })).toBeVisible();
+  await expect(page.getByLabel("Observed GSC queries")).toHaveValue(
+    "AI content readiness checklist\nhow to measure AI readiness",
+  );
+  await page.getByRole("button", { name: "Run Query Planner" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="query-plan"]')).toBeVisible();
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const runCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/task-agents/query-planner/runs");
+  expect(runCreate).toBeTruthy();
+  const body = JSON.parse(runCreate.body);
+  expect(body.input.queries).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      query: "AI content readiness checklist",
+      origin: "observed",
+    }),
+  ]));
+  expect(body.input.sources).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      title: "Google Search Console",
+      url: "sc-domain:example.test",
+    }),
+  ]));
+});
+
 test("faq generator content agent renders grounded FAQ pairs", async ({ page }) => {
   await openAuthenticated(page, "/task-agents/faq-generator");
   await expect(page.getByRole("heading", { name: "FAQ Generator" })).toBeVisible();
