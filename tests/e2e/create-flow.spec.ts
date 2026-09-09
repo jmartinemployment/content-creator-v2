@@ -192,6 +192,24 @@ test("skill admin validates prohibited parser imports and completes lifecycle wi
   await expect(page.getByText(/published → deprecated/)).toBeVisible();
 });
 
+test("skill admin downloads Agentic Skills listings into quarantine", async ({ page, request }) => {
+  await openAuthenticated(page, "/skills/admin");
+  await page.getByLabel("Agentic Skills URL").fill(
+    "https://agenticskills.io/skills/find-skills",
+  );
+  await page.getByRole("button", { name: "Download to quarantine" }).click();
+  await expect(page.getByText("Agentic Skill imported to quarantine")).toBeVisible();
+  await expect(page.getByText(/https:\/\/github\.com\/vercel-labs\/skills/)).toBeVisible();
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const imported = requests.find((entry: { path: string }) =>
+    entry.path === "/api/geek-content-creator-v2/skills/admin/import-agentic-skill"
+  );
+  expect(JSON.parse(imported.body)).toEqual({
+    listingUrl: "https://agenticskills.io/skills/find-skills",
+  });
+});
+
 test("guided create flow reaches approved, validated canvas with citations and provenance", async ({ page, request }) => {
   await openAuthenticated(page, "/creates/new");
 
@@ -305,4 +323,58 @@ test("guided create flow reaches approved, validated canvas with citations and p
     "Operator-authored exact content survives reload without an AI rewrite.",
     { exact: true },
   )).toBeVisible();
+});
+
+test("create continues when specialist catalog is unavailable", async ({ page, request }) => {
+  await page.addInitScript(() => {
+    sessionStorage.clear();
+  });
+  await page.route("**/api/gcc-v2/agents", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "specialists temporarily unavailable" }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await openAuthenticated(page, "/creates/new");
+
+  await page.getByLabel("Project site URL").fill("example.test");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Working title").fill("Catalog Outage Continue");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Primary search phrase").fill("deterministic content workflow");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByText(/Specialists unavailable/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review" })).toBeEnabled();
+  await page.getByRole("button", { name: "Review" }).click();
+
+  await expect(page.getByLabel("Resolved specialist team")).toContainText(
+    "backend's default published team",
+  );
+  await page.getByRole("button", { name: "Create content", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm partners & create" }).click();
+  await expect(page).toHaveURL(/\/creates\/create-1\?jobId=job-1/);
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const createRequest = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/creates",
+  );
+  expect(createRequest).toBeTruthy();
+  expect(JSON.parse(createRequest.body).selectedAgentIds).toBeUndefined();
+
+  const generateRequest = requests.find((entry: { path: string }) =>
+    entry.path === "/api/geek-content-creator-v2/creates/create-1/generate",
+  );
+  expect(generateRequest).toBeTruthy();
+  expect(JSON.parse(generateRequest.body).selectedAgentIds).toBeUndefined();
+
+  await expect(page.getByRole("heading", { name: "Brand kit awaiting approval" })).toBeVisible();
 });

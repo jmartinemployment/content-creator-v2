@@ -63,6 +63,16 @@ function JobRunnerSession({ jobId: initialJobId, createId }: JobRunnerProps) {
       setAwaitingApproval(false);
       setStatus("ready");
     }
+    if (evt.type === "JobFailed") {
+      setAwaitingApproval(false);
+      setStatus("failed");
+      if (payload && typeof payload === "object" && "error" in payload) {
+        const detail = (payload as { error?: unknown }).error;
+        setError(typeof detail === "string" && detail.trim() ? detail : "The job failed.");
+      } else {
+        setError("The job failed.");
+      }
+    }
     if (evt.type === "JobCanceled") {
       setAwaitingApproval(false);
       setStatus("canceled");
@@ -165,7 +175,7 @@ function JobRunnerSession({ jobId: initialJobId, createId }: JobRunnerProps) {
     }
   }
 
-  const isTerminal = status === "ready" || status === "canceled";
+  const isTerminal = status === "ready" || status === "failed" || status === "canceled";
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-[var(--cc-line)] p-4">

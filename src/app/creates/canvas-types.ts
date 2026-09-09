@@ -112,6 +112,16 @@ export type ValidationReportView = {
   outstandingIssues: boolean;
   repairAttempt?: number;
   agentExecution?: AgentExecution | null;
+  validation?: {
+    approved?: boolean;
+    unsupportedClaimCount?: number;
+    issues?: Array<{
+      sectionTitle?: string | null;
+      category?: string;
+      detail?: string;
+      repairInstruction?: string;
+    }>;
+  } | null;
 };
 
 /** Published CMS location captured on an AI-visibility snapshot — mirrors

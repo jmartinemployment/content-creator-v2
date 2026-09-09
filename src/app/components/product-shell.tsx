@@ -7,14 +7,17 @@ import type { ReactNode } from "react";
 const primaryNav = [
   { href: "/", label: "Dashboard", glyph: "⌂" },
   { href: "/creates", label: "Content", glyph: "▤" },
-  { href: "/agents", label: "Agents", glyph: "◎" },
+  { href: "/projects", label: "Projects", glyph: "◇" },
+  { href: "/grid", label: "Grid", glyph: "▦" },
+  { href: "/roi", label: "ROI", glyph: "%" },
+  { href: "/task-agents", label: "Task Agents", glyph: "◎" },
+  { href: "/studio", label: "Studio", glyph: "✎" },
+  { href: "/agents", label: "Agent Settings", glyph: "⚙" },
   { href: "/skills", label: "Skills", glyph: "✦" },
-  { href: "/brand-sources", label: "Brand & Sources", glyph: "◉" },
+  { href: "/brand-sources", label: "Brand & Source Library", glyph: "◉" },
 ] as const;
 
-const futureNav = [
-  { label: "Assets", glyph: "◇" },
-] as const;
+const futureNav: ReadonlyArray<{ label: string; glyph: string }> = [];
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);

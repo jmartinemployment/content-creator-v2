@@ -35,9 +35,9 @@ async function reachContextReview(page: Page, open = true) {
   await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();
 }
 
-test("Brand & Sources catalogs expose lifecycle, provenance, and ingestion activity", async ({ page }) => {
+test("Brand and source catalogs expose lifecycle, provenance, and ingestion activity", async ({ page }) => {
   await openAuthenticated(page, "/brand-sources");
-  await expect(page.getByRole("heading", { name: "Brand & Sources" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Brand & Source Library" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Brand & Sources" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Editorial Handbook" })).toBeVisible();
   await expect(page.getByText("plain-text 1.0.0")).toBeVisible();
@@ -50,9 +50,9 @@ test("Brand & Sources catalogs expose lifecycle, provenance, and ingestion activ
   await expect(page.getByText("Editorial handbook indexed")).toBeVisible();
 });
 
-test("knowledge upload sends bytes directly to issued storage URL and finalizes with JSON", async ({ page, request }) => {
+test("approved source upload sends bytes directly to issued storage URL and finalizes with JSON", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
-  await page.getByLabel("Upload source").setInputFiles({
+  await page.getByLabel("Upload additional reference").setInputFiles({
     name: "source.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("Private governed source"),
@@ -72,6 +72,16 @@ test("knowledge upload sends bytes directly to issued storage URL and finalizes 
   expect(JSON.parse(bffUploadCalls[0].body)).toMatchObject({ fileName: "source.txt", byteSize: 23 });
   expect(JSON.parse(bffUploadCalls[0].body).sha256).toMatch(/^[a-f0-9]{64}$/);
   expect(JSON.parse(bffUploadCalls[1].body).sha256).toMatch(/^[a-f0-9]{64}$/);
+});
+
+test("completed website research can be reused and promoted to the source library", async ({ page }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add website to Source Library" }).click();
+  await expect(page.getByRole("button", { name: "Added to Source Library · processing" })).toBeDisabled();
 });
 
 test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page, request }) => {

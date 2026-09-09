@@ -23,6 +23,7 @@ async function adminRequest(path: string, init?: RequestInit): Promise<unknown> 
 export function SkillAdminClient({ initialWorkspace }: { initialWorkspace: SkillAdminWorkspace }) {
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [selectedId, setSelectedId] = useState(initialWorkspace.skills[0]?.versionId ?? initialWorkspace.skills[0]?.id ?? "");
+  const [agenticSkillsUrl, setAgenticSkillsUrl] = useState("");
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [commit, setCommit] = useState("");
   const [skillPath, setSkillPath] = useState("");
@@ -74,6 +75,18 @@ export function SkillAdminClient({ initialWorkspace }: { initialWorkspace: Skill
     });
   }
 
+  async function importAgenticSkill(event: FormEvent) {
+    event.preventDefault();
+    const value = agenticSkillsUrl.trim();
+    if (!/^https:\/\/agenticskills\.io\/skills\/[^/]+\/?$/i.test(value)) {
+      setError("Enter an Agentic Skills listing URL such as https://agenticskills.io/skills/find-skills.");
+      return;
+    }
+    await mutate("Agentic Skill imported to quarantine", "import-agentic-skill", {
+      listingUrl: value,
+    });
+  }
+
   async function dispositionFinding(skill: AdminSkillDetail, findingId: string, disposition: string) {
     const rationale = window.prompt("Reviewer rationale (required)")?.trim();
     if (!rationale) return;
@@ -95,10 +108,24 @@ export function SkillAdminClient({ initialWorkspace }: { initialWorkspace: Skill
   return (
     <div className="mt-8 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="space-y-5">
+        <form onSubmit={importAgenticSkill} className="rounded-xl border border-[var(--cc-line)] bg-white p-4">
+          <h2 className="font-bold text-[var(--cc-ink)]">Import from Agentic Skills</h2>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            Paste a listing from agenticskills.io. We resolve its upstream GitHub source to an immutable commit,
+            download it into quarantine, and run the same static scans and approval workflow as a manual import.
+          </p>
+          <label className="mt-4 block text-xs font-semibold">Agentic Skills URL
+            <input aria-label="Agentic Skills URL" required value={agenticSkillsUrl} onChange={(event) => setAgenticSkillsUrl(event.target.value)} className="mt-1 w-full rounded-md border border-[var(--cc-line)] px-3 py-2 text-sm" placeholder="https://agenticskills.io/skills/find-skills" />
+          </label>
+          <button disabled={busy !== null} className="mt-4 rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {busy === "Agentic Skill imported to quarantine" ? "Resolving and scanning…" : "Download to quarantine"}
+          </button>
+        </form>
+
         <form onSubmit={importSkill} className="rounded-xl border border-[var(--cc-line)] bg-white p-4">
           <h2 className="font-bold text-[var(--cc-ink)]">Import to quarantine</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Repository URL, immutable commit, and skill path only. Marketplace listings are discovery metadata.
+            Or provide the upstream repository, immutable commit, and skill path directly.
             Hosted parsing services, cloud parsers, install commands, and runtime installation are rejected.
           </p>
           <label className="mt-4 block text-xs font-semibold">Source repository

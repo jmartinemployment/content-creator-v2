@@ -346,6 +346,13 @@ type NewCreateFormProps = {
   initialContentType?: ContentType;
 };
 
+type SavedProjectSite = {
+  runId: string;
+  siteUrl: string;
+  status: string;
+  completedAtUtc?: string | null;
+};
+
 export function NewCreateForm({
   initialTopic = "",
   initialContentType = "pillar",
@@ -361,6 +368,8 @@ export function NewCreateForm({
   const [analyzingLabel, setAnalyzingLabel] = useState<string | null>(null);
 
   const [projectSiteCrawlRunId, setProjectSiteCrawlRunId] = useState<string | null>(null);
+  const [sourceLibraryStatus, setSourceLibraryStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [sourceLibraryError, setSourceLibraryError] = useState<string | null>(null);
   const [section, setSection] = useState<SiteSectionContext | null>(null);
 
   const [title, setTitle] = useState(initialTopic);
@@ -403,6 +412,7 @@ export function NewCreateForm({
   const [resolvedTeam, setResolvedTeam] = useState<ResolvedAgentTeam | null>(null);
   const [resolvedTeamLoading, setResolvedTeamLoading] = useState(false);
   const [resolvedTeamError, setResolvedTeamError] = useState<string | null>(null);
+  const [savedProjectSites, setSavedProjectSites] = useState<SavedProjectSite[]>([]);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
   useEffect(() => {
@@ -431,6 +441,21 @@ export function NewCreateForm({
 
   useEffect(() => {
     const controller = new AbortController();
+    void fetch("/api/gcc-v2/project-site/runs", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const body = await response.json().catch(() => []);
+        return Array.isArray(body) ? body as SavedProjectSite[] : [];
+      })
+      .then(setSavedProjectSites)
+      .catch(() => {
+        // Direct URL entry remains available when saved-site discovery is unavailable.
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
     void fetch("/api/gcc-v2/agents", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const body = await response.json().catch(() => null);
@@ -444,7 +469,10 @@ export function NewCreateForm({
         });
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setAgentCatalogError(cause instanceof Error ? cause.message : "Could not load specialists");
+        if (!controller.signal.aborted) {
+          setAgentCatalog(null);
+          setAgentCatalogError(cause instanceof Error ? cause.message : "Could not load specialists");
+        }
       });
     return () => controller.abort();
   }, []);
@@ -484,7 +512,17 @@ export function NewCreateForm({
   }, [alsoDrafts, primaryDraft, step]);
 
   useEffect(() => {
-    if (step !== "review" || !agentCatalog) return;
+    if (step !== "review") return;
+    // Catalog fetch failed: skip client resolve; Create/Generate use the backend default team.
+    if (!agentCatalog && agentCatalogError) {
+      void Promise.resolve().then(() => {
+        setResolvedTeam(null);
+        setResolvedTeamError(null);
+        setResolvedTeamLoading(false);
+      });
+      return;
+    }
+    if (!agentCatalog) return;
     const contentTypes = [
       primaryDraft,
       ...alsoDraftOptionsFor(primaryDraft)
@@ -528,7 +566,7 @@ export function NewCreateForm({
         if (!controller.signal.aborted) setResolvedTeamLoading(false);
       });
     return () => controller.abort();
-  }, [agentCatalog, alsoDrafts, primaryDraft, selectedAgentIds, step]);
+  }, [agentCatalog, agentCatalogError, alsoDrafts, primaryDraft, selectedAgentIds, step]);
 
   useEffect(() => {
     // Wait until session draft hydrate finishes — otherwise the empty initial state clears a saved draft.
@@ -726,6 +764,8 @@ export function NewCreateForm({
     setAnalyzingLabel(force ? "Starting a new crawl…" : "Looking up existing crawl…");
     setSection(null);
     setProjectSiteCrawlRunId(null);
+    setSourceLibraryStatus("idle");
+    setSourceLibraryError(null);
     setSiteHierarchy(null);
     setHierarchyError(null);
     setToolsPreflight(null);
@@ -994,8 +1034,10 @@ export function NewCreateForm({
       setError("Confirm the model-policy quality tradeoff before continuing.");
       return;
     }
-    if (selectedProducerCount !== 1 || !resolvedTeam) {
-      setError("Select and resolve exactly one specialist producer before continuing.");
+    if (!producerSelectionReady || !teamReady) {
+      setError(usingBackendDefaultTeam
+        ? "Could not prepare the default specialist team. Retry when the agent service recovers."
+        : "Select and resolve exactly one specialist producer before continuing.");
       return;
     }
 
@@ -1009,7 +1051,9 @@ export function NewCreateForm({
           contentType: primaryDraft,
           siteUrl,
           siteSection: siteSectionForApi(section),
-          selectedAgentIds,
+          ...(effectiveSelectedAgentIds.length > 0
+            ? { selectedAgentIds: effectiveSelectedAgentIds }
+            : {}),
           contextSelection,
         }),
       });
@@ -1027,7 +1071,9 @@ export function NewCreateForm({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
           projectSiteCrawlRunId,
-          selectedAgentIds,
+          ...(effectiveSelectedAgentIds.length > 0
+            ? { selectedAgentIds: effectiveSelectedAgentIds }
+            : {}),
         }),
       });
       if (!preRes.ok) {
@@ -1068,8 +1114,10 @@ export function NewCreateForm({
       );
       return;
     }
-    if (selectedProducerCount !== 1 || !resolvedTeam) {
-      setError("Select and resolve exactly one specialist producer before continuing.");
+    if (!producerSelectionReady || !teamReady) {
+      setError(usingBackendDefaultTeam
+        ? "Could not prepare the default specialist team. Retry when the agent service recovers."
+        : "Select and resolve exactly one specialist producer before continuing.");
       return;
     }
     if (contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0) {
@@ -1090,7 +1138,9 @@ export function NewCreateForm({
           contentTypes,
           partnerToolsConfirmed: true,
           modelPolicy,
-          selectedAgentIds,
+          ...(effectiveSelectedAgentIds.length > 0
+            ? { selectedAgentIds: effectiveSelectedAgentIds }
+            : {}),
           contextSelection,
         }),
       });
@@ -1132,7 +1182,9 @@ export function NewCreateForm({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
           projectSiteCrawlRunId,
-          selectedAgentIds,
+          ...(effectiveSelectedAgentIds.length > 0
+            ? { selectedAgentIds: effectiveSelectedAgentIds }
+            : {}),
         }),
       });
       if (!preRes.ok) {
@@ -1155,6 +1207,30 @@ export function NewCreateForm({
     }
   }
 
+  async function saveProjectSiteAsApprovedSource() {
+    if (!projectSiteCrawlRunId) return;
+    setSourceLibraryStatus("saving");
+    setSourceLibraryError(null);
+    try {
+      const response = await fetch(
+        `/api/gcc-v2/project-site/runs/${projectSiteCrawlRunId}/promote-to-source`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ approve: true }),
+        },
+      );
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setSourceLibraryStatus("saved");
+    } catch (cause) {
+      setSourceLibraryStatus("idle");
+      setSourceLibraryError(
+        cause instanceof Error ? cause.message : "Could not add the website to the source library.",
+      );
+    }
+  }
+
   const currentStep = step === "analyzing" ? "source" : step;
   const currentIndex = WIZARD_STEPS.findIndex((item) => item.key === currentStep);
   const selectedContentTypes = [
@@ -1171,6 +1247,32 @@ export function NewCreateForm({
     agent.role !== "producer" && ["marketing", "seo", "aeo"].includes(agent.specialty),
   );
   const selectedProducerCount = producerAgents.filter((agent) => selectedAgentIds.includes(agent.id)).length;
+  // Phase 0: catalog failure must not block create — backend ResolveAsync(null) picks the default published team.
+  const usingBackendDefaultTeam = Boolean(agentCatalogError) && !agentCatalog;
+  const producerSelectionReady = selectedProducerCount === 1 || usingBackendDefaultTeam;
+  const teamReady = Boolean(resolvedTeam) || usingBackendDefaultTeam;
+  const effectiveSelectedAgentIds = usingBackendDefaultTeam ? [] : selectedAgentIds;
+  const creationBlockers = [
+    contextUploadProcessing ? "An attachment is still being processed." : null,
+    ...(contextPreview?.blockingFindings.map((finding) => finding.message) ?? []),
+    resolvedSkillsLoading
+      ? "The approved instruction bundle is still loading."
+      : !resolvedSkills
+        ? resolvedSkillsError || "The approved instruction bundle is unavailable."
+        : null,
+    usingBackendDefaultTeam
+      ? null
+      : resolvedTeamLoading
+        ? "The selected agent team is still loading."
+        : !resolvedTeam
+          ? resolvedTeamError || "The selected agent team is unavailable."
+          : null,
+    ragStatusLoading
+      ? "Research and generation availability is still being checked."
+      : !ragStatus?.available || ragStatus.citeableGenerateAvailable === false
+        ? ragStatus?.reason || "Research and generation are temporarily unavailable."
+        : null,
+  ].filter((message): message is string => Boolean(message));
 
   function addConcept(value = conceptInput) {
     const concept = value.trim();
@@ -1232,7 +1334,29 @@ export function NewCreateForm({
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
               We use your website to understand your offering, voice, and internal links.
             </p>
-            <div className={`${fieldClass} mt-6`}>
+            {savedProjectSites.length ? (
+              <div className={`${fieldClass} mt-6`}>
+                <label className={labelClass} htmlFor="savedSite">Previously analyzed sites</label>
+                <select
+                  id="savedSite"
+                  aria-label="Previously analyzed sites"
+                  className={inputClass}
+                  value={savedProjectSites.some((site) => site.siteUrl === siteUrlInput) ? siteUrlInput : ""}
+                  onChange={(event) => {
+                    setSiteUrlInput(event.target.value);
+                    setForceRecrawl(false);
+                  }}
+                  disabled={busy || step === "analyzing"}
+                >
+                  <option value="">Enter another website below</option>
+                  {savedProjectSites.map((site) => (
+                    <option key={site.runId} value={site.siteUrl}>{site.siteUrl}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-[var(--cc-muted)]">Choose one to reuse its latest completed research without uploading it again.</p>
+              </div>
+            ) : null}
+            <div className={`${fieldClass} ${savedProjectSites.length ? "mt-4" : "mt-6"}`}>
               <label className={labelClass} htmlFor="siteUrl">Project site URL</label>
               <input
                 id="siteUrl"
@@ -1309,6 +1433,27 @@ export function NewCreateForm({
               >
                 Change
               </button>
+            </div>
+            <div className="mt-3 rounded-lg border border-[var(--cc-line)] bg-white px-4 py-3 text-sm">
+              <p className="font-medium text-[var(--cc-ink)]">Want to reuse this website as optional context?</p>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                This creation already uses the research. Add it to the Source Library only if you want to select it in future projects.
+              </p>
+              <button
+                type="button"
+                className="mt-3 rounded-md border border-[var(--cc-accent)] px-3 py-2 text-xs font-semibold text-[var(--cc-accent)] disabled:opacity-60"
+                disabled={sourceLibraryStatus !== "idle"}
+                onClick={() => void saveProjectSiteAsApprovedSource()}
+              >
+                {sourceLibraryStatus === "saving"
+                  ? "Adding…"
+                  : sourceLibraryStatus === "saved"
+                    ? "Added to Source Library · processing"
+                    : "Add website to Source Library"}
+              </button>
+              {sourceLibraryError ? (
+                <p role="alert" className="mt-2 text-xs text-red-700">{sourceLibraryError}</p>
+              ) : null}
             </div>
             <div className={`${fieldClass} mt-6`}>
               <label className={labelClass} htmlFor="title">Working title</label>
@@ -1496,7 +1641,12 @@ export function NewCreateForm({
               <p className="mt-1 text-xs text-[var(--cc-muted)]">
                 Choose exactly one producer. Add any compatible Marketing, SEO, and AEO contributors or reviewers.
               </p>
-              {agentCatalogError ? <p role="alert" className="mt-2 text-xs text-red-700">Specialists unavailable: {agentCatalogError}</p> : null}
+              {agentCatalogError ? (
+                <p role="status" className="mt-2 text-xs text-amber-800">
+                  Specialists unavailable ({agentCatalogError}). You can continue — the backend will
+                  pin its default published team when this create starts.
+                </p>
+              ) : null}
               {!agentCatalog && !agentCatalogError ? <p className="mt-2 text-xs">Loading published specialists…</p> : null}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {producerAgents.map((agent) => (
@@ -1549,8 +1699,15 @@ export function NewCreateForm({
             ) : null}
             <div className="mt-7 flex justify-between">
               <button type="button" onClick={() => setStep("research")} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
-              <button type="button" disabled={selectedProducerCount !== 1} onClick={() => goNext("review")} className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Review</button>
+              <button type="button" disabled={!producerSelectionReady} onClick={() => goNext("review")} className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Review</button>
             </div>
+            {!producerSelectionReady ? (
+              <p role="alert" className="mt-3 text-right text-xs text-amber-800">
+                {producerAgents.length === 0
+                  ? "No published content producer supports all selected formats."
+                  : "Select exactly one content producer to continue."}
+              </p>
+            ) : null}
           </section>
         )}
 
@@ -1661,6 +1818,11 @@ export function NewCreateForm({
             <section className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950" aria-label="Resolved specialist team">
               <strong>Immutable specialist team</strong>
               <p className="mt-1 text-xs">The backend resolves stable catalog IDs to immutable versions and pinned skills before execution IDs are created.</p>
+              {usingBackendDefaultTeam ? (
+                <p role="status" className="mt-2 text-xs text-amber-900">
+                  Specialist catalog is temporarily unavailable. Create will pin the backend&apos;s default published team.
+                </p>
+              ) : null}
               {resolvedTeamLoading ? <p className="mt-2 text-xs">Resolving team…</p> : null}
               {resolvedTeamError ? <p role="alert" className="mt-2 text-xs text-red-800">{resolvedTeamError}</p> : null}
               {resolvedTeam ? (
@@ -1714,7 +1876,7 @@ export function NewCreateForm({
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"
-                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -1724,7 +1886,7 @@ export function NewCreateForm({
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />
@@ -1732,6 +1894,14 @@ export function NewCreateForm({
                 </form>
               )}
             </div>
+            {creationBlockers.length ? (
+              <div role="alert" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-semibold">Creation is waiting on:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {creationBlockers.map((message) => <li key={message}>{message}</li>)}
+                </ul>
+              </div>
+            ) : null}
           </section>
         )}
 

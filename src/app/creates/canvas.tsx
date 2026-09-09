@@ -1916,7 +1916,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-1">Ship ready is still no — see overlap hits and scores above.</p>
+                    <p className="mt-1">
+                      Ship ready is still no — see editorial notes, RAG issues, overlap hits, and scores above.
+                    </p>
                   )}
                 </div>
               ) : null}

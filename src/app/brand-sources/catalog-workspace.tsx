@@ -18,7 +18,7 @@ import {
 import { uploadContextFile } from "./direct-upload";
 
 const CATALOGS = [
-  { kind: "knowledge", path: "knowledge", label: "Knowledge" },
+  { kind: "knowledge", path: "knowledge", label: "Approved Sources" },
   { kind: "brand-kit", path: "brand-kits", label: "Brand Kits" },
   { kind: "audience", path: "audiences", label: "Audiences" },
   { kind: "style-guide", path: "style-guides", label: "Style Guides" },
@@ -224,8 +224,8 @@ export function CatalogWorkspace() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--cc-accent)]">Governed context</p>
-          <h1 className="mt-2 text-3xl font-bold">Brand &amp; Sources</h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">Versioned, owner-scoped context with review, provenance, freshness, and ingestion state.</p>
+          <h1 className="mt-2 text-3xl font-bold">Brand &amp; Source Library</h1>
+          <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">Manage optional reusable references and brand guidance. Project websites selected during creation are researched automatically and do not need to be uploaded again.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => void loadActivity()} className="rounded-lg border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-semibold">Connections &amp; activity</button>
@@ -262,7 +262,7 @@ export function CatalogWorkspace() {
               <input aria-label={`Search ${active.label}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${active.label.toLowerCase()}`} className="min-w-0 flex-1 rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" />
               <select aria-label="Lifecycle filter" value={lifecycle} onChange={(event) => setLifecycle(event.target.value)} className="rounded-md border border-[var(--cc-line)] bg-white px-2 text-sm"><option value="all">All states</option><option value="draft">Draft</option><option value="in_review">In review</option><option value="approved">Approved</option><option value="deprecated">Deprecated</option><option value="revoked">Revoked</option></select>
             </div>
-            {active.kind === "knowledge" ? <label className="mt-3 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--cc-accent)] bg-teal-50 px-3 py-3 text-sm font-semibold text-[var(--cc-accent)]">Upload source<input type="file" className="sr-only" disabled={actionBusy !== null} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadKnowledge(file); }} /></label> : null}
+            {active.kind === "knowledge" ? <label className="mt-3 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--cc-accent)] bg-teal-50 px-3 py-3 text-sm font-semibold text-[var(--cc-accent)]">Upload additional reference<input type="file" className="sr-only" disabled={actionBusy !== null} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadKnowledge(file); }} /></label> : null}
             {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading catalog…</p> : null}
             <ul className="mt-3 space-y-2">{filtered.map((item) => { const version = currentVersion(item); return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setSelectedVersionId(version?.id ?? null); }} className={`w-full rounded-lg border bg-white p-4 text-left ${selectedId === item.id ? "border-[var(--cc-accent)] ring-1 ring-[var(--cc-accent)]" : "border-[var(--cc-line)]"}`}><span className="font-semibold">{item.name}</span><span className="mt-1 block text-xs text-[var(--cc-muted)]">{item.description || "No description"}</span>{version ? <span className={`mt-2 inline-block rounded-full px-2 py-1 text-xs font-semibold ${statusClass(version.lifecycle)}`}>v{version.versionNumber} · {version.lifecycle}</span> : null}</button></li>; })}</ul>
           </section>

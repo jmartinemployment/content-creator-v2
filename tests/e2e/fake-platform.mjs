@@ -38,6 +38,9 @@ let agentTestRuns;
 let agentTestTimers;
 let contextCatalogs;
 let ingestionEvents;
+let studioAgents = new Map();
+let canvasProjects = new Map();
+let grids = new Map();
 let contextUploads;
 let manifests;
 
@@ -91,6 +94,9 @@ function reset() {
     products: [item("product-1", "product", "Evidence Engine", "product-version-1")],
   };
   manifests = new Map();
+  studioAgents = new Map();
+  canvasProjects = new Map();
+  grids = new Map();
   adminSkill = {
     id: "community-style",
     versionId: "skill-version-1",
@@ -225,6 +231,216 @@ async function readBody(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function studioDetail(draft) {
+  return {
+    contractVersion: "gcc-studio-agent.v1",
+    agent: draft.summary,
+    workflow: {
+      engine: "studio",
+      mode: "instruction-template",
+      artifactType: "customAgentOutput.v1",
+      instructionsTemplate: draft.instructionsTemplate,
+      exampleOutput: draft.exampleOutput,
+      temperature: draft.temperature,
+      uiSchema: { fields: draft.fields },
+    },
+    allowedModels: [draft.allowedModel],
+  };
+}
+
+function seedCanvasProject() {
+  const briefId = crypto.randomUUID();
+  const articleId = crypto.randomUUID();
+  const socialId = crypto.randomUUID();
+  const emailId = crypto.randomUUID();
+  const project = {
+    id: crypto.randomUUID(),
+    name: "Evidence Engine launch",
+    description: "A coordinated launch package built from one approved strategy brief.",
+    status: "review",
+    updatedAt: "2026-09-08T18:42:00.000Z",
+    owner: "owner",
+    collaborators: [],
+    persistence: "server",
+    activity: [
+      { id: "activity-1", kind: "created", actor: "Jeff Martin", occurredAt: "2026-09-03T14:00:00.000Z", message: "Created the project and strategy brief" },
+      { id: "activity-2", kind: "versioned", actor: "Maya Chen", occurredAt: "2026-09-05T16:20:00.000Z", message: "Created Launch strategy brief v2" },
+    ],
+    assets: [
+      {
+        id: briefId,
+        title: "Launch strategy brief",
+        kind: "brief",
+        parentAssetIds: [],
+        versions: [
+          {
+            id: crypto.randomUUID(), version: 1, createdAt: "2026-09-03T14:00:00.000Z", createdBy: "Jeff Martin",
+            status: "draft", summary: "Initial positioning, audience, and launch outcomes.",
+            evidence: [], provenance: { origin: "human", note: "Authored from stakeholder workshop notes." },
+          },
+          {
+            id: crypto.randomUUID(), version: 2, createdAt: "2026-09-05T16:20:00.000Z", createdBy: "Maya Chen",
+            status: "approved", summary: "Approved positioning with proof points and channel handoffs.",
+            evidence: [], provenance: { origin: "mixed", note: "Human-edited strategy suggestions." },
+          },
+        ],
+      },
+      {
+        id: articleId,
+        title: "Reliable content operations",
+        kind: "article",
+        parentAssetIds: [briefId],
+        versions: [{
+          id: crypto.randomUUID(), version: 1, createdAt: "2026-09-07T11:00:00.000Z", createdBy: "Content Producer",
+          status: "in-review", summary: "Long-form launch narrative with evidence-backed operational guidance.",
+          evidence: [], provenance: { origin: "agent", note: "Generated from launch brief v2; citations verified." },
+        }],
+      },
+      {
+        id: socialId,
+        title: "Launch carousel",
+        kind: "social",
+        parentAssetIds: [articleId],
+        versions: [{
+          id: crypto.randomUUID(), version: 1, createdAt: "2026-09-07T12:00:00.000Z", createdBy: "Maya Chen",
+          status: "draft", summary: "Six-slide narrative adapted from the pillar article.",
+          evidence: [], provenance: { origin: "mixed", note: "Adapted from article v1." },
+        }],
+      },
+      {
+        id: emailId,
+        title: "Customer launch email",
+        kind: "email",
+        parentAssetIds: [briefId, articleId],
+        versions: [{
+          id: crypto.randomUUID(), version: 1, createdAt: "2026-09-08T09:00:00.000Z", createdBy: "Content Producer",
+          status: "in-review", summary: "Concise customer announcement with article handoff.",
+          evidence: [], provenance: { origin: "agent", note: "Generated from approved brief and article draft." },
+        }],
+      },
+    ],
+  };
+  canvasProjects.set(project.id, project);
+  return project;
+}
+
+const DEMO_GRID_TOPICS = [
+  "What is Evidence Engine?",
+  "How does RAG grounding work?",
+  "Who owns brand voice approvals?",
+  "How do credit budgets apply to batch runs?",
+  "Can agents cite source library assets?",
+  "What happens on a failed row?",
+  "How do sample runs differ from full runs?",
+  "Where do FAQ outputs publish?",
+  "How is owner isolation enforced?",
+  "What is a TaskRun fan-out?",
+  "Can grids reuse canvas assets?",
+  "How do I preview estimated credits?",
+];
+
+function defaultGridConfig() {
+  return {
+    columns: [
+      { key: "topic", kind: "input", label: "Topic" },
+      { key: "agent", kind: "agent", label: "FAQ Generator", capability: "faq-generator" },
+      { key: "output", kind: "output", label: "Result" },
+    ],
+    creditsPerRow: 1,
+    executionNote: "Sample/full runs create one durable TaskRun per selected row and complete in-process.",
+  };
+}
+
+function seedGrid() {
+  const now = new Date().toISOString();
+  const grid = {
+    id: crypto.randomUUID(),
+    name: "FAQ launch batch",
+    description: "Twelve FAQ topics ready for a sample stub run.",
+    status: "ready",
+    updatedAt: now,
+    owner: "owner",
+    persistence: "server",
+    config: defaultGridConfig(),
+    rows: DEMO_GRID_TOPICS.map((topic, rowIndex) => ({
+      id: crypto.randomUUID(),
+      rowIndex,
+      input: { topic },
+      output: null,
+      status: "pending",
+      error: "",
+      updatedAt: now,
+    })),
+    runs: [],
+  };
+  grids.set(grid.id, grid);
+  return grid;
+}
+
+function executeGridRun(grid, mode, sampleSize = 10) {
+  const started = new Date();
+  const ordered = [...grid.rows].sort((a, b) => a.rowIndex - b.rowIndex);
+  const selected = mode === "full" ? ordered : ordered.slice(0, sampleSize);
+  const capability = grid.config.columns.find((column) => column.kind === "agent")?.capability ?? "faq-generator";
+  const creditsPerRow = grid.config.creditsPerRow ?? 1;
+
+  for (const row of selected) {
+    const topic = typeof row.input.topic === "string" ? row.input.topic : "(empty input)";
+    row.status = "succeeded";
+    row.error = "";
+    row.output = {
+      result: `FAQ draft for: ${topic}`,
+      mode: "task-run",
+      capability,
+      endpoint: capability === "faq-generator" ? "faq-set" : capability,
+      taskRunId: crypto.randomUUID(),
+      artifactType: "faqSet.v1",
+      artifact: {
+        artifactType: "faqSet.v1",
+        methodology: "grid-sync.v1",
+        pairs: [{ question: topic, answer: `Grounded FAQ draft for “${topic}”.` }],
+      },
+    };
+    row.updatedAt = new Date().toISOString();
+  }
+
+  const completed = new Date();
+  const estimatedCredits = creditsPerRow * selected.length;
+  const run = {
+    id: crypto.randomUUID(),
+    mode,
+    sampleSize: mode === "sample" ? sampleSize : null,
+    status: "succeeded",
+    actor: "owner",
+    startedAt: started.toISOString(),
+    completedAt: completed.toISOString(),
+    outputCount: selected.length,
+    budgetPreview: {
+      creditsPerRow,
+      rowCount: selected.length,
+      estimatedCredits,
+      note: grid.config.executionNote,
+      succeededCount: selected.length,
+      capability,
+      execution: "task-run",
+    },
+    history: [{
+      actor: "owner",
+      mode,
+      status: "succeeded",
+      startedAt: started.toISOString(),
+      durationMs: Math.max(1, completed.getTime() - started.getTime()),
+      outputCount: selected.length,
+      estimatedCredits,
+      capability,
+    }],
+  };
+  grid.runs = [run, ...grid.runs];
+  grid.status = mode === "full" || selected.length >= grid.rows.length ? "complete" : "ready";
+  grid.updatedAt = completed.toISOString();
+  return grid;
 }
 
 function event(type, payload, seq = ++sequence) {
@@ -956,6 +1172,29 @@ const server = http.createServer(async (req, res) => {
     };
     return send(res, 200, { versionId: adminSkill.versionId });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/skills/admin/import-agentic-skill" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    adminSkill = {
+      ...adminSkill,
+      source: {
+        repositoryUrl: "https://github.com/vercel-labs/skills",
+        commit: "0123456789abcdef0123456789abcdef01234567",
+        path: "skills/find-skills",
+      },
+      reviewStatus: "quarantined",
+      audit: [...adminSkill.audit, {
+        id: `audit-${adminSkill.audit.length + 1}`, actor: "admin@example.test", action: "imported-agentic-skill",
+        atUtc: "2026-09-09T15:20:00Z", beforeStatus: null, afterStatus: "quarantined",
+        detail: body.listingUrl,
+      }],
+    };
+    return send(res, 200, {
+      listingUrl: body.listingUrl,
+      packageSpecifier: "vercel-labs/skills@find-skills",
+      immutableRef: adminSkill.source.commit,
+      package: { versionId: adminSkill.versionId },
+    });
+  }
   const findingMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/skills\/admin\/([^/]+)\/findings\/([^/]+)$/);
   if (findingMatch && req.method === "PATCH") {
     const body = JSON.parse(rawBody || "{}");
@@ -989,6 +1228,14 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { versionId: adminSkill.versionId });
   }
 
+  if (url.pathname === "/api/geek-content-creator-v2/project-site/runs") {
+    return send(res, 200, [{
+      runId: "crawl-1",
+      siteUrl: "https://example.test",
+      status: "complete",
+      completedAtUtc: "2026-09-08T20:00:00Z",
+    }]);
+  }
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/latest") {
     return send(res, 200, { runId: "crawl-1", status: "complete" });
   }
@@ -1002,6 +1249,557 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/crawl-1/site-hierarchy") {
     return send(res, 200, { siteHierarchy: { headings: [{ text: "Solutions", children: [{ text: "Content operations" }] }] } });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/crawl-1/promote-to-source" && req.method === "POST") {
+    return send(res, 200, {
+      assetId: "knowledge-website",
+      versionId: "knowledge-website-v1",
+      resourceId: "knowledge-website-resource",
+      pageCount: 1,
+      lifecycleState: "approved",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/projects" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-canvas-project.v1",
+      projects: [...canvasProjects.values()].map((project) => ({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        updatedAt: project.updatedAt,
+        owner: project.owner,
+        collaborators: project.collaborators,
+        persistence: "server",
+        assetCount: project.assets.length,
+      })),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/projects" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const project = body.seedDemo
+      ? seedCanvasProject()
+      : {
+        id: crypto.randomUUID(),
+        name: body.name,
+        description: body.description || "",
+        status: body.status || "planning",
+        updatedAt: new Date().toISOString(),
+        owner: "owner",
+        collaborators: [],
+        persistence: "server",
+        activity: [],
+        assets: [],
+      };
+    if (!body.seedDemo) canvasProjects.set(project.id, project);
+    return send(res, 201, { contractVersion: "gcc-canvas-project.v1", project });
+  }
+  {
+    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)(?:\/assets(?:\/([^/]+)\/versions)?)?$/);
+    if (match) {
+      const projectId = decodeURIComponent(match[1]);
+      const assetId = match[2] ? decodeURIComponent(match[2]) : null;
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      if (!assetId && req.method === "GET") {
+        return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
+      }
+      if (assetId && url.pathname.endsWith("/versions") && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const asset = project.assets.find((item) => item.id === assetId);
+        if (!asset) return send(res, 404, { error: "Asset not found." });
+        const nextVersion = Math.max(0, ...asset.versions.map((item) => item.version)) + 1;
+        asset.versions = [...asset.versions, {
+          id: crypto.randomUUID(),
+          version: nextVersion,
+          createdAt: body.createdAt || new Date().toISOString(),
+          createdBy: body.createdBy || "You",
+          status: body.status || "draft",
+          summary: body.summary || `Successor draft based on v${nextVersion - 1}.`,
+          evidence: body.evidence || [],
+          provenance: body.provenance || { origin: "human", note: "" },
+        }];
+        project.activity = [
+          {
+            id: crypto.randomUUID(),
+            kind: "versioned",
+            actor: body.createdBy || "You",
+            occurredAt: new Date().toISOString(),
+            message: `Created ${asset.title} v${nextVersion}`,
+          },
+          ...project.activity,
+        ];
+        project.updatedAt = new Date().toISOString();
+        return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
+      }
+    }
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/roi/observed" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-roi-observed.v1",
+      observed: {
+        generatedCount: 48,
+        acceptedCount: 31,
+        publishedCount: 31,
+        rejectedCount: 9,
+        cancelledCount: 2,
+        reviewMinutes: 410,
+        periodLabel: "Last 90 days (TaskRuns)",
+        source: "telemetry",
+        notes: [
+          "Counts are owner-scoped TaskRun outcomes, not cash ROI.",
+          "publishedCount currently mirrors succeeded TaskRuns until CMS publish events are linked.",
+          "reviewMinutes approximates wall-clock run duration for terminal runs.",
+        ],
+      },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/grids" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-grid.v1",
+      grids: [...grids.values()].map((grid) => ({
+        id: grid.id,
+        name: grid.name,
+        description: grid.description,
+        status: grid.status,
+        updatedAt: grid.updatedAt,
+        owner: grid.owner,
+        rowCount: grid.rows.length,
+        lastRunStatus: grid.runs[0]?.status ?? null,
+        persistence: "server",
+      })),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/grids" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const grid = body.seedDemo
+      ? seedGrid()
+      : {
+        id: crypto.randomUUID(),
+        name: body.name || "Untitled grid",
+        description: body.description || "",
+        status: "draft",
+        updatedAt: new Date().toISOString(),
+        owner: "owner",
+        persistence: "server",
+        config: defaultGridConfig(),
+        rows: [],
+        runs: [],
+      };
+    if (!body.seedDemo) grids.set(grid.id, grid);
+    return send(res, 201, { contractVersion: "gcc-grid.v1", grid });
+  }
+  {
+    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs))?$/);
+    if (match) {
+      const gridId = decodeURIComponent(match[1]);
+      const action = match[2] || null;
+      const grid = grids.get(gridId);
+      if (!grid) return send(res, 404, { error: "Grid not found." });
+      if (!action && req.method === "GET") {
+        return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+      if (action === "runs" && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const mode = body.mode === "full" ? "full" : "sample";
+        const sampleSize = Number.isFinite(body.sampleSize) ? body.sampleSize : 10;
+        executeGridRun(grid, mode, sampleSize);
+        return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+      if (action === "rows" && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const now = new Date().toISOString();
+        grid.rows = [...grid.rows, {
+          id: crypto.randomUUID(),
+          rowIndex: grid.rows.length,
+          input: body.input || {},
+          output: null,
+          status: "pending",
+          error: "",
+          updatedAt: now,
+        }];
+        grid.updatedAt = now;
+        return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+    }
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/studio/agents" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-studio-catalog.v1",
+      agents: [...studioAgents.values()].map((item) => item.summary),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/studio/agents" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const id = `studio-${crypto.randomBytes(6).toString("hex")}`;
+    const draft = {
+      summary: {
+        id,
+        definitionId: crypto.randomUUID(),
+        displayName: body.name,
+        description: body.outcome,
+        versionId: crypto.randomUUID(),
+        version: "0.1.0",
+        state: "draft",
+        digest: crypto.createHash("sha256").update(id).digest("hex"),
+        visibility: body.visibility || "private",
+        ownerUserId: "owner",
+      },
+      fields: [],
+      instructionsTemplate: "You are a brand-safe marketing assistant.\nOutcome: {{outcome}}\nUse only attached approved context.",
+      exampleOutput: "{\n  \"summary\": \"…\",\n  \"sections\": []\n}",
+      allowedModel: "gpt-5.4",
+      temperature: 0.2,
+    };
+    studioAgents.set(id, draft);
+    return send(res, 201, studioDetail(draft));
+  }
+  {
+    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/studio\/agents\/([^/]+)(?:\/(draft|dry-run|publish))?$/);
+    if (match) {
+      const id = decodeURIComponent(match[1]);
+      const action = match[2] || null;
+      const draft = studioAgents.get(id);
+      if (!draft) return send(res, 404, { error: "Studio agent not found." });
+      if (!action && req.method === "GET") return send(res, 200, studioDetail(draft));
+      if (action === "draft" && req.method === "PUT") {
+        const body = JSON.parse(rawBody || "{}");
+        draft.summary.displayName = body.name || draft.summary.displayName;
+        draft.summary.description = body.outcome || draft.summary.description;
+        draft.summary.visibility = body.visibility || draft.summary.visibility;
+        draft.fields = body.fields || [];
+        draft.instructionsTemplate = body.instructionsTemplate;
+        draft.exampleOutput = body.exampleOutput;
+        draft.allowedModel = body.allowedModel;
+        draft.temperature = body.temperature;
+        const versionParts = draft.summary.version.split(".").map(Number);
+        versionParts[1] += 1;
+        draft.summary.version = versionParts.join(".");
+        draft.summary.versionId = crypto.randomUUID();
+        draft.summary.state = "draft";
+        draft.summary.digest = crypto.createHash("sha256").update(`${id}:${draft.summary.version}`).digest("hex");
+        return send(res, 200, studioDetail(draft));
+      }
+      if (action === "dry-run" && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const input = body.input || {};
+        const missing = draft.fields
+          .filter((field) => field.required && !String(input[field.id] || "").trim())
+          .map((field) => field.label);
+        let rendered = draft.instructionsTemplate
+          .replaceAll("{{outcome}}", draft.summary.description)
+          .replaceAll("{{agent.name}}", draft.summary.displayName);
+        for (const field of draft.fields) {
+          rendered = rendered.replaceAll(`{{inputs.${field.id}}}`, input[field.id] || "");
+        }
+        const unresolved = [...rendered.matchAll(/\{\{[^}]+\}\}/g)].map((item) => item[0]);
+        const valid = missing.length === 0 && unresolved.length === 0 && Boolean(draft.exampleOutput?.trim());
+        return send(res, 200, {
+          valid,
+          renderedInstructions: rendered,
+          missingTokens: unresolved,
+          validationErrors: missing.map((label) => `$.${label} is required.`),
+          message: valid ? "Dry-run passed." : missing.length ? `Missing required fields: ${missing.join(", ")}.` : `Unresolved template tokens: ${unresolved.join(", ")}.`,
+        });
+      }
+      if (action === "publish" && req.method === "POST") {
+        draft.summary.state = "published";
+        draft.summary.version = "1.0.0";
+        draft.summary.digest = crypto.createHash("sha256").update(`${id}:published`).digest("hex");
+        return send(res, 200, studioDetail(draft));
+      }
+    }
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-catalog.v1",
+      agents: [
+        {
+          id: "ai-readiness",
+          definitionId: "task-agent-1",
+          displayName: "AI Readiness Score",
+          description: "Score a page across seven explicit AI-answer readiness dimensions.",
+          versionId: "task-agent-version-1",
+          version: "1.0.0",
+          digest: "a".repeat(64),
+          workflowGroup: "diagnostic",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "query-planner",
+          definitionId: "task-agent-2",
+          displayName: "Query Planner",
+          description: "Prioritize observed, imported, and generated queries without treating hypotheses as demand.",
+          versionId: "task-agent-version-2",
+          version: "1.0.0",
+          digest: "c".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "ai-readiness-comparison",
+          definitionId: "task-agent-5",
+          displayName: "AI Readiness Comparison",
+          description: "Compare one owned page with up to four competitor pages under one AEO/GEO rubric.",
+          versionId: "task-agent-version-5",
+          version: "1.0.0",
+          digest: "g".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "content-gap",
+          definitionId: "task-agent-4",
+          displayName: "Content Gap Finder",
+          description: "Find evidence-linked content gaps between subject and competitor pages.",
+          versionId: "task-agent-version-4",
+          version: "1.0.0",
+          digest: "e".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "competitor-audit",
+          definitionId: "task-agent-6",
+          displayName: "Competitor Audit",
+          description: "Explain competitor strengths from supplied pages with evidence-linked prioritized actions.",
+          versionId: "task-agent-version-6",
+          version: "1.0.0",
+          digest: "h".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "competitor-positioning",
+          definitionId: "task-agent-7",
+          displayName: "Competitor Positioning",
+          description: "Map brand-versus-competitor narrative attributes without treating generated opinions as market perception.",
+          versionId: "task-agent-version-7",
+          version: "1.0.0",
+          digest: "i".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "competitor-page",
+          definitionId: "task-agent-3",
+          displayName: "Competitor Page Analysis",
+          description: "Analyze a competitor page from supplied visible content and evidence only.",
+          versionId: "task-agent-version-3",
+          version: "1.0.0",
+          digest: "d".repeat(64),
+          workflowGroup: "intelligence",
+          facets: { category: "analysis" },
+        },
+        {
+          id: "faq-generator",
+          definitionId: "task-agent-8",
+          displayName: "FAQ Generator",
+          description: "Generate answer-first FAQ pairs grounded in supplied queries and visible source content.",
+          versionId: "task-agent-version-8",
+          version: "1.0.0",
+          digest: "j".repeat(64),
+          workflowGroup: "originate",
+          facets: { category: "content" },
+        },
+        {
+          id: "citable-claims",
+          definitionId: "task-agent-9",
+          displayName: "Citable Claims",
+          description: "Convert source material into precise attributable claims without inventing statistics.",
+          versionId: "task-agent-version-9",
+          version: "1.0.0",
+          digest: "l".repeat(64),
+          workflowGroup: "originate",
+          facets: { category: "content" },
+        },
+      ],
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "ai-readiness",
+        displayName: "AI Readiness Score",
+        description: "Score a page across seven explicit AI-answer readiness dimensions.",
+        versionId: "task-agent-version-1",
+        version: "1.0.0",
+        digest: "a".repeat(64),
+      },
+      resultRenderer: { kind: "scorecard", artifactType: "readinessScore.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "query-planner",
+        displayName: "Query Planner",
+        description: "Prioritize observed, imported, and generated queries without treating hypotheses as demand.",
+        versionId: "task-agent-version-2",
+        version: "1.0.0",
+        digest: "c".repeat(64),
+      },
+      resultRenderer: { kind: "query-plan", artifactType: "queryPlan.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/faq-generator" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "faq-generator",
+        displayName: "FAQ Generator",
+        description: "Generate answer-first FAQ pairs grounded in supplied queries and visible source content.",
+        versionId: "task-agent-version-8",
+        version: "1.0.0",
+        digest: "j".repeat(64),
+      },
+      resultRenderer: { kind: "faq-list", artifactType: "faqSet.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/citable-claims" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "citable-claims",
+        displayName: "Citable Claims",
+        description: "Convert source material into precise attributable claims without inventing statistics.",
+        versionId: "task-agent-version-9",
+        version: "1.0.0",
+        digest: "l".repeat(64),
+      },
+      resultRenderer: { kind: "claim-ledger", artifactType: "claimLedger.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness/runs" && req.method === "POST") {
+    return send(res, 202, { id: "task-run-1", status: "queued", phase: "queued", progressPercent: 0 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/runs" && req.method === "POST") {
+    return send(res, 202, { id: "task-run-2", status: "queued", phase: "queued", progressPercent: 0 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/faq-generator/runs" && req.method === "POST") {
+    return send(res, 202, { id: "task-run-3", status: "queued", phase: "queued", progressPercent: 0 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/citable-claims/runs" && req.method === "POST") {
+    return send(res, 202, { id: "task-run-4", status: "queued", phase: "queued", progressPercent: 0 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-1" && req.method === "GET") {
+    return send(res, 200, { id: "task-run-1", status: "succeeded", phase: "complete", progressPercent: 100 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-2" && req.method === "GET") {
+    return send(res, 200, { id: "task-run-2", status: "succeeded", phase: "complete", progressPercent: 100 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-3" && req.method === "GET") {
+    return send(res, 200, { id: "task-run-3", status: "succeeded", phase: "complete", progressPercent: 100 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-4" && req.method === "GET") {
+    return send(res, 200, { id: "task-run-4", status: "succeeded", phase: "complete", progressPercent: 100 });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-1/result" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-result-shell.v1",
+      identity: { displayName: "AI Readiness Score", objective: "Score visible content." },
+      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+      artifacts: [{
+        id: "artifact-1",
+        artifactType: "readinessScore.v1",
+        versions: [{
+          id: "artifact-version-1",
+          payloadJson: JSON.stringify({ artifactType: "readinessScore.v1", overallScore: 82, prioritizedFixes: [] }),
+          evidenceJson: "[]",
+          citationsJson: "[]",
+          digest: "b".repeat(64),
+          validationState: "valid",
+        }],
+      }],
+      rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-2/result" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-result-shell.v1",
+      identity: { displayName: "Query Planner", objective: "Plan queries with provenance." },
+      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+      artifacts: [{
+        id: "artifact-2",
+        artifactType: "queryPlan.v1",
+        versions: [{
+          id: "artifact-version-2",
+          payloadJson: JSON.stringify({
+            artifactType: "queryPlan.v1",
+            methodology: {
+              demandDisclaimer: "Scores are deterministic planning heuristics, not traffic, volume, ranking, or demand measurements.",
+            },
+            queries: [{ query: "AI content readiness checklist", priorityTier: "high" }],
+            clusterCount: 1,
+            warnings: [],
+          }),
+          evidenceJson: "[]",
+          citationsJson: "[]",
+          digest: "f".repeat(64),
+          validationState: "valid",
+        }],
+      }],
+      rerun: { capabilityId: "query-planner", versionId: "task-agent-version-2", retryOfRunId: "task-run-2" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-3/result" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-result-shell.v1",
+      identity: { displayName: "FAQ Generator", objective: "Generate grounded FAQ pairs." },
+      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+      artifacts: [{
+        id: "artifact-3",
+        artifactType: "faqSet.v1",
+        versions: [{
+          id: "artifact-version-3",
+          payloadJson: JSON.stringify({
+            artifactType: "faqSet.v1",
+            topic: "AI content readiness",
+            pairs: [{
+              question: "What is AI content readiness?",
+              answer: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
+              verificationStatus: "supported",
+            }],
+            warnings: ["FAQ answers are generated from supplied content and queries only."],
+          }),
+          evidenceJson: "[]",
+          citationsJson: "[]",
+          digest: "k".repeat(64),
+          validationState: "valid",
+        }],
+      }],
+      rerun: { capabilityId: "faq-generator", versionId: "task-agent-version-8", retryOfRunId: "task-run-3" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-4/result" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-result-shell.v1",
+      identity: { displayName: "Citable Claims", objective: "Extract attributable claims." },
+      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+      artifacts: [{
+        id: "artifact-4",
+        artifactType: "claimLedger.v1",
+        versions: [{
+          id: "artifact-version-4",
+          payloadJson: JSON.stringify({
+            artifactType: "claimLedger.v1",
+            claims: [{
+              claimText: "Trusted by 500 customer teams.",
+              claimType: "quantifiableFact",
+              verificationStatus: "supported",
+            }],
+            warnings: ["Claims never invent statistics."],
+          }),
+          evidenceJson: "[]",
+          citationsJson: "[]",
+          digest: "m".repeat(64),
+          validationState: "valid",
+        }],
+      }],
+      rerun: { capabilityId: "citable-claims", versionId: "task-agent-version-9", retryOfRunId: "task-run-4" },
+    });
   }
   if (url.pathname === "/api/geek-content-creator-v2/creates" && req.method === "POST") {
     return send(res, 200, { id: "create-1" });
