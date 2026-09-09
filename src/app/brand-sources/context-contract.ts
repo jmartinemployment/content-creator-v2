@@ -1,5 +1,11 @@
 export type ContextLifecycle = "draft" | "in_review" | "approved" | "deprecated" | "revoked";
-export type ContextKind = "knowledge" | "brand-kit" | "audience" | "style-guide" | "product";
+export type ContextKind =
+  | "knowledge"
+  | "brand-kit"
+  | "audience"
+  | "style-guide"
+  | "product-schema"
+  | "product";
 export type IngestionState =
   | "queued"
   | "scanning"
@@ -49,6 +55,10 @@ export type GovernedVersion = {
   findings?: ContextFinding[];
   audit?: ContextAuditEvent[];
   data?: Record<string, unknown> | null;
+  productSchemaVersionId?: string | null;
+  approvedClaims?: string[];
+  prohibitedClaims?: string[];
+  mandatoryDisclaimers?: string[];
 };
 
 export type GovernedCatalogItem = {
@@ -181,6 +191,21 @@ function jsonObject(value: unknown): Record<string, unknown> | null {
   }
 }
 
+function stringList(value: unknown): string[] {
+  if (typeof value === "string") {
+    try {
+      return stringList(JSON.parse(value));
+    } catch {
+      return value.trim() ? [value.trim()] : [];
+    }
+  }
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function normalizeVersion(value: unknown): GovernedVersion | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -188,6 +213,25 @@ function normalizeVersion(value: unknown): GovernedVersion | null {
   const versionNumber = typeof raw.versionNumber === "number" ? raw.versionNumber : 0;
   if (!id || versionNumber < 1) return null;
   const provenance = jsonObject(raw.provenance) ?? jsonObject(raw.provenanceJson);
+  const data = jsonObject(raw.data)
+    ?? jsonObject(raw.payloadJson)
+    ?? jsonObject(raw.policyJson)
+    ?? jsonObject(raw.definitionJson)
+    ?? jsonObject(raw.fieldsJson)
+    ?? jsonObject(raw.fieldValuesJson);
+  // Product schemas may store fields as a top-level array.
+  const schemaFields = Array.isArray(raw.fieldsJson)
+    ? { fields: raw.fieldsJson }
+    : typeof raw.fieldsJson === "string"
+      ? (() => {
+        try {
+          const parsed = JSON.parse(raw.fieldsJson);
+          return Array.isArray(parsed) ? { fields: parsed } : jsonObject(parsed);
+        } catch {
+          return null;
+        }
+      })()
+      : null;
   return {
     id,
     versionNumber,
@@ -202,7 +246,13 @@ function normalizeVersion(value: unknown): GovernedVersion | null {
     provenance: provenance as ContextProvenance | null,
     findings: Array.isArray(raw.findings) ? raw.findings as ContextFinding[] : [],
     audit: Array.isArray(raw.audit) ? raw.audit as ContextAuditEvent[] : [],
-    data: jsonObject(raw.data) ?? jsonObject(raw.payloadJson),
+    data: data ?? schemaFields,
+    productSchemaVersionId: typeof raw.productSchemaVersionId === "string"
+      ? raw.productSchemaVersionId
+      : null,
+    approvedClaims: stringList(raw.approvedClaims ?? raw.approvedClaimsJson),
+    prohibitedClaims: stringList(raw.prohibitedClaims ?? raw.prohibitedClaimsJson),
+    mandatoryDisclaimers: stringList(raw.mandatoryDisclaimers ?? raw.mandatoryDisclaimersJson),
   };
 }
 

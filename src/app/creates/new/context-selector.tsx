@@ -9,6 +9,10 @@ import {
   type ResolvedContextPreview,
 } from "@/app/brand-sources/context-contract";
 import { uploadContextFile } from "@/app/brand-sources/direct-upload";
+import {
+  normalizeProductSchemaPolicy,
+  type ProductSchemaField,
+} from "@/app/brand-sources/product-policy";
 
 type ContextSelectorProps = {
   createId?: string | null;
@@ -25,6 +29,7 @@ type Catalogs = {
   audiences: GovernedCatalogItem[];
   styleGuides: GovernedCatalogItem[];
   products: GovernedCatalogItem[];
+  productSchemas: GovernedCatalogItem[];
 };
 
 const EMPTY_CATALOGS: Catalogs = {
@@ -33,12 +38,26 @@ const EMPTY_CATALOGS: Catalogs = {
   audiences: [],
   styleGuides: [],
   products: [],
+  productSchemas: [],
 };
 
 function approvedOptions(items: GovernedCatalogItem[]) {
   return items.flatMap((item) => item.versions
     .filter((version) => version.lifecycle === "approved" || version.lifecycle === "deprecated")
     .map((version) => ({ item, version })));
+}
+
+function schemaFieldsForProduct(
+  productVersion: { productSchemaVersionId?: string | null },
+  schemas: GovernedCatalogItem[],
+): ProductSchemaField[] {
+  const schemaVersionId = productVersion.productSchemaVersionId;
+  if (!schemaVersionId) return [];
+  for (const item of schemas) {
+    const version = item.versions.find((entry) => entry.id === schemaVersionId);
+    if (version) return normalizeProductSchemaPolicy(version.data).fields;
+  }
+  return [];
 }
 
 export function ContextSelector({
@@ -65,6 +84,7 @@ export function ContextSelector({
       ["audiences", "audiences"],
       ["styleGuides", "style-guides"],
       ["products", "products"],
+      ["productSchemas", "product-schemas"],
     ] as const;
     void Promise.all(entries.map(async ([key, path]) => {
       const response = await fetch(`/api/gcc-v2/${path}`, { cache: "no-store", signal: controller.signal });
@@ -144,10 +164,46 @@ export function ContextSelector({
     onPreviewChange(null);
   }
 
+  function toggleProduct(versionId: string, fields: ProductSchemaField[]) {
+    const selected = value.productSelections.some((selection) => selection.productVersionId === versionId);
+    onChange({
+      ...value,
+      productSelections: selected
+        ? value.productSelections.filter((selection) => selection.productVersionId !== versionId)
+        : [
+          ...value.productSelections,
+          { productVersionId: versionId, selectedFieldIds: fields.map((field) => field.id) },
+        ],
+    });
+    setPreview(null);
+    onPreviewChange(null);
+  }
+
+  function toggleProductField(versionId: string, fieldId: string, availableFieldIds: string[]) {
+    const existing = value.productSelections.find((selection) => selection.productVersionId === versionId);
+    if (!existing) return;
+    const current = existing.selectedFieldIds.length ? existing.selectedFieldIds : availableFieldIds;
+    const nextIds = current.includes(fieldId)
+      ? current.filter((id) => id !== fieldId)
+      : [...current, fieldId];
+    onChange({
+      ...value,
+      productSelections: value.productSelections.map((selection) =>
+        (selection.productVersionId === versionId
+          ? { ...selection, selectedFieldIds: nextIds }
+          : selection)),
+    });
+    setPreview(null);
+    onPreviewChange(null);
+  }
+
   return (
     <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50/40 p-5" aria-label="Run context">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="font-bold text-[var(--cc-ink)]">Content context</h3><p className="mt-1 text-xs text-[var(--cc-muted)]">Your project website research is included automatically. Add optional approved references or brand guidance below.</p></div>
+        <div>
+          <h3 className="font-bold text-[var(--cc-ink)]">Content context</h3>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">Your project website research is included automatically. Add optional approved references or brand guidance below.</p>
+        </div>
         <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage source library</a>
       </div>
       {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading governed catalogs…</p> : null}
@@ -171,35 +227,159 @@ export function ContextSelector({
         </label>
       </div>
 
-      <fieldset className="mt-4"><legend className="text-xs font-semibold">Additional approved sources</legend>{knowledgeOptions.length ? <div className="mt-2 grid gap-2 sm:grid-cols-2">{knowledgeOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs"><input type="checkbox" aria-label={`${item.name} version ${version.versionNumber}`} checked={value.knowledgeAssetVersionIds.includes(version.id)} onChange={() => onChange({ ...value, knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id) ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id) : [...value.knowledgeAssetVersionIds, version.id] })} /><span><strong>{item.name}</strong><span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span></span></label>)}</div> : <p className="mt-2 text-xs text-[var(--cc-muted)]">No additional references have been approved. Your selected project website is already included.</p>}</fieldset>
+      <fieldset className="mt-4">
+        <legend className="text-xs font-semibold">Additional approved sources</legend>
+        {knowledgeOptions.length ? (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {knowledgeOptions.map(({ item, version }) => (
+              <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs">
+                <input
+                  type="checkbox"
+                  aria-label={`${item.name} version ${version.versionNumber}`}
+                  checked={value.knowledgeAssetVersionIds.includes(version.id)}
+                  onChange={() => onChange({
+                    ...value,
+                    knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id)
+                      ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id)
+                      : [...value.knowledgeAssetVersionIds, version.id],
+                  })}
+                />
+                <span>
+                  <strong>{item.name}</strong>
+                  <span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-[var(--cc-muted)]">No additional references have been approved. Your selected project website is already included.</p>
+        )}
+      </fieldset>
 
-      <fieldset className="mt-4"><legend className="text-xs font-semibold">Products</legend>{productOptions.length ? <div className="mt-2 flex flex-wrap gap-2">{productOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-full border border-[var(--cc-line)] bg-white px-3 py-2 text-xs"><input type="checkbox" aria-label={`${item.name} product version ${version.versionNumber}`} checked={value.productSelections.some((selection) => selection.productVersionId === version.id)} onChange={() => onChange({ ...value, productSelections: value.productSelections.some((selection) => selection.productVersionId === version.id) ? value.productSelections.filter((selection) => selection.productVersionId !== version.id) : [...value.productSelections, { productVersionId: version.id, selectedFieldIds: [] }] })} />{item.name} v{version.versionNumber}</label>)}</div> : <p className="mt-2 text-xs text-[var(--cc-muted)]">No approved Products available.</p>}</fieldset>
+      <fieldset className="mt-4">
+        <legend className="text-xs font-semibold">Products</legend>
+        {productOptions.length ? (
+          <div className="mt-2 space-y-3">
+            {productOptions.map(({ item, version }) => {
+              const fields = schemaFieldsForProduct(version, catalogs.productSchemas);
+              const selection = value.productSelections.find((entry) => entry.productVersionId === version.id);
+              const selectedFieldIds = selection
+                ? (selection.selectedFieldIds.length ? selection.selectedFieldIds : fields.map((field) => field.id))
+                : [];
+              return (
+                <div key={version.id} className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                  <label className="flex gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      aria-label={`${item.name} product version ${version.versionNumber}`}
+                      checked={Boolean(selection)}
+                      onChange={() => toggleProduct(version.id, fields)}
+                    />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <span className="block text-[var(--cc-muted)]">Version {version.versionNumber}</span>
+                    </span>
+                  </label>
+                  {selection && fields.length ? (
+                    <div className="mt-2 grid gap-1 sm:grid-cols-2" aria-label={`${item.name} product fields`}>
+                      {fields.map((field) => (
+                        <label key={field.id} className="flex gap-2 text-xs text-[var(--cc-muted)]">
+                          <input
+                            type="checkbox"
+                            aria-label={`${item.name} field ${field.label}`}
+                            checked={selectedFieldIds.includes(field.id)}
+                            onChange={() => toggleProductField(
+                              version.id,
+                              field.id,
+                              fields.map((entry) => entry.id),
+                            )}
+                          />
+                          {field.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-[var(--cc-muted)]">No approved Products available.</p>
+        )}
+      </fieldset>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="flex gap-2 rounded-md bg-white p-3 text-xs"><input type="checkbox" checked={value.webSearchEnabled} onChange={(event) => onChange({ ...value, webSearchEnabled: event.target.checked })} /><span><strong>Web search</strong><span className="block text-[var(--cc-muted)]">Optional current public research.</span></span></label>
-        <label className="flex gap-2 rounded-md bg-white p-3 text-xs"><input type="checkbox" checked={value.knowledgeSearchEnabled} onChange={(event) => onChange({ ...value, knowledgeSearchEnabled: event.target.checked })} /><span><strong>Search additional sources</strong><span className="block text-[var(--cc-muted)]">Search only the approved references selected above.</span></span></label>
+        <label className="flex gap-2 rounded-md bg-white p-3 text-xs">
+          <input type="checkbox" checked={value.webSearchEnabled} onChange={(event) => onChange({ ...value, webSearchEnabled: event.target.checked })} />
+          <span><strong>Web search</strong><span className="block text-[var(--cc-muted)]">Optional current public research.</span></span>
+        </label>
+        <label className="flex gap-2 rounded-md bg-white p-3 text-xs">
+          <input type="checkbox" checked={value.knowledgeSearchEnabled} onChange={(event) => onChange({ ...value, knowledgeSearchEnabled: event.target.checked })} />
+          <span><strong>Search additional sources</strong><span className="block text-[var(--cc-muted)]">Search only the approved references selected above.</span></span>
+        </label>
       </div>
 
-      <label className="mt-4 block text-xs font-semibold">Run notes<textarea aria-label="Run context notes" value={value.runNotes ?? ""} onChange={(event) => onChange({ ...value, runNotes: event.target.value })} className="mt-1 min-h-16 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal" /></label>
+      <label className="mt-4 block text-xs font-semibold">
+        Run notes
+        <textarea aria-label="Run context notes" value={value.runNotes ?? ""} onChange={(event) => onChange({ ...value, runNotes: event.target.value })} className="mt-1 min-h-16 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal" />
+      </label>
 
       <div className="mt-4 rounded-lg border border-dashed border-teal-300 bg-white p-4">
         <p className="text-xs font-semibold">Temporary attachments · this run only</p>
         <p className="mt-1 text-xs text-[var(--cc-muted)]">Attachments never become persistent Knowledge automatically.</p>
-        {createId ? <label className="mt-2 inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">Choose attachment<input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} /></label> : <p className="mt-2 text-xs text-amber-800">Save the create from this review step before adding a run attachment.</p>}
+        {createId ? (
+          <label className="mt-2 inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">
+            Choose attachment
+            <input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
+          </label>
+        ) : (
+          <p className="mt-2 text-xs text-amber-800">Save the create from this review step before adding a run attachment.</p>
+        )}
         {uploadMessage ? <p role="status" className="mt-2 text-xs">{uploadMessage}</p> : null}
         {value.runAttachmentIds.length ? <ul className="mt-2 list-disc pl-4 text-xs">{value.runAttachmentIds.map((id) => <li key={id} className="font-mono">{id}</li>)}</ul> : null}
       </div>
 
       {!createId ? <p className="mt-4 text-xs text-[var(--cc-muted)]">Context will be checked automatically when you create the content. Manual recheck is available after the create is saved.</p> : null}
-      <button type="button" disabled={!createId || preflightBusy || uploadBusy || loading} onClick={() => void resolveContext()} className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{preflightBusy ? "Checking context…" : createId ? "Check context" : "Check after save"}</button>
+      <button type="button" disabled={!createId || preflightBusy || uploadBusy || loading} onClick={() => void resolveContext()} className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+        {preflightBusy ? "Checking context…" : createId ? "Check context" : "Check after save"}
+      </button>
 
-      {preview ? <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-white p-4" aria-label="Effective context preflight">
-        <div className="flex flex-wrap justify-between gap-2"><h4 className="font-semibold">Effective context preflight</h4><span className="text-xs text-[var(--cc-muted)]">{preview.estimatedContextSize.toLocaleString()} estimated units</span></div>
-        {[...preview.inheritedEntries, ...preview.effectiveEntries].length ? <ul className="mt-2 space-y-1 text-xs">{[...preview.inheritedEntries, ...preview.effectiveEntries].map((entry) => <li key={`${entry.kind}-${entry.versionId}`}><strong>{entry.name}</strong> · v{entry.versionNumber ?? "?"} · {entry.lifecycle ?? "resolved"}{entry.inherited ? " · inherited" : ""}{entry.temporary ? " · temporary" : ""}{entry.freshness ? ` · ${entry.freshness}` : ""}</li>)}</ul> : <p className="mt-2 text-xs text-[var(--cc-muted)]">Only the persisted brief and platform defaults are effective.</p>}
-        {preview.warnings.length ? <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-900"><strong>Warnings</strong><ul className="mt-1 list-disc pl-4">{preview.warnings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul></div> : null}
-        {preview.blockingFindings.length ? <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-900"><strong>Generation blocked</strong><ul className="mt-1 list-disc pl-4">{preview.blockingFindings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul></div> : <p className="mt-3 text-xs font-semibold text-emerald-700">Context is eligible for manifest resolution.</p>}
-        {preview.agentCompatibility.length ? <ul className="mt-3 text-xs">{preview.agentCompatibility.map((agent) => <li key={agent.agentId}>{agent.agentId}: {agent.compatible ? "compatible" : agent.message || "not compatible"}</li>)}</ul> : null}
-      </div> : null}
+      {preview ? (
+        <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-white p-4" aria-label="Effective context preflight">
+          <div className="flex flex-wrap justify-between gap-2">
+            <h4 className="font-semibold">Effective context preflight</h4>
+            <span className="text-xs text-[var(--cc-muted)]">{preview.estimatedContextSize.toLocaleString()} estimated units</span>
+          </div>
+          {[...preview.inheritedEntries, ...preview.effectiveEntries].length ? (
+            <ul className="mt-2 space-y-1 text-xs">
+              {[...preview.inheritedEntries, ...preview.effectiveEntries].map((entry) => (
+                <li key={`${entry.kind}-${entry.versionId}`}>
+                  <strong>{entry.name}</strong> · v{entry.versionNumber ?? "?"} · {entry.lifecycle ?? "resolved"}
+                  {entry.inherited ? " · inherited" : ""}
+                  {entry.temporary ? " · temporary" : ""}
+                  {entry.freshness ? ` · ${entry.freshness}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-[var(--cc-muted)]">Only the persisted brief and platform defaults are effective.</p>
+          )}
+          {preview.warnings.length ? (
+            <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-900">
+              <strong>Warnings</strong>
+              <ul className="mt-1 list-disc pl-4">{preview.warnings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul>
+            </div>
+          ) : null}
+          {preview.blockingFindings.length ? (
+            <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-900">
+              <strong>Generation blocked</strong>
+              <ul className="mt-1 list-disc pl-4">{preview.blockingFindings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs font-semibold text-emerald-700">Context is eligible for manifest resolution.</p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

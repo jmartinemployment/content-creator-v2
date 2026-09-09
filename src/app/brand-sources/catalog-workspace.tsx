@@ -16,12 +16,32 @@ import {
   type IngestionEvent,
 } from "./context-contract";
 import { uploadContextFile } from "./direct-upload";
+import {
+  EMPTY_STYLE_GUIDE_POLICY,
+  linesFromMultiline,
+  normalizeStyleGuidePolicy,
+  validateStyleGuidePolicy,
+  type StyleGuidePolicy,
+  type StyleGuideTermKind,
+  type StyleGuideTermRule,
+} from "./style-guide-policy";
+import {
+  EMPTY_PRODUCT_SCHEMA,
+  emptyProductSchemaField,
+  normalizeProductFieldValues,
+  normalizeProductSchemaPolicy,
+  validateProductDraft,
+  validateProductSchemaPolicy,
+  type ProductSchemaPolicy,
+  type ProductVersionDraft,
+} from "./product-policy";
 
 const CATALOGS = [
   { kind: "knowledge", path: "knowledge", label: "Approved Sources" },
   { kind: "brand-kit", path: "brand-kits", label: "Brand Kits" },
   { kind: "audience", path: "audiences", label: "Audiences" },
   { kind: "style-guide", path: "style-guides", label: "Style Guides" },
+  { kind: "product-schema", path: "product-schemas", label: "Product Schemas" },
   { kind: "product", path: "products", label: "Products" },
 ] as const;
 
@@ -72,6 +92,410 @@ function VersionDetail({ version }: { version: GovernedVersion }) {
   );
 }
 
+function GrammarToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="rounded border-[var(--cc-line)]"
+      />
+      {label}
+    </label>
+  );
+}
+
+function StyleGuidePolicyEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: StyleGuidePolicy;
+  busy: boolean;
+  onChange: (next: StyleGuidePolicy) => void;
+  onSave: () => void;
+}) {
+  const updateRule = (index: number, patch: Partial<StyleGuideTermRule>) => {
+    onChange({
+      ...policy,
+      termRules: policy.termRules.map((rule, ruleIndex) =>
+        (ruleIndex === index ? { ...rule, ...patch } : rule)),
+    });
+  };
+
+  return (
+    <section aria-label="Style Guide policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Typed style policy</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Grammar preferences guide generation. Term rules are validated deterministically after drafting.
+          Saving always creates a new immutable version.
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <GrammarToggle
+          label="Oxford comma"
+          checked={policy.grammar.oxfordComma !== false}
+          onChange={(oxfordComma) => onChange({ ...policy, grammar: { ...policy.grammar, oxfordComma } })}
+        />
+        <GrammarToggle
+          label="Prefer active voice"
+          checked={policy.grammar.preferActiveVoice !== false}
+          onChange={(preferActiveVoice) => onChange({
+            ...policy,
+            grammar: { ...policy.grammar, preferActiveVoice },
+          })}
+        />
+        <GrammarToggle
+          label="Allow em dashes"
+          checked={policy.grammar.allowEmDash !== false}
+          onChange={(allowEmDash) => onChange({ ...policy, grammar: { ...policy.grammar, allowEmDash } })}
+        />
+        <GrammarToggle
+          label="Sentence-case headings"
+          checked={policy.grammar.sentenceCaseHeadings !== false}
+          onChange={(sentenceCaseHeadings) => onChange({
+            ...policy,
+            grammar: { ...policy.grammar, sentenceCaseHeadings },
+          })}
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--cc-muted)]">Term rules</h4>
+          <button
+            type="button"
+            className="text-xs font-semibold text-[var(--cc-accent)]"
+            onClick={() => onChange({
+              ...policy,
+              termRules: [
+                ...policy.termRules,
+                {
+                  id: `rule-${policy.termRules.length + 1}`,
+                  kind: "prohibit",
+                  match: "",
+                  replacement: null,
+                  caseSensitive: false,
+                },
+              ],
+            })}
+          >
+            Add rule
+          </button>
+        </div>
+        <ul className="mt-2 space-y-2">
+          {policy.termRules.map((rule, index) => (
+            <li key={rule.id ?? index} className="grid gap-2 rounded-md border border-[var(--cc-line)] p-3 sm:grid-cols-[140px_1fr_1fr_auto]">
+              <label className="text-xs font-semibold">
+                Kind
+                <select
+                  aria-label={`Term rule ${index + 1} kind`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={rule.kind}
+                  onChange={(event) => updateRule(index, { kind: event.target.value as StyleGuideTermKind })}
+                >
+                  <option value="prohibit">Prohibit</option>
+                  <option value="replace">Replace</option>
+                  <option value="capitalize">Capitalize</option>
+                  <option value="abbreviation">Abbreviation</option>
+                  <option value="firstMention">First mention</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold">
+                Match
+                <input
+                  aria-label={`Term rule ${index + 1} match`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={rule.match}
+                  onChange={(event) => updateRule(index, { match: event.target.value })}
+                />
+              </label>
+              <label className="text-xs font-semibold">
+                Replacement
+                <input
+                  aria-label={`Term rule ${index + 1} replacement`}
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                  value={rule.replacement ?? ""}
+                  disabled={rule.kind === "prohibit" || rule.kind === "capitalize"}
+                  onChange={(event) => updateRule(index, { replacement: event.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className="self-end text-xs font-semibold text-red-700"
+                onClick={() => onChange({
+                  ...policy,
+                  termRules: policy.termRules.filter((_, ruleIndex) => ruleIndex !== index),
+                })}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Required phrases (one per line)
+        <textarea
+          aria-label="Required phrases"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.requiredPhrases.join("\n")}
+          onChange={(event) => onChange({
+            ...policy,
+            requiredPhrases: linesFromMultiline(event.target.value),
+          })}
+        />
+      </label>
+
+      <label className="block text-xs font-semibold">
+        Additional prohibited phrases (one per line)
+        <textarea
+          aria-label="Prohibited phrases"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.prohibitedPhrases.join("\n")}
+          onChange={(event) => onChange({
+            ...policy,
+            prohibitedPhrases: linesFromMultiline(event.target.value),
+          })}
+        />
+      </label>
+
+      <label className="block text-xs font-semibold">
+        Custom instructions
+        <textarea
+          aria-label="Custom instructions"
+          className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.customInstructions}
+          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
+        />
+      </label>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
+  );
+}
+
+function ProductSchemaEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: ProductSchemaPolicy;
+  busy: boolean;
+  onChange: (next: ProductSchemaPolicy) => void;
+  onSave: () => void;
+}) {
+  const updateField = (index: number, patch: Partial<ProductSchemaPolicy["fields"][number]>) => {
+    onChange({
+      ...policy,
+      fields: policy.fields.map((field, fieldIndex) =>
+        (fieldIndex === index ? { ...field, ...patch } : field)),
+    });
+  };
+
+  return (
+    <section aria-label="Product Schema fields" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Schema fields</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Define the shared Product IQ attributes. Products bind values to these immutable field IDs.
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="text-xs font-semibold text-[var(--cc-accent)]"
+          onClick={() => onChange({
+            ...policy,
+            fields: [...policy.fields, emptyProductSchemaField(policy.fields.length)],
+          })}
+        >
+          Add field
+        </button>
+      </div>
+      <ul className="space-y-2">
+        {policy.fields.map((field, index) => (
+          <li key={field.id} className="grid gap-2 rounded-md border border-[var(--cc-line)] p-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold">
+              Label
+              <input
+                aria-label={`Schema field ${index + 1} label`}
+                className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                value={field.label}
+                onChange={(event) => updateField(index, { label: event.target.value })}
+              />
+            </label>
+            <label className="text-xs font-semibold">
+              Key
+              <input
+                aria-label={`Schema field ${index + 1} key`}
+                className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+                value={field.key}
+                onChange={(event) => updateField(index, { key: event.target.value })}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={field.required}
+                onChange={(event) => updateField(index, { required: event.target.checked })}
+              />
+              Required
+              <button
+                type="button"
+                className="ml-auto text-xs font-semibold text-red-700"
+                onClick={() => onChange({
+                  ...policy,
+                  fields: policy.fields.filter((_, fieldIndex) => fieldIndex !== index),
+                })}
+              >
+                Remove
+              </button>
+            </label>
+            <p className="sm:col-span-2 font-mono text-[10px] text-[var(--cc-muted)]">id {field.id}</p>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
+  );
+}
+
+function ProductRecordEditor({
+  draft,
+  schemaOptions,
+  schema,
+  busy,
+  onChange,
+  onSave,
+}: {
+  draft: ProductVersionDraft;
+  schemaOptions: Array<{ versionId: string; label: string }>;
+  schema: ProductSchemaPolicy | null;
+  busy: boolean;
+  onChange: (next: ProductVersionDraft) => void;
+  onSave: () => void;
+}) {
+  return (
+    <section aria-label="Product IQ record" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Product values &amp; claims</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Bind this product to an approved schema version, then author field values and claim gates.
+        </p>
+      </div>
+      <label className="block text-xs font-semibold">
+        Product Schema version
+        <select
+          aria-label="Product Schema version"
+          className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={draft.productSchemaVersionId}
+          onChange={(event) => onChange({ ...draft, productSchemaVersionId: event.target.value })}
+        >
+          <option value="">Select approved schema version</option>
+          {schemaOptions.map((option) => (
+            <option key={option.versionId} value={option.versionId}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      {schema ? (
+        <ul className="space-y-2">
+          {schema.fields.map((field) => (
+            <li key={field.id}>
+              <label className="block text-xs font-semibold">
+                {field.label}{field.required ? " *" : ""}
+                <input
+                  aria-label={`Product field ${field.label}`}
+                  className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+                  value={draft.fieldValues[field.id] ?? ""}
+                  onChange={(event) => onChange({
+                    ...draft,
+                    fieldValues: { ...draft.fieldValues, [field.id]: event.target.value },
+                  })}
+                />
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-[var(--cc-muted)]">Choose a schema version to edit field values.</p>
+      )}
+      <label className="block text-xs font-semibold">
+        Approved claims (one per line)
+        <textarea
+          aria-label="Approved claims"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={draft.approvedClaims.join("\n")}
+          onChange={(event) => onChange({
+            ...draft,
+            approvedClaims: linesFromMultiline(event.target.value),
+          })}
+        />
+      </label>
+      <label className="block text-xs font-semibold">
+        Prohibited claims (one per line)
+        <textarea
+          aria-label="Prohibited claims"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={draft.prohibitedClaims.join("\n")}
+          onChange={(event) => onChange({
+            ...draft,
+            prohibitedClaims: linesFromMultiline(event.target.value),
+          })}
+        />
+      </label>
+      <label className="block text-xs font-semibold">
+        Mandatory disclaimers (one per line)
+        <textarea
+          aria-label="Mandatory disclaimers"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={draft.mandatoryDisclaimers.join("\n")}
+          onChange={(event) => onChange({
+            ...draft,
+            mandatoryDisclaimers: linesFromMultiline(event.target.value),
+          })}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
+  );
+}
+
 export function CatalogWorkspace() {
   const [active, setActive] = useState<CatalogDefinition>(CATALOGS[0]);
   const [items, setItems] = useState<GovernedCatalogItem[]>([]);
@@ -85,6 +509,19 @@ export function CatalogWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const [ingestionEvents, setIngestionEvents] = useState<IngestionEvent[]>([]);
   const [showActivity, setShowActivity] = useState(false);
+  const [stylePolicy, setStylePolicy] = useState<StyleGuidePolicy>(EMPTY_STYLE_GUIDE_POLICY);
+  const [productSchemaPolicy, setProductSchemaPolicy] = useState<ProductSchemaPolicy>({
+    ...EMPTY_PRODUCT_SCHEMA,
+    fields: [emptyProductSchemaField()],
+  });
+  const [productDraft, setProductDraft] = useState<ProductVersionDraft>({
+    productSchemaVersionId: "",
+    fieldValues: {},
+    approvedClaims: [],
+    prohibitedClaims: [],
+    mandatoryDisclaimers: [],
+  });
+  const [productSchemaCatalog, setProductSchemaCatalog] = useState<GovernedCatalogItem[]>([]);
   const ingestionLastSeq = useRef(0);
 
   const loadCatalog = useCallback(async (definition: CatalogDefinition) => {
@@ -98,6 +535,11 @@ export function CatalogWorkspace() {
       setItems(next);
       setSelectedId(next[0]?.id ?? null);
       setSelectedVersionId(next[0] ? currentVersion(next[0])?.id ?? null : null);
+      if (definition.kind === "product") {
+        const schemaResponse = await fetch("/api/gcc-v2/product-schemas", { cache: "no-store" });
+        const schemaBody = await schemaResponse.json().catch(() => null);
+        if (schemaResponse.ok) setProductSchemaCatalog(normalizeCatalog(schemaBody));
+      }
     } catch (cause) {
       setItems([]);
       setError(cause instanceof Error ? cause.message : "Catalog unavailable.");
@@ -159,6 +601,67 @@ export function CatalogWorkspace() {
     return matchesQuery && (lifecycle === "all" || version?.lifecycle === lifecycle);
   }), [items, lifecycle, query]);
 
+  useEffect(() => {
+    if (active.kind !== "style-guide") return;
+    setStylePolicy(normalizeStyleGuidePolicy(selectedVersion?.data));
+  }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
+
+  useEffect(() => {
+    if (active.kind !== "product-schema") return;
+    const normalized = normalizeProductSchemaPolicy(selectedVersion?.data);
+    setProductSchemaPolicy(normalized.fields.length
+      ? normalized
+      : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] });
+  }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
+
+  const approvedSchemaOptions = useMemo(() => productSchemaCatalog.flatMap((item) =>
+    item.versions
+      .filter((version) => version.lifecycle === "approved")
+      .map((version) => ({
+        versionId: version.id,
+        label: `${item.name} · v${version.versionNumber}`,
+        schema: normalizeProductSchemaPolicy(version.data),
+      }))), [productSchemaCatalog]);
+
+  const selectedProductSchema = useMemo(() => {
+    const match = approvedSchemaOptions.find((option) =>
+      option.versionId === productDraft.productSchemaVersionId);
+    return match?.schema ?? null;
+  }, [approvedSchemaOptions, productDraft.productSchemaVersionId]);
+
+  useEffect(() => {
+    if (active.kind !== "product") return;
+    const schemaVersionId = selectedVersion?.productSchemaVersionId
+      ?? approvedSchemaOptions[0]?.versionId
+      ?? "";
+    const schema = approvedSchemaOptions.find((option) => option.versionId === schemaVersionId)?.schema
+      ?? EMPTY_PRODUCT_SCHEMA;
+    setProductDraft({
+      productSchemaVersionId: schemaVersionId,
+      fieldValues: normalizeProductFieldValues(selectedVersion?.data, schema.fields),
+      approvedClaims: selectedVersion?.approvedClaims ?? [],
+      prohibitedClaims: selectedVersion?.prohibitedClaims ?? [],
+      mandatoryDisclaimers: selectedVersion?.mandatoryDisclaimers ?? [],
+    });
+  }, [
+    active.kind,
+    approvedSchemaOptions,
+    selectedVersion?.id,
+    selectedVersion?.data,
+    selectedVersion?.productSchemaVersionId,
+    selectedVersion?.approvedClaims,
+    selectedVersion?.prohibitedClaims,
+    selectedVersion?.mandatoryDisclaimers,
+  ]);
+
+  useEffect(() => {
+    if (active.kind !== "product" || !selectedProductSchema) return;
+    setProductDraft((current) => ({
+      ...current,
+      fieldValues: normalizeProductFieldValues(current.fieldValues, selectedProductSchema.fields),
+    }));
+  }, [active.kind, selectedProductSchema]);
+
   async function lifecycleAction(action: string) {
     if (!selected || !selectedVersion) return;
     setActionBusy(action);
@@ -187,18 +690,128 @@ export function CatalogWorkspace() {
     const name = window.prompt(`Name this ${active.label.toLowerCase()} record:`);
     if (!name?.trim()) return;
     setActionBusy("create");
-    const response = await fetch(`/api/gcc-v2/${active.path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), description: "", data: {} }),
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) setError(body?.error || `Draft creation failed (HTTP ${response.status}).`);
-    else {
+    setError(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: "" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `Draft creation failed (HTTP ${response.status}).`);
+      const catalogId = typeof body?.id === "string" ? body.id : null;
+      if ((active.kind === "style-guide" || active.kind === "product-schema") && catalogId) {
+        const payload = active.kind === "style-guide"
+          ? EMPTY_STYLE_GUIDE_POLICY
+          : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] };
+        const versionResponse = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(catalogId)}/versions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ payload, schemaVersion: 1, locale: "en" }),
+        });
+        const versionBody = await versionResponse.json().catch(() => null);
+        if (!versionResponse.ok) {
+          throw new Error(versionBody?.error || `Version create failed (HTTP ${versionResponse.status}).`);
+        }
+      }
       setNotice(`${name.trim()} draft created.`);
       await loadCatalog(active);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Draft creation failed.");
+    } finally {
+      setActionBusy(null);
     }
-    setActionBusy(null);
+  }
+
+  async function saveStyleGuideVersion() {
+    if (!selected) return;
+    const validation = validateStyleGuidePolicy(stylePolicy);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setActionBusy("save-style");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(selected.id)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payload: stylePolicy, schemaVersion: 1, locale: "en" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Style Guide version.`);
+      await loadCatalog(active);
+      if (typeof body?.id === "string") setSelectedVersionId(body.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Style Guide version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function saveProductSchemaVersion() {
+    if (!selected) return;
+    const validation = validateProductSchemaPolicy(productSchemaPolicy);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setActionBusy("save-schema");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(selected.id)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payload: productSchemaPolicy, schemaVersion: 1 }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Product Schema version.`);
+      await loadCatalog(active);
+      if (typeof body?.id === "string") setSelectedVersionId(body.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Product Schema version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function saveProductVersion() {
+    if (!selected || !selectedProductSchema) return;
+    const validation = validateProductDraft(productDraft, selectedProductSchema);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setActionBusy("save-product");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(selected.id)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          payload: productDraft.fieldValues,
+          schemaVersion: 1,
+          productSchemaVersionId: productDraft.productSchemaVersionId,
+          approvedClaims: productDraft.approvedClaims,
+          prohibitedClaims: productDraft.prohibitedClaims,
+          mandatoryDisclaimers: productDraft.mandatoryDisclaimers,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Product version.`);
+      await loadCatalog(active);
+      if (typeof body?.id === "string") setSelectedVersionId(body.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Product version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
   }
 
   async function uploadKnowledge(file: File) {
@@ -273,6 +886,32 @@ export function CatalogWorkspace() {
               <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-xs font-semibold">Exact version<select aria-label="Exact version" className="mt-1 block rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" value={selectedVersion.id} onChange={(event) => setSelectedVersionId(event.target.value)}>{[...selected.versions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => <option key={version.id} value={version.id}>Version {version.versionNumber} · {version.lifecycle}</option>)}</select></label>{active.kind !== "brand-kit" ? ["review", "approve", "deprecate", "revoke"].map((action) => <button key={action} type="button" disabled={actionBusy !== null || selectedVersion.lifecycle === "revoked"} onClick={() => void lifecycleAction(action)} className="rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold capitalize disabled:opacity-40">{actionBusy === action ? "Working…" : action}</button>) : null}</div>
               {selected.versions.length > 1 ? <p className="mt-3 text-xs text-[var(--cc-muted)]">Compare versions by selecting an immutable revision. Approved content is never edited in place.</p> : null}
               <dl><VersionDetail version={selectedVersion} /></dl>
+              {active.kind === "style-guide" ? (
+                <StyleGuidePolicyEditor
+                  policy={stylePolicy}
+                  busy={actionBusy === "save-style"}
+                  onChange={setStylePolicy}
+                  onSave={() => void saveStyleGuideVersion()}
+                />
+              ) : null}
+              {active.kind === "product-schema" ? (
+                <ProductSchemaEditor
+                  policy={productSchemaPolicy}
+                  busy={actionBusy === "save-schema"}
+                  onChange={setProductSchemaPolicy}
+                  onSave={() => void saveProductSchemaVersion()}
+                />
+              ) : null}
+              {active.kind === "product" ? (
+                <ProductRecordEditor
+                  draft={productDraft}
+                  schemaOptions={approvedSchemaOptions}
+                  schema={selectedProductSchema}
+                  busy={actionBusy === "save-product"}
+                  onChange={setProductDraft}
+                  onSave={() => void saveProductVersion()}
+                />
+              ) : null}
             </> : <p className="text-sm text-[var(--cc-muted)]">Select a catalog record to inspect its exact version.</p>}
           </section>
         </div>

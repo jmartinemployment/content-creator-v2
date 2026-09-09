@@ -50,6 +50,62 @@ test("Brand and source catalogs expose lifecycle, provenance, and ingestion acti
   await expect(page.getByText("Editorial handbook indexed")).toBeVisible();
 });
 
+test("Style Guide policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Style Guides" }).click();
+  await expect(page.getByRole("heading", { name: "Clear Technical Style" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Style Guide policy" })).toBeVisible();
+  await expect(page.getByLabel("Term rule 1 match")).toHaveValue("synergy");
+  await page.getByRole("button", { name: "Add rule" }).click();
+  await page.getByLabel("Term rule 3 kind").selectOption("capitalize");
+  await page.getByLabel("Term rule 3 match").fill("Acme Cloud");
+  await page.getByLabel("Custom instructions").fill("Prefer concrete operational outcomes and named systems.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Clear Technical Style as a new Style Guide version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/style-guides/style-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate.body)).toMatchObject({
+    schemaVersion: 1,
+    payload: {
+      schemaVersion: 1,
+      customInstructions: "Prefer concrete operational outcomes and named systems.",
+    },
+  });
+});
+
+test("Product Schema and Product IQ editors save typed versions with claims", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Product Schemas" }).click();
+  await expect(page.getByRole("heading", { name: "Core Product Schema" })).toBeVisible();
+  await expect(page.getByLabel("Schema field 1 label")).toHaveValue("Pricing");
+  await page.getByRole("button", { name: "Add field" }).click();
+  await page.getByLabel("Schema field 3 label").fill("Compatibility");
+  await page.getByLabel("Schema field 3 key").fill("compatibility");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Core Product Schema as a new Product Schema version")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Products" }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Engine" })).toBeVisible();
+  await expect(page.getByLabel("Product field Pricing")).toHaveValue("Contact sales");
+  await page.getByLabel("Approved claims").fill("Evidence Engine cites every claim\nSOC2 ready");
+  await page.getByLabel("Mandatory disclaimers").fill("Results depend on source coverage.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Evidence Engine as a new Product version")).toBeVisible();
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const productCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/products/product-1/versions");
+  expect(JSON.parse(productCreate.body)).toMatchObject({
+    productSchemaVersionId: "schema-version-1",
+    approvedClaims: ["Evidence Engine cites every claim", "SOC2 ready"],
+    mandatoryDisclaimers: ["Results depend on source coverage."],
+  });
+});
+
 test("approved source upload sends bytes directly to issued storage URL and finalizes with JSON", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByLabel("Upload additional reference").setInputFiles({
@@ -93,9 +149,18 @@ test("context selector restores stable IDs and shows warning versus blocking pre
   await page.getByLabel("Audience").selectOption("audience-version-1");
   await page.getByLabel("Style Guide").selectOption("style-version-1");
   await page.getByLabel("Evidence Engine product version 1").check();
+  await expect(page.getByLabel("Evidence Engine field Pricing")).toBeChecked();
+  await page.getByLabel("Evidence Engine field Differentiator").uncheck();
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("Editorial Handbook is stale");
   await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => {
+    const raw = sessionStorage.getItem("gcc-v2-new-create-draft");
+    return raw ? JSON.parse(raw).contextSelection?.productSelections : null;
+  })).toEqual([{
+    productVersionId: "product-version-1",
+    selectedFieldIds: ["11111111-1111-4111-8111-111111111111"],
+  }]);
   await expect.poll(() => page.evaluate(() => {
     const raw = sessionStorage.getItem("gcc-v2-new-create-draft");
     return raw ? JSON.parse(raw).contextSelection?.knowledgeAssetVersionIds : null;

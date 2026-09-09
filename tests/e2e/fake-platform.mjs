@@ -90,8 +90,50 @@ function reset() {
     knowledge: [item("knowledge-1", "knowledge", "Editorial Handbook", "knowledge-version-1")],
     "brand-kits": [item("brand-1", "brand-kit", "Example Systems", "brand-version-1")],
     audiences: [item("audience-1", "audience", "Technical Leaders", "audience-version-1")],
-    "style-guides": [item("style-1", "style-guide", "Clear Technical Style", "style-version-1")],
-    products: [item("product-1", "product", "Evidence Engine", "product-version-1")],
+    "style-guides": [item("style-1", "style-guide", "Clear Technical Style", "style-version-1", {
+      policyJson: {
+        schemaVersion: 1,
+        grammar: { oxfordComma: true, preferActiveVoice: true, allowEmDash: false, sentenceCaseHeadings: true },
+        termRules: [
+          { id: "no-synergy", kind: "prohibit", match: "synergy", caseSensitive: false },
+          { id: "customers", kind: "replace", match: "users", replacement: "customers" },
+        ],
+        prohibitedPhrases: ["best-in-class"],
+        requiredPhrases: ["security review"],
+        customInstructions: "Prefer concrete operational outcomes.",
+      },
+    })],
+    "product-schemas": [item("schema-1", "product-schema", "Core Product Schema", "schema-version-1", {
+      fieldsJson: {
+        schemaVersion: 1,
+        fields: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            key: "pricing",
+            label: "Pricing",
+            required: true,
+            valueType: "string",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            key: "differentiator",
+            label: "Differentiator",
+            required: false,
+            valueType: "text",
+          },
+        ],
+      },
+    })],
+    products: [item("product-1", "product", "Evidence Engine", "product-version-1", {
+      productSchemaVersionId: "schema-version-1",
+      fieldValuesJson: {
+        "11111111-1111-4111-8111-111111111111": "Contact sales",
+        "22222222-2222-4222-8222-222222222222": "Citeable evidence graph",
+      },
+      approvedClaimsJson: ["Evidence Engine cites every claim"],
+      prohibitedClaimsJson: ["guarantees perfect accuracy"],
+      mandatoryDisclaimersJson: ["Results depend on source coverage."],
+    })],
   };
   manifests = new Map();
   studioAgents = new Map();
@@ -816,7 +858,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/geek-content-creator-v2/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
   }
-  const catalogName = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|products)$/)?.[1];
+  const catalogName = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|product-schemas|products)$/)?.[1];
   if (catalogName && req.method === "GET") {
     return send(res, 200, { items: contextCatalogs[catalogName] });
   }
@@ -838,11 +880,74 @@ const server = http.createServer(async (req, res) => {
         createdAtUtc: new Date().toISOString(),
         findings: [],
         audit: [],
+        policyJson: catalogName === "style-guides" ? (body.payload || body.data || {}) : undefined,
+        fieldsJson: catalogName === "product-schemas" ? (body.payload || body.data || {}) : undefined,
       }],
     });
     return send(res, 201, { id: stableId, versionId });
   }
-  const catalogAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|products)\/(?:versions\/)?([^/]+)\/(review|approve|deprecate|revoke|refresh)$/);
+  const catalogVersionCreate = url.pathname.match(/^\/api\/geek-content-creator-v2\/(style-guides|audiences|product-schemas|products)\/([^/]+)\/versions$/);
+  if (catalogVersionCreate && req.method === "POST") {
+    const [, collection, catalogId] = catalogVersionCreate;
+    const target = contextCatalogs[collection].find((entry) => entry.id === catalogId);
+    if (!target) return send(res, 404, { error: "Context record not found" });
+    const body = JSON.parse(rawBody || "{}");
+    if (collection === "style-guides") {
+      const payload = body.payload || {};
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const prohibited = new Set([
+          ...(Array.isArray(payload.prohibitedPhrases) ? payload.prohibitedPhrases : []),
+          ...((Array.isArray(payload.termRules) ? payload.termRules : [])
+            .filter((rule) => rule?.kind === "prohibit")
+            .map((rule) => rule.match)),
+        ].filter(Boolean).map((value) => String(value).toLowerCase()));
+        for (const phrase of Array.isArray(payload.requiredPhrases) ? payload.requiredPhrases : []) {
+          if (prohibited.has(String(phrase).toLowerCase())) {
+            return send(res, 400, { error: "A Style Guide phrase cannot be both prohibited and required." });
+          }
+        }
+      } else {
+        return send(res, 400, { error: "Style Guide policy must be a JSON object." });
+      }
+    }
+    if (collection === "product-schemas") {
+      const payload = body.payload || {};
+      const fields = Array.isArray(payload.fields) ? payload.fields : [];
+      if (!fields.length) return send(res, 400, { error: "Product Schema must define at least one field." });
+    }
+    if (collection === "products") {
+      if (!body.productSchemaVersionId) {
+        return send(res, 400, { error: "productSchemaVersionId is required" });
+      }
+      const schema = contextCatalogs["product-schemas"]
+        .flatMap((entry) => entry.versions)
+        .find((version) => version.id === body.productSchemaVersionId);
+      if (!schema || schema.lifecycle !== "approved") {
+        return send(res, 409, { error: "Product Schema must be owner-accessible and approved." });
+      }
+    }
+    const versionId = `${catalogId}-version-${target.versions.length + 1}`;
+    const version = {
+      id: versionId,
+      versionNumber: target.versions.length + 1,
+      lifecycle: "draft",
+      digest: `sha256:${"e".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      findings: [],
+      audit: [],
+      policyJson: collection === "style-guides" ? (body.payload || {}) : undefined,
+      fieldsJson: collection === "product-schemas" ? (body.payload || {}) : undefined,
+      fieldValuesJson: collection === "products" ? (body.payload || {}) : undefined,
+      productSchemaVersionId: body.productSchemaVersionId,
+      approvedClaimsJson: body.approvedClaims || [],
+      prohibitedClaimsJson: body.prohibitedClaims || [],
+      mandatoryDisclaimersJson: body.mandatoryDisclaimers || [],
+    };
+    target.versions.push(version);
+    target.currentVersionId = versionId;
+    return send(res, 200, version);
+  }
+  const catalogAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|product-schemas|products)\/(?:versions\/)?([^/]+)\/(review|approve|deprecate|revoke|refresh)$/);
   if (catalogAction && req.method === "POST") {
     const [, collection, stableOrVersionId, action] = catalogAction;
     const target = contextCatalogs[collection].find((entry) =>
@@ -1627,6 +1732,16 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         digest: "a".repeat(64),
       },
+      workflow: {
+        endpoint: "readiness-score",
+        artifactType: "readinessScore.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
+            { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
+          ],
+        },
+      },
       resultRenderer: { kind: "scorecard", artifactType: "readinessScore.v1" },
     });
   }
@@ -1640,6 +1755,16 @@ const server = http.createServer(async (req, res) => {
         versionId: "task-agent-version-2",
         version: "1.0.0",
         digest: "c".repeat(64),
+      },
+      workflow: {
+        endpoint: "query-plan",
+        artifactType: "queryPlan.v1",
+        uiSchema: {
+          fields: [
+            { id: "hypothesisTopics", label: "Hypothesis topics", type: "longText", required: false },
+            { id: "importedQueries", label: "Imported queries", type: "longText", required: false },
+          ],
+        },
       },
       resultRenderer: { kind: "query-plan", artifactType: "queryPlan.v1" },
     });
@@ -1655,6 +1780,17 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         digest: "j".repeat(64),
       },
+      workflow: {
+        endpoint: "faq-set",
+        artifactType: "faqSet.v1",
+        uiSchema: {
+          fields: [
+            { id: "topic", label: "Topic", type: "shortText", required: true },
+            { id: "faqQuestions", label: "FAQ questions", type: "longText", required: false },
+            { id: "sourceContent", label: "Source content", type: "longText", required: false },
+          ],
+        },
+      },
       resultRenderer: { kind: "faq-list", artifactType: "faqSet.v1" },
     });
   }
@@ -1668,6 +1804,16 @@ const server = http.createServer(async (req, res) => {
         versionId: "task-agent-version-9",
         version: "1.0.0",
         digest: "l".repeat(64),
+      },
+      workflow: {
+        endpoint: "citable-claims",
+        artifactType: "claimLedger.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceContent", label: "Source content", type: "longText", required: true },
+            { id: "vagueStatements", label: "Vague statements to rewrite", type: "longText", required: false },
+          ],
+        },
       },
       resultRenderer: { kind: "claim-ledger", artifactType: "claimLedger.v1" },
     });

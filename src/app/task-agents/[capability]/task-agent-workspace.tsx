@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { StudioFormField } from "@/app/studio/studio-types";
+import {
+  adaptTaskAgentInput,
+  resolveTaskAgentUiFields,
+  schemaFormCanStart,
+} from "@/app/task-agents/input-adapters";
+import { SchemaForm } from "@/app/task-agents/schema-form";
+import { TaskAgentResultRenderer } from "@/app/task-agents/result-renderers";
 
 export type TaskAgentDetail = {
   contractVersion: string;
@@ -14,6 +22,12 @@ export type TaskAgentDetail = {
     digest: string;
   };
   resultRenderer: { kind?: string; artifactType?: string };
+  workflow?: {
+    uiSchema?: { fields?: StudioFormField[] };
+    endpoint?: string;
+    artifactType?: string;
+  } | null;
+  inputSchema?: unknown;
 };
 
 type TaskRun = {
@@ -116,10 +130,16 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [vagueStatements, setVagueStatements] = useState("");
   const [competitorName, setCompetitorName] = useState("Competitor");
   const [competitorContent, setCompetitorContent] = useState("");
+  const [schemaValues, setSchemaValues] = useState<Record<string, string>>({});
   const [run, setRun] = useState<TaskRun | null>(null);
   const [result, setResult] = useState<ResultShell | null>(null);
   const [error, setError] = useState<string | null>(null);
   const capabilityId = detail.agent.id;
+  const schemaFields = useMemo(
+    () => resolveTaskAgentUiFields(capabilityId, detail.workflow),
+    [capabilityId, detail.workflow],
+  );
+  const useSchemaDrivenForm = schemaFields.length > 0;
   const isEntityMapper = capabilityId === "entity-mapper";
   const isSchemaMarkup = capabilityId === "schema-markup";
   const isQueryPlanner = capabilityId === "query-planner";
@@ -167,6 +187,9 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   }, [run]);
 
   function canStart() {
+    if (useSchemaDrivenForm) {
+      return schemaFormCanStart(capabilityId, schemaFields, schemaValues);
+    }
     if (isQueryPlanner) {
       return hypothesisTopics.trim().length > 0 || importedQueries.trim().length > 0;
     }
@@ -209,6 +232,11 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   }
 
   function buildInput(): Record<string, unknown> {
+    if (useSchemaDrivenForm) {
+      const adapted = adaptTaskAgentInput(capabilityId, schemaValues, detail.contractVersion);
+      if (!adapted) throw new Error("Complete the required inputs before running.");
+      return adapted;
+    }
     const contractVersion = contractVersions[capabilityId] ?? detail.contractVersion;
     if (isQueryPlanner) {
       const topics = hypothesisTopics.split("\n").map((value) => value.trim()).filter(Boolean);
@@ -455,7 +483,14 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">{detail.agent.description}</p>
 
       <section className="mt-6 rounded-xl border border-[var(--cc-line)] bg-white p-5">
-        {isQueryPlanner ? (
+        {useSchemaDrivenForm ? (
+          <SchemaForm
+            fields={schemaFields}
+            values={schemaValues}
+            onChange={setSchemaValues}
+            disabled={running}
+          />
+        ) : isQueryPlanner ? (
           <>
             <label className="block text-sm font-semibold" htmlFor="hypothesisTopics">
               Hypothesis topics <span className="font-normal text-[var(--cc-muted)]">(one per line)</span>
@@ -758,59 +793,17 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Result</h2>
-              <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                {detail.resultRenderer.artifactType} · valid · <span className="font-mono">{artifactVersion.digest.slice(0, 12)}</span>
-              </p>
             </div>
             <button type="button" onClick={() => void startRun(result.rerun.retryOfRunId)} className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold">Run again</button>
           </div>
-          {"overallScore" in artifactPayload ? (
-            <p className="mt-6 text-5xl font-bold text-[var(--cc-accent)]">{String(artifactPayload.overallScore ?? "—")}</p>
-          ) : null}
-          {"pairs" in artifactPayload && Array.isArray(artifactPayload.pairs) ? (
-            <ul className="mt-6 space-y-4">
-              {(artifactPayload.pairs as Array<{ question?: string; answer?: string; verificationStatus?: string }>).map((pair) => (
-                <li key={pair.question} className="rounded-lg border border-[var(--cc-line)] p-4">
-                  <p className="font-semibold text-[var(--cc-ink)]">{pair.question}</p>
-                  <p className="mt-2 text-sm text-[var(--cc-muted)]">{pair.answer}</p>
-                  {pair.verificationStatus ? (
-                    <p className="mt-2 text-xs uppercase tracking-wide text-[var(--cc-muted)]">{pair.verificationStatus}</p>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {"claims" in artifactPayload && Array.isArray(artifactPayload.claims) ? (
-            <ul className="mt-6 space-y-4">
-              {(artifactPayload.claims as Array<{ claimText?: string; claimType?: string; verificationStatus?: string }>).map((claim) => (
-                <li key={claim.claimText} className="rounded-lg border border-[var(--cc-line)] p-4">
-                  <p className="font-semibold text-[var(--cc-ink)]">{claim.claimText}</p>
-                  <p className="mt-2 text-xs uppercase tracking-wide text-[var(--cc-muted)]">
-                    {[claim.claimType, claim.verificationStatus].filter(Boolean).join(" · ")}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {"sections" in artifactPayload && Array.isArray(artifactPayload.sections) ? (
-            <ul className="mt-6 space-y-3">
-              {(artifactPayload.sections as Array<{ heading?: string; objective?: string }>).map((section) => (
-                <li key={section.heading} className="rounded-lg border border-[var(--cc-line)] p-4">
-                  <p className="font-semibold">{section.heading}</p>
-                  {section.objective ? <p className="mt-1 text-sm text-[var(--cc-muted)]">{section.objective}</p> : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {typeof artifactPayload.methodology === "object"
-            && artifactPayload.methodology !== null
-            && "demandDisclaimer" in artifactPayload.methodology
-            && typeof (artifactPayload.methodology as { demandDisclaimer?: unknown }).demandDisclaimer === "string" ? (
-            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-              {(artifactPayload.methodology as { demandDisclaimer: string }).demandDisclaimer}
-            </p>
-          ) : null}
-          <pre className="mt-6 max-h-[36rem] overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(artifactPayload, null, 2)}</pre>
+          <div className="mt-4">
+            <TaskAgentResultRenderer
+              kind={detail.resultRenderer.kind}
+              artifactType={detail.resultRenderer.artifactType}
+              payload={artifactPayload}
+              digest={artifactVersion.digest}
+            />
+          </div>
         </section>
       ) : null}
     </main>
