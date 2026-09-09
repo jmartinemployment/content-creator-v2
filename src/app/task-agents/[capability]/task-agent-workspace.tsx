@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { StudioFormField } from "@/app/studio/studio-types";
 import {
+  EMPTY_CONTEXT_SELECTION,
+  type ContextSelectionRequest,
+  type ResolvedContextPreview,
+} from "@/app/brand-sources/context-contract";
+import { ContextSelector } from "@/app/creates/new/context-selector";
+import {
   adaptTaskAgentInput,
   resolveTaskAgentUiFields,
   schemaFormCanStart,
@@ -30,18 +36,25 @@ export type TaskAgentDetail = {
   inputSchema?: unknown;
 };
 
+type SharedContextPin = {
+  contextManifestId?: string | null;
+  contextManifestDigest?: string | null;
+};
+
 type TaskRun = {
   id: string;
   status: string;
   phase: string;
   progressPercent: number;
   terminalError?: string | null;
+  sharedContext?: SharedContextPin | null;
 };
 
 type ResultShell = {
   contractVersion: string;
   identity: { displayName: string; objective: string };
   progress: { status: string; phase: string; progressPercent: number };
+  sharedContext?: SharedContextPin | null;
   artifacts: Array<{
     id: string;
     artifactType: string;
@@ -56,6 +69,15 @@ type ResultShell = {
   }>;
   rerun: { capabilityId: string; versionId: string; retryOfRunId: string };
 };
+
+function selectionHasPins(selection: ContextSelectionRequest) {
+  return selection.knowledgeAssetVersionIds.length > 0
+    || selection.runAttachmentIds.length > 0
+    || Boolean(selection.audienceVersionId)
+    || Boolean(selection.styleGuideVersionId)
+    || selection.productSelections.length > 0
+    || Boolean(selection.brandKitVersionId);
+}
 
 const contractVersions: Record<string, string> = {
   "ai-readiness": "aiReadinessInput.v1",
@@ -131,9 +153,13 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [competitorName, setCompetitorName] = useState("Competitor");
   const [competitorContent, setCompetitorContent] = useState("");
   const [schemaValues, setSchemaValues] = useState<Record<string, string>>({});
+  const [contextSelection, setContextSelection] = useState<ContextSelectionRequest>(EMPTY_CONTEXT_SELECTION);
+  const [contextPreview, setContextPreview] = useState<ResolvedContextPreview | null>(null);
+  const [contextUploadProcessing, setContextUploadProcessing] = useState(false);
   const [run, setRun] = useState<TaskRun | null>(null);
   const [result, setResult] = useState<ResultShell | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const capabilityId = detail.agent.id;
   const schemaFields = useMemo(
     () => resolveTaskAgentUiFields(capabilityId, detail.workflow),
@@ -173,7 +199,10 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
         } else if (next.status === "failed") {
           setError(next.terminalError || "The task agent failed.");
         }
-        setRun(next);
+        setRun((previous) => ({
+          ...next,
+          sharedContext: next.sharedContext ?? previous?.sharedContext ?? null,
+        }));
       }).catch((cause) => {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Could not refresh the task run.");
@@ -448,6 +477,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
 
   async function startRun(retryOfRunId?: string) {
     if (!canStart()) return;
+    if ((contextPreview?.blockingFindings.length ?? 0) > 0) return;
     setError(null);
     setResult(null);
     setRun(null);
@@ -459,19 +489,59 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           input: buildInput(),
           versionId: detail.agent.versionId,
           retryOfRunId,
+          ...(selectionHasPins(contextSelection) ? { contextSelection } : {}),
         }),
       });
-      const body = await response.json().catch(() => null) as (TaskRun & { error?: string }) | null;
-      if (!response.ok || !body) throw new Error(body?.error || `Run failed (HTTP ${response.status}).`);
+      const body = await response.json().catch(() => null) as
+        | (TaskRun & { error?: string; blockingFindings?: unknown })
+        | null;
+      if (!response.ok || !body) {
+        const blockers = Array.isArray(body?.blockingFindings)
+          ? body.blockingFindings.map((finding) => (
+            typeof finding === "string"
+              ? finding
+              : (finding && typeof finding === "object" && "message" in finding
+                ? String((finding as { message: unknown }).message)
+                : null)
+          )).filter(Boolean)
+          : [];
+        throw new Error(
+          blockers.length
+            ? blockers.join(" ")
+            : (body?.error || `Run failed (HTTP ${response.status}).`),
+        );
+      }
       setRun(body);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the task agent.");
     }
   }
 
+  async function cancelRun() {
+    if (!run || ["succeeded", "failed", "cancelled"].includes(run.status)) return;
+    setCancelBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/task-agents/runs/${run.id}/cancel`, {
+        method: "POST",
+      });
+      const body = await response.json().catch(() => null) as (TaskRun & { error?: string }) | null;
+      if (!response.ok || !body) {
+        throw new Error(body?.error || `Cancel failed (HTTP ${response.status}).`);
+      }
+      setRun(body);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not cancel the task run.");
+    } finally {
+      setCancelBusy(false);
+    }
+  }
+
   const artifactVersion = result?.artifacts[0]?.versions.at(-1);
   const artifactPayload = artifactVersion ? JSON.parse(artifactVersion.payloadJson) as Record<string, unknown> : null;
   const running = run !== null && !["succeeded", "failed", "cancelled"].includes(run.status);
+  const contextBlocked = (contextPreview?.blockingFindings.length ?? 0) > 0;
+  const pinnedContext = result?.sharedContext ?? run?.sharedContext ?? null;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
@@ -767,9 +837,19 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             ) : null}
           </>
         )}
+        <ContextSelector
+          value={contextSelection}
+          selectedAgentIds={[detail.agent.id]}
+          onChange={setContextSelection}
+          onPreviewChange={setContextPreview}
+          onProcessingChange={setContextUploadProcessing}
+          resolvePath="/api/gcc-v2/context/resolve-task-agent"
+          allowAttachments={false}
+          checkLabel="Check governed context"
+        />
         <button
           type="button"
-          disabled={!canStart() || running}
+          disabled={!canStart() || running || contextBlocked || contextUploadProcessing}
           onClick={() => void startRun()}
           className="mt-5 rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
@@ -779,11 +859,28 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
 
       {run ? (
         <section aria-live="polite" className="mt-5 rounded-xl border border-[var(--cc-line)] bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-bold">Run status</h2>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{run.status}</span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{run.status}</span>
+              {running ? (
+                <button
+                  type="button"
+                  disabled={cancelBusy}
+                  onClick={() => void cancelRun()}
+                  className="rounded-lg border border-[var(--cc-line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                >
+                  {cancelBusy ? "Cancelling…" : "Cancel run"}
+                </button>
+              ) : null}
+            </div>
           </div>
           <p className="mt-2 text-sm text-[var(--cc-muted)]">{run.phase} · {run.progressPercent}%</p>
+          {pinnedContext?.contextManifestDigest ? (
+            <p className="mt-2 font-mono text-xs text-[var(--cc-muted)]" data-testid="shared-context-digest">
+              Context digest · {pinnedContext.contextManifestDigest}
+            </p>
+          ) : null}
         </section>
       ) : null}
       {error ? <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}
@@ -793,6 +890,11 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Result</h2>
+              {result.sharedContext?.contextManifestDigest ? (
+                <p className="mt-1 font-mono text-xs text-[var(--cc-muted)]" data-testid="result-context-digest">
+                  Pinned context · {result.sharedContext.contextManifestDigest}
+                </p>
+              ) : null}
             </div>
             <button type="button" onClick={() => void startRun(result.rerun.retryOfRunId)} className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold">Run again</button>
           </div>

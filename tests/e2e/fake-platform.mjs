@@ -43,6 +43,7 @@ let canvasProjects = new Map();
 let grids = new Map();
 let contextUploads;
 let manifests;
+let taskRuns;
 
 function reset() {
   scenario = { ragAvailable: true };
@@ -55,6 +56,7 @@ function reset() {
   agentTestRuns = new Map();
   adminAgentHistory = [];
   contextUploads = new Map();
+  taskRuns = new Map();
   ingestionEvents = [{
     id: "ingestion-event-1",
     jobId: "ingestion-1",
@@ -1001,6 +1003,78 @@ const server = http.createServer(async (req, res) => {
       agentCompatibility: (body.selectedAgentIds || []).map((agentId) => ({ agentId, compatible: condition !== "permission" })),
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/context/resolve-task-agent" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const selection = body.selection || {};
+    if ((selection.runAttachmentIds || []).length > 0) {
+      return send(res, 200, {
+        preview: {
+          effectiveEntries: [],
+          inheritedEntries: [],
+          warnings: [],
+          blockingFindings: [{
+            id: "blocked-attachment",
+            severity: "blocking",
+            code: "run_attachment:task_agent:not_supported",
+            message: "run_attachment:task_agent:not_supported",
+          }],
+          freshness: [],
+          estimatedContextSize: 0,
+          agentCompatibility: (body.selectedAgentIds || []).map((agentId) => ({
+            agentId,
+            compatible: true,
+            message: "Task-agent run can pin the selected governed context kinds.",
+          })),
+        },
+        envelope: null,
+      });
+    }
+    const condition = scenario.contextCondition || "ready";
+    const blockingFindings = condition === "revoked"
+      ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
+      : condition === "permission"
+        ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
+        : [];
+    const effectiveEntries = [
+      ...(selection.knowledgeAssetVersionIds || []).map(() => ({
+        kind: "knowledge", stableId: "knowledge-1", versionId: "knowledge-version-1",
+        name: "Editorial Handbook", versionNumber: 1,
+        lifecycle: condition === "revoked" ? "revoked" : "approved",
+        digest: `sha256:${"a".repeat(64)}`, freshness: "fresh", temporary: false,
+      })),
+      ...(selection.styleGuideVersionId ? [{
+        kind: "style-guide", stableId: "style-1", versionId: selection.styleGuideVersionId,
+        name: "Clear Technical Style", versionNumber: 1, lifecycle: "approved",
+        digest: `sha256:${"s".repeat(64)}`, freshness: "fresh", temporary: false,
+      }] : []),
+    ];
+    const digest = "c".repeat(64);
+    return send(res, 200, {
+      preview: {
+        effectiveEntries,
+        inheritedEntries: [],
+        warnings: [],
+        blockingFindings,
+        freshness: effectiveEntries.map((entry) => ({ versionId: entry.versionId, status: entry.freshness })),
+        estimatedContextSize: effectiveEntries.length * 512,
+        agentCompatibility: (body.selectedAgentIds || []).map((agentId) => ({
+          agentId,
+          compatible: true,
+          message: "Task-agent run can pin the selected governed context kinds.",
+        })),
+      },
+      envelope: blockingFindings.length
+        ? null
+        : {
+          manifestId: "task-manifest-1",
+          digest,
+          signature: "sig-task-1",
+          signingKeyId: "test-key",
+          resolvedAtUtc: "2026-09-09T12:00:00Z",
+          canonicalJson: JSON.stringify({ schemaVersion: 1, scope: "task-agent", digest }),
+        },
+    });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/knowledge/uploads" && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
     const uploadId = `upload-${contextUploads.size + 1}`;
@@ -1818,134 +1892,226 @@ const server = http.createServer(async (req, res) => {
       resultRenderer: { kind: "claim-ledger", artifactType: "claimLedger.v1" },
     });
   }
+  function createTaskRun(capabilityId, runId, body) {
+    const selection = body?.contextSelection;
+    const hasPins = selection && (
+      (selection.knowledgeAssetVersionIds || []).length > 0
+      || selection.audienceVersionId
+      || selection.styleGuideVersionId
+      || (selection.productSelections || []).length > 0
+      || selection.brandKitVersionId
+    );
+    if (hasPins && scenario.contextCondition === "revoked") {
+      return {
+        conflict: true,
+        payload: {
+          error: "Governed context is not eligible for this task-agent run.",
+          blockingFindings: ["Editorial Handbook version is revoked."],
+        },
+      };
+    }
+    if (hasPins && (selection.runAttachmentIds || []).length > 0) {
+      return {
+        conflict: true,
+        payload: {
+          error: "Governed context is not eligible for this task-agent run.",
+          blockingFindings: ["run_attachment:task_agent:not_supported"],
+        },
+      };
+    }
+    const sharedContext = hasPins
+      ? { contextManifestId: "task-manifest-1", contextManifestDigest: "c".repeat(64) }
+      : { contextManifestId: null, contextManifestDigest: null };
+    const hold = scenario.taskRunHold === true;
+    const run = {
+      id: runId,
+      status: hold ? "running" : "queued",
+      phase: hold ? "executing" : "queued",
+      progressPercent: hold ? 40 : 0,
+      capabilityId,
+      sharedContext,
+    };
+    taskRuns.set(runId, run);
+    return { conflict: false, payload: run };
+  }
+
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness/runs" && req.method === "POST") {
-    return send(res, 202, { id: "task-run-1", status: "queued", phase: "queued", progressPercent: 0 });
+    const created = createTaskRun("ai-readiness", "task-run-1", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/runs" && req.method === "POST") {
-    return send(res, 202, { id: "task-run-2", status: "queued", phase: "queued", progressPercent: 0 });
+    const created = createTaskRun("query-planner", "task-run-2", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/faq-generator/runs" && req.method === "POST") {
-    return send(res, 202, { id: "task-run-3", status: "queued", phase: "queued", progressPercent: 0 });
+    const created = createTaskRun("faq-generator", "task-run-3", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/citable-claims/runs" && req.method === "POST") {
-    return send(res, 202, { id: "task-run-4", status: "queued", phase: "queued", progressPercent: 0 });
+    const created = createTaskRun("citable-claims", "task-run-4", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
   }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-1" && req.method === "GET") {
-    return send(res, 200, { id: "task-run-1", status: "succeeded", phase: "complete", progressPercent: 100 });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-2" && req.method === "GET") {
-    return send(res, 200, { id: "task-run-2", status: "succeeded", phase: "complete", progressPercent: 100 });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-3" && req.method === "GET") {
-    return send(res, 200, { id: "task-run-3", status: "succeeded", phase: "complete", progressPercent: 100 });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-4" && req.method === "GET") {
-    return send(res, 200, { id: "task-run-4", status: "succeeded", phase: "complete", progressPercent: 100 });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-1/result" && req.method === "GET") {
-    return send(res, 200, {
-      contractVersion: "gcc-task-result-shell.v1",
-      identity: { displayName: "AI Readiness Score", objective: "Score visible content." },
-      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-      artifacts: [{
-        id: "artifact-1",
-        artifactType: "readinessScore.v1",
-        versions: [{
-          id: "artifact-version-1",
-          payloadJson: JSON.stringify({ artifactType: "readinessScore.v1", overallScore: 82, prioritizedFixes: [] }),
-          evidenceJson: "[]",
-          citationsJson: "[]",
-          digest: "b".repeat(64),
-          validationState: "valid",
-        }],
-      }],
-      rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
-    });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-2/result" && req.method === "GET") {
-    return send(res, 200, {
-      contractVersion: "gcc-task-result-shell.v1",
-      identity: { displayName: "Query Planner", objective: "Plan queries with provenance." },
-      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-      artifacts: [{
-        id: "artifact-2",
-        artifactType: "queryPlan.v1",
-        versions: [{
-          id: "artifact-version-2",
-          payloadJson: JSON.stringify({
+  const taskRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/task-agents\/runs\/([^/]+)(?:\/(result|cancel))?$/);
+  if (taskRunMatch) {
+    const runId = taskRunMatch[1];
+    const action = taskRunMatch[2] || null;
+    const existing = taskRuns.get(runId);
+    if (action === "cancel" && req.method === "POST") {
+      if (!existing) return send(res, 404, { error: "Task run not found." });
+      if (["succeeded", "failed", "cancelled"].includes(existing.status)) {
+        return send(res, 409, { error: "Task run is already terminal." });
+      }
+      const cancelled = {
+        ...existing,
+        status: "cancelled",
+        phase: "cancelled",
+        progressPercent: 100,
+      };
+      taskRuns.set(runId, cancelled);
+      return send(res, 200, cancelled);
+    }
+    if (action === "result" && req.method === "GET") {
+      const sharedContext = existing?.sharedContext
+        ?? { contextManifestId: null, contextManifestDigest: null };
+      if (runId === "task-run-1") {
+        return send(res, 200, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { displayName: "AI Readiness Score", objective: "Score visible content." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          sharedContext,
+          artifacts: [{
+            id: "artifact-1",
+            artifactType: "readinessScore.v1",
+            versions: [{
+              id: "artifact-version-1",
+              payloadJson: JSON.stringify({ artifactType: "readinessScore.v1", overallScore: 82, prioritizedFixes: [] }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "b".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
+        });
+      }
+      if (runId === "task-run-2") {
+        return send(res, 200, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { displayName: "Query Planner", objective: "Plan queries with provenance." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          sharedContext,
+          artifacts: [{
+            id: "artifact-2",
             artifactType: "queryPlan.v1",
-            methodology: {
-              demandDisclaimer: "Scores are deterministic planning heuristics, not traffic, volume, ranking, or demand measurements.",
-            },
-            queries: [{ query: "AI content readiness checklist", priorityTier: "high" }],
-            clusterCount: 1,
-            warnings: [],
-          }),
-          evidenceJson: "[]",
-          citationsJson: "[]",
-          digest: "f".repeat(64),
-          validationState: "valid",
-        }],
-      }],
-      rerun: { capabilityId: "query-planner", versionId: "task-agent-version-2", retryOfRunId: "task-run-2" },
-    });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-3/result" && req.method === "GET") {
-    return send(res, 200, {
-      contractVersion: "gcc-task-result-shell.v1",
-      identity: { displayName: "FAQ Generator", objective: "Generate grounded FAQ pairs." },
-      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-      artifacts: [{
-        id: "artifact-3",
-        artifactType: "faqSet.v1",
-        versions: [{
-          id: "artifact-version-3",
-          payloadJson: JSON.stringify({
+            versions: [{
+              id: "artifact-version-2",
+              payloadJson: JSON.stringify({
+                artifactType: "queryPlan.v1",
+                methodology: {
+                  demandDisclaimer: "Scores are deterministic planning heuristics, not traffic, volume, ranking, or demand measurements.",
+                },
+                queries: [{ query: "AI content readiness checklist", priorityTier: "high" }],
+                clusterCount: 1,
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "f".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          rerun: { capabilityId: "query-planner", versionId: "task-agent-version-2", retryOfRunId: "task-run-2" },
+        });
+      }
+      if (runId === "task-run-3") {
+        return send(res, 200, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { displayName: "FAQ Generator", objective: "Generate grounded FAQ pairs." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          sharedContext,
+          artifacts: [{
+            id: "artifact-3",
             artifactType: "faqSet.v1",
-            topic: "AI content readiness",
-            pairs: [{
-              question: "What is AI content readiness?",
-              answer: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
-              verificationStatus: "supported",
+            versions: [{
+              id: "artifact-version-3",
+              payloadJson: JSON.stringify({
+                artifactType: "faqSet.v1",
+                topic: "AI content readiness",
+                pairs: [{
+                  question: "What is AI content readiness?",
+                  answer: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
+                  verificationStatus: "supported",
+                }],
+                warnings: ["FAQ answers are generated from supplied content and queries only."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "k".repeat(64),
+              validationState: "valid",
             }],
-            warnings: ["FAQ answers are generated from supplied content and queries only."],
-          }),
-          evidenceJson: "[]",
-          citationsJson: "[]",
-          digest: "k".repeat(64),
-          validationState: "valid",
-        }],
-      }],
-      rerun: { capabilityId: "faq-generator", versionId: "task-agent-version-8", retryOfRunId: "task-run-3" },
-    });
-  }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/runs/task-run-4/result" && req.method === "GET") {
-    return send(res, 200, {
-      contractVersion: "gcc-task-result-shell.v1",
-      identity: { displayName: "Citable Claims", objective: "Extract attributable claims." },
-      progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-      artifacts: [{
-        id: "artifact-4",
-        artifactType: "claimLedger.v1",
-        versions: [{
-          id: "artifact-version-4",
-          payloadJson: JSON.stringify({
+          }],
+          rerun: { capabilityId: "faq-generator", versionId: "task-agent-version-8", retryOfRunId: "task-run-3" },
+        });
+      }
+      if (runId === "task-run-4") {
+        return send(res, 200, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { displayName: "Citable Claims", objective: "Extract attributable claims." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          sharedContext,
+          artifacts: [{
+            id: "artifact-4",
             artifactType: "claimLedger.v1",
-            claims: [{
-              claimText: "Trusted by 500 customer teams.",
-              claimType: "quantifiableFact",
-              verificationStatus: "supported",
+            versions: [{
+              id: "artifact-version-4",
+              payloadJson: JSON.stringify({
+                artifactType: "claimLedger.v1",
+                claims: [{
+                  claimText: "Trusted by 500 customer teams.",
+                  claimType: "quantifiableFact",
+                  verificationStatus: "supported",
+                }],
+                warnings: ["Claims never invent statistics."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "m".repeat(64),
+              validationState: "valid",
             }],
-            warnings: ["Claims never invent statistics."],
-          }),
-          evidenceJson: "[]",
-          citationsJson: "[]",
-          digest: "m".repeat(64),
-          validationState: "valid",
-        }],
-      }],
-      rerun: { capabilityId: "citable-claims", versionId: "task-agent-version-9", retryOfRunId: "task-run-4" },
-    });
+          }],
+          rerun: { capabilityId: "citable-claims", versionId: "task-agent-version-9", retryOfRunId: "task-run-4" },
+        });
+      }
+      return send(res, 404, { error: "Result not found." });
+    }
+    if (!action && req.method === "GET") {
+      if (existing) {
+        if (existing.status === "queued" || (existing.status === "running" && !scenario.taskRunHold)) {
+          const succeeded = {
+            ...existing,
+            status: "succeeded",
+            phase: "complete",
+            progressPercent: 100,
+          };
+          taskRuns.set(runId, succeeded);
+          return send(res, 200, succeeded);
+        }
+        return send(res, 200, existing);
+      }
+      if (runId === "task-run-1") {
+        return send(res, 200, { id: "task-run-1", status: "succeeded", phase: "complete", progressPercent: 100 });
+      }
+      if (runId === "task-run-2") {
+        return send(res, 200, { id: "task-run-2", status: "succeeded", phase: "complete", progressPercent: 100 });
+      }
+      if (runId === "task-run-3") {
+        return send(res, 200, { id: "task-run-3", status: "succeeded", phase: "complete", progressPercent: 100 });
+      }
+      if (runId === "task-run-4") {
+        return send(res, 200, { id: "task-run-4", status: "succeeded", phase: "complete", progressPercent: 100 });
+      }
+      return send(res, 404, { error: "Task run not found." });
+    }
   }
   if (url.pathname === "/api/geek-content-creator-v2/creates" && req.method === "POST") {
     return send(res, 200, { id: "create-1" });

@@ -21,6 +21,10 @@ type ContextSelectorProps = {
   onChange: (selection: ContextSelectionRequest) => void;
   onPreviewChange: (preview: ResolvedContextPreview | null) => void;
   onProcessingChange: (processing: boolean) => void;
+  /** Defaults to create-flow resolve. Use task-agent endpoint when createId is absent. */
+  resolvePath?: string;
+  allowAttachments?: boolean;
+  checkLabel?: string;
 };
 
 type Catalogs = {
@@ -67,6 +71,9 @@ export function ContextSelector({
   onChange,
   onPreviewChange,
   onProcessingChange,
+  resolvePath,
+  allowAttachments = true,
+  checkLabel,
 }: ContextSelectorProps) {
   const [catalogs, setCatalogs] = useState<Catalogs>(EMPTY_CATALOGS);
   const [loading, setLoading] = useState(true);
@@ -109,26 +116,35 @@ export function ContextSelector({
   const styleOptions = useMemo(() => approvedOptions(catalogs.styleGuides), [catalogs.styleGuides]);
   const productOptions = useMemo(() => approvedOptions(catalogs.products), [catalogs.products]);
 
+  const canCheckContext = Boolean(resolvePath || createId);
+
   const resolveContext = useCallback(async () => {
-    if (!createId) {
+    const endpoint = resolvePath
+      ?? (createId ? "/api/gcc-v2/context/resolve" : null);
+    if (!endpoint) {
       setError("Context is checked automatically when the create is saved.");
       return;
     }
     setPreflightBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/gcc-v2/context/resolve", {
+      const taskAgent = endpoint.includes("resolve-task-agent");
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          createId: createId || undefined,
-          selection: value,
-          selectedAgentIds,
-        }),
+        body: JSON.stringify(
+          taskAgent
+            ? { selection: value, selectedAgentIds }
+            : {
+              createId: createId || undefined,
+              selection: value,
+              selectedAgentIds,
+            },
+        ),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || `Context preflight failed (HTTP ${response.status}).`);
-      const next = normalizeContextPreview(body);
+      const next = normalizeContextPreview(taskAgent ? (body?.preview ?? body) : body);
       setPreview(next);
       onPreviewChange(next);
     } catch (cause) {
@@ -138,7 +154,7 @@ export function ContextSelector({
     } finally {
       setPreflightBusy(false);
     }
-  }, [createId, onPreviewChange, selectedAgentIds, value]);
+  }, [createId, onPreviewChange, resolvePath, selectedAgentIds, value]);
 
   async function uploadAttachment(file: File) {
     if (!createId) return;
@@ -327,7 +343,9 @@ export function ContextSelector({
       <div className="mt-4 rounded-lg border border-dashed border-teal-300 bg-white p-4">
         <p className="text-xs font-semibold">Temporary attachments · this run only</p>
         <p className="mt-1 text-xs text-[var(--cc-muted)]">Attachments never become persistent Knowledge automatically.</p>
-        {createId ? (
+        {!allowAttachments ? (
+          <p className="mt-2 text-xs text-[var(--cc-muted)]">Task-agent runs pin approved catalog context only. Use create-flow jobs for temporary attachments.</p>
+        ) : createId ? (
           <label className="mt-2 inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">
             Choose attachment
             <input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
@@ -339,9 +357,20 @@ export function ContextSelector({
         {value.runAttachmentIds.length ? <ul className="mt-2 list-disc pl-4 text-xs">{value.runAttachmentIds.map((id) => <li key={id} className="font-mono">{id}</li>)}</ul> : null}
       </div>
 
-      {!createId ? <p className="mt-4 text-xs text-[var(--cc-muted)]">Context will be checked automatically when you create the content. Manual recheck is available after the create is saved.</p> : null}
-      <button type="button" disabled={!createId || preflightBusy || uploadBusy || loading} onClick={() => void resolveContext()} className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-        {preflightBusy ? "Checking context…" : createId ? "Check context" : "Check after save"}
+      {!canCheckContext ? (
+        <p className="mt-4 text-xs text-[var(--cc-muted)]">
+          Context will be checked automatically when you create the content. Manual recheck is available after the create is saved.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={!canCheckContext || preflightBusy || uploadBusy || loading}
+        onClick={() => void resolveContext()}
+        className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {preflightBusy
+          ? "Checking context…"
+          : (checkLabel ?? (canCheckContext ? "Check context" : "Check after save"))}
       </button>
 
       {preview ? (

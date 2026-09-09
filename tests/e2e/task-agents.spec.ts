@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
 
 test.beforeEach(async ({ request }) => {
   await resetPlatform(request);
@@ -65,4 +65,32 @@ test("citable claims content agent never invents unsupported statistics", async 
   await expect(page.locator('[data-result-renderer="claim-ledger"]')).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "Trusted by 500 customer teams." })).toBeVisible();
   await expect(page.getByText(/claimLedger\.v1 · valid/)).toBeVisible();
+});
+
+test("task agent pins governed context digest on the result shell", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await expect(page.getByRole("region", { name: "Run context" })).toBeVisible();
+  await expect(page.getByText("Task-agent runs pin approved catalog context only")).toBeVisible();
+  await page.getByLabel("Editorial Handbook version 1").check();
+  await page.getByRole("button", { name: "Check governed context" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toContainText("eligible for manifest resolution");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByTestId("result-context-digest")).toContainText("c".repeat(64));
+  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+});
+
+test("task agent cancel stops a held run", async ({ page, request }) => {
+  await request.post(`${platformOrigin}/__scenario`, { data: { taskRunHold: true } });
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByText("running", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel run" }).click();
+  await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Result" })).toHaveCount(0);
 });
