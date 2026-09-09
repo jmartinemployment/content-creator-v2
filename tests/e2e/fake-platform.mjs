@@ -1923,6 +1923,12 @@ const server = http.createServer(async (req, res) => {
       ? { contextManifestId: "task-manifest-1", contextManifestDigest: "c".repeat(64) }
       : { contextManifestId: null, contextManifestDigest: null };
     const hold = scenario.taskRunHold === true;
+    const parentArtifactVersionIds = Array.isArray(body?.parentArtifactVersionIds)
+      ? body.parentArtifactVersionIds.filter((id) => typeof id === "string")
+      : [];
+    const lineageRelationship = typeof body?.lineageRelationship === "string"
+      ? body.lineageRelationship
+      : (body?.retryOfRunId ? "retry-of" : (parentArtifactVersionIds.length ? "derived-from" : null));
     const run = {
       id: runId,
       status: hold ? "running" : "queued",
@@ -1930,9 +1936,44 @@ const server = http.createServer(async (req, res) => {
       progressPercent: hold ? 40 : 0,
       capabilityId,
       sharedContext,
+      parentArtifactVersionIds,
+      lineageRelationship,
     };
     taskRuns.set(runId, run);
     return { conflict: false, payload: run };
+  }
+
+  function taskResultShell(runId, existing, base) {
+    const parents = (existing?.parentArtifactVersionIds || []).map((parentArtifactVersionId) => ({
+      parentArtifactVersionId,
+      relationship: existing?.lineageRelationship || "derived-from",
+      createdAtUtc: "2026-09-09T12:00:00Z",
+    }));
+    const artifactVersionId = base.artifacts[0].versions[0].id;
+    return {
+      ...base,
+      sharedContext: existing?.sharedContext
+        ?? { contextManifestId: null, contextManifestDigest: null },
+      lineage: [{
+        artifactVersionId,
+        versionNumber: 1,
+        digest: base.artifacts[0].versions[0].digest,
+        parents,
+        children: [],
+      }],
+      nextActions: base.nextActions || [],
+      rerun: {
+        ...base.rerun,
+        parentArtifactVersionIds: [artifactVersionId],
+      },
+      snapshot: {
+        taskAgentVersionDigest: "d".repeat(64),
+        inputDigest: "e".repeat(64),
+        sourceSnapshotDigest: "f".repeat(64),
+        rootRunId: runId,
+        retryOfRunId: existing?.lineageRelationship === "retry-of" ? "task-run-prior" : null,
+      },
+    };
   }
 
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness/runs" && req.method === "POST") {
@@ -1971,14 +2012,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, cancelled);
     }
     if (action === "result" && req.method === "GET") {
-      const sharedContext = existing?.sharedContext
-        ?? { contextManifestId: null, contextManifestDigest: null };
       if (runId === "task-run-1") {
-        return send(res, 200, {
+        return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
-          identity: { displayName: "AI Readiness Score", objective: "Score visible content." },
+          identity: { capabilityId: "ai-readiness", displayName: "AI Readiness Score", objective: "Score visible content." },
           progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-          sharedContext,
           artifacts: [{
             id: "artifact-1",
             artifactType: "readinessScore.v1",
@@ -1989,17 +2027,25 @@ const server = http.createServer(async (req, res) => {
               citationsJson: "[]",
               digest: "b".repeat(64),
               validationState: "valid",
+              parents: (existing?.parentArtifactVersionIds || []).map((parentArtifactVersionId) => ({
+                parentArtifactVersionId,
+                relationship: existing?.lineageRelationship || "derived-from",
+              })),
             }],
           }],
+          nextActions: [
+            { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+            { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+          ],
           rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
-        });
+        }));
       }
       if (runId === "task-run-2") {
-        return send(res, 200, {
+        return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
-          identity: { displayName: "Query Planner", objective: "Plan queries with provenance." },
+          identity: { capabilityId: "query-planner", displayName: "Query Planner", objective: "Plan queries with provenance." },
           progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-          sharedContext,
           artifacts: [{
             id: "artifact-2",
             artifactType: "queryPlan.v1",
@@ -2020,15 +2066,18 @@ const server = http.createServer(async (req, res) => {
               validationState: "valid",
             }],
           }],
+          nextActions: [
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+            { capabilityId: "pillar-outline", label: "Pillar Article Outline", artifactType: "pillarOutline.v1" },
+          ],
           rerun: { capabilityId: "query-planner", versionId: "task-agent-version-2", retryOfRunId: "task-run-2" },
-        });
+        }));
       }
       if (runId === "task-run-3") {
-        return send(res, 200, {
+        return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
-          identity: { displayName: "FAQ Generator", objective: "Generate grounded FAQ pairs." },
+          identity: { capabilityId: "faq-generator", displayName: "FAQ Generator", objective: "Generate grounded FAQ pairs." },
           progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-          sharedContext,
           artifacts: [{
             id: "artifact-3",
             artifactType: "faqSet.v1",
@@ -2050,15 +2099,17 @@ const server = http.createServer(async (req, res) => {
               validationState: "valid",
             }],
           }],
+          nextActions: [
+            { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+          ],
           rerun: { capabilityId: "faq-generator", versionId: "task-agent-version-8", retryOfRunId: "task-run-3" },
-        });
+        }));
       }
       if (runId === "task-run-4") {
-        return send(res, 200, {
+        return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
-          identity: { displayName: "Citable Claims", objective: "Extract attributable claims." },
+          identity: { capabilityId: "citable-claims", displayName: "Citable Claims", objective: "Extract attributable claims." },
           progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
-          sharedContext,
           artifacts: [{
             id: "artifact-4",
             artifactType: "claimLedger.v1",
@@ -2079,8 +2130,11 @@ const server = http.createServer(async (req, res) => {
               validationState: "valid",
             }],
           }],
+          nextActions: [
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+          ],
           rerun: { capabilityId: "citable-claims", versionId: "task-agent-version-9", retryOfRunId: "task-run-4" },
-        });
+        }));
       }
       return send(res, 404, { error: "Result not found." });
     }

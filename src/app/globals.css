@@ -22,3 +22,52 @@ body {
   color: var(--foreground);
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Task-agent result provenance spine (sequence of artifact versions). */
+.ta-lineage-step {
+  position: relative;
+  padding-inline-start: 1.25rem;
+}
+.ta-lineage-step:not(:last-child) {
+  padding-block-end: 1.25rem;
+}
+.ta-lineage-step::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0.35rem;
+  top: 0.55rem;
+  bottom: -0.15rem;
+  width: 1px;
+  background: color-mix(in srgb, var(--cc-line) 80%, transparent);
+}
+.ta-lineage-step:last-child::before {
+  display: none;
+}
+.ta-lineage-dot {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--cc-accent);
+  background: white;
+}
+.ta-lineage-step[data-current="true"] .ta-lineage-dot {
+  background: var(--cc-accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ta-result {
+    animation: ta-result-in 280ms ease-out;
+  }
+}
+@keyframes ta-result-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

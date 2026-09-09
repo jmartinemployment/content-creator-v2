@@ -15,7 +15,10 @@ import {
   schemaFormCanStart,
 } from "@/app/task-agents/input-adapters";
 import { SchemaForm } from "@/app/task-agents/schema-form";
-import { TaskAgentResultRenderer } from "@/app/task-agents/result-renderers";
+import {
+  TaskAgentResultShell,
+  type ResultShellModel,
+} from "@/app/task-agents/result-shell";
 
 export type TaskAgentDetail = {
   contractVersion: string;
@@ -48,26 +51,6 @@ type TaskRun = {
   progressPercent: number;
   terminalError?: string | null;
   sharedContext?: SharedContextPin | null;
-};
-
-type ResultShell = {
-  contractVersion: string;
-  identity: { displayName: string; objective: string };
-  progress: { status: string; phase: string; progressPercent: number };
-  sharedContext?: SharedContextPin | null;
-  artifacts: Array<{
-    id: string;
-    artifactType: string;
-    versions: Array<{
-      id: string;
-      payloadJson: string;
-      evidenceJson: string;
-      citationsJson: string;
-      digest: string;
-      validationState: string;
-    }>;
-  }>;
-  rerun: { capabilityId: string; versionId: string; retryOfRunId: string };
 };
 
 function selectionHasPins(selection: ContextSelectionRequest) {
@@ -157,9 +140,11 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [contextPreview, setContextPreview] = useState<ResolvedContextPreview | null>(null);
   const [contextUploadProcessing, setContextUploadProcessing] = useState(false);
   const [run, setRun] = useState<TaskRun | null>(null);
-  const [result, setResult] = useState<ResultShell | null>(null);
+  const [result, setResult] = useState<ResultShellModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [lineageParents, setLineageParents] = useState<string[]>([]);
+  const [lineageRelationship, setLineageRelationship] = useState<string | undefined>();
   const capabilityId = detail.agent.id;
   const schemaFields = useMemo(
     () => resolveTaskAgentUiFields(capabilityId, detail.workflow),
@@ -180,6 +165,14 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const isContent = contentIds.has(capabilityId);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromArtifact = params.get("fromArtifactVersionId");
+    if (fromArtifact) setLineageParents([fromArtifact]);
+    const relationship = params.get("lineageRelationship");
+    if (relationship) setLineageRelationship(relationship);
+  }, []);
+
+  useEffect(() => {
     if (!run || ["succeeded", "failed", "cancelled"].includes(run.status)) return;
     const controller = new AbortController();
     const timer = window.setInterval(() => {
@@ -195,7 +188,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             signal: controller.signal,
           });
           if (!resultResponse.ok) throw new Error(`Result failed (HTTP ${resultResponse.status}).`);
-          setResult(await resultResponse.json() as ResultShell);
+          setResult(await resultResponse.json() as ResultShellModel);
         } else if (next.status === "failed") {
           setError(next.terminalError || "The task agent failed.");
         }
@@ -475,21 +468,36 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     return input;
   }
 
-  async function startRun(retryOfRunId?: string) {
+  async function startRun(options?: {
+    retryOfRunId?: string;
+    parentArtifactVersionIds?: string[];
+    lineageRelationship?: string;
+  }) {
     if (!canStart()) return;
     if ((contextPreview?.blockingFindings.length ?? 0) > 0) return;
     setError(null);
     setResult(null);
     setRun(null);
     try {
+      const parents = options?.parentArtifactVersionIds?.length
+        ? options.parentArtifactVersionIds
+        : lineageParents;
+      const relationship = options?.lineageRelationship
+        ?? (options?.retryOfRunId ? "retry-of" : lineageRelationship);
       const response = await fetch(`/api/gcc-v2/task-agents/${encodeURIComponent(detail.agent.id)}/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           input: buildInput(),
           versionId: detail.agent.versionId,
-          retryOfRunId,
+          retryOfRunId: options?.retryOfRunId,
           ...(selectionHasPins(contextSelection) ? { contextSelection } : {}),
+          ...(parents.length
+            ? {
+              parentArtifactVersionIds: parents,
+              lineageRelationship: relationship || "derived-from",
+            }
+            : {}),
         }),
       });
       const body = await response.json().catch(() => null) as
@@ -537,8 +545,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     }
   }
 
-  const artifactVersion = result?.artifacts[0]?.versions.at(-1);
-  const artifactPayload = artifactVersion ? JSON.parse(artifactVersion.payloadJson) as Record<string, unknown> : null;
   const running = run !== null && !["succeeded", "failed", "cancelled"].includes(run.status);
   const contextBlocked = (contextPreview?.blockingFindings.length ?? 0) > 0;
   const pinnedContext = result?.sharedContext ?? run?.sharedContext ?? null;
@@ -857,6 +863,13 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
         </button>
       </section>
 
+      {lineageParents.length ? (
+        <p role="status" className="mt-5 rounded-lg border border-teal-200 bg-teal-50/50 px-4 py-3 text-sm text-teal-950">
+          This run will derive from artifact <span className="font-mono text-xs">{lineageParents[0]}</span>
+          {lineageRelationship ? ` (${lineageRelationship})` : ""}.
+        </p>
+      ) : null}
+
       {run ? (
         <section aria-live="polite" className="mt-5 rounded-xl border border-[var(--cc-line)] bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -885,28 +898,17 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       ) : null}
       {error ? <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}
 
-      {result && artifactPayload && artifactVersion ? (
-        <section className="mt-5 rounded-xl border border-[var(--cc-line)] bg-white p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold">Result</h2>
-              {result.sharedContext?.contextManifestDigest ? (
-                <p className="mt-1 font-mono text-xs text-[var(--cc-muted)]" data-testid="result-context-digest">
-                  Pinned context · {result.sharedContext.contextManifestDigest}
-                </p>
-              ) : null}
-            </div>
-            <button type="button" onClick={() => void startRun(result.rerun.retryOfRunId)} className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold">Run again</button>
-          </div>
-          <div className="mt-4">
-            <TaskAgentResultRenderer
-              kind={detail.resultRenderer.kind}
-              artifactType={detail.resultRenderer.artifactType}
-              payload={artifactPayload}
-              digest={artifactVersion.digest}
-            />
-          </div>
-        </section>
+      {result ? (
+        <TaskAgentResultShell
+          result={result}
+          rendererKind={detail.resultRenderer.kind}
+          rendererArtifactType={detail.resultRenderer.artifactType}
+          onRerun={() => void startRun({
+            retryOfRunId: result.rerun.retryOfRunId,
+            parentArtifactVersionIds: result.rerun.parentArtifactVersionIds,
+            lineageRelationship: "retry-of",
+          })}
+        />
       ) : null}
     </main>
   );

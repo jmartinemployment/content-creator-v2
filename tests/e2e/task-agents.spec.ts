@@ -15,7 +15,7 @@ test("task-agent catalog runs a diagnostic and renders its durable result", asyn
   );
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
 
-  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="scorecard"]')).toBeVisible();
   await expect(page.getByText("82", { exact: true })).toBeVisible();
   await expect(page.getByText(/readinessScore\.v1 · valid/)).toBeVisible();
@@ -29,7 +29,7 @@ test("query planner intelligence agent keeps demand as heuristic", async ({ page
   await expect(page.getByLabel("Task agent input form")).toBeVisible();
   await page.getByLabel("Hypothesis topics").fill("AI content readiness");
   await page.getByRole("button", { name: "Run Query Planner" }).click();
-  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="query-plan"]')).toBeVisible();
   await expect(page.getByRole("paragraph").filter({ hasText: /not traffic, volume, ranking, or demand measurements/ })).toBeVisible();
   await expect(page.getByText(/queryPlan\.v1 · valid/)).toBeVisible();
@@ -46,7 +46,7 @@ test("faq generator content agent renders grounded FAQ pairs", async ({ page }) 
     "## What is AI content readiness?\n\nAI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
   );
   await page.getByRole("button", { name: "Run FAQ Generator" }).click();
-  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="faq-list"]')).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "What is AI content readiness?" })).toBeVisible();
   await expect(page.getByText(/faqSet\.v1 · valid/)).toBeVisible();
@@ -61,7 +61,7 @@ test("citable claims content agent never invents unsupported statistics", async 
   );
   await page.getByLabel("Vague statements to rewrite").fill("Our product is trusted by many teams");
   await page.getByRole("button", { name: "Run Citable Claims" }).click();
-  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="claim-ledger"]')).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "Trusted by 500 customer teams." })).toBeVisible();
   await expect(page.getByText(/claimLedger\.v1 · valid/)).toBeVisible();
@@ -79,7 +79,23 @@ test("task agent pins governed context digest on the result shell", async ({ pag
   );
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
   await expect(page.getByTestId("result-context-digest")).toContainText("c".repeat(64));
-  await expect(page.getByRole("heading", { name: "Result" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+});
+
+test("task agent result shell shows lineage spine and follow-on actions", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("artifact-lineage")).toContainText("Origin");
+  await expect(page.getByTestId("next-actions").getByRole("link", { name: "Schema Markup" })).toBeVisible();
+  await expect(page.getByText("Inspect payload JSON")).toBeVisible();
+  await page.getByTestId("next-actions").getByRole("link", { name: "FAQ Generator" }).click();
+  await expect(page).toHaveURL(/fromArtifactVersionId=artifact-version-1/);
+  await expect(page.getByRole("heading", { name: "FAQ Generator" })).toBeVisible();
+  await expect(page.getByText(/This run will derive from artifact/)).toBeVisible();
 });
 
 test("task agent cancel stops a held run", async ({ page, request }) => {
@@ -92,5 +108,5 @@ test("task agent cancel stops a held run", async ({ page, request }) => {
   await expect(page.getByText("running", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Result" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Task result" })).toHaveCount(0);
 });
