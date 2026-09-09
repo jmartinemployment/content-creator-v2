@@ -274,12 +274,39 @@ export function WorkspaceSection({
       </div>
       {item.provenance ? (
         <details className="mt-3 text-xs text-[var(--cc-muted)]">
-          <summary className="cursor-pointer">Section technical details</summary>
+          <summary className="cursor-pointer">Section provenance</summary>
           <p className="mt-1">
             Model: {item.provenance.effectiveModel || item.provenance.modelUsed || "—"} · Retrieval:{" "}
             {item.provenance.retrievalStrategy || item.provenance.retrievalMode || "—"} ·{" "}
             {item.provenance.evidenceIds?.length ?? 0} evidence item(s)
           </p>
+          {item.provenance.agentExecution ? (
+            <div className="mt-2 rounded-md bg-slate-50 p-2">
+              <p>
+                Agent: <strong>{item.provenance.agentExecution.catalogAgentId || item.provenance.agentExecution.agentId}</strong> ·{" "}
+                {item.provenance.agentExecution.status} · attempt{" "}
+                <span className="font-mono">{item.provenance.agentExecution.attemptId}</span>
+              </p>
+              <p className="font-mono">
+                Version {item.provenance.agentExecution.agentVersionId || "legacy/unavailable"} · stage execution{" "}
+                {item.provenance.agentExecution.stageExecutionId || item.provenance.agentExecution.attemptId}
+              </p>
+              <p>
+                Skills: {item.provenance.agentExecution.activatedSkills.map((skill) => `${skill.name} ${skill.version}`).join(", ") || "none activated"}
+              </p>
+              <p>
+                Tools: {item.provenance.agentExecution.tools.map((tool) => `${tool.toolId} ×${tool.callCount}`).join(", ") || "none"}
+              </p>
+              <p>
+                Budget: {item.provenance.agentExecution.budget.turnsUsed}/{item.provenance.agentExecution.budget.maxTurns} turns ·{" "}
+                {item.provenance.agentExecution.budget.toolCallsUsed}/{item.provenance.agentExecution.budget.maxToolCalls} tool calls ·{" "}
+                {item.provenance.agentExecution.budget.tokensUsed}/{item.provenance.agentExecution.budget.maxTokens} tokens
+              </p>
+              {item.provenance.agentExecution.stopReason ? <p>Stop reason: {item.provenance.agentExecution.stopReason.replaceAll("_", " ")}</p> : null}
+              <p className="font-mono">Snapshot {item.provenance.agentExecution.snapshotDigest}</p>
+              {item.provenance.agentExecution.replacedAttemptId ? <p className="font-mono">Replaces attempt {item.provenance.agentExecution.replacedAttemptId}</p> : null}
+            </div>
+          ) : null}
         </details>
       ) : null}
     </article>

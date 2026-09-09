@@ -8,10 +8,23 @@
  * *create*'s content type (blog/pillar/...), not a drafted document's shape.
  */
 import type {
+  ActivatedSkillProvenance,
+  AgentBudget,
+  AgentExecution,
+  AgentStopReason,
+  AgentToolSummary,
   RagCitation,
   RagProvenance,
   ResearchEvidenceManifest,
 } from "./rag-contract";
+
+export type {
+  ActivatedSkillProvenance,
+  AgentBudget,
+  AgentExecution,
+  AgentStopReason,
+  AgentToolSummary,
+};
 
 export type ContentRun = {
   text: string;
@@ -96,6 +109,7 @@ export type ValidationReportView = {
   overlapHits: OverlapHitView[];
   outstandingIssues: boolean;
   repairAttempt?: number;
+  agentExecution?: AgentExecution | null;
 };
 
 /** Published CMS location captured on an AI-visibility snapshot — mirrors
@@ -153,6 +167,7 @@ export type SectionEventPayload = {
   usedFallbackStub: boolean;
   citations?: RagCitation[] | null;
   provenance?: RagProvenance | null;
+  agentExecution?: AgentExecution | null;
   modelUsed?: string | null;
   retrievalStrategy?: string | null;
   evidenceIds?: string[];

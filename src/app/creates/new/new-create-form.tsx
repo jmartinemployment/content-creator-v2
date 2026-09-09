@@ -48,6 +48,14 @@ import {
   type ModelPolicySelection,
   type RagReadiness,
 } from "../rag-contract";
+import { shortDigest, type ResolvedSkillSnapshot } from "@/app/skills/skill-contract";
+import {
+  isCompatibleAgent,
+  normalizeAgentCatalog,
+  normalizeResolvedAgentTeam,
+  type AgentCatalog,
+  type ResolvedAgentTeam,
+} from "@/app/agents/agent-contract";
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -114,6 +122,7 @@ type NewCreateDraft = {
   targetEntities: string[];
   selectedTemplateIds: string[];
   modelPolicy: ModelPolicySelection;
+  selectedAgentIds: string[];
   pendingCreateId: string | null;
 };
 
@@ -171,6 +180,9 @@ function readNewCreateDraft(): NewCreateDraft | null {
         parsed.modelPolicy?.preset === "o3-only" || parsed.modelPolicy?.preset === "custom"
           ? parsed.modelPolicy
           : { version: "content-model-policy.v1", preset: "best-quality" },
+      selectedAgentIds: Array.isArray(parsed.selectedAgentIds)
+        ? parsed.selectedAgentIds.filter((value): value is string => typeof value === "string")
+        : [],
       pendingCreateId: typeof parsed.pendingCreateId === "string" ? parsed.pendingCreateId : null,
     };
   } catch {
@@ -352,6 +364,15 @@ export function NewCreateForm({
   const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
+  const [resolvedSkills, setResolvedSkills] = useState<ResolvedSkillSnapshot | null>(null);
+  const [resolvedSkillsLoading, setResolvedSkillsLoading] = useState(false);
+  const [resolvedSkillsError, setResolvedSkillsError] = useState<string | null>(null);
+  const [agentCatalog, setAgentCatalog] = useState<AgentCatalog | null>(null);
+  const [agentCatalogError, setAgentCatalogError] = useState<string | null>(null);
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [resolvedTeam, setResolvedTeam] = useState<ResolvedAgentTeam | null>(null);
+  const [resolvedTeamLoading, setResolvedTeamLoading] = useState(false);
+  const [resolvedTeamError, setResolvedTeamError] = useState<string | null>(null);
   const restoredRef = useRef(false);
 
   useEffect(() => {
@@ -379,6 +400,107 @@ export function NewCreateForm({
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/gcc-v2/agents", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const catalog = normalizeAgentCatalog(body);
+        setAgentCatalog(catalog);
+        setSelectedAgentIds((current) => {
+          if (current.length) return current;
+          const producer = catalog.agents.find((agent) => agent.role === "producer" && agent.status.toLowerCase() === "published");
+          return producer ? [producer.id] : [];
+        });
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) setAgentCatalogError(cause instanceof Error ? cause.message : "Could not load specialists");
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (step !== "review") return;
+    const contentTypes = [
+      primaryDraft,
+      ...alsoDraftOptionsFor(primaryDraft)
+        .map((option) => option.value)
+        .filter((value) => alsoDrafts.has(value)),
+    ];
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      setResolvedSkillsLoading(true);
+      setResolvedSkillsError(null);
+    });
+    void fetch(`/api/gcc-v2/skills/resolve?contentTypes=${encodeURIComponent(contentTypes.join(","))}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as ResolvedSkillSnapshot | { error?: string } | null;
+        if (!response.ok) throw new Error(body && "error" in body ? body.error : `HTTP ${response.status}`);
+        setResolvedSkills(body as ResolvedSkillSnapshot);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setResolvedSkills(null);
+          setResolvedSkillsError(cause instanceof Error ? cause.message : "Could not resolve skills");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResolvedSkillsLoading(false);
+      });
+    return () => controller.abort();
+  }, [alsoDrafts, primaryDraft, step]);
+
+  useEffect(() => {
+    if (step !== "review" || !agentCatalog) return;
+    const contentTypes = [
+      primaryDraft,
+      ...alsoDraftOptionsFor(primaryDraft)
+        .map((option) => option.value)
+        .filter((value) => alsoDrafts.has(value)),
+    ];
+    const compatible = agentCatalog.agents.filter((agent) => isCompatibleAgent(agent, contentTypes));
+    const selected = selectedAgentIds.filter((id) => compatible.some((agent) => agent.id === id));
+    const producerCount = compatible.filter((agent) => agent.role === "producer" && selected.includes(agent.id)).length;
+    if (producerCount !== 1) {
+      void Promise.resolve().then(() => {
+        setResolvedTeam(null);
+        setResolvedTeamError("Select exactly one compatible producer.");
+      });
+      return;
+    }
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      setResolvedTeamLoading(true);
+      setResolvedTeamError(null);
+    });
+    void fetch("/api/gcc-v2/agents/resolve", {
+      method: "POST",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ selectedAgentIds: selected, contentTypes }),
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+        setResolvedTeam(normalizeResolvedAgentTeam(body));
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setResolvedTeam(null);
+          setResolvedTeamError(cause instanceof Error ? cause.message : "Could not resolve specialist team");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResolvedTeamLoading(false);
+      });
+    return () => controller.abort();
+  }, [agentCatalog, alsoDrafts, primaryDraft, selectedAgentIds, step]);
+
+  useEffect(() => {
     // Wait until session draft hydrate finishes — otherwise the empty initial state clears a saved draft.
     if (!restoredRef.current) return;
     if (step === "source" && !siteUrlInput.trim() && !projectSiteCrawlRunId) {
@@ -403,6 +525,7 @@ export function NewCreateForm({
       targetEntities,
       selectedTemplateIds,
       modelPolicy,
+      selectedAgentIds,
       pendingCreateId,
     });
   }, [
@@ -423,6 +546,7 @@ export function NewCreateForm({
     targetEntities,
     selectedTemplateIds,
     modelPolicy,
+    selectedAgentIds,
     pendingCreateId,
   ]);
 
@@ -666,6 +790,7 @@ export function NewCreateForm({
       setTargetEntities(draft.targetEntities);
       setSelectedTemplateIds(draft.selectedTemplateIds);
       setModelPolicy(draft.modelPolicy);
+      setSelectedAgentIds(draft.selectedAgentIds);
       setPendingCreateId(draft.pendingCreateId);
 
       if (!runId || !resolvedUrl) {
@@ -720,6 +845,7 @@ export function NewCreateForm({
               operatorTools: parseOperatorTools(draft.operatorToolsText),
               paaQuestions: draft.paaQuestionsText,
               competitorUrls: draft.competitorUrlsText,
+              selectedAgentIds: draft.selectedAgentIds,
             };
             const preRes = await fetch(
               `/api/gcc-v2/creates/${draft.pendingCreateId}/partner-tools/preflight`,
@@ -805,6 +931,7 @@ export function NewCreateForm({
         operatorTools,
         paaQuestions: paaQuestionsText,
         competitorUrls: competitorUrlsText,
+        selectedAgentIds,
         // Prefer early mobile crawl so preflight does not re-fetch (avoids cold-start fail + twin noise).
         ...(siteHierarchy ? { siteHierarchy } : {}),
       },
@@ -827,6 +954,10 @@ export function NewCreateForm({
       setError("Confirm the model-policy quality tradeoff before continuing.");
       return;
     }
+    if (selectedProducerCount !== 1 || !resolvedTeam) {
+      setError("Select and resolve exactly one specialist producer before continuing.");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -838,6 +969,7 @@ export function NewCreateForm({
           contentType: primaryDraft,
           siteUrl,
           siteSection: siteSectionForApi(section),
+          selectedAgentIds,
         }),
       });
       if (!createRes.ok) {
@@ -854,6 +986,7 @@ export function NewCreateForm({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
           projectSiteCrawlRunId,
+          selectedAgentIds,
         }),
       });
       if (!preRes.ok) {
@@ -894,6 +1027,10 @@ export function NewCreateForm({
       );
       return;
     }
+    if (selectedProducerCount !== 1 || !resolvedTeam) {
+      setError("Select and resolve exactly one specialist producer before continuing.");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -908,6 +1045,7 @@ export function NewCreateForm({
           contentTypes,
           partnerToolsConfirmed: true,
           modelPolicy,
+          selectedAgentIds,
         }),
       });
       if (!genRes.ok) {
@@ -948,6 +1086,7 @@ export function NewCreateForm({
           targetKeyword: targetKeyword.trim() || undefined,
           brief,
           projectSiteCrawlRunId,
+          selectedAgentIds,
         }),
       });
       if (!preRes.ok) {
@@ -975,6 +1114,20 @@ export function NewCreateForm({
   const availableConcepts = (ragStatus?.entitySeeds ?? []).filter(
     (entity) => !targetEntities.includes(entity),
   );
+  const selectedContentTypes = [
+    primaryDraft,
+    ...alsoDraftOptionsFor(primaryDraft)
+      .map((option) => option.value)
+      .filter((value) => alsoDrafts.has(value)),
+  ];
+  const compatibleAgents = (agentCatalog?.agents ?? []).filter((agent) =>
+    isCompatibleAgent(agent, selectedContentTypes),
+  );
+  const producerAgents = compatibleAgents.filter((agent) => agent.role === "producer");
+  const optionalAgents = compatibleAgents.filter((agent) =>
+    agent.role !== "producer" && ["marketing", "seo", "aeo"].includes(agent.specialty),
+  );
+  const selectedProducerCount = producerAgents.filter((agent) => selectedAgentIds.includes(agent.id)).length;
 
   function addConcept(value = conceptInput) {
     const concept = value.trim();
@@ -1312,6 +1465,45 @@ export function NewCreateForm({
                 ))}
               </div>
             </fieldset>
+            <fieldset className="mt-6">
+              <legend className={labelClass}>Specialist agent team</legend>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                Choose exactly one producer. Add any compatible Marketing, SEO, and AEO contributors or reviewers.
+              </p>
+              {agentCatalogError ? <p role="alert" className="mt-2 text-xs text-red-700">Specialists unavailable: {agentCatalogError}</p> : null}
+              {!agentCatalog && !agentCatalogError ? <p className="mt-2 text-xs">Loading published specialists…</p> : null}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {producerAgents.map((agent) => (
+                  <label key={agent.id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${selectedAgentIds.includes(agent.id) ? "border-[var(--cc-accent)] bg-blue-50" : "border-[var(--cc-line)]"}`}>
+                    <input
+                      type="radio"
+                      name="producer-agent"
+                      aria-label={`${agent.name} producer`}
+                      checked={selectedAgentIds.includes(agent.id)}
+                      onChange={() => setSelectedAgentIds((current) => [
+                        agent.id,
+                        ...current.filter((id) => !producerAgents.some((producer) => producer.id === id)),
+                      ])}
+                    />
+                    <span><strong>{agent.name}</strong><span className="block text-xs capitalize text-[var(--cc-muted)]">{agent.specialty} producer · {agent.version}</span></span>
+                  </label>
+                ))}
+                {optionalAgents.map((agent) => (
+                  <label key={agent.id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${selectedAgentIds.includes(agent.id) ? "border-[var(--cc-accent)] bg-blue-50" : "border-[var(--cc-line)]"}`}>
+                    <input
+                      type="checkbox"
+                      aria-label={`${agent.name} ${agent.role}`}
+                      checked={selectedAgentIds.includes(agent.id)}
+                      onChange={() => setSelectedAgentIds((current) =>
+                        current.includes(agent.id) ? current.filter((id) => id !== agent.id) : [...current, agent.id],
+                      )}
+                    />
+                    <span><strong>{agent.name}</strong><span className="block text-xs capitalize text-[var(--cc-muted)]">{agent.specialty} {agent.role} · {agent.version}</span></span>
+                  </label>
+                ))}
+              </div>
+              {agentCatalog && producerAgents.length === 0 ? <p role="alert" className="mt-2 text-xs text-red-700">No compatible published producer is available for these outputs.</p> : null}
+            </fieldset>
             {ragCapabilitiesFor(primaryDraft).includes("ad-templates") ? (
               <fieldset className="mt-6">
                 <legend className={labelClass}>Optional campaign structures</legend>
@@ -1331,7 +1523,7 @@ export function NewCreateForm({
             ) : null}
             <div className="mt-7 flex justify-between">
               <button type="button" onClick={() => setStep("research")} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
-              <button type="button" onClick={() => goNext("review")} className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white">Review</button>
+              <button type="button" disabled={selectedProducerCount !== 1} onClick={() => goNext("review")} className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Review</button>
             </div>
           </section>
         )}
@@ -1431,18 +1623,63 @@ export function NewCreateForm({
                 </fieldset>
             </details>
 
-            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+            <section className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950" aria-label="Resolved specialist team">
+              <strong>Immutable specialist team</strong>
+              <p className="mt-1 text-xs">The backend resolves stable catalog IDs to immutable versions and pinned skills before execution IDs are created.</p>
+              {resolvedTeamLoading ? <p className="mt-2 text-xs">Resolving team…</p> : null}
+              {resolvedTeamError ? <p role="alert" className="mt-2 text-xs text-red-800">{resolvedTeamError}</p> : null}
+              {resolvedTeam ? (
+                <div className="mt-3 rounded-md bg-white/70 p-3">
+                  <p className="font-mono text-xs">Team {shortDigest(resolvedTeam.snapshotDigest)} · catalog {resolvedTeam.catalogVersion}</p>
+                  <ol className="mt-2 space-y-2 text-xs">
+                    {resolvedTeam.agents.map((agent) => (
+                      <li key={agent.versionId || agent.id}>
+                        <strong>{agent.name} {agent.version}</strong> · <span className="capitalize">{agent.specialty}</span> · <span className="font-mono">{shortDigest(agent.digest)}</span>
+                        <span className="block">
+                          Responsibilities: {agent.participation.length
+                            ? [...agent.participation].sort((a, b) => a.order - b.order).map((row) => `${row.stage}: ${row.role}`).join(", ")
+                            : `${agent.supportedStages.join(", ")}: ${agent.role}`}
+                        </span>
+                        <span className="block">Pinned skills: {agent.pinnedSkills.map((skill) => `${skill.name || skill.id} ${skill.version} (${shortDigest(skill.digest)})`).join(", ") || "none"}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950" aria-label="Immutable resolved skill bundle">
               <strong>Approved skills are selected automatically.</strong>{" "}
-              The persisted content type determines the reviewed skill set for this run.{" "}
-              <Link href="/skills" className="font-semibold underline">See skills and recommended bundles</Link>
-            </div>
+              This preview is resolved by the backend. Job creation persists a signed, immutable
+              snapshot so retries use the same reviewed instructions and resources. Operators cannot
+              install or inject runtime skills.{" "}
+              <Link href="/skills" className="font-semibold underline">See governed catalog</Link>
+              {resolvedSkillsLoading ? <p className="mt-2 text-xs">Resolving immutable bundle…</p> : null}
+              {resolvedSkillsError ? <p role="alert" className="mt-2 text-xs text-red-800">Bundle unavailable: {resolvedSkillsError}</p> : null}
+              {resolvedSkills ? (
+                <div className="mt-3 rounded-md bg-white/70 p-3">
+                  <p className="font-mono text-xs">
+                    Snapshot {shortDigest(resolvedSkills.snapshotDigest)} · catalog {resolvedSkills.catalogVersion}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {resolvedSkills.skills.map((skill) => (
+                      <li key={skill.versionId ?? `${skill.id}-${skill.version}`}>
+                        <strong>{skill.name} {skill.version}</strong> ·{" "}
+                        <span className="font-mono">{shortDigest(skill.packageDigest)}</span> ·{" "}
+                        {skill.supportedStages.join(", ")}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
 
             <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
               <button type="button" onClick={() => { setToolsPreflight(null); setPendingCreateId(null); setStep("outputs"); }} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"
-                  disabled={busy || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                  disabled={busy || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -1452,7 +1689,7 @@ export function NewCreateForm({
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                    disabled={busy || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />

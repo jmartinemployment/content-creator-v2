@@ -62,6 +62,8 @@ export const config = {
   matcher: [
     "/",
     "/creates/:path*",
+    "/agents/:path*",
+    "/skills/:path*",
     "/legacy/:path*",
     "/rag",
     "/rag/:path*",

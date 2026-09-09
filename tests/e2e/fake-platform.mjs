@@ -7,6 +7,22 @@ const recordSeparator = "\x1e";
 const fixtureQuote =
   "Deterministic content systems pair human approval gates with exact source attribution.";
 const fixtureMarkdown = `# Reliable content operations\n\n${fixtureQuote}\n\nRetries remain bounded and observable.`;
+const skillVersionIds = {
+  citation: "11111111-1111-1111-1111-111111111111",
+  technical: "22222222-2222-2222-2222-222222222222",
+};
+const agentIds = {
+  producer: "33333333-3333-3333-3333-333333333333",
+  marketing: "44444444-4444-4444-4444-444444444444",
+  seo: "55555555-5555-5555-5555-555555555555",
+  aeo: "66666666-6666-6666-6666-666666666666",
+};
+const agentVersionIds = {
+  producer: "77777777-7777-7777-7777-777777777777",
+  marketing: "88888888-8888-8888-8888-888888888888",
+  seo: "99999999-9999-9999-9999-999999999999",
+  aeo: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+};
 
 let scenario;
 let requests;
@@ -15,6 +31,11 @@ let sequence;
 let job;
 let sockets;
 let history;
+let adminSkill;
+let adminAgent;
+let adminAgentHistory;
+let agentTestRuns;
+let agentTestTimers;
 
 function reset() {
   scenario = { ragAvailable: true };
@@ -22,6 +43,89 @@ function reset() {
   sectionAttempts = new Map();
   sequence = 0;
   history = [];
+  for (const timer of agentTestTimers || []) clearTimeout(timer);
+  agentTestTimers = [];
+  agentTestRuns = new Map();
+  adminAgentHistory = [];
+  adminSkill = {
+    id: "community-style",
+    versionId: "skill-version-1",
+    name: "Community Style",
+    version: "1.0.0",
+    contribution: "Apply reviewed style guidance without changing evidence policy.",
+    source: {
+      repositoryUrl: "https://github.com/example/agent-skills",
+      commit: "0123456789abcdef0123456789abcdef01234567",
+      path: "skills/community-style",
+      discoveryUrl: "https://agenticskills.example/community-style",
+    },
+    packageDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    manifestDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    license: "Apache-2.0",
+    compatibility: "gcc-skill-envelope.v2",
+    reviewStatus: "quarantined",
+    reviewer: null,
+    supportedStages: ["outline", "section"],
+    supportedContentTypes: ["pillar", "blog"],
+    requestedTools: ["get_brief_context"],
+    origin: "community",
+    findings: [{
+      id: "finding-1", severity: "medium", scanner: "instruction-policy", rule: "instruction-override",
+      filePath: "SKILL.md", line: 8, message: "Review wording that could be interpreted as overriding workflow policy.",
+      disposition: "open", reviewerRationale: null,
+    }],
+    files: [{
+      path: "SKILL.md", mediaType: "text/markdown", byteCount: 128,
+      digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      executable: false, content: "---\nname: community-style\ndescription: Reviewed style guidance\n---\nUse concise, evidence-grounded prose.",
+    }],
+    audit: [{
+      id: "audit-1", actor: "admin@example.test", action: "imported", atUtc: "2026-09-08T20:00:00Z",
+      beforeStatus: null, afterStatus: "quarantined", detail: "Immutable commit imported into quarantine.",
+    }],
+  };
+  adminAgent = {
+    id: "marketing-strategist",
+    agentId: agentIds.marketing,
+    versionId: agentVersionIds.marketing,
+    name: "Marketing Strategist",
+    description: "Connect audience intent to a focused content angle.",
+    objective: "Improve audience fit without weakening evidence requirements.",
+    version: "2.0.0",
+    digest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    role: "contributor",
+    specialty: "marketing",
+    status: "draft",
+    supportedContentTypes: ["pillar", "blog"],
+    supportedStages: ["outline", "validation"],
+    skillIds: ["technical-depth"],
+    skills: [{
+      id: "technical-depth", name: "Technical Depth", version: "2.1.0",
+      versionId: skillVersionIds.technical,
+      digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    }],
+    participation: [
+      { stage: "outline", role: "contributor", order: 20 },
+      { stage: "validation", role: "reviewer", order: 30 },
+    ],
+    instructions: "Contribute a marketing angle without overriding evidence policy.",
+    tools: ["get_brief_context", "submit_contribution", "submit_review"],
+    models: ["o3"],
+    modelPolicy: { version: "content-model-policy.v1", allowedModels: ["o3"] },
+    modelPolicyVersion: "content-model-policy.v1",
+    tests: [],
+    findings: [{
+      id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      severity: "high",
+      scanner: "agent-policy-v1",
+      rule: "broad-objective",
+      message: "Confirm that the objective remains subordinate to evidence policy.",
+      blocking: true,
+      disposition: "open",
+      reviewerRationale: null,
+    }],
+    audit: [{ id: "agent-audit-1", action: "created", actor: "admin@example.test", atUtc: "2026-09-08T20:00:00Z" }],
+  };
   job = {
     id: "job-1",
     status: "awaiting_brandkit_approval",
@@ -85,6 +189,37 @@ function broadcast(evt) {
   }
 }
 
+function agentTestEvent(run, message) {
+  return {
+    contractVersion: "gcc-agent-test-event.v1",
+    testRunId: run.id,
+    agentVersionId: run.agentVersionId,
+    versionDigest: run.versionDigest,
+    status: run.status,
+    progressPercent: run.progressPercent,
+    phase: run.phase,
+    message,
+    attemptCount: run.attemptCount,
+    queuedAtUtc: run.queuedAtUtc,
+    startedAtUtc: run.startedAtUtc,
+    completedAtUtc: run.completedAtUtc,
+    resultJson: run.resultJson,
+    error: run.error,
+  };
+}
+
+function sendAgentTest(socket, run, message) {
+  if (socket.readyState === socket.OPEN) {
+    socket.send(hubMessage({ type: 1, target: "AgentTestEvent", arguments: [agentTestEvent(run, message)] }));
+  }
+}
+
+function storeAgentTestRun(run) {
+  agentTestRuns.set(run.id, run);
+  const agent = [adminAgent, ...adminAgentHistory].find((item) => item.versionId === run.agentVersionId);
+  if (agent) agent.tests = [run, ...(agent.tests || []).filter((item) => item.id !== run.id)];
+}
+
 function brandKitEvent() {
   return event("BrandKitReady", {
     companyName: "Example Systems",
@@ -104,6 +239,12 @@ function outlinePayload() {
       { key: "advance", heading: "Build a deterministic workflow", job: "advance", hierarchyChildHeadings: [] },
     ],
     hierarchyChildHeadings: [],
+    provenance: {
+      stage: "PLAN",
+      attemptId: "attempt-plan-1",
+      modelUsed: "o1-pro",
+      agentExecution: { ...agentExecution(), stage: "PLAN", agentId: "OutlineAgent", attemptId: "attempt-plan-1" },
+    },
   };
 }
 
@@ -123,7 +264,9 @@ function sectionPayload() {
       promptVersion: "write/v2",
       retrievalStrategy: "hybrid",
       evidenceIds: ["page-1"],
+      agentExecution: agentExecution(),
     },
+    agentExecution: agentExecution(),
     documentJson: JSON.stringify({
       tag: "h2",
       heading: "Why reliability matters",
@@ -144,6 +287,178 @@ function ragCitation() {
   };
 }
 
+function publishedSkills() {
+  return [
+    {
+      id: "citation-discipline",
+      versionId: skillVersionIds.citation,
+      name: "Citation Discipline",
+      version: "2.0.0",
+      contribution: "Return verbatim quote citations for factual claims.",
+      source: {
+        repositoryUrl: "https://github.com/geek/content-skills",
+        commit: "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        path: "skills/citation-discipline",
+      },
+      packageDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      manifestDigest: "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+      license: "Proprietary",
+      compatibility: "gcc-skill-envelope.v2 / rag-generate.v3",
+      reviewStatus: "published",
+      reviewer: "Content Platform",
+      reviewedAtUtc: "2026-09-08T18:00:00Z",
+      publishedAtUtc: "2026-09-08T19:00:00Z",
+      supportedStages: ["researchPlanning", "outline", "section", "validation", "repair"],
+      supportedContentTypes: ["pillar", "blog"],
+      requestedTools: ["search_corpus", "load_evidence_page"],
+      activationMode: "automatic",
+      assignedAgentIds: ["content-producer", "aeo-contributor"],
+      origin: "first-party",
+    },
+    {
+      id: "technical-depth",
+      versionId: skillVersionIds.technical,
+      name: "Technical Depth",
+      version: "2.1.0",
+      contribution: "Include supported constraints, tradeoffs, and implementation decisions.",
+      source: {
+        repositoryUrl: "https://github.com/geek/content-skills",
+        commit: "1234567890abcdef1234567890abcdef12345678",
+        path: "skills/technical-depth",
+      },
+      packageDigest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      manifestDigest: "sha256:2323232323232323232323232323232323232323232323232323232323232323",
+      license: "Proprietary",
+      compatibility: "gcc-skill-envelope.v2 / rag-generate.v3",
+      reviewStatus: "published",
+      reviewer: "Content Platform",
+      reviewedAtUtc: "2026-09-08T18:05:00Z",
+      publishedAtUtc: "2026-09-08T19:05:00Z",
+      supportedStages: ["outline", "section", "validation", "repair"],
+      supportedContentTypes: ["pillar", "tech-article"],
+      requestedTools: ["get_brief_context", "load_evidence_page"],
+      activationMode: "automatic",
+      assignedAgentIds: ["marketing-strategist", "seo-reviewer"],
+      origin: "first-party",
+    },
+  ];
+}
+
+function publishedAgents() {
+  return [
+    {
+      id: "content-producer",
+      agentId: agentIds.producer,
+      versionId: agentVersionIds.producer,
+      name: "Content Producer",
+      description: "Owns the final evidence-grounded draft.",
+      version: "3.0.0",
+      digest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      role: "producer",
+      specialty: "content",
+      status: "published",
+      supportedContentTypes: ["pillar", "blog"],
+      supportedStages: ["researchPlanning", "outline", "section", "repair", "validation", "finalSynthesis", "complete"],
+      skillIds: ["citation-discipline"],
+      skills: [{
+        id: "citation-discipline", name: "Citation Discipline", version: "2.0.0",
+        versionId: skillVersionIds.citation,
+        digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      }],
+      participation: ["researchPlanning", "outline", "section", "repair", "validation", "finalSynthesis", "complete"]
+        .map((stage, order) => ({ stage, role: "producer", order })),
+      tools: ["search_corpus", "load_evidence_page", "get_brief_context", "activate_skill", "read_skill_resource", "submit_section"],
+      models: ["o3", "o1-pro"],
+      modelPolicy: { version: "content-model-policy.v1", allowedModels: ["o3", "o1-pro"] },
+    },
+    {
+      ...adminAgent,
+      status: "published",
+      participation: [
+        { stage: "outline", role: "contributor", order: 20 },
+        { stage: "validation", role: "reviewer", order: 30 },
+      ],
+      supportedStages: ["outline", "validation"],
+    },
+    {
+      id: "seo-reviewer",
+      agentId: agentIds.seo,
+      versionId: agentVersionIds.seo,
+      name: "SEO Reviewer",
+      description: "Reviews discoverability and search intent coverage.",
+      version: "1.0.0",
+      digest: "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      role: "reviewer",
+      specialty: "seo",
+      status: "published",
+      supportedContentTypes: ["pillar", "blog"],
+      supportedStages: ["VALIDATE"],
+      skillIds: ["technical-depth"],
+      skills: [{
+        id: "technical-depth", name: "Technical Depth", version: "2.1.0",
+        versionId: skillVersionIds.technical,
+        digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      }],
+      participation: [{ stage: "validation", role: "reviewer", order: 40 }],
+      tools: ["get_brief_context", "submit_review"],
+      models: ["o3"],
+      modelPolicy: { version: "content-model-policy.v1", allowedModels: ["o3"] },
+    },
+    {
+      id: "aeo-contributor",
+      agentId: agentIds.aeo,
+      versionId: agentVersionIds.aeo,
+      name: "AEO Contributor",
+      description: "Shapes concise answers for answer engines.",
+      version: "1.0.0",
+      digest: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      role: "contributor",
+      specialty: "aeo",
+      status: "published",
+      supportedContentTypes: ["pillar"],
+      supportedStages: ["PLAN"],
+      skillIds: ["citation-discipline"],
+      skills: [{
+        id: "citation-discipline", name: "Citation Discipline", version: "2.0.0",
+        versionId: skillVersionIds.citation,
+        digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      }],
+      participation: [{ stage: "outline", role: "contributor", order: 10 }],
+      tools: ["get_brief_context", "submit_contribution"],
+      models: ["o3"],
+      modelPolicy: { version: "content-model-policy.v1", allowedModels: ["o3"] },
+    },
+  ];
+}
+
+function agentExecution(status = "completed") {
+  return {
+    protocolVersion: "rag-generate.v3",
+    traceVersion: "agent-trace.v1",
+    stage: "WRITE",
+    agentId: "SectionWriterAgent",
+    agentVersion: "1.0.0",
+    catalogAgentId: "content-producer",
+    agentVersionId: agentVersionIds.producer,
+    agentDigest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    stageExecutionId: "execution-write-1",
+    workflowVersion: "llama-workflow.v1",
+    promptVersion: "write/v3",
+    status,
+    attemptId: "attempt-write-1",
+    replacedAttemptId: null,
+    snapshotDigest: "sha256:snapshotfixture",
+    activatedSkills: [{
+      skillId: "citation-discipline", versionId: skillVersionIds.citation, name: "Citation Discipline",
+      version: "2.0.0", packageDigest: publishedSkills()[0].packageDigest,
+      resourcesRead: [{ path: "SKILL.md", digest: "sha256:resource", byteCount: 128 }],
+    }],
+    tools: [{ toolId: "search_corpus", version: "1.0.0", callCount: 2, successCount: 2, errorCount: 0, durationMs: 21, resultCount: 4 }],
+    budget: { maxTurns: 8, turnsUsed: 3, maxToolCalls: 10, toolCallsUsed: 2, maxTokens: 12000, tokensUsed: 2400, exhausted: null },
+    stopReason: status === "completed" ? "completed" : null,
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   if (req.method === "OPTIONS") return send(res, 204, "");
@@ -153,7 +468,9 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { ok: true });
   }
   if (url.pathname === "/__scenario" && req.method === "POST") {
-    scenario = { ...scenario, ...JSON.parse((await readBody(req)) || "{}") };
+    const update = JSON.parse((await readBody(req)) || "{}");
+    scenario = { ...scenario, ...update };
+    if (typeof update.adminAgentStatus === "string") adminAgent.status = update.adminAgentStatus;
     return send(res, 200, scenario);
   }
   if (url.pathname === "/__requests") return send(res, 200, requests);
@@ -208,7 +525,7 @@ const server = http.createServer(async (req, res) => {
       authorization,
       body: rawBody,
     });
-    if (authorization !== "Bearer e2e-access" && authorization !== "Bearer refreshed-access" && authorization !== "Bearer oauth-access") {
+    if (authorization !== "Bearer e2e-access" && authorization !== "Bearer viewer-access" && authorization !== "Bearer refreshed-access" && authorization !== "Bearer oauth-access") {
       return send(res, 401, { error: "fake platform requires bearer" });
     }
   }
@@ -222,35 +539,183 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/rag/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/agents" && req.method === "GET") {
+    return send(res, 200, { catalogVersion: "agent-catalog.2026-09-08", agents: publishedAgents() });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/agents/resolve" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const agents = publishedAgents().filter((agent) => body.selectedAgentIds?.includes(agent.id));
+    if (agents.filter((agent) => agent.role === "producer").length !== 1) {
+      return send(res, 422, { error: "Exactly one producer is required" });
+    }
+    return send(res, 200, {
+      snapshotVersion: "agent-team.v1",
+      catalogVersion: "agent-catalog.2026-09-08",
+      snapshotDigest: "sha256:teamfixture",
+      selectedAgentIds: agents.map((agent) => agent.id),
+      agents: agents.map((agent) => ({
+        ...agent,
+        pinnedSkills: agent.skills,
+      })),
+      skills: [...new Map(agents.flatMap((agent) => agent.skills).map((skill) => [skill.versionId, skill])).values()],
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/agents/admin" && req.method === "GET") {
+    if (authorization === "Bearer viewer-access") return send(res, 403, { error: "Administrator role required" });
+    return send(res, 200, { authorized: true, agents: [...adminAgentHistory, adminAgent] });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/agents/admin" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const selectedSkills = publishedSkills().filter((skill) => body.skillVersionIds?.includes(skill.versionId));
+    adminAgentHistory.push(structuredClone(adminAgent));
+    adminAgent = {
+      ...adminAgent,
+      id: body.slug || String(body.displayName || "specialist").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      agentId: crypto.randomUUID(),
+      versionId: crypto.randomUUID(),
+      name: body.displayName,
+      description: body.description,
+      objective: body.objective,
+      version: body.semanticVersion,
+      digest: `sha256:${"9".repeat(64)}`,
+      role: body.stageParticipation?.some((row) => row.role === "producer") ? "producer" : body.stageParticipation?.[0]?.role || "contributor",
+      specialty: body.slug || "specialist",
+      instructions: body.instructions,
+      skillIds: selectedSkills.map((skill) => skill.id),
+      skills: selectedSkills.map((skill) => ({ id: skill.id, name: skill.name, version: skill.version, versionId: skill.versionId, digest: skill.packageDigest })),
+      participation: body.stageParticipation,
+      supportedStages: body.stageParticipation.map((row) => row.stage),
+      supportedContentTypes: body.contentTypes,
+      tools: body.allowedTools,
+      models: body.allowedModels,
+      modelPolicy: body.modelPolicy,
+      modelPolicyVersion: body.modelPolicyVersion,
+      tests: [],
+      findings: [],
+      audit: [],
+      status: "draft",
+    };
+    return send(res, 200, { versionId: adminAgent.versionId });
+  }
+  const createAgentVersion = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/admin\/([^/]+)\/versions$/);
+  if (createAgentVersion && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const selectedSkills = publishedSkills().filter((skill) => body.skillVersionIds?.includes(skill.versionId));
+    const predecessor = [adminAgent, ...adminAgentHistory].find((agent) => agent.agentId === createAgentVersion[1]);
+    if (!predecessor) return send(res, 404, { error: "Agent not found" });
+    adminAgentHistory.push(structuredClone(predecessor));
+    adminAgent = {
+      ...predecessor,
+      versionId: crypto.randomUUID(),
+      version: body.semanticVersion,
+      digest: `sha256:${"8".repeat(64)}`,
+      objective: body.objective,
+      instructions: body.instructions,
+      skillIds: selectedSkills.map((skill) => skill.id),
+      skills: selectedSkills.map((skill) => ({ id: skill.id, name: skill.name, version: skill.version, versionId: skill.versionId, digest: skill.packageDigest })),
+      participation: body.stageParticipation,
+      supportedStages: body.stageParticipation.map((row) => row.stage),
+      supportedContentTypes: body.contentTypes,
+      tools: body.allowedTools,
+      models: body.allowedModels,
+      modelPolicy: { version: "content-model-policy.v1", allowedModels: body.allowedModels },
+      modelPolicyVersion: body.modelPolicyVersion,
+      tests: [],
+      findings: [],
+      audit: [],
+      status: "draft",
+    };
+    return send(res, 200, { versionId: adminAgent.versionId });
+  }
+  const agentTestHistory = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/admin\/([^/]+)\/tests$/);
+  if (agentTestHistory && req.method === "GET") {
+    return send(res, 200, [...agentTestRuns.values()]
+      .filter((run) => run.agentVersionId === agentTestHistory[1])
+      .sort((a, b) => b.queuedAtUtc.localeCompare(a.queuedAtUtc)));
+  }
+  const cancelAgentTest = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/admin\/test-runs\/([^/]+)\/cancel$/);
+  if (cancelAgentTest && req.method === "POST") {
+    const run = agentTestRuns.get(cancelAgentTest[1]);
+    if (!run) return send(res, 404, { error: "Test run not found" });
+    const cancelled = {
+      ...run,
+      status: "cancelled",
+      phase: "cancelled",
+      progressPercent: 100,
+      cancellationRequestedAtUtc: new Date().toISOString(),
+      completedAtUtc: new Date().toISOString(),
+    };
+    storeAgentTestRun(cancelled);
+    return send(res, 202, cancelled);
+  }
+  const agentFinding = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/admin\/([^/]+)\/findings\/([^/]+)$/);
+  if (agentFinding && req.method === "PATCH") {
+    const target = [adminAgent, ...adminAgentHistory].find((agent) => agent.versionId === agentFinding[1]);
+    if (!target) return send(res, 404, { error: "Agent version not found" });
+    const body = JSON.parse(rawBody || "{}");
+    target.findings = target.findings.map((finding) => finding.id === agentFinding[2]
+      ? { ...finding, disposition: body.disposition, reviewerRationale: body.reviewerRationale }
+      : finding);
+    return send(res, 200, target.findings.find((finding) => finding.id === agentFinding[2]));
+  }
+  const agentAdminAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/admin\/([^/]+)\/(test|review|publish|deprecate|revoke)$/);
+  if (agentAdminAction && req.method === "POST") {
+    const action = agentAdminAction[2];
+    const body = JSON.parse(rawBody || "{}");
+    const target = [adminAgent, ...adminAgentHistory].find((agent) => agent.versionId === agentAdminAction[1]);
+    if (!target) return send(res, 404, { error: "Agent version not found" });
+    if (action === "test") {
+      if (target.status !== "approved") return send(res, 409, { error: "Version must be approved before testing." });
+      const run = {
+        id: crypto.randomUUID(),
+        agentVersionId: target.versionId,
+        versionDigest: target.digest,
+        scenario: body.scenario || "contract",
+        status: "queued",
+        progressPercent: 0,
+        phase: "queued",
+        resultJson: null,
+        error: null,
+        attemptCount: 0,
+        queuedAtUtc: new Date().toISOString(),
+        startedAtUtc: null,
+        completedAtUtc: null,
+        cancellationRequestedAtUtc: null,
+      };
+      storeAgentTestRun(run);
+      return send(res, 202, { runId: run.id, status: run.status, testRun: run });
+    } else if (action === "review") {
+      if (target.findings.some((finding) => finding.blocking && finding.disposition === "open")) {
+        return send(res, 409, { error: "Blocking findings must be dispositioned." });
+      }
+      target.status = body.decision === "approve" ? "approved" : "draft";
+    } else if (action === "publish" && target.status === "approved"
+      && [...agentTestRuns.values()].filter((run) => run.agentVersionId === target.versionId)
+        .sort((a, b) => b.queuedAtUtc.localeCompare(a.queuedAtUtc))[0]?.status === "passed") {
+      target.status = "published";
+    } else if (action === "deprecate" && target.status === "published") {
+      target.status = "deprecated";
+    } else if (action === "revoke") {
+      target.status = "revoked";
+    } else {
+      return send(res, 409, { error: "Invalid lifecycle transition" });
+    }
+    target.audit = [...(target.audit || []), { id: `agent-audit-${Date.now()}`, action, actor: "admin@example.test", atUtc: "2026-09-08T20:30:00Z", detail: body.notes || body.reason || null }];
+    return send(res, 200, { versionId: target.versionId });
+  }
+  const agentDetail = url.pathname.match(/^\/api\/geek-content-creator-v2\/agents\/([^/]+)$/);
+  if (agentDetail && req.method === "GET") {
+    const found = publishedAgents().find((agent) => agent.id === decodeURIComponent(agentDetail[1]));
+    return found ? send(res, 200, found) : send(res, 404, { error: "Agent not found" });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/skills") {
     return send(res, 200, {
       catalogVersion: "gcc-safe-skills.2026-09-08",
-      envelopeVersion: "gcc-skill-envelope.v1",
+      envelopeVersion: "gcc-skill-envelope.v2",
       selectionMode: "automatic-read-only",
       customizationAvailable: false,
       activeSkillIds: [],
-      skills: [
-        {
-          id: "citation-discipline",
-          name: "Citation Discipline",
-          version: "1.0.0",
-          contribution: "Return verbatim quote citations for factual claims.",
-          reviewStatus: "Approved",
-          reviewer: "Content Platform",
-          supportedStages: ["researchPlanning", "outline", "section", "validation", "repair"],
-          supportedContentTypes: ["pillar", "blog"],
-        },
-        {
-          id: "technical-depth",
-          name: "Technical Depth",
-          version: "1.0.0",
-          contribution: "Include supported constraints, tradeoffs, and implementation decisions.",
-          reviewStatus: "Approved",
-          reviewer: "Content Platform",
-          supportedStages: ["outline", "section", "validation", "repair"],
-          supportedContentTypes: ["pillar", "tech-article"],
-        },
-      ],
+      skills: publishedSkills(),
       recommendedBundles: [
         {
           id: "technical-authority",
@@ -260,6 +725,70 @@ const server = http.createServer(async (req, res) => {
         },
       ],
     });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/skills/resolve") {
+    return send(res, 200, {
+      snapshotVersion: "gcc-skill-envelope.v2",
+      catalogVersion: "gcc-safe-skills.2026-09-08",
+      snapshotDigest: "sha256:snapshotfixture",
+      resolvedAtUtc: "2026-09-08T20:10:00Z",
+      signatureKeyId: "skills-key-2026-09",
+      skills: publishedSkills(),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/skills/admin" && req.method === "GET") {
+    if (authorization === "Bearer viewer-access") {
+      return send(res, 403, { error: "Administrator role required" });
+    }
+    return send(res, 200, { authorized: true, skills: [adminSkill] });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/skills/admin/import" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    if (/llama[\s_-]*(parse|cloud)|@llamaindex\/cloud/i.test(JSON.stringify(body))) {
+      return send(res, 422, { error: "Hosted parser dependency is prohibited" });
+    }
+    adminSkill = {
+      ...adminSkill,
+      source: { repositoryUrl: body.repositoryUrl, commit: body.immutableRef, path: body.skillPath },
+      reviewStatus: "quarantined",
+      audit: [...adminSkill.audit, {
+        id: `audit-${adminSkill.audit.length + 1}`, actor: "admin@example.test", action: "imported",
+        atUtc: "2026-09-08T20:11:00Z", beforeStatus: null, afterStatus: "quarantined",
+      }],
+    };
+    return send(res, 200, { versionId: adminSkill.versionId });
+  }
+  const findingMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/skills\/admin\/([^/]+)\/findings\/([^/]+)$/);
+  if (findingMatch && req.method === "PATCH") {
+    const body = JSON.parse(rawBody || "{}");
+    adminSkill.findings = adminSkill.findings.map((finding) =>
+      finding.id === findingMatch[2] ? { ...finding, disposition: body.disposition, reviewerRationale: body.reviewerRationale } : finding
+    );
+    return send(res, 200, { ok: true });
+  }
+  const adminActionMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/skills\/admin\/([^/]+)\/(review|publish|deprecate)$/);
+  if (adminActionMatch && req.method === "POST") {
+    const action = adminActionMatch[2];
+    const body = JSON.parse(rawBody || "{}");
+    const before = adminSkill.reviewStatus;
+    if (action === "review") {
+      adminSkill.reviewStatus = body.decision === "approve" ? "approved" : "rejected";
+      adminSkill.reviewer = "admin@example.test";
+    } else if (action === "publish" && adminSkill.reviewStatus === "approved") {
+      adminSkill.reviewStatus = "published";
+      adminSkill.publishedAtUtc = "2026-09-08T20:13:00Z";
+    } else if (action === "deprecate" && adminSkill.reviewStatus === "published") {
+      adminSkill.reviewStatus = "deprecated";
+      adminSkill.deprecatedAtUtc = "2026-09-08T20:14:00Z";
+    } else {
+      return send(res, 409, { error: "Invalid lifecycle transition" });
+    }
+    adminSkill.audit = [...adminSkill.audit, {
+      id: `audit-${adminSkill.audit.length + 1}`, actor: "admin@example.test", action,
+      atUtc: `2026-09-08T20:${12 + adminSkill.audit.length}:00Z`,
+      beforeStatus: before, afterStatus: adminSkill.reviewStatus, detail: body.notes || body.reason || null,
+    }];
+    return send(res, 200, { versionId: adminSkill.versionId });
   }
 
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/latest") {
@@ -321,7 +850,37 @@ const server = http.createServer(async (req, res) => {
         modelPolicyVersion: "content-model-policy.v1",
         promptVersion: "synthesis/v1",
         retrievalStrategy: "hybrid",
+        attemptId: "attempt-write-1",
+        agentExecution: agentExecution(),
       },
+      agentExecutions: [
+        { ...agentExecution(), stage: "PLAN", agentId: "OutlineAgent", attemptId: "attempt-plan-1" },
+        agentExecution(),
+      ],
+      agentTeam: {
+        snapshotVersion: "agent-team.v1",
+        catalogVersion: "agent-catalog.2026-09-08",
+        snapshotDigest: "sha256:teamfixture",
+        members: publishedAgents().slice(0, 2).map((agent) => ({
+          catalogAgentId: agent.id,
+          agentVersionId: agent.versionId,
+          name: agent.name,
+          version: agent.version,
+          digest: agent.digest,
+          role: agent.role,
+          specialty: agent.specialty,
+          activatedSkills: agentExecution().activatedSkills.filter((skill) => agent.skillIds.includes(skill.skillId)),
+        })),
+      },
+      handoffs: [{
+        id: "handoff-1",
+        fromCatalogAgentId: "marketing-strategist",
+        toCatalogAgentId: "content-producer",
+        kind: "contribution",
+        status: "accepted",
+        summary: "Audience angle incorporated into the producer draft.",
+        stageExecutionId: "execution-write-1",
+      }],
       evidenceManifest: {
         ready: true,
         sources: [{ pageId: "page-1", url: ragCitation().url, title: ragCitation().title, crawlType: "project" }],
@@ -330,9 +889,13 @@ const server = http.createServer(async (req, res) => {
       approvedStageModels: { WRITE: ["o3"], COMPLETE: ["o1-pro", "o3"] },
     });
     broadcast(event("OutlineApproved", {}));
+    broadcast(event("AgentStageStarted", { execution: agentExecution("running") }));
+    broadcast(event("SkillActivated", { execution: agentExecution("running") }));
+    broadcast(event("AgentToolCompleted", { execution: agentExecution("running") }));
     const drafted = event("SectionDrafted", sectionPayload());
     broadcast(drafted);
     broadcast(drafted);
+    broadcast(event("AgentStageCompleted", { execution: agentExecution() }));
     broadcast(event("ValidationReport", {
       shipReady: true, outstandingIssues: false, reviewVerdict: "pass", reviewNotes: "Deterministic fixture",
       seoScore: 95, polishScore: 96, polishShipReady: true, geoScore: 94, seoChecks: [], geoChecks: [], overlapHits: [],
@@ -482,6 +1045,32 @@ wss.on("connection", (socket) => {
         for (const evt of history.filter((item) => item.seq > lastSeq)) {
           socket.send(hubMessage({ type: 1, target: "JobEvent", arguments: [evt] }));
         }
+        socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
+      } else if (message.type === 1 && message.target === "JoinAgentTest") {
+        const runId = message.arguments?.[0];
+        const run = agentTestRuns.get(runId);
+        if (!run) {
+          socket.send(hubMessage({ type: 3, invocationId: message.invocationId, error: "Agent test run not found" }));
+          continue;
+        }
+        sendAgentTest(socket, run, "Snapshot");
+        socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
+        const runningTimer = setTimeout(() => {
+          const current = agentTestRuns.get(runId);
+          if (!current || current.status !== "queued") return;
+          const running = { ...current, status: "running", progressPercent: 45, phase: "rag-smoke", attemptCount: 1, startedAtUtc: new Date().toISOString() };
+          storeAgentTestRun(running);
+          sendAgentTest(socket, running, "Executing governed specialist scenario.");
+        }, 40);
+        const passedTimer = setTimeout(() => {
+          const current = agentTestRuns.get(runId);
+          if (!current || current.status !== "running") return;
+          const passed = { ...current, status: "passed", progressPercent: 100, phase: "passed", resultJson: JSON.stringify({ passed: true, scenario: current.scenario }), completedAtUtc: new Date().toISOString() };
+          storeAgentTestRun(passed);
+          sendAgentTest(socket, passed, "Exact-version test passed.");
+        }, run.scenario === "rag-smoke" ? 1200 : 600);
+        agentTestTimers.push(runningTimer, passedTimer);
+      } else if (message.type === 1 && message.target === "LeaveAgentTest") {
         socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
       } else if (message.type === 6) {
         socket.send(hubMessage({ type: 6 }));

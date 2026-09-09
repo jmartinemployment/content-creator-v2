@@ -8,6 +8,7 @@ import type {
   CanvasSection,
   OutlineSectionView,
   OutlineView,
+  AgentExecution,
   SectionEventPayload,
   SectionNode,
   ValidationReportView,
@@ -40,6 +41,8 @@ import { WorkspaceSection, canvasSectionsToPlain, type CanvasAction } from "@/ap
 import { WorkspaceTabs, type WorkspaceTab } from "@/app/creates/workspace-tabs";
 import {
   modelPolicyLabel,
+  type AgentHandoffProvenance,
+  type AgentTeamProvenance,
   type ApprovedStageModels,
   type ModelPolicySelection,
   type RagCitation,
@@ -81,6 +84,17 @@ function safeParse(json: string): unknown {
   } catch {
     return null;
   }
+}
+
+function upsertAgentExecution(
+  current: AgentExecution[],
+  execution: AgentExecution,
+): AgentExecution[] {
+  const index = current.findIndex((item) => item.attemptId === execution.attemptId);
+  if (index < 0) return [...current, execution];
+  const next = [...current];
+  next[index] = execution;
+  return next;
 }
 
 async function callCanvasAction(
@@ -173,6 +187,9 @@ type ParsedJobResult = {
   modelPolicy: ModelPolicySelection | null;
   approvedStageModels: ApprovedStageModels;
   linkedInCarousel: LinkedInCarouselArtifact | null;
+  agentExecutions: AgentExecution[];
+  agentTeam: AgentTeamProvenance | null;
+  handoffs: AgentHandoffProvenance[];
 };
 
 function parseJobResult(resultJson: string | null | undefined): ParsedJobResult {
@@ -185,6 +202,9 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
     modelPolicy: null,
     approvedStageModels: {},
     linkedInCarousel: null,
+    agentExecutions: [],
+    agentTeam: null,
+    handoffs: [],
   };
   if (!resultJson?.trim()) return empty;
   try {
@@ -198,6 +218,9 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       modelPolicy?: ModelPolicySelection | null;
       approvedStageModels?: ApprovedStageModels | null;
       linkedInCarousel?: LinkedInCarouselArtifact | null;
+      agentExecutions?: AgentExecution[] | null;
+      agentTeam?: AgentTeamProvenance | null;
+      handoffs?: AgentHandoffProvenance[] | null;
     };
     const html = parsed.sourceAttributionHtml?.trim();
     return {
@@ -210,6 +233,13 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       modelPolicy: parsed.modelPolicy ?? null,
       approvedStageModels: parsed.approvedStageModels ?? {},
       linkedInCarousel: parsed.linkedInCarousel ?? null,
+      agentExecutions: Array.isArray(parsed.agentExecutions) ? parsed.agentExecutions : [],
+      agentTeam: parsed.agentTeam ?? parsed.provenance?.agentTeam ?? null,
+      handoffs: Array.isArray(parsed.handoffs)
+        ? parsed.handoffs
+        : Array.isArray(parsed.provenance?.handoffs)
+          ? parsed.provenance.handoffs
+          : [],
     };
   } catch {
     return empty;
@@ -364,6 +394,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [retryReason, setRetryReason] = useState("availability");
   const [retryConfirmed, setRetryConfirmed] = useState(false);
   const [retryBusy, setRetryBusy] = useState(false);
+  const [agentExecutions, setAgentExecutions] = useState<AgentExecution[]>([]);
+  const [agentTeam, setAgentTeam] = useState<AgentTeamProvenance | null>(null);
+  const [handoffs, setHandoffs] = useState<AgentHandoffProvenance[]>([]);
 
   const lastSeqRef = useRef(0);
   const statusRef = useRef(status);
@@ -383,6 +416,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setEvidenceManifest(parsed.evidenceManifest);
     setModelPolicy(parsed.modelPolicy);
     setApprovedStageModels(parsed.approvedStageModels);
+    setAgentExecutions(parsed.agentExecutions);
+    setAgentTeam(parsed.agentTeam);
+    setHandoffs(parsed.handoffs);
     if (parsed.linkedInCarousel) {
       setCarouselResult({
         slug: parsed.linkedInCarousel.slug,
@@ -425,7 +461,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         usedFallbackStub: payload.usedFallbackStub,
         citations: payload.citations ?? [],
         provenance:
-          payload.provenance ??
+          (payload.provenance || payload.agentExecution
+            ? { ...(payload.provenance ?? {}), agentExecution: payload.agentExecution ?? payload.provenance?.agentExecution }
+            : null) ??
           (payload.modelUsed || payload.retrievalStrategy || payload.evidenceIds
             ? {
                 modelUsed: payload.modelUsed,
@@ -466,6 +504,36 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         case "JobStageChanged":
           setStage((payload as { stage?: string })?.stage ?? null);
           break;
+        case "AgentStageStarted":
+        case "AgentToolCompleted":
+        case "SkillActivated":
+        case "AgentStageCompleted": {
+          const execution = (payload as { execution?: AgentExecution })?.execution;
+          if (execution?.attemptId) {
+            setAgentExecutions((current) => upsertAgentExecution(current, execution));
+            setProvenance((current) => ({
+              ...(current ?? {}),
+              stage: execution.stage,
+              attemptId: execution.attemptId,
+              agentExecution: execution,
+            }));
+          }
+          break;
+        }
+        case "AgentTeamResolved": {
+          const team = (payload as { team?: AgentTeamProvenance }).team ?? payload as AgentTeamProvenance;
+          if (team?.snapshotDigest) setAgentTeam(team);
+          break;
+        }
+        case "AgentContributionCompleted":
+        case "AgentReviewCompleted":
+        case "AgentHandoff": {
+          const handoff = (payload as { handoff?: AgentHandoffProvenance }).handoff ?? payload as AgentHandoffProvenance;
+          if (handoff?.fromCatalogAgentId && handoff?.toCatalogAgentId) {
+            setHandoffs((current) => handoff.id && current.some((item) => item.id === handoff.id) ? current : [...current, handoff]);
+          }
+          break;
+        }
         case "BrandKitReady": {
           const kit = payload as BrandKitReadyView;
           setBrandKit(kit);
@@ -599,6 +667,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
       setEvidenceManifest(null);
       setModelPolicy(null);
       setApprovedStageModels({});
+      setAgentExecutions([]);
+      setAgentTeam(null);
+      setHandoffs([]);
     });
     void joinActiveJob(jobId, 0);
   }, [jobId, joinActiveJob]);
@@ -1162,6 +1233,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     approvedStageModels[retryStage.toLowerCase()] ??
     Object.values(approvedStageModels)[0] ??
     [];
+  const currentAgentExecution =
+    provenance?.agentExecution ?? agentExecutions[agentExecutions.length - 1] ?? null;
   const reviewCount =
     outstandingBlockers.length
     + (report?.overlapHits.length ?? 0)
@@ -1617,6 +1690,74 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             </p>
             {provenance?.modelPolicyVersion ? <p>Policy version: {provenance.modelPolicyVersion}</p> : null}
             {provenance?.promptVersion ? <p>Prompt version: {provenance.promptVersion}</p> : null}
+            {agentTeam ? (
+              <div className="mt-2 rounded-md border border-violet-200 bg-violet-50 p-2 text-violet-950">
+                <p className="font-semibold">Specialist team ({agentTeam.members.length})</p>
+                <p className="font-mono">Team snapshot {agentTeam.snapshotDigest}</p>
+                <ul className="mt-1 space-y-1">
+                  {agentTeam.members.map((member) => (
+                    <li key={member.agentVersionId}>
+                      <strong>{member.name} {member.version}</strong> · {member.role}{member.specialty ? ` · ${member.specialty}` : ""}
+                      <span className="block font-mono">Catalog {member.catalogAgentId} · version {member.agentVersionId} · {member.digest}</span>
+                      <span className="block">Activated skills: {member.activatedSkills?.map((skill) => `${skill.name} ${skill.version}`).join(", ") || "none recorded"}</span>
+                    </li>
+                  ))}
+                </ul>
+                {handoffs.length ? (
+                  <ol className="mt-2 border-t border-violet-200 pt-2">
+                    {handoffs.map((handoff, index) => (
+                      <li key={handoff.id ?? `${handoff.fromCatalogAgentId}-${handoff.toCatalogAgentId}-${index}`}>
+                        <span className="capitalize">{handoff.kind}</span>: {handoff.fromCatalogAgentId} → {handoff.toCatalogAgentId}{handoff.status ? ` · ${handoff.status}` : ""}
+                        {handoff.summary ? <span className="block">{handoff.summary}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+              </div>
+            ) : null}
+            {currentAgentExecution ? (
+              <div className={`mt-2 rounded-md border p-2 ${
+                currentAgentExecution.budget.exhausted || (currentAgentExecution.stopReason && currentAgentExecution.stopReason !== "completed")
+                  ? "border-amber-300 bg-amber-50 text-amber-950"
+                  : "border-[var(--cc-line)] bg-slate-50"
+              }`}>
+                <p>
+                  Agent: <strong>{currentAgentExecution.catalogAgentId || currentAgentExecution.agentId}</strong> {currentAgentExecution.agentVersion} ·{" "}
+                  {currentAgentExecution.status}
+                </p>
+                <p className="font-mono">Version {currentAgentExecution.agentVersionId || "legacy/unavailable"} · digest {currentAgentExecution.agentDigest || "legacy/unavailable"}</p>
+                <p className="font-mono">Stage execution {currentAgentExecution.stageExecutionId || currentAgentExecution.attemptId}</p>
+                <p>Protocol: {currentAgentExecution.protocolVersion} · workflow {currentAgentExecution.workflowVersion}</p>
+                <p className="font-mono">Attempt {currentAgentExecution.attemptId}{currentAgentExecution.replacedAttemptId ? ` replaces ${currentAgentExecution.replacedAttemptId}` : ""}</p>
+                <p className="font-mono">Immutable snapshot {currentAgentExecution.snapshotDigest}</p>
+                <p>
+                  Activated skills: {currentAgentExecution.activatedSkills.map((skill) => `${skill.name} ${skill.version}`).join(", ") || "none"}
+                </p>
+                <p>
+                  Tools: {currentAgentExecution.tools.map((tool) => `${tool.toolId} ×${tool.callCount} (${tool.errorCount} errors)`).join(", ") || "none"}
+                </p>
+                <p>
+                  Budget: {currentAgentExecution.budget.turnsUsed}/{currentAgentExecution.budget.maxTurns} turns ·{" "}
+                  {currentAgentExecution.budget.toolCallsUsed}/{currentAgentExecution.budget.maxToolCalls} tools ·{" "}
+                  {currentAgentExecution.budget.tokensUsed}/{currentAgentExecution.budget.maxTokens} tokens
+                </p>
+                {currentAgentExecution.stopReason ? <p className="font-semibold">Stop reason: {currentAgentExecution.stopReason.replaceAll("_", " ")}</p> : null}
+                {currentAgentExecution.budget.exhausted ? <p className="font-semibold">Budget exhausted: {currentAgentExecution.budget.exhausted.replaceAll("_", " ")}</p> : null}
+              </div>
+            ) : null}
+            {agentExecutions.length > 1 ? (
+              <details className="mt-2">
+                <summary className="cursor-pointer">Immutable attempt lineage ({agentExecutions.length}) / retries</summary>
+                <ol className="mt-1 list-decimal pl-4">
+                  {agentExecutions.map((execution) => (
+                    <li key={execution.attemptId}>
+                      {execution.stage} · <span className="font-mono">{execution.attemptId}</span> · {execution.status}
+                      {execution.stopReason ? ` · ${execution.stopReason.replaceAll("_", " ")}` : ""}
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            ) : null}
             {evidenceManifest ? (
               <>
                 <p>
