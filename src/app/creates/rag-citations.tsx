@@ -26,6 +26,16 @@ export function SectionCitations({ citations }: { citations: RagCitation[] }) {
               {citation.verified === false ? "verification warning" : "verified"}
               {citation.crawlType ? ` · ${citation.crawlType}` : ""}
             </span>
+            {citation.assetVersionId || citation.coordinates ? (
+              <span className="mt-1 block text-[var(--cc-muted)]">
+                {citation.assetVersionId ? `Exact revision ${citation.assetVersionId}` : "Exact source coordinates"}
+                {citation.coordinates?.page ? ` · page ${citation.coordinates.page}` : ""}
+                {citation.coordinates?.slide ? ` · slide ${citation.coordinates.slide}` : ""}
+                {citation.coordinates?.sheet ? ` · ${citation.coordinates.sheet}${citation.coordinates.cellRange ? ` ${citation.coordinates.cellRange}` : ""}` : ""}
+                {typeof citation.coordinates?.timeStartSeconds === "number" ? ` · ${citation.coordinates.timeStartSeconds}s–${citation.coordinates.timeEndSeconds ?? "?"}s` : ""}
+                {citation.coordinates?.region ? ` · region ${citation.coordinates.region}` : ""}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>

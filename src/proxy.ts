@@ -64,6 +64,7 @@ export const config = {
     "/creates/:path*",
     "/agents/:path*",
     "/skills/:path*",
+    "/brand-sources/:path*",
     "/legacy/:path*",
     "/rag",
     "/rag/:path*",

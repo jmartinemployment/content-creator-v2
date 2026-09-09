@@ -39,6 +39,7 @@ import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 import { SectionCitations } from "@/app/creates/rag-citations";
 import { WorkspaceSection, canvasSectionsToPlain, type CanvasAction } from "@/app/creates/workspace-section";
 import { WorkspaceTabs, type WorkspaceTab } from "@/app/creates/workspace-tabs";
+import { ContextManifestDetails } from "@/app/creates/context-manifest-details";
 import {
   modelPolicyLabel,
   type AgentHandoffProvenance,
@@ -1773,6 +1774,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 ) : null}
               </>
             ) : null}
+            <ContextManifestDetails createId={createId} jobId={jobId} jobStatus={status} />
           </div>
             <details className="mt-3">
               <summary className="cursor-pointer">Event log ({log.length})</summary>

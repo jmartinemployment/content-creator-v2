@@ -56,6 +56,12 @@ import {
   type AgentCatalog,
   type ResolvedAgentTeam,
 } from "@/app/agents/agent-contract";
+import {
+  EMPTY_CONTEXT_SELECTION,
+  type ContextSelectionRequest,
+  type ResolvedContextPreview,
+} from "@/app/brand-sources/context-contract";
+import { ContextSelector } from "./context-selector";
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -124,6 +130,7 @@ type NewCreateDraft = {
   modelPolicy: ModelPolicySelection;
   selectedAgentIds: string[];
   pendingCreateId: string | null;
+  contextSelection: ContextSelectionRequest;
 };
 
 function readNewCreateDraft(): NewCreateDraft | null {
@@ -184,6 +191,22 @@ function readNewCreateDraft(): NewCreateDraft | null {
         ? parsed.selectedAgentIds.filter((value): value is string => typeof value === "string")
         : [],
       pendingCreateId: typeof parsed.pendingCreateId === "string" ? parsed.pendingCreateId : null,
+      contextSelection: {
+        ...EMPTY_CONTEXT_SELECTION,
+        ...(parsed.contextSelection && typeof parsed.contextSelection === "object"
+          ? parsed.contextSelection
+          : {}),
+        knowledgeAssetVersionIds: Array.isArray(parsed.contextSelection?.knowledgeAssetVersionIds)
+          ? parsed.contextSelection.knowledgeAssetVersionIds.filter((id): id is string => typeof id === "string")
+          : [],
+        runAttachmentIds: Array.isArray(parsed.contextSelection?.runAttachmentIds)
+          ? parsed.contextSelection.runAttachmentIds.filter((id): id is string => typeof id === "string")
+          : [],
+        productSelections: Array.isArray(parsed.contextSelection?.productSelections)
+          ? parsed.contextSelection.productSelections.filter((selection) =>
+              Boolean(selection && typeof selection.productVersionId === "string"))
+          : [],
+      },
     };
   } catch {
     return null;
@@ -356,6 +379,9 @@ export function NewCreateForm({
     version: "content-model-policy.v1",
     preset: "best-quality",
   });
+  const [contextSelection, setContextSelection] = useState<ContextSelectionRequest>(EMPTY_CONTEXT_SELECTION);
+  const [contextPreview, setContextPreview] = useState<ResolvedContextPreview | null>(null);
+  const [contextUploadProcessing, setContextUploadProcessing] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -373,7 +399,7 @@ export function NewCreateForm({
   const [resolvedTeam, setResolvedTeam] = useState<ResolvedAgentTeam | null>(null);
   const [resolvedTeamLoading, setResolvedTeamLoading] = useState(false);
   const [resolvedTeamError, setResolvedTeamError] = useState<string | null>(null);
-  const restoredRef = useRef(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -502,7 +528,7 @@ export function NewCreateForm({
 
   useEffect(() => {
     // Wait until session draft hydrate finishes — otherwise the empty initial state clears a saved draft.
-    if (!restoredRef.current) return;
+    if (!draftHydrated) return;
     if (step === "source" && !siteUrlInput.trim() && !projectSiteCrawlRunId) {
       clearNewCreateDraft();
       return;
@@ -527,6 +553,7 @@ export function NewCreateForm({
       modelPolicy,
       selectedAgentIds,
       pendingCreateId,
+      contextSelection,
     });
   }, [
     step,
@@ -548,6 +575,8 @@ export function NewCreateForm({
     modelPolicy,
     selectedAgentIds,
     pendingCreateId,
+    contextSelection,
+    draftHydrated,
   ]);
 
   const loadSiteHierarchyFromRun = useCallback(async (runId: string) => {
@@ -759,10 +788,11 @@ export function NewCreateForm({
   }
 
   useEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
     const draft = readNewCreateDraft();
-    if (!draft) return;
+    if (!draft) {
+      void Promise.resolve().then(() => setDraftHydrated(true));
+      return;
+    }
 
     const resolvedUrl = draft.siteUrl || normalizeSiteUrl(draft.siteUrlInput) || "";
     const resumeStep = draft.step;
@@ -792,6 +822,8 @@ export function NewCreateForm({
       setModelPolicy(draft.modelPolicy);
       setSelectedAgentIds(draft.selectedAgentIds);
       setPendingCreateId(draft.pendingCreateId);
+      setContextSelection(draft.contextSelection);
+      setDraftHydrated(true);
 
       if (!runId || !resolvedUrl) {
         setStep("source");
@@ -942,6 +974,10 @@ export function NewCreateForm({
     e.preventDefault();
     setError(null);
 
+    if (contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0) {
+      setError("Resolve context blockers and wait for uploads before creating content.");
+      return;
+    }
     if (!projectSiteCrawlRunId || !section || !section.relatedPages.length) {
       setError("Resolve a project site URL with crawled pages first.");
       return;
@@ -970,6 +1006,7 @@ export function NewCreateForm({
           siteUrl,
           siteSection: siteSectionForApi(section),
           selectedAgentIds,
+          contextSelection,
         }),
       });
       if (!createRes.ok) {
@@ -1031,6 +1068,10 @@ export function NewCreateForm({
       setError("Select and resolve exactly one specialist producer before continuing.");
       return;
     }
+    if (contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0) {
+      setError("Resolve context blockers and wait for uploads before starting generation.");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -1046,6 +1087,7 @@ export function NewCreateForm({
           partnerToolsConfirmed: true,
           modelPolicy,
           selectedAgentIds,
+          contextSelection,
         }),
       });
       if (!genRes.ok) {
@@ -1547,6 +1589,15 @@ export function NewCreateForm({
               </div>
             )}
 
+            <ContextSelector
+              createId={pendingCreateId}
+              value={contextSelection}
+              selectedAgentIds={selectedAgentIds}
+              onChange={setContextSelection}
+              onPreviewChange={setContextPreview}
+              onProcessingChange={setContextUploadProcessing}
+            />
+
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
                   Advanced run settings · Quality: {modelPolicy.preset === "best-quality" ? "Best available" : "Custom"}
@@ -1659,7 +1710,7 @@ export function NewCreateForm({
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"
-                  disabled={busy || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -1669,7 +1720,7 @@ export function NewCreateForm({
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || resolvedTeamLoading || !resolvedTeam || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />

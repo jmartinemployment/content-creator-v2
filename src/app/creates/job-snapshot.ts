@@ -9,6 +9,10 @@ export type JobSnapshot = {
   updatedAtUtc?: string | null;
   tabLabel?: string | null;
   resultJson?: string | null;
+  contextManifestId?: string | null;
+  contextManifestDigest?: string | null;
+  retryOfJobId?: string | null;
+  refreshedFromJobId?: string | null;
 };
 
 function parsePayload(payloadJson: string): Record<string, unknown> {

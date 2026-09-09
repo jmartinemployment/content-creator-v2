@@ -21,10 +21,24 @@ async function proxy(
   }
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const contentType = request.headers.get("content-type");
+  const isUploadControlRoute = path.includes("uploads");
+  if (hasBody && isUploadControlRoute && !contentType?.toLowerCase().includes("application/json")) {
+    return Response.json(
+      { error: "File bytes must be uploaded directly to the issued storage URL." },
+      { status: 415 },
+    );
+  }
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (hasBody && Number.isFinite(contentLength) && contentLength > 1_048_576) {
+    return Response.json(
+      { error: "The BFF accepts metadata only; upload file bytes directly to storage." },
+      { status: 413 },
+    );
+  }
   const bufferedBody = hasBody ? await request.arrayBuffer() : undefined;
 
   const headers = new Headers();
-  const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   headers.set("Authorization", `Bearer ${token}`);
 

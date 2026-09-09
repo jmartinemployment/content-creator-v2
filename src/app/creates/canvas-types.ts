@@ -17,6 +17,7 @@ import type {
   RagProvenance,
   ResearchEvidenceManifest,
 } from "./rag-contract";
+import type { RunContextManifest } from "@/app/brand-sources/context-contract";
 
 export type {
   ActivatedSkillProvenance,
@@ -24,6 +25,7 @@ export type {
   AgentExecution,
   AgentStopReason,
   AgentToolSummary,
+  RunContextManifest,
 };
 
 export type ContentRun = {

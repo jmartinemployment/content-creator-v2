@@ -201,7 +201,8 @@ test("guided create flow reaches approved, validated canvas with citations and p
 
   await page.getByLabel("Working title").fill("Reliable Content Operations");
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "+ Evidence Engine" }).click();
+  await page.getByLabel("Key concepts to emphasize").fill("Evidence Engine");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByLabel("Research readiness")).toContainText("Research is ready");
@@ -219,7 +220,7 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await expect(page.getByRole("radio", { name: /Best available/ })).toBeChecked();
   await page.getByRole("button", { name: "Create content" }).click();
   await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
-  await expect(page.getByText("Evidence Engine")).toBeVisible();
+  await expect(page.getByText("Evidence Engine", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Confirm partners & create" }).click();
 
   await expect(page).toHaveURL(/\/creates\/create-1\?jobId=job-1/);

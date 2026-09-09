@@ -36,6 +36,10 @@ let adminAgent;
 let adminAgentHistory;
 let agentTestRuns;
 let agentTestTimers;
+let contextCatalogs;
+let ingestionEvents;
+let contextUploads;
+let manifests;
 
 function reset() {
   scenario = { ragAvailable: true };
@@ -47,6 +51,46 @@ function reset() {
   agentTestTimers = [];
   agentTestRuns = new Map();
   adminAgentHistory = [];
+  contextUploads = new Map();
+  ingestionEvents = [{
+    id: "ingestion-event-1",
+    jobId: "ingestion-1",
+    seq: 1,
+    state: "ready",
+    message: "Editorial handbook indexed",
+    progressPercent: 100,
+    createdAtUtc: "2026-09-09T10:00:00Z",
+    assetId: "knowledge-1",
+  }];
+  const audit = [{ id: "audit-context-1", action: "approved", actor: "owner@example.test", atUtc: "2026-09-09T09:00:00Z" }];
+  const provenance = {
+    sourceLabel: "Editorial handbook.txt",
+    sourceTimestampUtc: "2026-09-08T15:00:00Z",
+    parser: "plain-text",
+    parserVersion: "1.0.0",
+    contentDigest: `sha256:${"a".repeat(64)}`,
+  };
+  const item = (id, kind, name, versionId, extra = {}) => ({
+    id, kind, name, description: `${name} governed context`, tags: [kind],
+    currentVersionId: versionId,
+    versions: [{
+      id: versionId, versionNumber: 1, lifecycle: "approved",
+      digest: `sha256:${id.at(-1).repeat(64)}`, createdAtUtc: "2026-09-09T09:00:00Z",
+      freshness: "fresh", ingestionState: kind === "knowledge" ? "ready" : null,
+      extractionState: kind === "knowledge" ? "verified" : null,
+      indexState: kind === "knowledge" ? "ready" : null,
+      provenance: kind === "knowledge" ? provenance : { sourceLabel: "Owner authored" },
+      findings: [], audit, ...extra,
+    }],
+  });
+  contextCatalogs = {
+    knowledge: [item("knowledge-1", "knowledge", "Editorial Handbook", "knowledge-version-1")],
+    "brand-kits": [item("brand-1", "brand-kit", "Example Systems", "brand-version-1")],
+    audiences: [item("audience-1", "audience", "Technical Leaders", "audience-version-1")],
+    "style-guides": [item("style-1", "style-guide", "Clear Technical Style", "style-version-1")],
+    products: [item("product-1", "product", "Evidence Engine", "product-version-1")],
+  };
+  manifests = new Map();
   adminSkill = {
     id: "community-style",
     versionId: "skill-version-1",
@@ -133,7 +177,26 @@ function reset() {
     contentType: "pillar",
     tabLabel: "Pillar",
     resultJson: null,
+    contextManifestId: "manifest-1",
+    contextManifestDigest: `sha256:${"f".repeat(64)}`,
   };
+  manifests.set("job-1", {
+    manifestId: "manifest-1",
+    digest: `sha256:${"f".repeat(64)}`,
+    schemaVersion: "run-context-manifest.v1",
+    signingKeyId: "context-key-2026-09",
+    resolvedAtUtc: "2026-09-09T10:05:00Z",
+    entries: [
+      {
+        kind: "knowledge", stableId: "knowledge-1", versionId: "knowledge-version-1",
+        name: "Editorial Handbook", versionNumber: 1, lifecycle: "approved",
+        digest: `sha256:${"a".repeat(64)}`, freshness: "fresh", extractionState: "verified",
+        indexState: "ready", temporary: false, provenance,
+      },
+    ],
+    warnings: [],
+    validationFindings: [],
+  });
   sockets = sockets || new Set();
 }
 reset();
@@ -142,7 +205,7 @@ function cors(headers = {}) {
   return {
     "access-control-allow-origin": "http://127.0.0.1:3004",
     "access-control-allow-credentials": "true",
-    "access-control-allow-headers": "authorization,content-type,x-requested-with,x-signalr-user-agent",
+    "access-control-allow-headers": "authorization,content-type,x-requested-with,x-signalr-user-agent,x-upload-token",
     "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     ...headers,
   };
@@ -471,6 +534,7 @@ const server = http.createServer(async (req, res) => {
     const update = JSON.parse((await readBody(req)) || "{}");
     scenario = { ...scenario, ...update };
     if (typeof update.adminAgentStatus === "string") adminAgent.status = update.adminAgentStatus;
+    if (typeof update.jobStatus === "string") job.status = update.jobStatus;
     return send(res, 200, scenario);
   }
   if (url.pathname === "/__requests") return send(res, 200, requests);
@@ -535,6 +599,140 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/geek-content-creator-v2/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
+  }
+  const catalogName = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|products)$/)?.[1];
+  if (catalogName && req.method === "GET") {
+    return send(res, 200, { items: contextCatalogs[catalogName] });
+  }
+  if (catalogName && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const stableId = `${catalogName}-${contextCatalogs[catalogName].length + 1}`;
+    const versionId = `${stableId}-version-1`;
+    contextCatalogs[catalogName].push({
+      id: stableId,
+      kind: catalogName,
+      name: body.name,
+      description: body.description,
+      currentVersionId: versionId,
+      versions: [{
+        id: versionId,
+        versionNumber: 1,
+        lifecycle: "draft",
+        digest: `sha256:${"d".repeat(64)}`,
+        createdAtUtc: new Date().toISOString(),
+        findings: [],
+        audit: [],
+      }],
+    });
+    return send(res, 201, { id: stableId, versionId });
+  }
+  const catalogAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|products)\/(?:versions\/)?([^/]+)\/(review|approve|deprecate|revoke|refresh)$/);
+  if (catalogAction && req.method === "POST") {
+    const [, collection, stableOrVersionId, action] = catalogAction;
+    const target = contextCatalogs[collection].find((entry) =>
+      entry.id === stableOrVersionId || entry.versions.some((version) => version.id === stableOrVersionId),
+    );
+    if (!target) return send(res, 404, { error: "Context record not found" });
+    const body = JSON.parse(rawBody || "{}");
+    const version = target.versions.find((entry) => entry.id === body.versionId) || target.versions[0];
+    const next = { review: "in_review", approve: "approved", deprecate: "deprecated", revoke: "revoked", refresh: version.lifecycle }[action];
+    version.lifecycle = next;
+    version.audit.push({ id: crypto.randomUUID(), action, actor: "owner@example.test", atUtc: new Date().toISOString() });
+    return send(res, 200, { versionId: version.id, lifecycle: next });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/context/ingestion/events" && req.method === "GET") {
+    return send(res, 200, { events: ingestionEvents });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/context/resolve" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const selection = body.selection || {};
+    const condition = scenario.contextCondition || "ready";
+    const warnings = condition === "stale" ? [{ id: "warning-stale", severity: "warning", code: "stale", message: "Editorial Handbook is stale; verify before use." }] : [];
+    const blockingFindings = condition === "revoked"
+      ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
+      : condition === "permission"
+        ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
+        : condition === "processing"
+          ? [{ id: "blocked-processing", severity: "blocking", code: "not_ready", message: "A selected attachment is still processing." }]
+          : [];
+    const selectedEntries = [
+      ...(selection.knowledgeAssetVersionIds || []).map(() => ({
+        kind: "knowledge", stableId: "knowledge-1", versionId: "knowledge-version-1",
+        name: "Editorial Handbook", versionNumber: 1, lifecycle: condition === "revoked" ? "revoked" : "approved",
+        digest: `sha256:${"a".repeat(64)}`, freshness: condition === "stale" ? "stale" : "fresh",
+        extractionState: "verified", indexState: "ready", temporary: false,
+      })),
+      ...(selection.runAttachmentIds || []).map((versionId) => ({
+        kind: "run-attachment", versionId, name: "Run attachment", versionNumber: 1,
+        lifecycle: "finalized", freshness: "fresh", temporary: true,
+      })),
+    ];
+    return send(res, 200, {
+      effectiveEntries: selectedEntries,
+      inheritedEntries: [{
+        kind: "brand-kit", stableId: "brand-1", versionId: selection.brandKitVersionId || "brand-version-1",
+        name: "Example Systems", versionNumber: 1, lifecycle: "approved", inherited: !selection.brandKitVersionId,
+      }],
+      warnings,
+      blockingFindings,
+      freshness: selectedEntries.map((entry) => ({ versionId: entry.versionId, status: entry.freshness })),
+      estimatedContextSize: 4280,
+      agentCompatibility: (body.selectedAgentIds || []).map((agentId) => ({ agentId, compatible: condition !== "permission" })),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/knowledge/uploads" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const uploadId = `upload-${contextUploads.size + 1}`;
+    contextUploads.set(uploadId, { scope: "knowledge", metadata: body, bytes: null });
+    return send(res, 200, {
+      uploadId,
+      uploadUrl: `http://127.0.0.1:${port}/storage/${uploadId}`,
+      method: "PUT",
+      headers: { "x-upload-token": uploadId },
+      expiresAtUtc: "2026-09-09T11:00:00Z",
+      maxBytes: 10_000_000,
+    });
+  }
+  const attachmentIssue = url.pathname.match(/^\/api\/geek-content-creator-v2\/creates\/([^/]+)\/attachments\/uploads$/);
+  if (attachmentIssue && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const uploadId = `attachment-upload-${contextUploads.size + 1}`;
+    contextUploads.set(uploadId, { scope: "attachment", createId: attachmentIssue[1], metadata: body, bytes: null });
+    return send(res, 200, {
+      uploadId,
+      uploadUrl: `http://127.0.0.1:${port}/storage/${uploadId}`,
+      method: "PUT",
+      headers: { "x-upload-token": uploadId },
+      expiresAtUtc: "2026-09-09T11:00:00Z",
+      maxBytes: 10_000_000,
+    });
+  }
+  const completeUpload = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge\/uploads|creates\/[^/]+\/attachments\/uploads)\/([^/]+)\/complete$/);
+  if (completeUpload && req.method === "POST") {
+    const upload = contextUploads.get(completeUpload[2]);
+    if (!upload?.bytes) return send(res, 409, { error: "Object bytes were not uploaded directly." });
+    const isAttachment = upload.scope === "attachment";
+    ingestionEvents.push({
+      id: crypto.randomUUID(), jobId: `ingestion-${ingestionEvents.length + 1}`,
+      seq: ingestionEvents.length + 1, state: "queued", message: `${upload.metadata.fileName} queued`,
+      progressPercent: 0, createdAtUtc: new Date().toISOString(),
+    });
+    return send(res, 202, {
+      uploadId: completeUpload[2],
+      attachmentId: isAttachment ? `attachment-${contextUploads.size}` : null,
+      assetId: isAttachment ? null : `knowledge-${contextCatalogs.knowledge.length + 1}`,
+      versionId: isAttachment ? null : `knowledge-version-${contextCatalogs.knowledge.length + 1}`,
+      ingestionJobId: ingestionEvents.at(-1).jobId,
+      state: scenario.contextCondition === "processing" ? "extracting" : "queued",
+    });
+  }
+  const directStorage = url.pathname.match(/^\/storage\/([^/]+)$/);
+  if (directStorage && req.method === "PUT") {
+    const upload = contextUploads.get(directStorage[1]);
+    if (!upload || req.headers["x-upload-token"] !== directStorage[1]) return send(res, 403, "invalid upload grant");
+    upload.bytes = Buffer.from(rawBody);
+    requests.push({ method: req.method, path: url.pathname, directStorage: true, byteLength: upload.bytes.length });
+    return send(res, 200, "", { etag: `"${directStorage[1]}"` });
   }
   if (url.pathname === "/api/rag/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
@@ -794,6 +992,9 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/latest") {
     return send(res, 200, { runId: "crawl-1", status: "complete" });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/crawl-1") {
+    return send(res, 200, { runId: "crawl-1", status: "complete" });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/project-site/runs/crawl-1/pages") {
     return send(res, 200, {
       pages: [{ id: "page-1", url: "https://example.test/reliable-content", title: "Reliable content operations", markdown: fixtureMarkdown }],
@@ -822,7 +1023,40 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { id: "create-1", title: "Reliable Content Operations", contentType: "pillar", siteUrl: "https://example.test" });
   }
   if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/jobs") return send(res, 200, [job]);
-  if (url.pathname === "/api/geek-content-creator-v2/jobs/job-1" && req.method === "GET") return send(res, 200, job);
+  if (url.pathname === `/api/geek-content-creator-v2/jobs/${job.id}` && req.method === "GET") return send(res, 200, job);
+  const manifestMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/jobs\/([^/]+)\/context-manifest$/);
+  if (manifestMatch && req.method === "GET") {
+    const manifest = manifests.get(manifestMatch[1]);
+    return manifest ? send(res, 200, manifest) : send(res, 404, { error: "Context manifest not found" });
+  }
+  const retryContext = url.pathname.match(/^\/api\/geek-content-creator-v2\/jobs\/([^/]+)\/retry$/);
+  if (retryContext && req.method === "POST") {
+    const manifest = manifests.get(retryContext[1]);
+    if (!manifest) return send(res, 404, { error: "Context manifest not found" });
+    const nextId = "job-retry-1";
+    manifests.set(nextId, { ...structuredClone(manifest), originalJobId: retryContext[1] });
+    job = { ...job, id: nextId, status: "pending", retryOfJobId: retryContext[1], contextManifestId: manifest.manifestId };
+    return send(res, 202, { jobId: nextId, contextManifestId: manifest.manifestId });
+  }
+  const refreshContext = url.pathname.match(/^\/api\/geek-content-creator-v2\/jobs\/([^/]+)\/refresh-context-and-rerun$/);
+  if (refreshContext && req.method === "POST") {
+    const prior = manifests.get(refreshContext[1]);
+    if (!prior) return send(res, 404, { error: "Context manifest not found" });
+    const nextId = "job-refresh-1";
+    const nextManifest = {
+      ...structuredClone(prior),
+      manifestId: "manifest-2",
+      digest: `sha256:${"e".repeat(64)}`,
+      resolvedAtUtc: "2026-09-09T10:10:00Z",
+      replacesJobId: refreshContext[1],
+    };
+    manifests.set(nextId, nextManifest);
+    job = {
+      ...job, id: nextId, status: "pending", refreshedFromJobId: refreshContext[1],
+      contextManifestId: nextManifest.manifestId, contextManifestDigest: nextManifest.digest,
+    };
+    return send(res, 202, { jobId: nextId, contextManifestId: nextManifest.manifestId });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/ai-visibility") {
     return send(res, 200, { ready: false, createId: "create-1", message: "Complete the draft first." });
   }
@@ -1044,6 +1278,12 @@ wss.on("connection", (socket) => {
         const lastSeq = Number(message.arguments?.[1] || 0);
         for (const evt of history.filter((item) => item.seq > lastSeq)) {
           socket.send(hubMessage({ type: 1, target: "JobEvent", arguments: [evt] }));
+        }
+        socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
+      } else if (message.type === 1 && message.target === "JoinContextIngestion") {
+        const lastSeq = Number(message.arguments?.[0] || 0);
+        for (const ingestionEvent of ingestionEvents.filter((item) => item.seq > lastSeq)) {
+          socket.send(hubMessage({ type: 1, target: "ContextIngestionEvent", arguments: [ingestionEvent] }));
         }
         socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
       } else if (message.type === 1 && message.target === "JoinAgentTest") {

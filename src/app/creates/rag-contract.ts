@@ -153,12 +153,25 @@ export type RagProvenance = {
 
 export type RagCitation = {
   pageId?: string | null;
+  assetId?: string | null;
+  assetVersionId?: string | null;
+  resourceId?: string | null;
+  sourceDigest?: string | null;
   url: string;
   title?: string | null;
   sectionTitle?: string | null;
   quote: string;
   crawlType?: string | null;
   verified?: boolean;
+  coordinates?: {
+    page?: number | null;
+    slide?: number | null;
+    sheet?: string | null;
+    cellRange?: string | null;
+    timeStartSeconds?: number | null;
+    timeEndSeconds?: number | null;
+    region?: string | null;
+  } | null;
 };
 
 export type ResearchEvidenceManifest = {

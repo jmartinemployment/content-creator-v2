@@ -9,11 +9,11 @@ const primaryNav = [
   { href: "/creates", label: "Content", glyph: "▤" },
   { href: "/agents", label: "Agents", glyph: "◎" },
   { href: "/skills", label: "Skills", glyph: "✦" },
+  { href: "/brand-sources", label: "Brand & Sources", glyph: "◉" },
 ] as const;
 
 const futureNav = [
   { label: "Assets", glyph: "◇" },
-  { label: "Brand & Sources", glyph: "◉" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -102,7 +102,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[var(--cc-line)] bg-white px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-[var(--cc-line)] bg-white px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 md:hidden"
         aria-label="Mobile navigation"
       >
         {primaryNav.map((item) => (
