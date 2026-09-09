@@ -2117,12 +2117,26 @@ const server = http.createServer(async (req, res) => {
               id: "artifact-version-4",
               payloadJson: JSON.stringify({
                 artifactType: "claimLedger.v1",
-                claims: [{
-                  claimText: "Trusted by 500 customer teams.",
-                  claimType: "quantifiableFact",
-                  verificationStatus: "supported",
-                }],
-                warnings: ["Claims never invent statistics."],
+                claims: [
+                  {
+                    claimId: "claim-500",
+                    claimText: "Trusted by 500 customer teams.",
+                    claimType: "quantifiableFact",
+                    verificationStatus: "supported",
+                    contradictionState: "possible",
+                  },
+                  {
+                    claimId: "claim-50",
+                    claimText: "Trusted by 50 customer teams.",
+                    claimType: "quantifiableFact",
+                    verificationStatus: "supported",
+                    contradictionState: "possible",
+                  },
+                ],
+                warnings: [
+                  "Claims never invent statistics.",
+                  "Possible contradiction (conflicting quantities) between claims claim-500 and claim-50.",
+                ],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",

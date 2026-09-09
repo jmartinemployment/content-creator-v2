@@ -57,13 +57,15 @@ test("citable claims content agent never invents unsupported statistics", async 
   await expect(page.getByRole("heading", { name: "Citable Claims" })).toBeVisible();
   await expect(page.getByLabel("Task agent input form")).toBeVisible();
   await page.getByLabel("Source content").fill(
-    "# Proof\n\nTrusted by 500 customer teams across regulated industries.",
+    "# Proof\n\nTrusted by 500 customer teams across regulated industries.\n\nTrusted by 50 customer teams across regulated industries.",
   );
   await page.getByLabel("Vague statements to rewrite").fill("Our product is trusted by many teams");
   await page.getByRole("button", { name: "Run Citable Claims" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="claim-ledger"]')).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "Trusted by 500 customer teams." })).toBeVisible();
+  await expect(page.getByTestId("contradiction-summary")).toContainText("Possible contradictions");
+  await expect(page.locator('[data-contradiction="possible"]').first()).toBeVisible();
   await expect(page.getByText(/claimLedger\.v1 · valid/)).toBeVisible();
 });
 

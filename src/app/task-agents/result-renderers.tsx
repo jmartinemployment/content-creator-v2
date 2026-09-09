@@ -58,20 +58,77 @@ function FaqListView({ payload }: { payload: ArtifactPayload }) {
 
 function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
   const claims = Array.isArray(payload.claims) ? payload.claims : [];
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const contradictionWarnings = warnings.filter((warning) =>
+    warning.toLowerCase().includes("possible contradiction"),
+  );
+  const hasPossible = claims.some((claim) => {
+    const row = claim as { contradictionState?: string };
+    return row.contradictionState === "possible";
+  });
+
   return (
-    <ul className="mt-4 space-y-4">
-      {claims.map((claim) => {
-        const row = claim as { claimText?: string; claimType?: string; verificationStatus?: string };
-        return (
-          <li key={row.claimText} className="border-l-2 border-[var(--cc-line)] pl-3">
-            <p className="font-semibold text-[var(--cc-ink)]">{row.claimText}</p>
-            <p className="mt-1 text-xs text-[var(--cc-muted)]">
-              {[row.claimType, row.verificationStatus].filter(Boolean).join(" · ")}
-            </p>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="mt-4">
+      {hasPossible || contradictionWarnings.length ? (
+        <aside
+          aria-label="Possible contradictions"
+          className="mb-5 border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3"
+          data-testid="contradiction-summary"
+        >
+          <p className="text-sm font-semibold text-amber-950">Possible contradictions</p>
+          <p className="mt-1 max-w-prose text-xs leading-relaxed text-amber-950/80">
+            These claims share a subject but disagree on quantity or polarity. Review before citing.
+          </p>
+          {contradictionWarnings.length ? (
+            <ul className="mt-2 space-y-1 text-xs text-amber-950/90">
+              {contradictionWarnings.map((warning) => (
+                <li key={warning} className="font-mono text-[0.7rem] leading-relaxed">
+                  {warning}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </aside>
+      ) : null}
+      <ul className="space-y-4">
+        {claims.map((claim) => {
+          const row = claim as {
+            claimId?: string;
+            claimText?: string;
+            claimType?: string;
+            verificationStatus?: string;
+            contradictionState?: string;
+          };
+          const contradiction = row.contradictionState || "none";
+          const border =
+            contradiction === "possible"
+              ? "border-amber-600"
+              : contradiction === "unknown"
+                ? "border-[var(--cc-line)]"
+                : "border-[var(--cc-accent)]/40";
+          return (
+            <li
+              key={row.claimId || row.claimText}
+              className={`border-l-2 ${border} pl-3`}
+              data-contradiction={contradiction}
+            >
+              <p className="font-semibold text-[var(--cc-ink)]">{row.claimText}</p>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                {[row.claimType, row.verificationStatus].filter(Boolean).join(" · ")}
+              </p>
+              {contradiction === "possible" ? (
+                <p className="mt-1 text-xs font-medium text-amber-900">Possible contradiction</p>
+              ) : null}
+              {contradiction === "unknown" ? (
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">Contradiction not assessed</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
