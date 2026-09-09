@@ -1111,9 +1111,6 @@ export function NewCreateForm({
 
   const currentStep = step === "analyzing" ? "source" : step;
   const currentIndex = WIZARD_STEPS.findIndex((item) => item.key === currentStep);
-  const availableConcepts = (ragStatus?.entitySeeds ?? []).filter(
-    (entity) => !targetEntities.includes(entity),
-  );
   const selectedContentTypes = [
     primaryDraft,
     ...alsoDraftOptionsFor(primaryDraft)
@@ -1363,23 +1360,6 @@ export function NewCreateForm({
                       {concept} ×
                     </button>
                   ))}
-                </div>
-              ) : null}
-              {availableConcepts.length > 0 ? (
-                <div>
-                  <p className="mb-2 text-xs text-[var(--cc-muted)]">Suggestions from your sources</p>
-                  <div className="flex flex-wrap gap-2">
-                    {availableConcepts.slice(0, 8).map((entity) => (
-                      <button
-                        type="button"
-                        key={entity}
-                        onClick={() => addConcept(entity)}
-                        className="rounded-full border border-[var(--cc-line)] px-3 py-1.5 text-xs text-[var(--cc-ink)]"
-                      >
-                        + {entity}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               ) : null}
             </div>
