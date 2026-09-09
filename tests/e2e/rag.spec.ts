@@ -27,7 +27,7 @@ test("canonical Create offers all 17 content types and relevant RAG capabilities
   await page.getByLabel("Main format").selectOption("ads");
   await expect(page.getByText(/Short-form drafting with verified evidence/)).toBeVisible();
   await page.getByLabel("Main format").selectOption("linkedin-document");
-  await expect(page.getByText(/Slide-oriented drafting with connected strategy themes/)).toBeVisible();
+  await expect(page.getByText(/slide-oriented PDF with connected strategy themes/i)).toBeVisible();
 });
 
 test("o3-only policy requires explicit quality-tradeoff confirmation", async ({ page }) => {

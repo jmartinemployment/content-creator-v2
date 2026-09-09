@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { labelForContentType } from "@/app/creates/content-types";
 import type { SkillSummary } from "@/app/skills/skill-contract";
 import { shortDigest } from "@/app/skills/skill-contract";
 import {
@@ -306,7 +307,7 @@ export function AgentAdminClient({
             return <div key={stage} className="grid grid-cols-[1fr_110px_60px] items-center gap-2 text-xs"><label className="flex items-center gap-2"><input type="checkbox" aria-label={`${stage} enabled`} checked={Boolean(row)} onChange={() => setStageParticipation((current) => row ? current.filter((item) => item.stage !== stage) : [...current, { stage, role: "contributor", order: current.length }])} />{stage}</label><select aria-label={`${stage} role`} disabled={!row} value={row?.role ?? "contributor"} onChange={(event) => setStageParticipation((current) => current.map((item) => item.stage === stage ? { ...item, role: event.target.value as AgentTeamRole } : item))} className="rounded border p-1"><option value="contributor">Contributor</option><option value="producer">Producer</option><option value="reviewer">Reviewer</option></select><input aria-label={`${stage} order`} disabled={!row} type="number" min="0" value={row?.order ?? 0} onChange={(event) => setStageParticipation((current) => current.map((item) => item.stage === stage ? { ...item, order: Number(event.target.value) } : item))} className="w-full rounded border p-1" /></div>;
           })}</div></fieldset>
 
-          <fieldset className="mt-4"><legend className="text-xs font-bold">Supported content types</legend><div className="mt-2 flex flex-wrap gap-2">{CONTENT_TYPES.map((type) => <label key={type} className="text-xs"><input type="checkbox" aria-label={`${type} content type`} checked={contentTypes.includes(type)} onChange={() => setContentTypes((current) => toggle(current, type))} /> {type}</label>)}</div></fieldset>
+          <fieldset className="mt-4"><legend className="text-xs font-bold">Supported content types</legend><div className="mt-2 flex flex-wrap gap-2">{CONTENT_TYPES.map((type) => <label key={type} className="text-xs"><input type="checkbox" aria-label={`${type} content type`} checked={contentTypes.includes(type)} onChange={() => setContentTypes((current) => toggle(current, type))} /> {labelForContentType(type)}</label>)}</div></fieldset>
           <fieldset className="mt-4"><legend className="text-xs font-bold">Allowed tools</legend><div className="mt-2 grid gap-1">{TOOLS.map((tool) => <label key={tool} className="text-xs"><input type="checkbox" aria-label={`${tool} tool`} checked={allowedTools.includes(tool)} onChange={() => setAllowedTools((current) => toggle(current, tool))} /> {tool}</label>)}</div></fieldset>
           <fieldset className="mt-4"><legend className="text-xs font-bold">Allowed models</legend><p className="text-xs text-[var(--cc-muted)]">Policy {MODEL_POLICY_VERSION}</p><div className="mt-2 flex gap-4">{MODELS.map((model) => <label key={model} className="text-xs"><input type="checkbox" aria-label={`${model} model`} checked={allowedModels.includes(model)} onChange={() => setAllowedModels((current) => toggle(current, model))} /> {model}</label>)}</div></fieldset>
           <button disabled={busy !== null} className="mt-4 rounded bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy === "save" ? "Saving…" : editingAgent ? "Save successor draft" : "Create draft"}</button>
@@ -324,7 +325,7 @@ export function AgentAdminClient({
             <div><dt className="font-semibold">Stable / version IDs</dt><dd className="font-mono">{selected.id}<br />{selected.versionId}</dd></div>
             <div><dt className="font-semibold">Digest</dt><dd className="font-mono">{selected.digest}</dd></div>
             <div className="sm:col-span-2"><dt className="font-semibold">Objective</dt><dd>{selected.objective}</dd></div>
-            <div><dt className="font-semibold">Content types</dt><dd>{selected.supportedContentTypes.join(", ") || "None"}</dd></div>
+            <div><dt className="font-semibold">Content types</dt><dd>{selected.supportedContentTypes.map(labelForContentType).join(", ") || "None"}</dd></div>
             <div><dt className="font-semibold">Allowed models / policy</dt><dd>{selected.models.join(", ") || "None"} · {selected.modelPolicyVersion}</dd></div>
             <div className="sm:col-span-2"><dt className="font-semibold">Allowed tools</dt><dd>{selected.tools.join(", ") || "None"}</dd></div>
           </dl>

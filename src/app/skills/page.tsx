@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fetchGccV2 } from "@/app/auth/server-bff";
+import { labelForContentType } from "@/app/creates/content-types";
 import { shortDigest, type SkillCatalog } from "@/app/skills/skill-contract";
 
 export default async function SkillsPage() {
@@ -104,7 +105,7 @@ export default async function SkillsPage() {
                       </dd>
                     </div>
                     <div className="sm:col-span-2"><dt className="font-semibold text-[var(--cc-ink)]">Applicable stages</dt><dd>{skill.supportedStages.join(", ") || "None"}</dd></div>
-                    <div className="sm:col-span-2"><dt className="font-semibold text-[var(--cc-ink)]">Content types</dt><dd>{skill.supportedContentTypes.join(", ") || "None"}</dd></div>
+                    <div className="sm:col-span-2"><dt className="font-semibold text-[var(--cc-ink)]">Content types</dt><dd>{skill.supportedContentTypes.map(labelForContentType).join(", ") || "None"}</dd></div>
                     <div className="sm:col-span-2"><dt className="font-semibold text-[var(--cc-ink)]">Requested tools</dt><dd>{skill.requestedTools.join(", ") || "No tools"}</dd></div>
                     <div className="sm:col-span-2">
                       <dt className="font-semibold text-[var(--cc-ink)]">Used by specialists</dt>

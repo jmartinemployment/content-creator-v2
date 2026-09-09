@@ -930,7 +930,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     setCarouselBusy(true);
     setCarouselError(null);
     try {
-      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/linkedin-carousel`, {
+      const res = await fetch(`/api/gcc-v2/creates/${createId}/transform/pdf`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jobId }),
@@ -2023,10 +2023,9 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         </div>
 
         <div className={`${activeTab === "assets" ? "" : "hidden"} rounded-lg border border-[var(--cc-line)] p-4`}>
-          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">LinkedIn carousel</h2>
+          <h2 className="text-sm font-semibold text-[var(--cc-ink)]">PDF slide deck</h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Turn this ready long-form draft into a swipeable PDF (1080×1350 portrait) plus a feed
-            caption. Upload the PDF to LinkedIn as a document post.
+            Turn this ready long-form draft into a downloadable 1080×1350 portrait PDF.
           </p>
           {!isLongFormContentType(contentType) ? (
             <p className="mt-2 text-xs text-amber-800">

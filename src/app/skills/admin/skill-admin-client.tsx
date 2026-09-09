@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { labelForContentType } from "@/app/creates/content-types";
 import {
   assertSafeSkillImportFields,
   shortDigest,
@@ -148,7 +149,7 @@ export function SkillAdminClient({ initialWorkspace }: { initialWorkspace: Skill
               <div><dt className="font-semibold">Repository / commit</dt><dd className="break-all">{selected.source.repositoryUrl}<br/><span className="font-mono">{selected.source.commit}</span></dd></div>
               <div><dt className="font-semibold">Digests</dt><dd className="font-mono">package {shortDigest(selected.packageDigest)}<br/>manifest {shortDigest(selected.manifestDigest)}</dd></div>
               <div><dt className="font-semibold">License / compatibility</dt><dd>{selected.license} · {selected.compatibility}</dd></div>
-              <div><dt className="font-semibold">Applicability / tools</dt><dd>{selected.supportedStages.join(", ")} · {selected.supportedContentTypes.join(", ")}<br/>{selected.requestedTools.join(", ") || "No tools"}</dd></div>
+              <div><dt className="font-semibold">Applicability / tools</dt><dd>{selected.supportedStages.join(", ")} · {selected.supportedContentTypes.map(labelForContentType).join(", ")}<br/>{selected.requestedTools.join(", ") || "No tools"}</dd></div>
             </dl>
 
             <h3 className="mt-7 font-bold">Deterministic findings</h3>

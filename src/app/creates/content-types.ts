@@ -21,7 +21,7 @@ export const CONTENT_TYPES = [
   { value: "social", label: "Social" },
   { value: "image-prompt", label: "Image prompt" },
   { value: "ads", label: "Ads" },
-  { value: "linkedin-document", label: "LinkedIn document" },
+  { value: "linkedin-document", label: "PDF" },
 ] as const;
 
 export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
@@ -55,7 +55,7 @@ export const ALSO_DRAFT_SHORT_TYPES = [
   { value: "email", label: "Email" },
   { value: "social", label: "Social" },
   { value: "ads", label: "Ads" },
-  { value: "linkedin-document", label: "LinkedIn document" },
+  { value: "linkedin-document", label: "PDF" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
 
 const OTHER_LONG_FORM: ReadonlyArray<{ value: ContentType; label: string }> = [

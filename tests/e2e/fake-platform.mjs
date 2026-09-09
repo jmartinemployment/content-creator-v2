@@ -1171,7 +1171,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/ai-visibility/refresh") {
     return send(res, 200, { ready: true, createId: "create-1", score: 94, report: { seoScore: 95, geoScore: 94, geoChecks: [], publishedUrls: [] } });
   }
-  if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/transform/linkedin-carousel") {
+  if ([
+    "/api/geek-content-creator-v2/creates/create-1/transform/pdf",
+    "/api/geek-content-creator-v2/creates/create-1/transform/linkedin-carousel",
+  ].includes(url.pathname)) {
     const artifact = {
       slug: "reliable-content-operations",
       generatedAtUtc: new Date().toISOString(),

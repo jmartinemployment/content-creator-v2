@@ -106,7 +106,11 @@ const FORMAT_GROUPS = [
   },
   {
     label: "Campaign content",
-    values: ["email", "social", "ads", "linkedin-document", "image-prompt"],
+    values: ["email", "social", "ads", "image-prompt"],
+  },
+  {
+    label: "Documents",
+    values: ["linkedin-document"],
   },
 ] as const;
 
@@ -320,7 +324,7 @@ function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
     case "email":
       return "Short-form drafting with verified evidence, optional approved templates, and variations available in your workspace.";
     case "linkedin-document":
-      return "Slide-oriented drafting with connected strategy themes; your workspace preserves PDF and caption workflows.";
+      return "A slide-oriented PDF with connected strategy themes, editable pages, and downloadable export.";
     case "image-prompt":
       return "A specialized visual brief grounded in the same brand, topic, and source evidence as prose jobs.";
     default:

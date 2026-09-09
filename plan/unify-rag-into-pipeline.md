@@ -169,7 +169,7 @@ Downgrading must not weaken evidence rules, citation verification, validation ga
 - `pillar`, `blog`, `guide`, `tech-article`, `case-study`, `whitepaper`, `listicle`: LongForm; guided outline + section fill.
 - `comparison`, `alternatives`: Battlecard; dual partner/competitor retrieval.
 - `ads`, `social`, `email`: ShortForm; ad-template few-shot when indexed.
-- `linkedin-document`: Slides; GraphRAG themes when enabled.
+- PDF (`linkedin-document` legacy identifier): slides; GraphRAG themes when enabled.
 - `tool`, `service`, `local`: LongForm; preserve tool-page WRITE extras, but body sections come from RAG.
 - `image-prompt`: Specialized visual-brief output derived from the same canonical brief, brand context, and source evidence; validate its fidelity separately from prose.
 

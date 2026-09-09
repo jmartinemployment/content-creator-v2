@@ -1,13 +1,16 @@
-# LinkedIn document (PDF)
+# PDF slide deck
 
-Turn a **ready long-form draft** into a **multi-page PDF** for LinkedIn document posts — swipeable slides at **1080×1350** portrait (4:5).
+Turn a **ready long-form draft** into a **multi-page PDF slide deck** at **1080×1350** portrait (4:5).
+
+The persisted values `linkedin-document` and `linkedin-carousel` are legacy compatibility
+identifiers. They are not product labels and must be displayed as **PDF**.
 
 ## Entry points
 
 | Path | When |
 |------|------|
 | **Canvas → Generate PDF** | Any ready long-form tab (pillar, blog, case-study, guide, …) |
-| **Also draft → LinkedIn document** | Checked at create; job spawns when the first long-form job on that create reaches `ready` |
+| **Also draft → PDF** | Checked at create; job spawns when the first long-form job on that create reaches `ready` |
 | **Export ZIP** | Includes document artifacts from transform or document jobs |
 
 Tool pages, email, social, and ads are **not** valid carousel sources.
@@ -20,7 +23,7 @@ Tool pages, email, social, and ads are **not** valid carousel sources.
 7. **framework** — mini-playbook / before-after  
 8. **cta** — soft CTA + takeaway  
 
-Plus a **caption** (150–250 words) for the feed post that accompanies the PDF upload.
+Plus a **companion summary** (150–250 words) for sharing the PDF.
 
 ## PDF spec
 
@@ -37,15 +40,15 @@ Plus a **caption** (150–250 words) for the feed post that accompanies the PDF 
 
 | File | Content |
 |------|---------|
-| `social/linkedin/carousels/{slug}.pdf` | QuestPDF output |
-| `social/linkedin/carousels/{slug}-caption.txt` | Feed caption + hashtags |
-| `social/linkedin/carousels/{slug}-slides.json` | Structured slide backup |
+| `social/linkedin/carousels/{slug}.pdf` | QuestPDF output (legacy storage path) |
+| `social/linkedin/carousels/{slug}-caption.txt` | Companion summary + topic tags |
+| `social/linkedin/carousels/{slug}-slides.json` | Structured page backup |
 
 ## Backend
 
-- `GeekBackend/GeekAPI/Services/ContentCreatorV2/LinkedInDocument/` — models, parser, prompt, QuestPDF renderer, transform service, spawn service  
-- `POST .../transform/linkedin-document` — sync transform from ready long-form job  
-- `ResultJson.linkedInDocument` — persisted slide JSON on source job after transform  
+- `GeekBackend/GeekAPI/Services/ContentCreatorV2/Carousel/` — legacy internal namespace containing the PDF models, parser, prompt, QuestPDF renderer, transform service, and spawn service
+- `POST .../transform/pdf` — sync transform from a ready long-form job; the old route remains an alias for existing clients
+- `ResultJson.linkedInCarousel` — legacy persisted property containing structured PDF page JSON
 
 ## QuestPDF license
 
@@ -53,6 +56,6 @@ QuestPDF Community license applies for companies with less than $1M USD annual r
 
 ## Related
 
-- Generic LinkedIn **post text** remains `social` short-form — not replaced by carousel  
-- Re-Purpose LinkedIn channel remains single-post snippets — carousel is a separate pipeline  
+- PDF is an export-only slide-deck format, not a web-page content type
+- Channel-specific post text remains `social` short-form
 - See [`long-form-content-types.md`](./long-form-content-types.md) for long-form source types

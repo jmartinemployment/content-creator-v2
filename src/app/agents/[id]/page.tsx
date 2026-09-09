@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAccessToken } from "@/app/auth/session";
 import { fetchGccV2 } from "@/app/auth/server-bff";
 import { normalizeAgent, normalizeAgentCatalog } from "@/app/agents/agent-contract";
+import { labelForContentType } from "@/app/creates/content-types";
 import { shortDigest } from "@/app/skills/skill-contract";
 
 export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,7 +42,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <div><dt className="font-semibold">Immutable version ID</dt><dd className="font-mono">{agent.versionId}</dd></div>
           <div><dt className="font-semibold">Version</dt><dd>{agent.version}</dd></div>
           <div><dt className="font-semibold">Digest</dt><dd className="font-mono" title={agent.digest}>{shortDigest(agent.digest)}</dd></div>
-          <div><dt className="font-semibold">Content types</dt><dd>{agent.supportedContentTypes.join(", ") || "All compatible types"}</dd></div>
+          <div><dt className="font-semibold">Content types</dt><dd>{agent.supportedContentTypes.map(labelForContentType).join(", ") || "All compatible types"}</dd></div>
           <div><dt className="font-semibold">Stages</dt><dd>{agent.supportedStages.join(", ") || "Backend assigned"}</dd></div>
           <div><dt className="font-semibold">Allowed models</dt><dd>{agent.models.join(", ") || "None returned"}</dd></div>
           <div><dt className="font-semibold">Model policy</dt><dd>{agent.modelPolicyVersion || agent.modelPolicy?.version || "content-model-policy.v1"}</dd></div>

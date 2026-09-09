@@ -48,16 +48,16 @@ Built at job `ready` via `GccV2JsonLdBuilder` and persisted on `ResultJson.jsonL
 
 All long-form types plus `email`, `social`, `ads` are valid Re-Purpose sources (`GccV2RepurposeSourceTypes`, `repurpose-channels.ts`).
 
-## LinkedIn document (PDF)
+## PDF slide deck
 
-Not a long-form web page — export-only channel type. See [`linkedin-document.md`](./linkedin-document.md).
+Not a long-form web page—this is an export-only PDF type. See [`pdf.md`](./pdf.md).
 
 - **Canvas:** Generate PDF from any ready long-form tab  
-- **Also draft:** `linkedin-document` spawns after the first long-form job on the create reaches `ready`  
-- **Export:** `social/linkedin/carousels/{slug}.pdf` + caption + slides JSON  
+- **Also draft:** PDF spawns after the first long-form job on the create reaches `ready`
+- **Export:** PDF + companion summary + structured page JSON
 
 ## Phi operator notes
 
-- **Primary draft** dropdown lists all long-form types; **Also draft** offers the remaining long-form types plus email/social/ads/**LinkedIn document**.
+- **Primary draft** dropdown lists all long-form types; **Also draft** offers the remaining long-form types plus email/social/ads/**PDF**.
 - Amber banner for `partnerResearchWarnings` appears in create detail when external partner/competitor/local crawls are missing.
 - Local crawls are started in **Geek-Crawler** (`crawlType: local`), not from Content Creator.
