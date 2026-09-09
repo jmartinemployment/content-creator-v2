@@ -108,6 +108,66 @@ test("schema markup diagnostic renders json-ld nodes", async ({ page }) => {
   await expect(page.getByText(/schemaMarkup\.v1 · valid/)).toBeVisible();
 });
 
+test("ai readiness comparison renders score-matrix deltas", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness-comparison");
+  await expect(page.getByRole("heading", { name: "AI Readiness Comparison" })).toBeVisible();
+  await page.getByLabel("Subject page content").fill("# Our page\n\nEvidence-backed answers.");
+  await page.getByLabel("Competitor page content").fill("# Rival\n\nTrusted by 500 teams.");
+  await page.getByRole("button", { name: "Run AI Readiness Comparison" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="score-matrix"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Dimension deltas" })).toContainText("factDensity");
+  await expect(page.getByText(/readinessComparison\.v1 · valid/)).toBeVisible();
+});
+
+test("content gap finder renders gap-report opportunities", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/content-gap");
+  await expect(page.getByRole("heading", { name: "Content Gap Finder" })).toBeVisible();
+  await page.getByLabel("Subject page content").fill("# Ours\n\nGeneral overview.");
+  await page.getByLabel("Competitor page content").fill("# Rival\n\nTrusted by 500 teams.");
+  await page.getByRole("button", { name: "Run Content Gap Finder" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="gap-report"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Content gaps" })).toContainText("supportedGap");
+  await expect(page.getByText(/contentGapAnalysis\.v1 · valid/)).toBeVisible();
+});
+
+test("competitor audit renders prioritized audit-report actions", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/competitor-audit");
+  await expect(page.getByRole("heading", { name: "Competitor Audit" })).toBeVisible();
+  await page.getByLabel("Subject page content").fill("# Ours\n\nGeneral overview.");
+  await page.getByLabel("Competitor page content").fill("# Rival\n\nTrusted by 500 teams.");
+  await page.getByRole("button", { name: "Run Competitor Audit" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="audit-report"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Prioritized actions" })).toContainText("customer-count");
+  await expect(page.getByText(/competitorAudit\.v1 · valid/)).toBeVisible();
+});
+
+test("competitor positioning renders positioning-map hypotheses", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/competitor-positioning");
+  await expect(page.getByRole("heading", { name: "Competitor Positioning" })).toBeVisible();
+  await page.getByLabel("Brand page content").fill("# Brand\n\nEvidence-first drafting.");
+  await page.getByLabel("Competitor page content").fill("# Rival\n\nThe fastest AI writing tool.");
+  await page.getByRole("button", { name: "Run Competitor Positioning" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="positioning-map"]')).toBeVisible();
+  await expect(page.getByTestId("messaging-hypotheses")).toContainText("Generated only");
+  await expect(page.getByText(/competitorPositioning\.v1 · valid/)).toBeVisible();
+});
+
+test("competitor page analysis renders competitor-report dimensions", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/competitor-page");
+  await expect(page.getByRole("heading", { name: "Competitor Page Analysis" })).toBeVisible();
+  await page.getByLabel("Competitor name").fill("Rival Co");
+  await page.getByLabel("Competitor page content").fill("# Rival\n\nTrusted by 500 teams.");
+  await page.getByRole("button", { name: "Run Competitor Page Analysis" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="competitor-report"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Competitor dimensions" })).toContainText("proof");
+  await expect(page.getByText(/competitorPageAnalysis\.v1 · valid/)).toBeVisible();
+});
+
 test("task agent pins governed context digest on the result shell", async ({ page }) => {
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await expect(page.getByRole("region", { name: "Run context" })).toBeVisible();
@@ -137,6 +197,28 @@ test("task agent result shell shows lineage spine and follow-on actions", async 
   await expect(page).toHaveURL(/fromArtifactVersionId=artifact-version-1/);
   await expect(page.getByRole("heading", { name: "FAQ Generator" })).toBeVisible();
   await expect(page.getByText(/This run will derive from artifact/)).toBeVisible();
+});
+
+test("task agent result can attach artifact to a canvas project", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await expect(page.getByRole("link", { name: "Evidence Engine launch" })).toBeVisible();
+
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("attach-to-project")).toBeVisible();
+  await page.getByLabel("Attach to project").selectOption({ label: "Evidence Engine launch" });
+  await page.getByRole("button", { name: "Attach artifact" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Attached" })).toBeVisible();
+  await page.getByRole("link", { name: "Open project" }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Engine launch" })).toBeVisible();
+  await expect(page.getByText(/AI Readiness Score · readinessScore\.v1/).first()).toBeVisible();
+  await page.getByRole("button", { name: /Select AI Readiness Score/ }).click();
+  await expect(page.getByTestId("attached-artifact-ref")).toContainText("artifact-version-1");
 });
 
 test("task agent cancel stops a held run", async ({ page, request }) => {

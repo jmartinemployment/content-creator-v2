@@ -410,6 +410,288 @@ function OutlineView({ payload }: { payload: ArtifactPayload }) {
   );
 }
 
+function asEntry(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function scoreLabel(value: unknown): string {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? String(numeric) : "—";
+}
+
+function ScoreMatrixView({ payload }: { payload: ArtifactPayload }) {
+  const subject = asEntry(payload.subject);
+  const competitors = Array.isArray(payload.competitors) ? payload.competitors : [];
+  const deltas = Array.isArray(payload.dimensionDeltas) ? payload.dimensionDeltas : [];
+  const fixes = Array.isArray(payload.prioritizedFixes) ? payload.prioritizedFixes : [];
+
+  return (
+    <div className="mt-2 space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-sm text-[var(--cc-muted)]">Subject readiness</p>
+          <p className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]" style={{ fontSize: "clamp(2rem, 4vw, 3.25rem)", lineHeight: 1 }}>
+            {scoreLabel(subject.overallScore)}
+          </p>
+        </div>
+        <ul className="space-y-2" aria-label="Competitor readiness scores">
+          {competitors.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.sourceId || row.competitorId)} className="border-l-2 border-[var(--cc-line)] pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">
+                  {String(row.competitorName || row.competitorId || "Competitor")}
+                </span>
+                <span className="ml-2 tabular-nums text-[var(--cc-muted)]">
+                  {scoreLabel(row.overallScore)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {deltas.length ? (
+        <ul className="space-y-3" aria-label="Dimension deltas">
+          {deltas.map((entry) => {
+            const row = asEntry(entry);
+            const delta = typeof row.deltaVsBestCompetitor === "number"
+              ? row.deltaVsBestCompetitor
+              : Number(row.deltaVsBestCompetitor);
+            return (
+              <li key={String(row.dimension)} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.dimension)}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  Subject {scoreLabel(row.subjectScore)}
+                  {" · best competitor "}
+                  {scoreLabel(row.bestCompetitorScore)}
+                  {Number.isFinite(delta) ? ` · delta ${delta > 0 ? "+" : ""}${delta}` : ""}
+                </span>
+                {typeof row.summary === "string" && row.summary ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">{row.summary}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {fixes.length ? (
+        <ul className="space-y-2" aria-label="Comparison fixes">
+          {fixes.slice(0, 6).map((fix) => (
+            <li key={String(fix)} className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm text-[var(--cc-ink)]">
+              {String(fix)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function GapReportView({ payload }: { payload: ArtifactPayload }) {
+  const gaps = Array.isArray(payload.gaps) ? payload.gaps : [];
+  const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+  return (
+    <div className="mt-4 space-y-6">
+      {gaps.length ? (
+        <ul className="space-y-3" aria-label="Content gaps">
+          {gaps.map((entry) => {
+            const row = asEntry(entry);
+            const status = String(row.status || "");
+            return (
+              <li
+                key={String(row.gapId || row.signal)}
+                className={`border-l-2 pl-3 text-sm ${status === "supportedGap" ? "border-amber-600" : "border-[var(--cc-line)]"}`}
+                data-gap-status={status || "unknown"}
+              >
+                <span className="font-semibold text-[var(--cc-ink)]">
+                  {String(row.dimension || "Gap")}
+                  {row.signal ? ` · ${String(row.signal)}` : ""}
+                </span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {[status, row.confidence].filter(Boolean).join(" · ")}
+                </span>
+                {typeof row.opportunity === "string" && row.opportunity ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">{row.opportunity}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--cc-muted)]">No comparative gaps were detected from the supplied pages.</p>
+      )}
+      {dimensions.length ? (
+        <ul className="space-y-2" aria-label="Coverage by dimension">
+          {dimensions.map((entry) => {
+            const row = asEntry(entry);
+            const subject = row.subjectCoverage;
+            const subjectLabel = subject === true ? "covered" : subject === false ? "missing" : "unknown";
+            return (
+              <li key={String(row.dimension)} className="text-sm text-[var(--cc-ink)]">
+                <span className="font-semibold">{String(row.dimension)}</span>
+                <span className="ml-2 text-xs text-[var(--cc-muted)]">
+                  subject {subjectLabel}
+                  {" · competitors "}
+                  {String(row.competitorCoverageCount ?? "—")}/{String(row.competitorPageCount ?? "—")}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function AuditReportView({ payload }: { payload: ArtifactPayload }) {
+  const actions = Array.isArray(payload.prioritizedActions) ? payload.prioritizedActions : [];
+  const pageAnalyses = Array.isArray(payload.pageAnalyses) ? payload.pageAnalyses : [];
+  const contentGap = asEntry(payload.contentGap);
+  const gapCount = Array.isArray(contentGap.gaps) ? contentGap.gaps.length : 0;
+
+  return (
+    <div className="mt-4 space-y-6">
+      <p className="text-sm text-[var(--cc-muted)]">
+        {pageAnalyses.length} competitor page{pageAnalyses.length === 1 ? "" : "s"} analyzed
+        {gapCount ? ` · ${gapCount} comparative gap${gapCount === 1 ? "" : "s"}` : ""}
+      </p>
+      {actions.length ? (
+        <ol className="list-decimal space-y-3 pl-5" aria-label="Prioritized actions">
+          {actions.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.actionId || row.action)} className="text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.action)}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {[row.priority, row.dimension, row.origin].filter(Boolean).join(" · ")}
+                </span>
+                {typeof row.rationale === "string" && row.rationale ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">{row.rationale}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="text-sm text-[var(--cc-muted)]">No prioritized actions were produced.</p>
+      )}
+    </div>
+  );
+}
+
+function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
+  const attributes = Array.isArray(payload.attributeMap) ? payload.attributeMap : [];
+  const gaps = Array.isArray(payload.perceptionGaps) ? payload.perceptionGaps : [];
+  const hypotheses = Array.isArray(payload.messagingHypotheses) ? payload.messagingHypotheses : [];
+
+  return (
+    <div className="mt-4 space-y-6">
+      {attributes.length ? (
+        <ul className="space-y-3" aria-label="Positioning attributes">
+          {attributes.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.attributeId || row.attribute)} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.attribute)}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {[row.party, row.competitorName || row.competitorId].filter(Boolean).join(" · ")}
+                </span>
+                {Array.isArray(row.signals) && row.signals.length ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">
+                    {row.signals.filter((signal): signal is string => typeof signal === "string").join("; ")}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {gaps.length ? (
+        <ul className="space-y-3" aria-label="Perception gaps">
+          {gaps.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.gapId || row.attribute)} className="border-l-2 border-amber-600 pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.attribute)}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">{String(row.status || "")}</span>
+                {typeof row.summary === "string" && row.summary ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">{row.summary}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {hypotheses.length ? (
+        <aside
+          aria-label="Messaging hypotheses"
+          className="border-l-2 border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-3"
+          data-testid="messaging-hypotheses"
+        >
+          <p className="text-sm font-semibold text-[var(--cc-ink)]">Messaging hypotheses</p>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            Generated only — not measured market perception, demand, or ranking.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {hypotheses.map((entry) => {
+              const row = asEntry(entry);
+              return (
+                <li key={String(row.hypothesisId || row.message)} className="text-sm text-[var(--cc-ink)]">
+                  {String(row.message)}
+                  {row.targetQuery ? (
+                    <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                      Target query: {String(row.targetQuery)}
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      ) : null}
+    </div>
+  );
+}
+
+function CompetitorReportView({ payload }: { payload: ArtifactPayload }) {
+  const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+  const opportunities = Array.isArray(payload.opportunities) ? payload.opportunities : [];
+  return (
+    <div className="mt-4 space-y-6">
+      {typeof payload.competitorId === "string" && payload.competitorId ? (
+        <p className="text-sm text-[var(--cc-muted)]">Competitor {payload.competitorId}</p>
+      ) : null}
+      <ul className="space-y-3" aria-label="Competitor dimensions">
+        {dimensions.map((entry) => {
+          const row = asEntry(entry);
+          const present = row.present;
+          const presentLabel = present === true ? "present" : present === false ? "absent" : "unknown";
+          return (
+            <li key={String(row.dimension)} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+              <span className="font-semibold text-[var(--cc-ink)]">{String(row.dimension)}</span>
+              <span className="ml-2 text-xs text-[var(--cc-muted)]">{presentLabel}</span>
+              {typeof row.summary === "string" && row.summary ? (
+                <span className="mt-1 block text-[var(--cc-muted)]">{row.summary}</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {opportunities.length ? (
+        <ul className="space-y-2" aria-label="Competitor opportunities">
+          {opportunities.map((entry) => (
+            <li key={String(entry)} className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm text-[var(--cc-ink)]">
+              {String(entry)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function resolveKind(kind: string | undefined, payload: ArtifactPayload): string {
   if (kind) return kind;
   if (Array.isArray(payload.jsonLd)) return "json-ld";
@@ -420,6 +702,15 @@ function resolveKind(kind: string | undefined, payload: ArtifactPayload): string
     && "overallScore" in payload
   )) {
     return "claim-audit";
+  }
+  if (payload.subject && Array.isArray(payload.dimensionDeltas)) return "score-matrix";
+  if (Array.isArray(payload.gaps) && Array.isArray(payload.dimensions)) return "gap-report";
+  if (Array.isArray(payload.prioritizedActions)) return "audit-report";
+  if (Array.isArray(payload.attributeMap) || Array.isArray(payload.perceptionGaps)) {
+    return "positioning-map";
+  }
+  if (Array.isArray(payload.opportunities) && Array.isArray(payload.dimensions)) {
+    return "competitor-report";
   }
   if ("overallScore" in payload) return "scorecard";
   if ("pairs" in payload) return "faq-list";
@@ -454,6 +745,11 @@ export function TaskAgentResultRenderer({
       {resolved === "claim-audit" ? <ClaimAuditView payload={payload} /> : null}
       {resolved === "entity-graph" ? <EntityGraphView payload={payload} /> : null}
       {resolved === "json-ld" ? <JsonLdView payload={payload} /> : null}
+      {resolved === "score-matrix" ? <ScoreMatrixView payload={payload} /> : null}
+      {resolved === "gap-report" ? <GapReportView payload={payload} /> : null}
+      {resolved === "audit-report" ? <AuditReportView payload={payload} /> : null}
+      {resolved === "positioning-map" ? <PositioningMapView payload={payload} /> : null}
+      {resolved === "competitor-report" ? <CompetitorReportView payload={payload} /> : null}
       {resolved === "faq-list" ? <FaqListView payload={payload} /> : null}
       {resolved === "claim-ledger" ? <ClaimLedgerView payload={payload} /> : null}
       {resolved === "query-plan" ? <QueryPlanView payload={payload} /> : null}

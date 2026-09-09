@@ -1526,6 +1526,63 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, { contractVersion: "gcc-canvas-project.v1", project });
   }
   {
+    const attachMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/from-task-artifact$/);
+    if (attachMatch && req.method === "POST") {
+      const projectId = decodeURIComponent(attachMatch[1]);
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      const body = JSON.parse(rawBody || "{}");
+      if (!body.runId || !body.artifactVersionId) {
+        return send(res, 400, { error: "runId and artifactVersionId are required." });
+      }
+      const title = body.title || `Task report · ${body.artifactVersionId}`;
+      const assetId = crypto.randomUUID();
+      const versionId = crypto.randomUUID();
+      project.assets = [
+        ...project.assets,
+        {
+          id: assetId,
+          title,
+          kind: body.kind || "report",
+          parentAssetIds: [],
+          versions: [{
+            id: versionId,
+            version: 1,
+            createdAt: new Date().toISOString(),
+            createdBy: "You",
+            status: "draft",
+            summary: `Attached from task run ${body.runId}.`,
+            evidence: [],
+            provenance: {
+              origin: "agent",
+              note: `Attached from task run ${body.runId}.`,
+              sourceRunId: body.runId,
+              sourceArtifactVersionId: body.artifactVersionId,
+              artifactType: body.artifactType || "task-artifact",
+              digest: body.digest || "",
+            },
+          }],
+        },
+      ];
+      project.activity = [
+        {
+          id: crypto.randomUUID(),
+          kind: "handoff",
+          actor: "You",
+          occurredAt: new Date().toISOString(),
+          message: `Attached ${title} from task artifact`,
+        },
+        ...project.activity,
+      ];
+      project.updatedAt = new Date().toISOString();
+      return send(res, 200, {
+        contractVersion: "gcc-canvas-project.v1",
+        project,
+        assetId,
+      });
+    }
+  }
+  {
     const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)(?:\/assets(?:\/([^/]+)\/versions)?)?$/);
     if (match) {
       const projectId = decodeURIComponent(match[1]);
@@ -1533,6 +1590,22 @@ const server = http.createServer(async (req, res) => {
       const project = canvasProjects.get(projectId);
       if (!project) return send(res, 404, { error: "Project not found." });
       if (!assetId && req.method === "GET") {
+        return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
+      }
+      if (!assetId && req.method === "POST" && url.pathname.endsWith("/assets")) {
+        const body = JSON.parse(rawBody || "{}");
+        const nextAssetId = crypto.randomUUID();
+        project.assets = [
+          ...project.assets,
+          {
+            id: nextAssetId,
+            title: body.title || "Untitled asset",
+            kind: body.kind || "brief",
+            parentAssetIds: body.parentAssetIds || [],
+            versions: [],
+          },
+        ];
+        project.updatedAt = new Date().toISOString();
         return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
       }
       if (assetId && url.pathname.endsWith("/versions") && req.method === "POST") {
@@ -2040,6 +2113,81 @@ const server = http.createServer(async (req, res) => {
       resultRenderer: { kind: "claim-ledger", artifactType: "claimLedger.v1" },
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness-comparison" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "ai-readiness-comparison",
+        displayName: "AI Readiness Comparison",
+        description: "Compare one owned page with up to four competitor pages under one AEO/GEO rubric.",
+        versionId: "task-agent-version-5",
+        version: "1.0.0",
+        digest: "g".repeat(64),
+      },
+      workflow: { endpoint: "readiness-comparison", artifactType: "readinessComparison.v1" },
+      resultRenderer: { kind: "score-matrix", artifactType: "readinessComparison.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/content-gap" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "content-gap",
+        displayName: "Content Gap Finder",
+        description: "Find evidence-linked content gaps between subject and competitor pages.",
+        versionId: "task-agent-version-4",
+        version: "1.0.0",
+        digest: "e".repeat(64),
+      },
+      workflow: { endpoint: "content-gap", artifactType: "contentGapAnalysis.v1" },
+      resultRenderer: { kind: "gap-report", artifactType: "contentGapAnalysis.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-audit" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "competitor-audit",
+        displayName: "Competitor Audit",
+        description: "Explain competitor strengths from supplied pages with evidence-linked prioritized actions.",
+        versionId: "task-agent-version-6",
+        version: "1.0.0",
+        digest: "h".repeat(64),
+      },
+      workflow: { endpoint: "competitor-audit", artifactType: "competitorAudit.v1" },
+      resultRenderer: { kind: "audit-report", artifactType: "competitorAudit.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-positioning" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "competitor-positioning",
+        displayName: "Competitor Positioning",
+        description: "Map brand-versus-competitor narrative attributes without treating generated opinions as market perception.",
+        versionId: "task-agent-version-7",
+        version: "1.0.0",
+        digest: "i".repeat(64),
+      },
+      workflow: { endpoint: "competitor-positioning", artifactType: "competitorPositioning.v1" },
+      resultRenderer: { kind: "positioning-map", artifactType: "competitorPositioning.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-page" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "competitor-page",
+        displayName: "Competitor Page Analysis",
+        description: "Analyze a competitor page from supplied visible content and evidence only.",
+        versionId: "task-agent-version-3",
+        version: "1.0.0",
+        digest: "d".repeat(64),
+      },
+      workflow: { endpoint: "competitor-page", artifactType: "competitorPageAnalysis.v1" },
+      resultRenderer: { kind: "competitor-report", artifactType: "competitorPageAnalysis.v1" },
+    });
+  }
   function createTaskRun(capabilityId, runId, body) {
     const selection = body?.contextSelection;
     const hasPins = selection && (
@@ -2150,6 +2298,26 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/citable-claims/runs" && req.method === "POST") {
     const created = createTaskRun("citable-claims", "task-run-4", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/ai-readiness-comparison/runs" && req.method === "POST") {
+    const created = createTaskRun("ai-readiness-comparison", "task-run-5", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/content-gap/runs" && req.method === "POST") {
+    const created = createTaskRun("content-gap", "task-run-6", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-audit/runs" && req.method === "POST") {
+    const created = createTaskRun("competitor-audit", "task-run-7", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-positioning/runs" && req.method === "POST") {
+    const created = createTaskRun("competitor-positioning", "task-run-8", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-page/runs" && req.method === "POST") {
+    const created = createTaskRun("competitor-page", "task-run-9", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
   }
   const taskRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/task-agents\/runs\/([^/]+)(?:\/(result|cancel))?$/);
@@ -2441,6 +2609,223 @@ const server = http.createServer(async (req, res) => {
             { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
           ],
           rerun: { capabilityId: "citable-claims", versionId: "task-agent-version-9", retryOfRunId: "task-run-4" },
+        }));
+      }
+      if (runId === "task-run-5") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "ai-readiness-comparison", displayName: "AI Readiness Comparison", objective: "Compare readiness scores." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-5",
+            artifactType: "readinessComparison.v1",
+            versions: [{
+              id: "artifact-version-5",
+              payloadJson: JSON.stringify({
+                artifactType: "readinessComparison.v1",
+                subject: { role: "subject", sourceId: "subject-1", overallScore: 78, dimensions: [], prioritizedFixes: [], warnings: [], evidenceIds: [] },
+                competitors: [{
+                  role: "competitor",
+                  sourceId: "competitor-1",
+                  competitorId: "rival",
+                  competitorName: "Rival Co",
+                  overallScore: 86,
+                  dimensions: [],
+                  prioritizedFixes: [],
+                  warnings: [],
+                  evidenceIds: [],
+                }],
+                dimensionDeltas: [{
+                  dimension: "factDensity",
+                  subjectScore: 70,
+                  competitorScores: [{ sourceId: "competitor-1", competitorId: "rival", score: 88 }],
+                  bestCompetitorScore: 88,
+                  deltaVsBestCompetitor: -18,
+                  summary: "Competitor cites more specific evidence.",
+                }],
+                prioritizedFixes: ["Add supported quantitative claims to the subject page."],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "t".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "content-gap", label: "Content Gap Finder", artifactType: "contentGapAnalysis.v1" },
+          ],
+          rerun: { capabilityId: "ai-readiness-comparison", versionId: "task-agent-version-5", retryOfRunId: "task-run-5" },
+        }));
+      }
+      if (runId === "task-run-6") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "content-gap", displayName: "Content Gap Finder", objective: "Find comparative gaps." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-6",
+            artifactType: "contentGapAnalysis.v1",
+            versions: [{
+              id: "artifact-version-6",
+              payloadJson: JSON.stringify({
+                artifactType: "contentGapAnalysis.v1",
+                dimensions: [{
+                  dimension: "proof",
+                  subjectCoverage: false,
+                  competitorCoverageCount: 1,
+                  competitorPageCount: 1,
+                  subjectEvidenceIds: [],
+                  competitorEvidenceIds: ["ev-1"],
+                  summary: "Competitor shows proof signals the subject lacks.",
+                }],
+                gaps: [{
+                  gapId: "gap-proof-1",
+                  dimension: "proof",
+                  signal: "customer count",
+                  status: "supportedGap",
+                  opportunity: "Publish a citeable customer-count proof block.",
+                  competitorSourceIds: ["competitor-1"],
+                  evidenceIds: ["ev-1"],
+                  confidence: "high",
+                }],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "u".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "competitor-audit", label: "Competitor Audit", artifactType: "competitorAudit.v1" },
+          ],
+          rerun: { capabilityId: "content-gap", versionId: "task-agent-version-4", retryOfRunId: "task-run-6" },
+        }));
+      }
+      if (runId === "task-run-7") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "competitor-audit", displayName: "Competitor Audit", objective: "Prioritize remediation actions." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-7",
+            artifactType: "competitorAudit.v1",
+            versions: [{
+              id: "artifact-version-7",
+              payloadJson: JSON.stringify({
+                artifactType: "competitorAudit.v1",
+                pageAnalyses: [{
+                  artifactType: "competitorPageAnalysis.v1",
+                  competitorId: "rival",
+                  dimensions: [],
+                  opportunities: ["Add FAQ answers"],
+                  warnings: [],
+                }],
+                contentGap: { gaps: [{ gapId: "gap-1" }] },
+                prioritizedActions: [{
+                  actionId: "action-1",
+                  priority: "high",
+                  dimension: "proof",
+                  action: "Add a verified customer-count claim with source evidence.",
+                  rationale: "Competitor proof signals are present while subject coverage is absent.",
+                  evidenceIds: ["ev-1"],
+                  origin: "supportedGap",
+                }],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "v".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [],
+          rerun: { capabilityId: "competitor-audit", versionId: "task-agent-version-6", retryOfRunId: "task-run-7" },
+        }));
+      }
+      if (runId === "task-run-8") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "competitor-positioning", displayName: "Competitor Positioning", objective: "Map narrative attributes." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-8",
+            artifactType: "competitorPositioning.v1",
+            versions: [{
+              id: "artifact-version-8",
+              payloadJson: JSON.stringify({
+                artifactType: "competitorPositioning.v1",
+                attributeMap: [{
+                  attributeId: "attr-1",
+                  attribute: "Evidence-first drafting",
+                  party: "brand",
+                  signals: ["citeable drafts"],
+                  evidenceIds: ["ev-1"],
+                  sourceIds: ["brand-1"],
+                }],
+                perceptionGaps: [{
+                  gapId: "pg-1",
+                  attribute: "Speed claims",
+                  status: "supportedGap",
+                  summary: "Competitor emphasizes speed; brand does not.",
+                  evidenceIds: ["ev-2"],
+                  competitorIds: ["rival"],
+                }],
+                messagingHypotheses: [{
+                  hypothesisId: "hyp-1",
+                  origin: "generatedHypothesis",
+                  message: "Lead with bounded review gates instead of speed slogans.",
+                  targetQuery: "fastest AI writing tool",
+                  relatedAttribute: "Speed claims",
+                  evidenceIds: ["ev-2"],
+                }],
+                observations: [],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "w".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [],
+          rerun: { capabilityId: "competitor-positioning", versionId: "task-agent-version-7", retryOfRunId: "task-run-8" },
+        }));
+      }
+      if (runId === "task-run-9") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: { capabilityId: "competitor-page", displayName: "Competitor Page Analysis", objective: "Analyze competitor signals." },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-9",
+            artifactType: "competitorPageAnalysis.v1",
+            versions: [{
+              id: "artifact-version-9",
+              payloadJson: JSON.stringify({
+                artifactType: "competitorPageAnalysis.v1",
+                competitorId: "rival",
+                dimensions: [{
+                  dimension: "proof",
+                  present: true,
+                  summary: "Page cites customer counts and named systems.",
+                  signals: ["500 teams"],
+                  evidenceIds: ["ev-1"],
+                }],
+                opportunities: ["Mirror proof density with verified owned evidence."],
+                warnings: [],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "x".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "content-gap", label: "Content Gap Finder", artifactType: "contentGapAnalysis.v1" },
+          ],
+          rerun: { capabilityId: "competitor-page", versionId: "task-agent-version-3", retryOfRunId: "task-run-9" },
         }));
       }
       return send(res, 404, { error: "Result not found." });

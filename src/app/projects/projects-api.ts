@@ -85,3 +85,22 @@ export async function appendProjectAssetVersion(
   ) as { project: CanvasProject };
   return body.project;
 }
+
+export async function attachTaskArtifactToProject(
+  projectId: string,
+  input: {
+    runId: string;
+    artifactVersionId: string;
+    title?: string;
+    kind?: AssetKind;
+  },
+) {
+  const body = await projectsFetch(
+    `/${encodeURIComponent(projectId)}/assets/from-task-artifact`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ) as { project: CanvasProject; assetId?: string };
+  return body;
+}

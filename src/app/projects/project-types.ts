@@ -1,6 +1,6 @@
 export type ProjectStatus = "planning" | "in-progress" | "review" | "complete";
 export type AssetStatus = "draft" | "in-review" | "approved" | "published";
-export type AssetKind = "brief" | "article" | "social" | "image" | "email";
+export type AssetKind = "brief" | "article" | "social" | "image" | "email" | "report";
 export type ActivityKind = "created" | "versioned" | "handoff" | "review";
 
 export type EvidenceReference = Readonly<{
@@ -22,6 +22,10 @@ export type AssetVersion = Readonly<{
     agent?: string;
     model?: string;
     note: string;
+    sourceRunId?: string;
+    sourceArtifactVersionId?: string;
+    artifactType?: string;
+    digest?: string;
   }>;
 }>;
 

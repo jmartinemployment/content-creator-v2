@@ -10,7 +10,7 @@ import {
 import { appendProjectAssetVersion, getProject } from "@/app/projects/projects-api";
 import type { AssetStatus, CanvasProject } from "@/app/projects/project-types";
 
-const assetGlyph = { brief: "▤", article: "¶", social: "▦", image: "▧", email: "✉" } as const;
+const assetGlyph = { brief: "▤", article: "¶", social: "▦", image: "▧", email: "✉", report: "▣" } as const;
 const statusStyles: Record<AssetStatus, string> = {
   draft: "border-slate-200 bg-slate-50 text-slate-700",
   "in-review": "border-amber-200 bg-amber-50 text-amber-800",
@@ -177,6 +177,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               <p className="mt-4 text-sm leading-6 text-[var(--cc-muted)]">{currentVersion.summary}</p>
               {currentVersion.provenance.note ? (
                 <p className="mt-3 text-xs text-[var(--cc-muted)]">{currentVersion.provenance.note}</p>
+              ) : null}
+              {currentVersion.provenance.sourceArtifactVersionId ? (
+                <p className="mt-2 font-mono text-[0.7rem] text-[var(--cc-muted)]" data-testid="attached-artifact-ref">
+                  source artifact {currentVersion.provenance.sourceArtifactVersionId}
+                  {currentVersion.provenance.artifactType
+                    ? ` · ${currentVersion.provenance.artifactType}`
+                    : ""}
+                </p>
               ) : null}
 
               <h3 className="mt-6 text-sm font-semibold text-[var(--cc-ink)]">Version history</h3>
