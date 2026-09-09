@@ -77,27 +77,29 @@ test("knowledge upload sends bytes directly to issued storage URL and finalizes 
 test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page, request }) => {
   await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "stale" } });
   await reachContextReview(page);
+  await page.getByRole("button", { name: "Create content" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
   await page.getByLabel("Editorial Handbook version 1").check();
   await page.getByLabel("Audience").selectOption("audience-version-1");
   await page.getByLabel("Style Guide").selectOption("style-version-1");
   await page.getByLabel("Evidence Engine product version 1").check();
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("Editorial Handbook is stale");
-  await expect(page.getByRole("button", { name: "Create content" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeEnabled();
   await expect.poll(() => page.evaluate(() => {
     const raw = sessionStorage.getItem("gcc-v2-new-create-draft");
     return raw ? JSON.parse(raw).contextSelection?.knowledgeAssetVersionIds : null;
   })).toEqual(["knowledge-version-1"]);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
   await expect(page.getByLabel("Editorial Handbook version 1")).toBeChecked();
   await expect(page.getByLabel("Audience")).toHaveValue("audience-version-1");
 
   await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "permission" } });
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("You no longer have access");
-  await expect(page.getByRole("button", { name: "Create content" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeDisabled();
 });
 
 test("manifest details distinguish original-context retry from refresh lineage", async ({ page, request }) => {

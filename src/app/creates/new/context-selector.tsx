@@ -90,6 +90,10 @@ export function ContextSelector({
   const productOptions = useMemo(() => approvedOptions(catalogs.products), [catalogs.products]);
 
   const resolveContext = useCallback(async () => {
+    if (!createId) {
+      setError("Context is checked automatically when the create is saved.");
+      return;
+    }
     setPreflightBusy(true);
     setError(null);
     try {
@@ -143,7 +147,7 @@ export function ContextSelector({
   return (
     <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50/40 p-5" aria-label="Run context">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="font-bold text-[var(--cc-ink)]">Run context</h3><p className="mt-1 text-xs text-[var(--cc-muted)]">Choose immutable versions. The server rechecks ownership, lifecycle, freshness, and compatibility.</p></div>
+        <div><h3 className="font-bold text-[var(--cc-ink)]">Run context</h3><p className="mt-1 text-xs text-[var(--cc-muted)]">Choose the approved brand information and sources to use for this content.</p></div>
         <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage Brand &amp; Sources</a>
       </div>
       {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading governed catalogs…</p> : null}
@@ -156,8 +160,8 @@ export function ContextSelector({
           ["Style Guide", "styleGuideVersionId", styleOptions],
         ] as const).map(([label, field, options]) => (
           <label key={field} className="text-xs font-semibold">{label}
-            <select aria-label={label} value={value[field] ?? ""} onChange={(event) => setSingle(field, event.target.value)} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal">
-              <option value="">Use owner/create default</option>
+            <select aria-label={label} disabled={options.length === 0} value={value[field] ?? ""} onChange={(event) => setSingle(field, event.target.value)} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal disabled:bg-slate-100 disabled:text-[var(--cc-muted)]">
+              <option value="">{options.length ? "Use saved default" : `No approved ${label.toLowerCase()} available`}</option>
               {options.map(({ item, version }) => <option key={version.id} value={version.id}>{item.name} · v{version.versionNumber}{version.lifecycle === "deprecated" ? " (deprecated)" : ""}</option>)}
             </select>
           </label>
@@ -167,9 +171,9 @@ export function ContextSelector({
         </label>
       </div>
 
-      <fieldset className="mt-4"><legend className="text-xs font-semibold">Knowledge</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{knowledgeOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs"><input type="checkbox" aria-label={`${item.name} version ${version.versionNumber}`} checked={value.knowledgeAssetVersionIds.includes(version.id)} onChange={() => onChange({ ...value, knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id) ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id) : [...value.knowledgeAssetVersionIds, version.id] })} /><span><strong>{item.name}</strong><span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span></span></label>)}</div></fieldset>
+      <fieldset className="mt-4"><legend className="text-xs font-semibold">Knowledge</legend>{knowledgeOptions.length ? <div className="mt-2 grid gap-2 sm:grid-cols-2">{knowledgeOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs"><input type="checkbox" aria-label={`${item.name} version ${version.versionNumber}`} checked={value.knowledgeAssetVersionIds.includes(version.id)} onChange={() => onChange({ ...value, knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id) ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id) : [...value.knowledgeAssetVersionIds, version.id] })} /><span><strong>{item.name}</strong><span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span></span></label>)}</div> : <p className="mt-2 text-xs text-[var(--cc-muted)]">No approved Knowledge available. Add and approve sources in Brand &amp; Sources.</p>}</fieldset>
 
-      <fieldset className="mt-4"><legend className="text-xs font-semibold">Products</legend><div className="mt-2 flex flex-wrap gap-2">{productOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-full border border-[var(--cc-line)] bg-white px-3 py-2 text-xs"><input type="checkbox" aria-label={`${item.name} product version ${version.versionNumber}`} checked={value.productSelections.some((selection) => selection.productVersionId === version.id)} onChange={() => onChange({ ...value, productSelections: value.productSelections.some((selection) => selection.productVersionId === version.id) ? value.productSelections.filter((selection) => selection.productVersionId !== version.id) : [...value.productSelections, { productVersionId: version.id, selectedFieldIds: [] }] })} />{item.name} v{version.versionNumber}</label>)}</div></fieldset>
+      <fieldset className="mt-4"><legend className="text-xs font-semibold">Products</legend>{productOptions.length ? <div className="mt-2 flex flex-wrap gap-2">{productOptions.map(({ item, version }) => <label key={version.id} className="flex gap-2 rounded-full border border-[var(--cc-line)] bg-white px-3 py-2 text-xs"><input type="checkbox" aria-label={`${item.name} product version ${version.versionNumber}`} checked={value.productSelections.some((selection) => selection.productVersionId === version.id)} onChange={() => onChange({ ...value, productSelections: value.productSelections.some((selection) => selection.productVersionId === version.id) ? value.productSelections.filter((selection) => selection.productVersionId !== version.id) : [...value.productSelections, { productVersionId: version.id, selectedFieldIds: [] }] })} />{item.name} v{version.versionNumber}</label>)}</div> : <p className="mt-2 text-xs text-[var(--cc-muted)]">No approved Products available.</p>}</fieldset>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="flex gap-2 rounded-md bg-white p-3 text-xs"><input type="checkbox" checked={value.webSearchEnabled} onChange={(event) => onChange({ ...value, webSearchEnabled: event.target.checked })} /><span><strong>Web search</strong><span className="block text-[var(--cc-muted)]">Optional current public research.</span></span></label>
@@ -186,7 +190,8 @@ export function ContextSelector({
         {value.runAttachmentIds.length ? <ul className="mt-2 list-disc pl-4 text-xs">{value.runAttachmentIds.map((id) => <li key={id} className="font-mono">{id}</li>)}</ul> : null}
       </div>
 
-      <button type="button" disabled={preflightBusy || uploadBusy || loading} onClick={() => void resolveContext()} className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{preflightBusy ? "Checking context…" : "Check context"}</button>
+      {!createId ? <p className="mt-4 text-xs text-[var(--cc-muted)]">Context will be checked automatically when you create the content. Manual recheck is available after the create is saved.</p> : null}
+      <button type="button" disabled={!createId || preflightBusy || uploadBusy || loading} onClick={() => void resolveContext()} className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{preflightBusy ? "Checking context…" : createId ? "Check context" : "Check after save"}</button>
 
       {preview ? <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-white p-4" aria-label="Effective context preflight">
         <div className="flex flex-wrap justify-between gap-2"><h4 className="font-semibold">Effective context preflight</h4><span className="text-xs text-[var(--cc-muted)]">{preview.estimatedContextSize.toLocaleString()} estimated units</span></div>
