@@ -106,3 +106,43 @@ export async function runDueGridSchedules(input?: { force?: boolean }) {
   };
   return body;
 }
+
+export async function putGridPipeline(
+  gridId: string,
+  input: { pipelineDefinitionId: string | null },
+) {
+  const body = await gridsFetch(`/${encodeURIComponent(gridId)}/pipeline`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  }) as { grid: Grid };
+  return body.grid;
+}
+
+export async function startGridPipelineRun(
+  gridId: string,
+  input?: { mode?: GridRunMode; sampleSize?: number; pipelineDefinitionId?: string },
+) {
+  const body = await gridsFetch(`/${encodeURIComponent(gridId)}/pipeline-runs`, {
+    method: "POST",
+    body: JSON.stringify(input ?? { mode: "sample", sampleSize: 10 }),
+  }) as {
+    grid: Grid;
+    pipelineRunId: string;
+    workItemCount: number;
+    pipeline: { id: string; name: string; status: string };
+  };
+  return body;
+}
+
+export async function putGridRoiProjection(
+  gridId: string,
+  input:
+    | { runId: string; artifactVersionId: string }
+    | { clear: true },
+) {
+  const body = await gridsFetch(`/${encodeURIComponent(gridId)}/roi-projection`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  }) as { grid: Grid };
+  return body.grid;
+}

@@ -6,8 +6,10 @@ import {
   createGridRow,
   createGridRun,
   getGrid,
+  putGridPipeline,
   putGridSchedule,
   runDueGridSchedule,
+  startGridPipelineRun,
 } from "@/app/grid/grid-api";
 import {
   estimateBudget,
@@ -20,6 +22,8 @@ import {
   succeededCount,
 } from "@/app/grid/grid-model";
 import type { Grid, GridRowStatus, GridRunMode, GridScheduleCadence } from "@/app/grid/grid-types";
+import { listPipelines } from "@/app/pipelines/pipeline-api";
+import type { PipelineSummary } from "@/app/pipelines/pipeline-types";
 import {
   attachGridRowsToProject,
   listProjects,
@@ -49,6 +53,9 @@ export function GridDetail({ gridId }: { gridId: string }) {
   const [scheduleMode, setScheduleMode] = useState<GridRunMode>("sample");
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [pipelines, setPipelines] = useState<PipelineSummary[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [pipelineBusy, setPipelineBusy] = useState(false);
 
   useEffect(() => {
     void getGrid(gridId)
@@ -58,6 +65,7 @@ export function GridDetail({ gridId }: { gridId: string }) {
         setScheduleCadence(schedule.cadence);
         setScheduleMode(schedule.mode);
         setScheduleEnabled(schedule.enabled);
+        setSelectedPipelineId(next.config.pipelineDefinitionId ?? "");
       })
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load grid."))
       .finally(() => setReady(true));
@@ -70,6 +78,16 @@ export function GridDetail({ gridId }: { gridId: string }) {
         setSelectedProjectId((current) => current || items[0]?.id || "");
       })
       .catch(() => setProjects([]));
+  }, []);
+
+  useEffect(() => {
+    void listPipelines()
+      .then((items) => {
+        const published = items.filter((item) => item.status === "published");
+        setPipelines(published);
+        setSelectedPipelineId((current) => current || published[0]?.id || "");
+      })
+      .catch(() => setPipelines([]));
   }, []);
 
   const samplePreview = useMemo(() => {
@@ -85,6 +103,12 @@ export function GridDetail({ gridId }: { gridId: string }) {
   );
   const schedule = useMemo(() => readGridSchedule(grid?.config), [grid]);
   const due = scheduleIsDue(schedule);
+  const attachedPipelineId = grid?.config.pipelineDefinitionId ?? null;
+  const lastPipelineRunId = grid?.config.lastPipelineRunId ?? null;
+  const attachedPipeline = useMemo(
+    () => pipelines.find((item) => item.id === attachedPipelineId) ?? null,
+    [pipelines, attachedPipelineId],
+  );
 
   if (!ready) {
     return <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-[var(--cc-muted)]">Loading grid…</main>;
@@ -194,15 +218,63 @@ export function GridDetail({ gridId }: { gridId: string }) {
       setScheduleCadence(next.cadence);
       setScheduleMode(next.mode);
       setScheduleEnabled(next.enabled);
+      const pipelineProjected = Boolean(result.grid.config.lastPipelineRunId)
+        && String(result.reason ?? "").includes("pipeline");
       setAttachNotice(
         result.ran
-          ? `Scheduled ${next.mode} run completed. Next run ${next.nextRunAt ?? "unset"}.`
+          ? pipelineProjected
+            ? `Scheduled pipeline projection completed (${result.grid.config.lastPipelineRunId}). Next run ${next.nextRunAt ?? "unset"}.`
+            : `Scheduled ${next.mode} run completed. Next run ${next.nextRunAt ?? "unset"}.`
           : `Schedule not due yet (${result.reason ?? "not-due"}).`,
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not run due schedule.");
     } finally {
       setScheduleBusy(false);
+    }
+  }
+
+  async function savePipelineAttachment() {
+    setPipelineBusy(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const updated = await putGridPipeline(grid!.id, {
+        pipelineDefinitionId: selectedPipelineId || null,
+      });
+      setGrid(updated);
+      setSelectedPipelineId(updated.config.pipelineDefinitionId ?? "");
+      setAttachNotice(
+        updated.config.pipelineDefinitionId
+          ? "Pipeline attached. Sample/full schedule runs will project rows as pipeline work items."
+          : "Pipeline detached. Schedules return to grid TaskRun stubs.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not attach pipeline.");
+    } finally {
+      setPipelineBusy(false);
+    }
+  }
+
+  async function projectPipeline(mode: GridRunMode) {
+    setPipelineBusy(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const result = await startGridPipelineRun(grid!.id, {
+        mode,
+        sampleSize: mode === "sample" ? 10 : undefined,
+        pipelineDefinitionId: attachedPipelineId || selectedPipelineId || undefined,
+      });
+      setGrid(result.grid);
+      setSelectedPipelineId(result.grid.config.pipelineDefinitionId ?? selectedPipelineId);
+      setAttachNotice(
+        `Projected ${result.workItemCount} work item${result.workItemCount === 1 ? "" : "s"} into pipeline run ${result.pipelineRunId}.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not project grid into pipeline.");
+    } finally {
+      setPipelineBusy(false);
     }
   }
 
@@ -356,6 +428,12 @@ export function GridDetail({ gridId }: { gridId: string }) {
                   <dt className="text-[var(--cc-muted)]">Est. credits</dt>
                   <dd className="font-medium">{latestRun.budgetPreview.estimatedCredits}</dd>
                 </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--cc-muted)]">Actor</dt>
+                  <dd className="font-medium font-mono text-xs">
+                    {latestRun.actor === "schedule" ? "schedule" : latestRun.actor}
+                  </dd>
+                </div>
               </dl>
             ) : (
               <p className="mt-4 text-sm text-[var(--cc-muted)]">No runs yet. Start with a sample run.</p>
@@ -363,10 +441,112 @@ export function GridDetail({ gridId }: { gridId: string }) {
           </section>
 
           <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
+            <h2 className="font-semibold text-[var(--cc-ink)]">ROI projection</h2>
+            <p className="mt-2 text-xs leading-5 text-[var(--cc-muted)]">
+              Pin a directional roiProjection.v1 from the ROI Business Calculator. Schedules and
+              pipeline Optimize stages can share the same business-case assumptions.
+            </p>
+            {grid.config.roiProjection?.artifactVersionId ? (
+              <dl className="mt-4 space-y-2 text-sm" data-testid="grid-roi-projection">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--cc-muted)]">Artifact</dt>
+                  <dd className="font-mono text-xs">{grid.config.roiProjection.artifactType ?? "roiProjection.v1"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--cc-muted)]">Version</dt>
+                  <dd className="font-mono text-xs">{grid.config.roiProjection.artifactVersionId}</dd>
+                </div>
+                {typeof grid.config.roiProjection.expectedRoiPercent === "number" ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-[var(--cc-muted)]">Expected ROI</dt>
+                    <dd className="font-medium">
+                      {grid.config.roiProjection.expectedRoiPercent.toFixed(1)}%
+                      <span className="ml-1 text-xs font-normal text-[var(--cc-muted)]">(not cash)</span>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
+              <p className="mt-4 text-sm text-[var(--cc-muted)]">
+                No ROI projection pinned. Run{" "}
+                <Link href="/task-agents/roi-business-calculator" className="font-semibold text-[var(--cc-accent)] underline">
+                  ROI Business Calculator
+                </Link>
+                {" "}and choose Pin ROI on Grid.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
+            <h2 className="font-semibold text-[var(--cc-ink)]">Pipeline projection</h2>
+            <p className="mt-2 text-xs leading-5 text-[var(--cc-muted)]">
+              Attach a published Geek Content Pipeline so grid rows become durable WorkItems.
+              Enabled schedules then start pipeline runs instead of orphaned cell stubs.
+            </p>
+            {pipelines.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--cc-muted)]">
+                No published pipelines yet.{" "}
+                <Link href="/pipelines" className="font-semibold text-[var(--cc-accent)] underline">
+                  Create one
+                </Link>
+                .
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-semibold text-[var(--cc-ink)]">
+                  Pipeline
+                  <select
+                    aria-label="Attach pipeline to grid"
+                    className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+                    value={selectedPipelineId}
+                    onChange={(event) => setSelectedPipelineId(event.target.value)}
+                  >
+                    <option value="">None</option>
+                    {pipelines.map((pipeline) => (
+                      <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-sm text-[var(--cc-ink)]" aria-live="polite">
+                  {attachedPipeline
+                    ? `Attached: ${attachedPipeline.name}`
+                    : "No pipeline attached"}
+                  {lastPipelineRunId ? ` · last run ${lastPipelineRunId}` : ""}
+                </p>
+                <button
+                  type="button"
+                  disabled={pipelineBusy}
+                  onClick={() => void savePipelineAttachment()}
+                  className="w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {pipelineBusy ? "Saving…" : "Save pipeline attachment"}
+                </button>
+                <button
+                  type="button"
+                  disabled={pipelineBusy || grid.rows.length === 0 || !(attachedPipelineId || selectedPipelineId)}
+                  onClick={() => void projectPipeline("sample")}
+                  className="w-full rounded-lg bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Project sample as work items
+                </button>
+                {attachedPipelineId ? (
+                  <Link
+                    href={`/pipelines/${encodeURIComponent(attachedPipelineId)}`}
+                    className="inline-block text-xs font-semibold text-[var(--cc-accent)] underline"
+                  >
+                    Open pipeline
+                  </Link>
+                ) : null}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
             <h2 className="font-semibold text-[var(--cc-ink)]">Schedule</h2>
             <p className="mt-2 text-xs leading-5 text-[var(--cc-muted)]">
               Server-owned cadence for sample or full runs. Due runs are fired from this panel
-              (cron can call the same run-due endpoint).
+              (cron can call the same run-due endpoint)
+              {attachedPipelineId ? " and project into the attached pipeline." : "."}
             </p>
             <p className="mt-3 text-sm text-[var(--cc-ink)]" aria-live="polite">
               {scheduleLabel(schedule)}
@@ -493,9 +673,11 @@ export function GridDetail({ gridId }: { gridId: string }) {
                     <li key={`${runItem.id}-${index}`} className="text-sm">
                       <p className="font-medium text-[var(--cc-ink)]">
                         {entry.mode} · {entry.outputCount} outputs · {entry.estimatedCredits} credits
+                        {entry.actor === "schedule" ? " · schedule" : ""}
                       </p>
                       <p className="mt-1 text-xs text-[var(--cc-muted)]">
                         {entry.status} · {entry.durationMs}ms · {new Date(entry.startedAt).toLocaleString()}
+                        {entry.actor && entry.actor !== "schedule" ? ` · ${entry.actor}` : ""}
                       </p>
                     </li>
                   )),

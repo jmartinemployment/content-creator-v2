@@ -2086,6 +2086,7 @@ const server = http.createServer(async (req, res) => {
     { key: "adapt-canvas", lifecycle: "adapt", kind: "handoff", handoff: "canvas", displayName: "Canvas adapt", dependsOn: ["create-faq"] },
     { key: "activate-publish", lifecycle: "activate", kind: "handoff", handoff: "publish", displayName: "Publish handoff", dependsOn: ["adapt-canvas"] },
     { key: "optimize-readiness", lifecycle: "optimize", kind: "task-agent", capabilityId: "ai-readiness", displayName: "AI Readiness Score", dependsOn: ["activate-publish"] },
+    { key: "optimize-roi", lifecycle: "optimize", kind: "task-agent", capabilityId: "roi-business-calculator", displayName: "ROI Business Calculator", dependsOn: ["optimize-readiness"] },
   ];
   function pipelineDetail(pipeline) {
     return {
@@ -2102,70 +2103,113 @@ const server = http.createServer(async (req, res) => {
       runs: pipeline.runs,
     };
   }
-  function executePipelineRun(pipeline, failStageKey = null) {
+  function executePipelineRun(pipeline, failStageKey = null, workItemInputs = null) {
     const now = new Date().toISOString();
-    let failed = false;
-    const stageAttempts = [];
-    for (const stage of pipeline.stages) {
+    const inputs = Array.isArray(workItemInputs) && workItemInputs.length > 0
+      ? workItemInputs
+      : [{}];
+    const history = [];
+    const workItems = [];
+    let anyFailed = false;
+    for (let index = 0; index < inputs.length; index += 1) {
+      let failed = false;
+      const stageAttempts = [];
+      for (const stage of pipeline.stages) {
       let status = "succeeded";
       let error = null;
-      let output = stage.kind === "task-agent"
-        ? { artifactType: `${stage.capabilityId}.stub.v1`, capabilityId: stage.capabilityId, summary: `Stub artifact from ${stage.displayName}.`, lifecycle: stage.lifecycle }
-        : { handoff: stage.handoff, summary: `Completed ${stage.displayName} handoff.`, lifecycle: stage.lifecycle };
+      let output;
+      if (stage.capabilityId === "roi-business-calculator") {
+        output = {
+          artifactType: "roiProjection.v1",
+          formulaVersion: "gcc-roi-formulas.v1",
+          contractVersion: "roiBusinessCalculatorInput.v1",
+          capabilityId: "roi-business-calculator",
+          lifecycle: stage.lifecycle,
+          workItemIndex: index,
+          summary: "Directional ROI projection from pipeline Optimize stage.",
+          scenarios: [
+            { scenario: "conservative", label: "Conservative", roiPercent: 30 },
+            { scenario: "expected", label: "Expected", roiPercent: 48 },
+            { scenario: "upside", label: "Upside", roiPercent: 70 },
+          ],
+          warnings: ["Directional model only — not a quote, guarantee, or audited finance result."],
+        };
+      } else if (stage.kind === "task-agent") {
+        output = {
+          artifactType: `${stage.capabilityId}.stub.v1`,
+          capabilityId: stage.capabilityId,
+          summary: `Stub artifact from ${stage.displayName}.`,
+          lifecycle: stage.lifecycle,
+          workItemIndex: index,
+        };
+      } else {
+        output = {
+          handoff: stage.handoff,
+          summary: `Completed ${stage.displayName} handoff.`,
+          lifecycle: stage.lifecycle,
+          workItemIndex: index,
+        };
+      }
       if (failed) {
         status = "skipped";
         error = "Skipped after earlier stage failure.";
         output = null;
-      } else if (failStageKey && failStageKey === stage.key) {
+      } else if (failStageKey && failStageKey === stage.key && index === 0) {
         status = "failed";
         error = `Injected isolation failure at stage '${stage.key}'.`;
         output = null;
         failed = true;
       }
-      stageAttempts.push({
+        stageAttempts.push({
+          id: crypto.randomUUID(),
+          stageKey: stage.key,
+          lifecycleStage: stage.lifecycle,
+          kind: stage.kind,
+          displayName: stage.displayName,
+          capabilityId: stage.capabilityId || null,
+          handoff: stage.handoff || null,
+          attemptNumber: 1,
+          status,
+          output,
+          error,
+          startedAtUtc: now,
+          completedAtUtc: now,
+        });
+        history.push({
+          atUtc: now,
+          workItemIndex: index,
+          stageKey: stage.key,
+          lifecycle: stage.lifecycle,
+          status,
+        });
+      }
+      workItems.push({
         id: crypto.randomUUID(),
-        stageKey: stage.key,
-        lifecycleStage: stage.lifecycle,
-        kind: stage.kind,
-        displayName: stage.displayName,
-        capabilityId: stage.capabilityId || null,
-        handoff: stage.handoff || null,
-        attemptNumber: 1,
-        status,
-        output,
-        error,
-        startedAtUtc: now,
-        completedAtUtc: now,
+        workItemIndex: index,
+        input: inputs[index],
+        status: failed ? "failed" : "succeeded",
+        error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
+        updatedAtUtc: now,
+        stageAttempts,
       });
+      anyFailed = anyFailed || failed;
     }
     const run = {
       id: `pipeline-run-${pipeline.runs.length + 1}`,
       definitionVersionNumber: pipeline.versionNumber,
       definitionDigest: pipeline.digest,
-      status: failed ? "failed" : "succeeded",
+      status: anyFailed ? "failed" : "succeeded",
       actorUserId: "e2e-user",
       startedAtUtc: now,
       completedAtUtc: now,
       pausedAtUtc: null,
-      error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
-      history: stageAttempts.map((attempt) => ({
-        atUtc: attempt.completedAtUtc,
-        stageKey: attempt.stageKey,
-        lifecycle: attempt.lifecycleStage,
-        status: attempt.status,
-      })),
-      workItems: [{
-        id: crypto.randomUUID(),
-        workItemIndex: 0,
-        status: failed ? "failed" : "succeeded",
-        error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
-        updatedAtUtc: now,
-        stageAttempts,
-      }],
+      error: anyFailed ? "One or more work items failed; later stages on failed items were skipped." : null,
+      history,
+      workItems,
     };
     pipeline.runs = [run, ...pipeline.runs];
     pipeline.updatedAtUtc = now;
-    return pipeline;
+    return run;
   }
   if (url.pathname === "/api/geek-content-creator-v2/pipelines" && req.method === "GET") {
     return send(res, 200, {
@@ -2230,7 +2274,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 409, { error: "Only published pipelines can be run." });
       }
       const body = JSON.parse(rawBody || "{}");
-      executePipelineRun(pipeline, body.failStageKey || null);
+      executePipelineRun(pipeline, body.failStageKey || null, body.workItems || null);
       return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
     }
   }
@@ -2280,7 +2324,30 @@ const server = http.createServer(async (req, res) => {
         results.push({ gridId: grid.id, name: grid.name, ran: false, reason: "not-due" });
         continue;
       }
-      executeGridRun(grid, schedule.mode === "full" ? "full" : "sample", schedule.sampleSize || 10, "schedule");
+      const mode = schedule.mode === "full" ? "full" : "sample";
+      const sampleSize = schedule.sampleSize || 10;
+      let reason = force ? "forced" : "due";
+      if (grid.config.pipelineDefinitionId) {
+        const pipeline = pipelines.get(grid.config.pipelineDefinitionId);
+        if (!pipeline) {
+          skippedCount += 1;
+          results.push({ gridId: grid.id, name: grid.name, ran: false, reason: "pipeline-missing" });
+          continue;
+        }
+        const selected = mode === "full" ? grid.rows : grid.rows.slice(0, sampleSize);
+        const run = executePipelineRun(
+          pipeline,
+          null,
+          selected.map((row) => row.input || {}),
+        );
+        grid.config = {
+          ...grid.config,
+          lastPipelineRunId: run.id,
+        };
+        reason = force ? "forced-pipeline" : "due-pipeline";
+      } else {
+        executeGridRun(grid, mode, sampleSize, "schedule");
+      }
       const completed = new Date();
       const next = new Date(completed.getTime());
       if (schedule.cadence === "daily") next.setUTCDate(next.getUTCDate() + 1);
@@ -2299,7 +2366,7 @@ const server = http.createServer(async (req, res) => {
         gridId: grid.id,
         name: grid.name,
         ran: true,
-        reason: force ? "forced" : "due",
+        reason,
         lastRunStatus: grid.runs[0]?.status ?? null,
       });
     }
@@ -2347,7 +2414,7 @@ const server = http.createServer(async (req, res) => {
   }
   {
     const match = url.pathname.match(
-      /^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs|schedule(?:\/run-due)?))?$/,
+      /^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs|pipeline-runs|pipeline|roi-projection|schedule(?:\/run-due)?))?$/,
     );
     if (match) {
       const gridId = decodeURIComponent(match[1]);
@@ -2378,6 +2445,123 @@ const server = http.createServer(async (req, res) => {
         }];
         grid.updatedAt = now;
         return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+      if (action === "pipeline" && req.method === "PUT") {
+        const body = JSON.parse(rawBody || "{}");
+        const pipelineDefinitionId = typeof body.pipelineDefinitionId === "string"
+          && body.pipelineDefinitionId.trim()
+          ? body.pipelineDefinitionId.trim()
+          : null;
+        if (pipelineDefinitionId) {
+          const pipeline = pipelines.get(pipelineDefinitionId);
+          if (!pipeline) return send(res, 404, { error: "Pipeline not found." });
+          if (pipeline.status !== "published") {
+            return send(res, 409, { error: "Only published pipelines can be attached to a grid." });
+          }
+        }
+        grid.config = {
+          ...grid.config,
+          pipelineDefinitionId,
+          lastPipelineRunId: pipelineDefinitionId ? grid.config.lastPipelineRunId || null : null,
+        };
+        grid.updatedAt = new Date().toISOString();
+        return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+      if (action === "roi-projection" && req.method === "PUT") {
+        const body = JSON.parse(rawBody || "{}");
+        if (body.clear === true) {
+          const { roiProjection: _removed, ...rest } = grid.config;
+          grid.config = rest;
+          grid.updatedAt = new Date().toISOString();
+          return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+        }
+        const runId = typeof body.runId === "string" ? body.runId : null;
+        const artifactVersionId = typeof body.artifactVersionId === "string" ? body.artifactVersionId : null;
+        if (!runId || !artifactVersionId) {
+          return send(res, 400, { error: "runId and artifactVersionId are required." });
+        }
+        const run = taskRuns.get(runId);
+        if (!run) return send(res, 404, { error: "Task run not found." });
+        if (run.status !== "succeeded") {
+          return send(res, 409, { error: "Only succeeded task runs can pin an ROI projection on a grid." });
+        }
+        let artifactType = "roiProjection.v1";
+        let expectedRoiPercent = null;
+        let found = false;
+        for (const artifact of run.artifacts || []) {
+          for (const version of artifact.versions || []) {
+            if (version.id !== artifactVersionId) continue;
+            found = true;
+            artifactType = artifact.artifactType || artifactType;
+            try {
+              const payload = typeof version.payloadJson === "string"
+                ? JSON.parse(version.payloadJson)
+                : version.payloadJson;
+              const expected = (payload?.scenarios || []).find((item) => item.scenario === "expected");
+              if (expected && Number.isFinite(expected.roiPercent)) expectedRoiPercent = expected.roiPercent;
+            } catch {
+              // ignore
+            }
+          }
+        }
+        if (!found) return send(res, 404, { error: "Artifact version was not found on the owned task run." });
+        if (artifactType !== "roiProjection.v1") {
+          return send(res, 400, { error: "Only roiProjection.v1 artifacts can be pinned to a grid." });
+        }
+        grid.config = {
+          ...grid.config,
+          roiProjection: {
+            runId,
+            artifactVersionId,
+            artifactType,
+            expectedRoiPercent,
+            attachedAtUtc: new Date().toISOString(),
+          },
+        };
+        grid.updatedAt = new Date().toISOString();
+        return send(res, 200, {
+          contractVersion: "gcc-grid.v1",
+          grid,
+          roiProjection: grid.config.roiProjection,
+        });
+      }
+      if (action === "pipeline-runs" && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const pipelineDefinitionId = (typeof body.pipelineDefinitionId === "string" && body.pipelineDefinitionId.trim())
+          || grid.config.pipelineDefinitionId
+          || null;
+        if (!pipelineDefinitionId) {
+          return send(res, 400, { error: "Attach a published pipeline before projecting rows." });
+        }
+        const pipeline = pipelines.get(pipelineDefinitionId);
+        if (!pipeline) return send(res, 404, { error: "Pipeline not found." });
+        if (pipeline.status !== "published") {
+          return send(res, 409, { error: "Only published pipelines can be run." });
+        }
+        const mode = body.mode === "full" ? "full" : "sample";
+        const sampleSize = Number.isFinite(body.sampleSize) && body.sampleSize > 0 ? body.sampleSize : 10;
+        const selected = mode === "full" ? grid.rows : grid.rows.slice(0, sampleSize);
+        if (selected.length === 0) {
+          return send(res, 400, { error: "Grid has no rows to project into the pipeline." });
+        }
+        const run = executePipelineRun(
+          pipeline,
+          null,
+          selected.map((row) => row.input || {}),
+        );
+        grid.config = {
+          ...grid.config,
+          pipelineDefinitionId,
+          lastPipelineRunId: run.id,
+        };
+        grid.updatedAt = new Date().toISOString();
+        return send(res, 200, {
+          contractVersion: "gcc-grid.v1",
+          grid,
+          pipelineRunId: run.id,
+          workItemCount: run.workItems.length,
+          pipeline: { id: pipeline.id, name: pipeline.name, status: pipeline.status },
+        });
       }
       if (action === "schedule" && req.method === "PUT") {
         const body = JSON.parse(rawBody || "{}");
@@ -2424,7 +2608,26 @@ const server = http.createServer(async (req, res) => {
             grid,
           });
         }
-        executeGridRun(grid, schedule.mode === "full" ? "full" : "sample", schedule.sampleSize || 10, "schedule");
+        const mode = schedule.mode === "full" ? "full" : "sample";
+        const sampleSize = schedule.sampleSize || 10;
+        let reason = force ? "forced" : "due";
+        if (grid.config.pipelineDefinitionId) {
+          const pipeline = pipelines.get(grid.config.pipelineDefinitionId);
+          if (!pipeline) return send(res, 404, { error: "Pipeline not found." });
+          const selected = mode === "full" ? grid.rows : grid.rows.slice(0, sampleSize);
+          const run = executePipelineRun(
+            pipeline,
+            null,
+            selected.map((row) => row.input || {}),
+          );
+          grid.config = {
+            ...grid.config,
+            lastPipelineRunId: run.id,
+          };
+          reason = force ? "forced-pipeline" : "due-pipeline";
+        } else {
+          executeGridRun(grid, mode, sampleSize, "schedule");
+        }
         const completed = new Date();
         const next = new Date(completed.getTime());
         if (schedule.cadence === "daily") next.setUTCDate(next.getUTCDate() + 1);
@@ -2441,7 +2644,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, {
           contractVersion: "gcc-grid.v1",
           ran: true,
-          reason: force ? "forced" : "due",
+          reason,
           grid,
         });
       }
@@ -4548,7 +4751,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
         const gross = productivity + external;
         const net = gross - tco;
         const roiPercent = tco > 0 ? (net / tco) * 100 : null;
-        return send(res, 200, taskResultShell(runId, existing, {
+        const shell = taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: {
             capabilityId: "roi-business-calculator",
@@ -4600,7 +4803,17 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
             { capabilityId: "ai-readiness", label: "AI Readiness Score", artifactType: "readinessScore.v1" },
           ],
           rerun: { capabilityId: "roi-business-calculator", versionId: "task-agent-version-17", retryOfRunId: "task-run-17" },
-        }));
+        });
+        if (existing) {
+          taskRuns.set(runId, {
+            ...existing,
+            status: "succeeded",
+            phase: "complete",
+            progressPercent: 100,
+            artifacts: shell.artifacts,
+          });
+        }
+        return send(res, 200, shell);
       }
       return send(res, 404, { error: "Result not found." });
     }

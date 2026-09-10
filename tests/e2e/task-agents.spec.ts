@@ -85,6 +85,39 @@ test("ROI business calculator task agent projects scenarios and reconciles telem
   await expect(page.getByTestId("roi-projection-result")).toContainText("Directional model only");
 });
 
+test("roiProjection.v1 can attach to Canvas and pin on Grid", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await expect(page.getByRole("link", { name: "Evidence Engine launch" })).toBeVisible();
+
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await expect(page.getByRole("link", { name: "FAQ launch batch" })).toBeVisible();
+
+  await openAuthenticated(page, "/task-agents/roi-business-calculator");
+  await page.getByRole("button", { name: /Run / }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("attach-to-project")).toBeVisible();
+  await page.getByLabel("Attach to project").selectOption({ label: "Evidence Engine launch" });
+  await page.getByRole("button", { name: "Attach artifact" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Attached" })).toBeVisible();
+
+  await expect(page.getByTestId("attach-to-grid")).toBeVisible();
+  await page.getByLabel("Attach ROI to grid").selectOption({ label: "FAQ launch batch" });
+  await page.getByRole("button", { name: "Pin ROI projection" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "ROI projection pinned" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Open grid" }).click();
+  await expect(page.getByRole("heading", { name: "FAQ launch batch" })).toBeVisible();
+  await expect(page.getByTestId("grid-roi-projection")).toContainText("roiProjection.v1");
+  await expect(page.getByTestId("grid-roi-projection")).toContainText("not cash");
+
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Engine launch" })).toBeVisible();
+  await expect(page.getByText(/roiProjection\.v1|AI-Based ROI Business Calculator/).first()).toBeVisible();
+});
+
 test("task-agent catalog filters by Jasper workflow and opens a diagnostic", async ({ page }) => {
   await openAuthenticated(page, "/task-agents");
   await expect(page.getByRole("heading", { name: "Task Agents" })).toBeVisible();

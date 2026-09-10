@@ -165,7 +165,8 @@ test("grid schedule can be saved and fired when due", async ({ page }) => {
   await page.getByRole("button", { name: "Run due now" }).click();
   await expect(page.getByText(/Scheduled sample run completed/)).toBeVisible();
   await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
-  await expect(page.getByRole("list", { name: "Grid run history" }).getByText("sample · 10 outputs")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Grid run history" }).getByText(/schedule/)).toBeVisible();
+  await expect(page.getByText("Actor")).toBeVisible();
 });
 
 test("grid list can run all due schedules in one action", async ({ page }) => {
@@ -186,4 +187,34 @@ test("grid list can run all due schedules in one action", async ({ page }) => {
   await page.getByRole("button", { name: /Run due schedules \(1\)/ }).click();
   await expect(page.getByText(/Ran 1 due schedule/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Run due schedules" })).toBeDisabled();
+});
+
+test("grid can attach a pipeline and project sample rows as work items", async ({ page }) => {
+  await openAuthenticated(page, "/pipelines");
+  await page.getByRole("button", { name: "Create AEO pipeline template" }).click();
+  await expect(page.getByRole("heading", { name: "AEO content pipeline" })).toBeVisible();
+
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+
+  await expect(page.getByRole("heading", { name: "Pipeline projection" })).toBeVisible();
+  await page.getByLabel("Attach pipeline to grid").selectOption({ label: "AEO content pipeline" });
+  await page.getByRole("button", { name: "Save pipeline attachment" }).click();
+  await expect(page.getByText(/Pipeline attached/)).toBeVisible();
+  await expect(page.getByText(/Attached: AEO content pipeline/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Project sample as work items" }).click();
+  await expect(page.getByText(/Projected 10 work items into pipeline run/)).toBeVisible();
+  await expect(page.getByText(/last run pipeline-run-/)).toBeVisible();
+
+  await page.getByLabel("Grid schedule cadence").selectOption("daily");
+  await page.getByLabel("Enable grid schedule").check();
+  await page.getByRole("button", { name: "Save schedule" }).click();
+  await page.getByRole("button", { name: "Run due now" }).click();
+  await expect(page.getByText(/Scheduled pipeline projection completed/)).toBeVisible();
+
+  await page.getByRole("link", { name: "Open pipeline" }).click();
+  await expect(page.getByRole("heading", { name: "AEO content pipeline" })).toBeVisible();
+  await expect(page.getByLabel("Latest pipeline run")).toContainText("succeeded");
 });

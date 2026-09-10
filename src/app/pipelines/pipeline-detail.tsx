@@ -170,8 +170,15 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
                   ) : null}
                   {attempt.output && typeof attempt.output === "object" ? (
                     <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                      {String((attempt.output as { summary?: string }).summary
-                        ?? JSON.stringify(attempt.output).slice(0, 120))}
+                      {String(
+                        (attempt.output as { artifactType?: string }).artifactType
+                          ?? (attempt.output as { summary?: string }).summary
+                          ?? JSON.stringify(attempt.output).slice(0, 120),
+                      )}
+                      {(attempt.output as { summary?: string }).summary
+                        && (attempt.output as { artifactType?: string }).artifactType
+                        ? ` · ${(attempt.output as { summary?: string }).summary}`
+                        : ""}
                     </p>
                   ) : null}
                 </li>

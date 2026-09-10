@@ -39,14 +39,19 @@ export async function createAeoPipeline(name?: string): Promise<PipelineDefiniti
 
 export async function startPipelineRun(
   id: string,
-  options?: { failStageKey?: string; input?: Record<string, unknown> },
+  options?: {
+    failStageKey?: string;
+    input?: Record<string, unknown>;
+    workItems?: ReadonlyArray<Record<string, unknown>>;
+  },
 ): Promise<PipelineDefinition> {
   const response = await fetch(`/api/gcc-v2/pipelines/${encodeURIComponent(id)}/runs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      input: options?.input ?? { topic: "Evidence Engine FAQ launch" },
+      input: options?.input ?? options?.workItems?.[0] ?? { topic: "Evidence Engine FAQ launch" },
       failStageKey: options?.failStageKey,
+      workItems: options?.workItems,
     }),
   });
   const body = await readJson<{ pipeline: PipelineDefinition }>(response);

@@ -26,6 +26,15 @@ export type GridConfig = Readonly<{
   creditsPerRow: number;
   executionNote: string;
   schedule?: GridSchedule;
+  pipelineDefinitionId?: string | null;
+  lastPipelineRunId?: string | null;
+  roiProjection?: Readonly<{
+    runId: string;
+    artifactVersionId: string;
+    artifactType?: string;
+    expectedRoiPercent?: number | null;
+    attachedAtUtc?: string | null;
+  }> | null;
 }>;
 
 export type GridRow = Readonly<{
