@@ -32,5 +32,7 @@ export type StudioDryRunResult = {
   valid: boolean;
   renderedInstructions: string;
   missingFields: string[];
+  evaluationPrompt?: string;
+  knowledgeAttachmentCount?: number;
   message: string;
 };

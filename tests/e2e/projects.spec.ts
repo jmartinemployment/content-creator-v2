@@ -62,12 +62,17 @@ test("projects pages expose server persistence, canvas lineage, and honest revie
   await expect(page.getByRole("list", { name: "Project asset canvas" })).toBeVisible();
   await expect(page.getByText("Launch strategy brief").first()).toBeVisible();
   await expect(page.getByText("Reliable content operations").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add comment · Coming soon" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Request approval · Coming soon" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add comment" })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: "Asset comment" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request approval" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish" })).toBeEnabled();
 
   await page.getByRole("button", { name: "Select Reliable content operations" }).click();
   await expect(page.getByText("1 parent artifact · 2 child artifacts")).toBeVisible();
   await expect(page.getByText(/Generated from launch brief v2/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
 });
 
 test("a new immutable version survives reload from the server", async ({ page }) => {
@@ -85,4 +90,108 @@ test("a new immutable version survives reload from the server", async ({ page })
   await page.reload();
   await expect(page.getByRole("list", { name: "Launch strategy brief version history" }).getByText("Version 3", { exact: true })).toBeVisible();
   await expect(page.getByText("Created Launch strategy brief v3")).toBeVisible();
+});
+
+test("request approval moves a draft asset into in-review with activity", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Launch carousel" }).click();
+  const history = page.getByRole("list", { name: "Launch carousel version history" });
+  await expect(history.getByText("draft").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request approval" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Request approval" }).click();
+  await expect(history.getByText("in-review").first()).toBeVisible();
+  await expect(page.getByText("Requested review for Launch carousel")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request approval" })).toBeDisabled();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Select Launch carousel" }).click();
+  await expect(page.getByRole("list", { name: "Launch carousel version history" }).getByText("in-review").first()).toBeVisible();
+  await expect(page.getByText("Requested review for Launch carousel")).toBeVisible();
+});
+
+test("approve and publish advance editorial status with activity", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Reliable content operations" }).click();
+  const articleHistory = page.getByRole("list", { name: "Reliable content operations version history" });
+  await expect(articleHistory.getByText("in-review").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(articleHistory.getByText("approved").first()).toBeVisible();
+  await expect(page.getByText("Approved Reliable content operations")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(articleHistory.getByText("published").first()).toBeVisible();
+  await expect(page.getByText("Published Reliable content operations")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Select Reliable content operations" }).click();
+  await expect(
+    page.getByRole("list", { name: "Reliable content operations version history" }).getByText("published").first(),
+  ).toBeVisible();
+  await expect(page.getByText("Published Reliable content operations")).toBeVisible();
+});
+
+test("asset comments append durable activity and survive reload", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Launch carousel" }).click();
+  await page.getByRole("textbox", { name: "Asset comment" }).fill("Tighten slide 3 proof points.");
+  await expect(page.getByRole("button", { name: "Add comment" })).toBeEnabled();
+  await page.getByRole("button", { name: "Add comment" }).click();
+
+  await expect(page.getByText("Commented on Launch carousel: Tighten slide 3 proof points.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Asset comment" })).toHaveValue("");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Select Launch carousel" }).click();
+  await expect(page.getByText("Commented on Launch carousel: Tighten slide 3 proof points.")).toBeVisible();
+});
+
+test("convert to batch opens a Grid seeded from the Canvas asset", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Reliable content operations" }).click();
+  await page.getByRole("button", { name: "Convert to batch" }).click();
+
+  await expect(page).toHaveURL(/\/grid\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: "Reliable content operations batch" })).toBeVisible();
+  await expect(page.getByText("Reliable content operations").first()).toBeVisible();
+  await expect(page.getByText("(pillar-outline)")).toBeVisible();
+
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+  await expect(page.getByText("Converted Reliable content operations to batch grid Reliable content operations batch")).toBeVisible();
+});
+
+test("send to agent opens a task agent with Canvas prefills", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Reliable content operations" }).click();
+  await expect(page.getByRole("combobox", { name: "Send to agent" })).toHaveValue("pillar-outline");
+  await page.getByRole("button", { name: "Send to agent" }).click();
+
+  await expect(page).toHaveURL(/\/task-agents\/pillar-outline\?/);
+  await expect(page.getByRole("heading", { name: "Pillar Article Outline" })).toBeVisible();
+  await expect(page.getByLabel("Topic")).toHaveValue("Reliable content operations");
+  await expect(page.getByText(/Prefills arrived from Canvas asset/)).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to project" }).click();
+  await expect(page.getByText("Sent Reliable content operations to Pillar Article Outline")).toBeVisible();
 });

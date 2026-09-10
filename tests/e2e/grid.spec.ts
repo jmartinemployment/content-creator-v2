@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
+  advanceScheduleNextRunAt,
   estimateBudget,
+  normalizeGridSchedule,
+  scheduleIsDue,
   selectRowsForRun,
 } from "../../src/app/grid/grid-model";
 import type { GridConfig, GridRow } from "../../src/app/grid/grid-types";
@@ -45,16 +48,39 @@ test("sample selection and budget preview stay transparent", () => {
   });
 });
 
+test("schedule helpers normalize, due-check, and advance cadences", () => {
+  const schedule = normalizeGridSchedule({
+    cadence: "weekly",
+    enabled: true,
+    mode: "full",
+    sampleSize: 5,
+    nextRunAt: "2026-01-01T00:00:00.000Z",
+  });
+  expect(schedule).toMatchObject({
+    cadence: "weekly",
+    enabled: true,
+    mode: "full",
+    sampleSize: 5,
+  });
+  expect(scheduleIsDue(schedule, new Date("2026-01-02T00:00:00.000Z"))).toBe(true);
+  expect(scheduleIsDue(schedule, new Date("2025-12-31T00:00:00.000Z"))).toBe(false);
+  expect(advanceScheduleNextRunAt(new Date("2026-01-01T00:00:00.000Z"), "daily")?.toISOString())
+    .toBe("2026-01-02T00:00:00.000Z");
+  expect(advanceScheduleNextRunAt(new Date("2026-01-01T00:00:00.000Z"), "weekly")?.toISOString())
+    .toBe("2026-01-08T00:00:00.000Z");
+});
+
 test("grid pages expose TaskRun execution, sample run, and history", async ({ page }) => {
   await openAuthenticated(page, "/grid");
   await expect(page.getByRole("heading", { name: "Grid" })).toBeVisible();
-  await page.getByRole("button", { name: "New demo grid" }).click();
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
   await expect(page.getByRole("link", { name: "FAQ launch batch" })).toBeVisible();
   await page.getByRole("link", { name: "FAQ launch batch" }).click();
 
   await expect(page.getByRole("heading", { name: "FAQ launch batch" })).toBeVisible();
   await expect(page.getByText("TaskRun execution")).toBeVisible();
   await expect(page.getByText("Sample budget preview: 10 credits")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run sample (10)" })).toBeVisible();
   await expect(page.getByText("What is Evidence Engine?")).toBeVisible();
   await expect(page.getByText("How do I preview estimated credits?")).toBeVisible();
 
@@ -65,4 +91,99 @@ test("grid pages expose TaskRun execution, sample run, and history", async ({ pa
   await page.reload();
   await expect(page.getByRole("list", { name: "Grid run history" }).getByText("sample · 10 outputs · 10 credits")).toBeVisible();
   await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
+});
+
+test("pillar demo grid runs topic rows with outline previews", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New pillar demo" }).click();
+  await expect(page.getByRole("link", { name: "Pillar launch batch" })).toBeVisible();
+  await page.getByRole("link", { name: "Pillar launch batch" }).click();
+
+  await expect(page.getByRole("heading", { name: "Pillar launch batch" })).toBeVisible();
+  await expect(page.getByText("Evidence Engine")).toBeVisible();
+  await expect(page.getByText("(pillar-outline)")).toBeVisible();
+
+  await page.getByRole("button", { name: "Run sample (10)" }).click();
+  await expect(page.getByText("Pillar outline for: Evidence Engine")).toBeVisible();
+  await expect(page.getByText("sample · 10 outputs · 10 credits")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Pillar outline for: Evidence Engine")).toBeVisible();
+});
+
+test("grid detail can append a topic row and run it", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+
+  await expect(page.getByText("12 rows")).toBeVisible();
+  await page.getByRole("textbox", { name: "New grid topic" }).fill("Owner isolation follow-up");
+  await page.getByRole("button", { name: "Add row" }).click();
+  await expect(page.getByText("13 rows")).toBeVisible();
+  await expect(page.getByText("Owner isolation follow-up")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("13 rows")).toBeVisible();
+  await expect(page.getByText("Owner isolation follow-up")).toBeVisible();
+});
+
+test("succeeded grid rows can attach into a Canvas project", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await expect(page.getByRole("link", { name: "Evidence Engine launch" })).toBeVisible();
+
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+  await page.getByRole("button", { name: "Run sample (10)" }).click();
+  await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
+
+  await expect(page.getByRole("button", { name: "Attach succeeded (10)" })).toBeEnabled();
+  await page.getByLabel("Attach grid rows to project").selectOption({ label: "Evidence Engine launch" });
+  await page.getByRole("button", { name: "Attach succeeded (10)" }).click();
+  await expect(page.getByText("Attached 10 rows to the project.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Open project" }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Engine launch" })).toBeVisible();
+  await expect(page.getByText("FAQ launch batch · What is Evidence Engine?").first()).toBeVisible();
+  await expect(page.getByText(/Attached FAQ launch batch · What is Evidence Engine\? from grid FAQ launch batch/)).toBeVisible();
+});
+
+test("grid schedule can be saved and fired when due", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+
+  await expect(page.getByRole("heading", { name: "Schedule" })).toBeVisible();
+  await page.getByLabel("Grid schedule cadence").selectOption("daily");
+  await page.getByLabel("Grid schedule run mode").selectOption("sample");
+  await page.getByLabel("Enable grid schedule").check();
+  await page.getByRole("button", { name: "Save schedule" }).click();
+  await expect(page.getByText(/Schedule saved: daily · sample \(10\)/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run due now" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Run due now" }).click();
+  await expect(page.getByText(/Scheduled sample run completed/)).toBeVisible();
+  await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Grid run history" }).getByText("sample · 10 outputs")).toBeVisible();
+});
+
+test("grid list can run all due schedules in one action", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+
+  await page.getByLabel("Grid schedule cadence").selectOption("daily");
+  await page.getByLabel("Enable grid schedule").check();
+  await page.getByRole("button", { name: "Save schedule" }).click();
+  await expect(page.getByText(/Schedule saved: daily/)).toBeVisible();
+
+  await page.getByRole("link", { name: "← Grid" }).click();
+  await expect(page.getByRole("heading", { name: "Grid" })).toBeVisible();
+  await expect(page.getByText(/Due · daily/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Run due schedules \(1\)/ })).toBeEnabled();
+
+  await page.getByRole("button", { name: /Run due schedules \(1\)/ }).click();
+  await expect(page.getByText(/Ran 1 due schedule/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run due schedules" })).toBeDisabled();
 });

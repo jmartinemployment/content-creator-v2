@@ -25,6 +25,9 @@ export async function fetchObservedTelemetry(lookbackDays = 90): Promise<Observe
     reviewMinutes: Number(observed.reviewMinutes) || 0,
     periodLabel: typeof observed.periodLabel === "string" ? observed.periodLabel : "Observed period",
     source: observed.source === "telemetry" || observed.source === "empty" ? observed.source : "demo",
+    lookbackDays: Number.isFinite(Number(observed.lookbackDays)) && Number(observed.lookbackDays) > 0
+      ? Number(observed.lookbackDays)
+      : lookbackDays,
     notes: Array.isArray(observed.notes)
       ? observed.notes.filter((note: unknown): note is string => typeof note === "string")
       : undefined,

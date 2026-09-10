@@ -7,12 +7,21 @@ import {
   demoObservedTelemetry,
   formatCurrency,
   formatHours,
+  formatMonths,
   formatPercent,
+  lookbackDayOptions,
+  normalizeLookbackDays,
   observedAcceptanceRate,
   observedPublishRate,
   projectAllScenarios,
+  readStoredAssumptions,
+  readStoredLookbackDays,
+  reconcileProjectedVsObserved,
+  writeStoredAssumptions,
+  writeStoredLookbackDays,
   type ObservedTelemetry,
   type RoiAssumptions,
+  type RoiLookbackDays,
 } from "@/app/roi/roi-model";
 
 type AssumptionField = {
@@ -39,28 +48,66 @@ const fields: readonly AssumptionField[] = [
 
 export function RoiCalculator() {
   const [assumptions, setAssumptions] = useState<RoiAssumptions>(defaultAssumptions);
+  const [lookbackDays, setLookbackDays] = useState<RoiLookbackDays>(90);
+  const [hydrated, setHydrated] = useState(false);
   const projections = useMemo(() => projectAllScenarios(assumptions), [assumptions]);
   const [observed, setObserved] = useState<ObservedTelemetry>(demoObservedTelemetry);
   const [observedError, setObservedError] = useState<string | null>(null);
+  const [observedLoading, setObservedLoading] = useState(false);
   const acceptance = observedAcceptanceRate(observed);
   const publish = observedPublishRate(observed);
+  const reconciliation = useMemo(
+    () => reconcileProjectedVsObserved(assumptions, observed),
+    [assumptions, observed],
+  );
 
   useEffect(() => {
-    void fetchObservedTelemetry()
+    setAssumptions(readStoredAssumptions());
+    setLookbackDays(readStoredLookbackDays());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeStoredAssumptions(assumptions);
+  }, [assumptions, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeStoredLookbackDays(lookbackDays);
+  }, [lookbackDays, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    setObservedLoading(true);
+    void fetchObservedTelemetry(lookbackDays)
       .then((next) => {
+        if (cancelled) return;
         setObserved(next);
         setObservedError(null);
       })
       .catch((cause) => {
-        setObserved(demoObservedTelemetry);
+        if (cancelled) return;
+        setObserved({ ...demoObservedTelemetry, lookbackDays });
         setObservedError(cause instanceof Error ? cause.message : "Could not load observed telemetry.");
+      })
+      .finally(() => {
+        if (!cancelled) setObservedLoading(false);
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, lookbackDays]);
 
   function updateField(key: keyof RoiAssumptions, raw: string) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
     setAssumptions((current) => ({ ...current, [key]: parsed }));
+  }
+
+  function resetAssumptions() {
+    setAssumptions(defaultAssumptions);
   }
 
   const sourceBadge =
@@ -72,21 +119,52 @@ export function RoiCalculator() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
-      <div>
-        <p className="text-sm font-semibold text-[var(--cc-accent)]">Measurement</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--cc-ink)]">ROI</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--cc-muted)]">
-          Transparent directional projections. Every coefficient is editable. Capacity created stays
-          separate from cash saved; this is not a quote or guarantee.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-[var(--cc-accent)]">Measurement</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--cc-ink)]">ROI</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--cc-muted)]">
+            Transparent directional projections. Every coefficient is editable. Capacity created stays
+            separate from cash saved; this is not a quote or guarantee.
+          </p>
+        </div>
+        <label className="block text-sm font-medium text-[var(--cc-ink)]">
+          Observed lookback
+          <select
+            aria-label="Observed lookback days"
+            className="mt-1 block min-w-[10rem] rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+            value={lookbackDays}
+            onChange={(event) => setLookbackDays(normalizeLookbackDays(event.target.value))}
+          >
+            {lookbackDayOptions.map((days) => (
+              <option key={days} value={days}>
+                Last {days} days
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-[var(--cc-ink)]">Assumptions</h2>
-          <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            Formulas: savedHours = volume × (baseline − assisted) / 60 × adoption × success
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-[var(--cc-ink)]">Assumptions</h2>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                Formulas: savedHours = volume × (baseline − assisted) / 60 × adoption × success
+              </p>
+              <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                Saved in this browser so edits survive reload.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={resetAssumptions}
+              className="rounded-md border border-[var(--cc-line)] px-2.5 py-1 text-xs font-semibold text-[var(--cc-ink)]"
+            >
+              Reset defaults
+            </button>
+          </div>
           <ul className="mt-5 space-y-4">
             {fields.map((field) => (
               <li key={field.key}>
@@ -120,6 +198,8 @@ export function RoiCalculator() {
                     <th className="px-3 py-3 font-semibold">External avoided</th>
                     <th className="px-3 py-3 font-semibold">Net benefit</th>
                     <th className="px-3 py-3 font-semibold">ROI</th>
+                    <th className="px-3 py-3 font-semibold">Payback</th>
+                    <th className="px-3 py-3 font-semibold">Time to value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -131,6 +211,8 @@ export function RoiCalculator() {
                       <td className="px-3 py-3">{formatCurrency(row.externalCostAvoided)}</td>
                       <td className="px-3 py-3">{formatCurrency(row.netBenefit)}</td>
                       <td className="px-3 py-3">{formatPercent(row.roiPercent)}</td>
+                      <td className="px-3 py-3">{formatMonths(row.paybackMonths)}</td>
+                      <td className="px-3 py-3">{formatMonths(row.timeToValueMonths)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -138,9 +220,70 @@ export function RoiCalculator() {
             </div>
             <p className="mt-4 text-xs leading-5 text-[var(--cc-muted)]">
               grossBenefit = productivityValue + externalCostAvoided · netBenefit = grossBenefit − TCO ·
-              roiPercent = netBenefit / TCO × 100. Attributable gross margin is shown for future revenue
-              conversion and is not mixed into cash ROI.
+              roiPercent = netBenefit / TCO × 100 · paybackMonths = TCO / (grossBenefit/12) ·
+              timeToValueMonths = TCO / (productivityValue/12). Attributable gross margin is reserved for
+              revenue→GP conversion and is not mixed into cash ROI.
             </p>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm" aria-label="Projected versus observed">
+            <h2 className="font-semibold text-[var(--cc-ink)]">Projected vs observed</h2>
+            <p className="mt-1 text-xs text-[var(--cc-muted)]">
+              Expected-scenario assumptions compared to live TaskRun acceptance and Canvas publishes.
+            </p>
+            <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Assumed success rate</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {formatPercent(reconciliation.assumedSuccessRate * 100)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Observed acceptance</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {formatPercent(
+                    reconciliation.observedAcceptanceRate == null
+                      ? null
+                      : reconciliation.observedAcceptanceRate * 100,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Success delta</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {reconciliation.successRateDeltaPp == null
+                    ? "—"
+                    : `${reconciliation.successRateDeltaPp >= 0 ? "+" : ""}${reconciliation.successRateDeltaPp.toFixed(1)} pp`}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Assumed assisted minutes</dt>
+                <dd className="mt-1 text-lg font-semibold">{reconciliation.assumedAssistedMinutes}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Observed avg review minutes</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {reconciliation.observedAvgReviewMinutes == null
+                    ? "—"
+                    : reconciliation.observedAvgReviewMinutes.toFixed(1)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Annualized accepted (proj / obs)</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {reconciliation.projectedAnnualAccepted.toFixed(0)}
+                  {" / "}
+                  {reconciliation.observedAnnualizedAccepted == null
+                    ? "—"
+                    : reconciliation.observedAnnualizedAccepted.toFixed(0)}
+                </dd>
+              </div>
+            </dl>
+            <ul className="mt-4 list-disc space-y-1 pl-4 text-xs text-[var(--cc-muted)]">
+              {reconciliation.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
           </section>
 
           <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
@@ -149,6 +292,9 @@ export function RoiCalculator() {
               <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sourceBadge.className}`}>
                 {sourceBadge.label}
               </span>
+              {observedLoading ? (
+                <span className="text-xs text-[var(--cc-muted)]">Refreshing…</span>
+              ) : null}
             </div>
             <p className="mt-1 text-xs text-[var(--cc-muted)]">
               {observed.periodLabel}. Acceptance and publish rates are workflow outcomes, not dollar ROI.
@@ -174,6 +320,10 @@ export function RoiCalculator() {
               <div>
                 <dt className="text-xs text-[var(--cc-muted)]">Rejected</dt>
                 <dd className="mt-1 text-lg font-semibold">{observed.rejectedCount}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[var(--cc-muted)]">Cancelled</dt>
+                <dd className="mt-1 text-lg font-semibold">{observed.cancelledCount ?? 0}</dd>
               </div>
               <div>
                 <dt className="text-xs text-[var(--cc-muted)]">Review minutes</dt>

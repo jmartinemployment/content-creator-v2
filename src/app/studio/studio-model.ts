@@ -86,17 +86,27 @@ export function dryRunStudioDraft(
     rendered = rendered.replaceAll(`{{inputs.${field.id}}}`, inputs[field.id] ?? "");
   }
   const unresolved = [...rendered.matchAll(/\{\{[^}]+\}\}/g)].map((match) => match[0]);
-  const valid = missingFields.length === 0 && unresolved.length === 0 && draft.exampleOutput.trim().length > 0;
+  const missingEvaluation = !draft.evaluationPrompt.trim();
+  const valid = missingFields.length === 0
+    && unresolved.length === 0
+    && draft.exampleOutput.trim().length > 0
+    && !missingEvaluation;
   return {
     valid,
     renderedInstructions: rendered,
     missingFields,
+    evaluationPrompt: draft.evaluationPrompt,
+    knowledgeAttachmentCount: draft.contextKnowledgeIds.length,
     message: valid
-      ? "Dry-run passed. Publish/share still requires the governed backend lifecycle."
+      ? draft.contextKnowledgeIds.length > 0
+        ? `Dry-run passed. Evaluation criteria on file. ${draft.contextKnowledgeIds.length} knowledge attachment(s).`
+        : "Dry-run passed. Evaluation criteria on file."
       : missingFields.length
         ? `Missing required fields: ${missingFields.join(", ")}.`
         : unresolved.length
           ? `Unresolved template tokens: ${unresolved.join(", ")}.`
-          : "Example output is required before the dry-run can pass.",
+          : draft.exampleOutput.trim().length === 0
+            ? "Example output is required before the dry-run can pass."
+            : "Evaluation prompt is required before the dry-run can pass.",
   };
 }

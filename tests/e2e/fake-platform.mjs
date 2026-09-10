@@ -309,6 +309,8 @@ function studioDetail(draft) {
       instructionsTemplate: draft.instructionsTemplate,
       exampleOutput: draft.exampleOutput,
       temperature: draft.temperature,
+      evaluationPrompt: draft.evaluationPrompt || "",
+      contextKnowledgeIds: Array.isArray(draft.contextKnowledgeIds) ? draft.contextKnowledgeIds : [],
       uiSchema: { fields: draft.fields },
     },
     allowedModels: [draft.allowedModel],
@@ -391,7 +393,7 @@ function seedCanvasProject() {
   return project;
 }
 
-const DEMO_GRID_TOPICS = [
+const DEMO_FAQ_TOPICS = [
   "What is Evidence Engine?",
   "How does RAG grounding work?",
   "Who owns brand voice approvals?",
@@ -406,11 +408,32 @@ const DEMO_GRID_TOPICS = [
   "How do I preview estimated credits?",
 ];
 
-function defaultGridConfig() {
+const DEMO_PILLAR_TOPICS = [
+  "Evidence Engine",
+  "RAG grounding",
+  "Brand voice approvals",
+  "Credit budgets for batch runs",
+  "Source library citations",
+  "Failed row recovery",
+  "Sample versus full runs",
+  "FAQ output publishing",
+  "Owner isolation",
+  "TaskRun fan-out",
+  "Canvas asset reuse",
+  "Estimated credit previews",
+];
+
+function defaultGridConfig(capability = "faq-generator") {
+  const isPillar = capability === "pillar-outline";
   return {
     columns: [
       { key: "topic", kind: "input", label: "Topic" },
-      { key: "agent", kind: "agent", label: "FAQ Generator", capability: "faq-generator" },
+      {
+        key: "agent",
+        kind: "agent",
+        label: isPillar ? "Pillar Article Outline" : "FAQ Generator",
+        capability: isPillar ? "pillar-outline" : "faq-generator",
+      },
       { key: "output", kind: "output", label: "Result" },
     ],
     creditsPerRow: 1,
@@ -418,18 +441,22 @@ function defaultGridConfig() {
   };
 }
 
-function seedGrid() {
+function seedGrid(capability = "faq-generator") {
+  const isPillar = capability === "pillar-outline";
+  const topics = isPillar ? DEMO_PILLAR_TOPICS : DEMO_FAQ_TOPICS;
   const now = new Date().toISOString();
   const grid = {
     id: crypto.randomUUID(),
-    name: "FAQ launch batch",
-    description: "Twelve FAQ topics ready for a sample stub run.",
+    name: isPillar ? "Pillar launch batch" : "FAQ launch batch",
+    description: isPillar
+      ? "Twelve pillar topics ready for a sample stub run."
+      : "Twelve FAQ topics ready for a sample stub run.",
     status: "ready",
     updatedAt: now,
     owner: "owner",
     persistence: "server",
-    config: defaultGridConfig(),
-    rows: DEMO_GRID_TOPICS.map((topic, rowIndex) => ({
+    config: defaultGridConfig(capability),
+    rows: topics.map((topic, rowIndex) => ({
       id: crypto.randomUUID(),
       rowIndex,
       input: { topic },
@@ -444,30 +471,75 @@ function seedGrid() {
   return grid;
 }
 
-function executeGridRun(grid, mode, sampleSize = 10) {
+function summarizeGridSchedule(grid) {
+  const schedule = grid.config?.schedule;
+  if (!schedule || !schedule.enabled || schedule.cadence === "none") {
+    return {
+      cadence: schedule?.cadence || "none",
+      enabled: false,
+      mode: schedule?.mode || "sample",
+      sampleSize: schedule?.sampleSize || 10,
+      nextRunAt: schedule?.nextRunAt || null,
+      lastRunAt: schedule?.lastRunAt || null,
+      due: false,
+    };
+  }
+  const dueAt = schedule.nextRunAt ? Date.parse(schedule.nextRunAt) : NaN;
+  return {
+    cadence: schedule.cadence,
+    enabled: true,
+    mode: schedule.mode === "full" ? "full" : "sample",
+    sampleSize: schedule.sampleSize || 10,
+    nextRunAt: schedule.nextRunAt || null,
+    lastRunAt: schedule.lastRunAt || null,
+    due: Number.isFinite(dueAt) && dueAt <= Date.now(),
+  };
+}
+
+function executeGridRun(grid, mode, sampleSize = 10, actor = "owner") {
   const started = new Date();
   const ordered = [...grid.rows].sort((a, b) => a.rowIndex - b.rowIndex);
   const selected = mode === "full" ? ordered : ordered.slice(0, sampleSize);
   const capability = grid.config.columns.find((column) => column.kind === "agent")?.capability ?? "faq-generator";
+  const isPillar = capability === "pillar-outline";
   const creditsPerRow = grid.config.creditsPerRow ?? 1;
 
   for (const row of selected) {
     const topic = typeof row.input.topic === "string" ? row.input.topic : "(empty input)";
     row.status = "succeeded";
     row.error = "";
-    row.output = {
-      result: `FAQ draft for: ${topic}`,
-      mode: "task-run",
-      capability,
-      endpoint: capability === "faq-generator" ? "faq-set" : capability,
-      taskRunId: crypto.randomUUID(),
-      artifactType: "faqSet.v1",
-      artifact: {
+    row.output = isPillar
+      ? {
+        result: `Pillar outline for: ${topic}`,
+        mode: "task-run",
+        capability: "pillar-outline",
+        endpoint: "pillar-outline",
+        taskRunId: crypto.randomUUID(),
+        artifactType: "pillarOutline.v1",
+        artifact: {
+          artifactType: "pillarOutline.v1",
+          methodology: "grid-sync.v1",
+          topic,
+          sections: [{
+            sectionId: "sec-1",
+            heading: `What is ${topic}?`,
+            objective: `Define ${topic} in answer-first language.`,
+          }],
+        },
+      }
+      : {
+        result: `FAQ draft for: ${topic}`,
+        mode: "task-run",
+        capability,
+        endpoint: capability === "faq-generator" ? "faq-set" : capability,
+        taskRunId: crypto.randomUUID(),
         artifactType: "faqSet.v1",
-        methodology: "grid-sync.v1",
-        pairs: [{ question: topic, answer: `Grounded FAQ draft for “${topic}”.` }],
-      },
-    };
+        artifact: {
+          artifactType: "faqSet.v1",
+          methodology: "grid-sync.v1",
+          pairs: [{ question: topic, answer: `Grounded FAQ draft for “${topic}”.` }],
+        },
+      };
     row.updatedAt = new Date().toISOString();
   }
 
@@ -478,7 +550,7 @@ function executeGridRun(grid, mode, sampleSize = 10) {
     mode,
     sampleSize: mode === "sample" ? sampleSize : null,
     status: "succeeded",
-    actor: "owner",
+    actor,
     startedAt: started.toISOString(),
     completedAt: completed.toISOString(),
     outputCount: selected.length,
@@ -492,7 +564,7 @@ function executeGridRun(grid, mode, sampleSize = 10) {
       execution: "task-run",
     },
     history: [{
-      actor: "owner",
+      actor,
       mode,
       status: "succeeded",
       startedAt: started.toISOString(),
@@ -1526,6 +1598,150 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, { contractVersion: "gcc-canvas-project.v1", project });
   }
   {
+    const toAgentMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/([^/]+)\/to-agent$/);
+    if (toAgentMatch && req.method === "POST") {
+      const projectId = decodeURIComponent(toAgentMatch[1]);
+      const assetId = decodeURIComponent(toAgentMatch[2]);
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      const asset = project.assets.find((item) => item.id === assetId);
+      if (!asset) return send(res, 404, { error: "Asset not found." });
+      const latest = [...asset.versions].sort((a, b) => b.version - a.version)[0];
+      if (!latest) return send(res, 409, { error: "Asset has no versions to send." });
+      const body = JSON.parse(rawBody || "{}");
+      let capabilityId = body.capabilityId;
+      if (!capabilityId) {
+        capabilityId = asset.kind === "article" || asset.kind === "brief" ? "pillar-outline" : "faq-generator";
+      }
+      if (!["faq-generator", "pillar-outline", "citable-claims"].includes(capabilityId)) {
+        return send(res, 400, { error: "capabilityId must be faq-generator, pillar-outline, or citable-claims." });
+      }
+      const agentLabel = capabilityId === "pillar-outline"
+        ? "Pillar Article Outline"
+        : capabilityId === "citable-claims"
+          ? "Citable Claims"
+          : "FAQ Generator";
+      const actor = body.createdBy || "You";
+      project.activity = [
+        {
+          id: crypto.randomUUID(),
+          kind: "handoff",
+          actor,
+          occurredAt: new Date().toISOString(),
+          message: `Sent ${asset.title} to ${agentLabel}`,
+        },
+        ...project.activity,
+      ];
+      project.updatedAt = new Date().toISOString();
+      const query = new URLSearchParams({
+        fromCanvasProjectId: project.id,
+        fromCanvasAssetId: asset.id,
+        fromCanvasVersionId: latest.id,
+        topic: asset.title,
+      });
+      if (latest.summary) query.set("sourceContent", latest.summary);
+      return send(res, 200, {
+        contractVersion: "gcc-canvas-project.v1",
+        project,
+        capabilityId,
+        agentLabel,
+        redirectPath: `/task-agents/${encodeURIComponent(capabilityId)}?${query.toString()}`,
+      });
+    }
+    const toGridMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/([^/]+)\/to-grid$/);
+    if (toGridMatch && req.method === "POST") {
+      const projectId = decodeURIComponent(toGridMatch[1]);
+      const assetId = decodeURIComponent(toGridMatch[2]);
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      const asset = project.assets.find((item) => item.id === assetId);
+      if (!asset) return send(res, 404, { error: "Asset not found." });
+      const latest = [...asset.versions].sort((a, b) => b.version - a.version)[0];
+      if (!latest) return send(res, 409, { error: "Asset has no versions to convert." });
+      const body = JSON.parse(rawBody || "{}");
+      let capability = body.capability;
+      if (!capability) {
+        capability = asset.kind === "article" || asset.kind === "brief" ? "pillar-outline" : "faq-generator";
+      }
+      if (capability !== "faq-generator" && capability !== "pillar-outline") {
+        return send(res, 400, { error: "capability must be faq-generator or pillar-outline." });
+      }
+      const gridName = `${asset.title} batch`;
+      const grid = {
+        id: crypto.randomUUID(),
+        name: gridName,
+        description: `Batch converted from Canvas asset “${asset.title}” (v${latest.version}) in project “${project.name}”.`,
+        status: "ready",
+        updatedAt: new Date().toISOString(),
+        owner: "owner",
+        persistence: "server",
+        config: defaultGridConfig(capability),
+        rows: [{
+          id: crypto.randomUUID(),
+          rowIndex: 0,
+          input: {
+            topic: asset.title,
+            sourceSummary: latest.summary,
+            sourceProjectId: project.id,
+            sourceAssetId: asset.id,
+            sourceVersionId: latest.id,
+            sourceVersionNumber: latest.version,
+          },
+          output: null,
+          status: "pending",
+          error: "",
+          updatedAt: new Date().toISOString(),
+        }],
+        runs: [],
+      };
+      grids.set(grid.id, grid);
+      const actor = body.createdBy || "You";
+      project.activity = [
+        {
+          id: crypto.randomUUID(),
+          kind: "handoff",
+          actor,
+          occurredAt: new Date().toISOString(),
+          message: `Converted ${asset.title} to batch grid ${gridName}`,
+        },
+        ...project.activity,
+      ];
+      project.updatedAt = new Date().toISOString();
+      return send(res, 200, {
+        contractVersion: "gcc-canvas-project.v1",
+        project,
+        gridId: grid.id,
+        gridName,
+        capability,
+        rowCount: grid.rows.length,
+      });
+    }
+    const commentMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/([^/]+)\/comments$/);
+    if (commentMatch && req.method === "POST") {
+      const projectId = decodeURIComponent(commentMatch[1]);
+      const assetId = decodeURIComponent(commentMatch[2]);
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      const asset = project.assets.find((item) => item.id === assetId);
+      if (!asset) return send(res, 404, { error: "Asset not found." });
+      const body = JSON.parse(rawBody || "{}");
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message) return send(res, 400, { error: "message is required." });
+      if (message.length > 500) return send(res, 400, { error: "message must be 500 characters or fewer." });
+      const actor = body.createdBy || "You";
+      project.activity = [
+        {
+          id: crypto.randomUUID(),
+          kind: "comment",
+          actor,
+          occurredAt: new Date().toISOString(),
+          message: `Commented on ${asset.title}: ${message}`,
+        },
+        ...project.activity,
+      ];
+      project.updatedAt = new Date().toISOString();
+      return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
+    }
     const attachMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/from-task-artifact$/);
     if (attachMatch && req.method === "POST") {
       const projectId = decodeURIComponent(attachMatch[1]);
@@ -1581,6 +1797,73 @@ const server = http.createServer(async (req, res) => {
         assetId,
       });
     }
+    const attachGridMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/from-grid$/);
+    if (attachGridMatch && req.method === "POST") {
+      const projectId = decodeURIComponent(attachGridMatch[1]);
+      const project = canvasProjects.get(projectId);
+      if (!project) return send(res, 404, { error: "Project not found." });
+      const body = JSON.parse(rawBody || "{}");
+      const grid = grids.get(body.gridId);
+      if (!grid) return send(res, 404, { error: "Grid not found." });
+      const selected = new Set(Array.isArray(body.rowIds) ? body.rowIds : []);
+      const rows = grid.rows
+        .filter((row) => row.status === "succeeded")
+        .filter((row) => selected.size === 0 || selected.has(row.id));
+      if (rows.length === 0) {
+        return send(res, 409, { error: "No succeeded grid rows were available to attach." });
+      }
+      const attached = [];
+      for (const row of rows) {
+        const topic = typeof row.input?.topic === "string" ? row.input.topic : "Untitled topic";
+        const preview = typeof row.output?.result === "string" ? row.output.result : `Grid output for ${topic}.`;
+        const title = body.titlePrefix ? `${body.titlePrefix} · ${topic}` : `${grid.name} · ${topic}`;
+        const assetId = crypto.randomUUID();
+        project.assets = [
+          ...project.assets,
+          {
+            id: assetId,
+            title,
+            kind: body.kind || "report",
+            parentAssetIds: [],
+            versions: [{
+              id: crypto.randomUUID(),
+              version: 1,
+              createdAt: new Date().toISOString(),
+              createdBy: "You",
+              status: "draft",
+              summary: preview,
+              evidence: [],
+              provenance: {
+                origin: "agent",
+                note: `Attached from grid ${grid.name} row ${row.rowIndex + 1}.`,
+                sourceGridId: grid.id,
+                sourceGridRowId: row.id,
+                sourceRunId: typeof row.output?.taskRunId === "string" ? row.output.taskRunId : undefined,
+                artifactType: typeof row.output?.artifactType === "string" ? row.output.artifactType : undefined,
+              },
+            }],
+          },
+        ];
+        project.activity = [
+          {
+            id: crypto.randomUUID(),
+            kind: "handoff",
+            actor: "You",
+            occurredAt: new Date().toISOString(),
+            message: `Attached ${title} from grid ${grid.name}`,
+          },
+          ...project.activity,
+        ];
+        attached.push({ assetId, title, rowId: row.id });
+      }
+      project.updatedAt = new Date().toISOString();
+      return send(res, 200, {
+        contractVersion: "gcc-canvas-project.v1",
+        project,
+        attachedCount: attached.length,
+        attached,
+      });
+    }
   }
   {
     const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)(?:\/assets(?:\/([^/]+)\/versions)?)?$/);
@@ -1613,47 +1896,87 @@ const server = http.createServer(async (req, res) => {
         const asset = project.assets.find((item) => item.id === assetId);
         if (!asset) return send(res, 404, { error: "Asset not found." });
         const nextVersion = Math.max(0, ...asset.versions.map((item) => item.version)) + 1;
+        const status = body.status || "draft";
+        const actor = body.createdBy || "You";
         asset.versions = [...asset.versions, {
           id: crypto.randomUUID(),
           version: nextVersion,
           createdAt: body.createdAt || new Date().toISOString(),
-          createdBy: body.createdBy || "You",
-          status: body.status || "draft",
+          createdBy: actor,
+          status,
           summary: body.summary || `Successor draft based on v${nextVersion - 1}.`,
           evidence: body.evidence || [],
           provenance: body.provenance || { origin: "human", note: "" },
         }];
-        project.activity = [
+        const activity = [
           {
             id: crypto.randomUUID(),
             kind: "versioned",
-            actor: body.createdBy || "You",
+            actor,
             occurredAt: new Date().toISOString(),
             message: `Created ${asset.title} v${nextVersion}`,
           },
-          ...project.activity,
         ];
+        if (status === "in-review") {
+          activity.unshift({
+            id: crypto.randomUUID(),
+            kind: "review",
+            actor,
+            occurredAt: new Date().toISOString(),
+            message: `Requested review for ${asset.title}`,
+          });
+        } else if (status === "approved") {
+          activity.unshift({
+            id: crypto.randomUUID(),
+            kind: "approval",
+            actor,
+            occurredAt: new Date().toISOString(),
+            message: `Approved ${asset.title}`,
+          });
+        } else if (status === "published") {
+          activity.unshift({
+            id: crypto.randomUUID(),
+            kind: "publish",
+            actor,
+            occurredAt: new Date().toISOString(),
+            message: `Published ${asset.title}`,
+          });
+        }
+        project.activity = [...activity, ...project.activity];
         project.updatedAt = new Date().toISOString();
         return send(res, 200, { contractVersion: "gcc-canvas-project.v1", project });
       }
     }
   }
   if (url.pathname === "/api/geek-content-creator-v2/roi/observed" && req.method === "GET") {
+    const lookbackDays = Math.min(365, Math.max(1, Number(url.searchParams.get("lookbackDays") || 90)));
+    const since = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
+    let publishedCount = 0;
+    for (const project of canvasProjects.values()) {
+      for (const asset of project.assets || []) {
+        const latest = [...(asset.versions || [])].sort((a, b) => (b.version || 0) - (a.version || 0))[0];
+        if (!latest || latest.status !== "published") continue;
+        const created = Date.parse(latest.createdAt || latest.createdAtUtc || "");
+        if (Number.isFinite(created) && created >= since) publishedCount += 1;
+      }
+    }
     return send(res, 200, {
-      contractVersion: "gcc-roi-observed.v1",
+      contractVersion: "gcc-roi-observed.v2",
       observed: {
         generatedCount: 48,
         acceptedCount: 31,
-        publishedCount: 31,
+        publishedCount,
         rejectedCount: 9,
         cancelledCount: 2,
         reviewMinutes: 410,
-        periodLabel: "Last 90 days (TaskRuns)",
+        lookbackDays,
+        periodLabel: `Last ${lookbackDays} days (TaskRuns + Canvas publishes)`,
         source: "telemetry",
         notes: [
-          "Counts are owner-scoped TaskRun outcomes, not cash ROI.",
-          "publishedCount currently mirrors succeeded TaskRuns until CMS publish events are linked.",
-          "reviewMinutes approximates wall-clock run duration for terminal runs.",
+          "Counts are owner-scoped workflow outcomes, not cash ROI.",
+          "generated/accepted/rejected come from TaskRuns in the lookback window.",
+          "publishedCount counts Canvas asset versions whose latest status is published in the window.",
+          "reviewMinutes approximates wall-clock TaskRun duration for terminal runs.",
         ],
       },
     });
@@ -1671,13 +1994,80 @@ const server = http.createServer(async (req, res) => {
         rowCount: grid.rows.length,
         lastRunStatus: grid.runs[0]?.status ?? null,
         persistence: "server",
+        schedule: summarizeGridSchedule(grid),
+      })),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/grids/schedules/run-due" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const force = body.force === true;
+    const results = [];
+    let ranCount = 0;
+    let skippedCount = 0;
+    for (const grid of grids.values()) {
+      const schedule = grid.config.schedule;
+      if (!schedule?.enabled || schedule.cadence === "none") {
+        skippedCount += 1;
+        results.push({ gridId: grid.id, name: grid.name, ran: false, reason: "not-enabled" });
+        continue;
+      }
+      const dueAt = schedule.nextRunAt ? Date.parse(schedule.nextRunAt) : NaN;
+      const due = Number.isFinite(dueAt) && dueAt <= Date.now();
+      if (!force && !due) {
+        skippedCount += 1;
+        results.push({ gridId: grid.id, name: grid.name, ran: false, reason: "not-due" });
+        continue;
+      }
+      executeGridRun(grid, schedule.mode === "full" ? "full" : "sample", schedule.sampleSize || 10, "schedule");
+      const completed = new Date();
+      const next = new Date(completed.getTime());
+      if (schedule.cadence === "daily") next.setUTCDate(next.getUTCDate() + 1);
+      else if (schedule.cadence === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+      else next.setUTCMonth(next.getUTCMonth() + 1);
+      grid.config = {
+        ...grid.config,
+        schedule: {
+          ...schedule,
+          lastRunAt: completed.toISOString(),
+          nextRunAt: next.toISOString(),
+        },
+      };
+      ranCount += 1;
+      results.push({
+        gridId: grid.id,
+        name: grid.name,
+        ran: true,
+        reason: force ? "forced" : "due",
+        lastRunStatus: grid.runs[0]?.status ?? null,
+      });
+    }
+    return send(res, 200, {
+      contractVersion: "gcc-grid.v1",
+      ranCount,
+      skippedCount,
+      results,
+      grids: [...grids.values()].map((grid) => ({
+        id: grid.id,
+        name: grid.name,
+        description: grid.description,
+        status: grid.status,
+        updatedAt: grid.updatedAt,
+        owner: grid.owner,
+        rowCount: grid.rows.length,
+        lastRunStatus: grid.runs[0]?.status ?? null,
+        persistence: "server",
+        schedule: summarizeGridSchedule(grid),
       })),
     });
   }
   if (url.pathname === "/api/geek-content-creator-v2/grids" && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
+    const capability = body.capability === "pillar-outline" ? "pillar-outline" : "faq-generator";
+    if (body.capability && body.capability !== "faq-generator" && body.capability !== "pillar-outline") {
+      return send(res, 400, { error: "capability must be faq-generator or pillar-outline." });
+    }
     const grid = body.seedDemo
-      ? seedGrid()
+      ? seedGrid(capability)
       : {
         id: crypto.randomUUID(),
         name: body.name || "Untitled grid",
@@ -1686,7 +2076,7 @@ const server = http.createServer(async (req, res) => {
         updatedAt: new Date().toISOString(),
         owner: "owner",
         persistence: "server",
-        config: defaultGridConfig(),
+        config: defaultGridConfig(capability),
         rows: [],
         runs: [],
       };
@@ -1694,7 +2084,9 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, { contractVersion: "gcc-grid.v1", grid });
   }
   {
-    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs))?$/);
+    const match = url.pathname.match(
+      /^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs|schedule(?:\/run-due)?))?$/,
+    );
     if (match) {
       const gridId = decodeURIComponent(match[1]);
       const action = match[2] || null;
@@ -1725,6 +2117,72 @@ const server = http.createServer(async (req, res) => {
         grid.updatedAt = now;
         return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
       }
+      if (action === "schedule" && req.method === "PUT") {
+        const body = JSON.parse(rawBody || "{}");
+        const cadence = ["daily", "weekly", "monthly"].includes(body.cadence) ? body.cadence : "none";
+        const mode = body.mode === "full" ? "full" : "sample";
+        const sampleSize = Number.isFinite(body.sampleSize) && body.sampleSize > 0 ? body.sampleSize : 10;
+        const enabled = body.enabled === true && cadence !== "none";
+        const previous = grid.config.schedule || {};
+        const now = new Date().toISOString();
+        let nextRunAt = null;
+        if (enabled) {
+          nextRunAt = previous.enabled && previous.nextRunAt && previous.cadence === cadence
+            ? previous.nextRunAt
+            : now;
+        }
+        grid.config = {
+          ...grid.config,
+          schedule: {
+            cadence,
+            enabled,
+            mode,
+            sampleSize,
+            nextRunAt,
+            lastRunAt: previous.lastRunAt || null,
+          },
+        };
+        grid.updatedAt = now;
+        return send(res, 200, { contractVersion: "gcc-grid.v1", grid });
+      }
+      if (action === "schedule/run-due" && req.method === "POST") {
+        const body = JSON.parse(rawBody || "{}");
+        const schedule = grid.config.schedule;
+        if (!schedule?.enabled || schedule.cadence === "none") {
+          return send(res, 400, { error: "Grid schedule is not enabled." });
+        }
+        const force = body.force === true;
+        const dueAt = schedule.nextRunAt ? Date.parse(schedule.nextRunAt) : NaN;
+        const due = Number.isFinite(dueAt) && dueAt <= Date.now();
+        if (!force && !due) {
+          return send(res, 200, {
+            contractVersion: "gcc-grid.v1",
+            ran: false,
+            reason: "not-due",
+            grid,
+          });
+        }
+        executeGridRun(grid, schedule.mode === "full" ? "full" : "sample", schedule.sampleSize || 10, "schedule");
+        const completed = new Date();
+        const next = new Date(completed.getTime());
+        if (schedule.cadence === "daily") next.setUTCDate(next.getUTCDate() + 1);
+        else if (schedule.cadence === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+        else next.setUTCMonth(next.getUTCMonth() + 1);
+        grid.config = {
+          ...grid.config,
+          schedule: {
+            ...schedule,
+            lastRunAt: completed.toISOString(),
+            nextRunAt: next.toISOString(),
+          },
+        };
+        return send(res, 200, {
+          contractVersion: "gcc-grid.v1",
+          ran: true,
+          reason: force ? "forced" : "due",
+          grid,
+        });
+      }
     }
   }
   if (url.pathname === "/api/geek-content-creator-v2/studio/agents" && req.method === "GET") {
@@ -1754,6 +2212,8 @@ const server = http.createServer(async (req, res) => {
       exampleOutput: "{\n  \"summary\": \"…\",\n  \"sections\": []\n}",
       allowedModel: "gpt-5.4",
       temperature: 0.2,
+      evaluationPrompt: "Output must be valid JSON matching the example shape.",
+      contextKnowledgeIds: [],
     };
     studioAgents.set(id, draft);
     return send(res, 201, studioDetail(draft));
@@ -1776,6 +2236,10 @@ const server = http.createServer(async (req, res) => {
         draft.exampleOutput = body.exampleOutput;
         draft.allowedModel = body.allowedModel;
         draft.temperature = body.temperature;
+        draft.evaluationPrompt = typeof body.evaluationPrompt === "string" ? body.evaluationPrompt : "";
+        draft.contextKnowledgeIds = Array.isArray(body.contextKnowledgeIds)
+          ? body.contextKnowledgeIds.filter((id) => typeof id === "string" && id.trim()).slice(0, 10)
+          : [];
         const versionParts = draft.summary.version.split(".").map(Number);
         versionParts[1] += 1;
         draft.summary.version = versionParts.join(".");
@@ -1797,20 +2261,51 @@ const server = http.createServer(async (req, res) => {
           rendered = rendered.replaceAll(`{{inputs.${field.id}}}`, input[field.id] || "");
         }
         const unresolved = [...rendered.matchAll(/\{\{[^}]+\}\}/g)].map((item) => item[0]);
-        const valid = missing.length === 0 && unresolved.length === 0 && Boolean(draft.exampleOutput?.trim());
+        const missingEvaluation = !String(draft.evaluationPrompt || "").trim();
+        const knowledgeCount = Array.isArray(draft.contextKnowledgeIds) ? draft.contextKnowledgeIds.length : 0;
+        const valid = missing.length === 0
+          && unresolved.length === 0
+          && Boolean(draft.exampleOutput?.trim())
+          && !missingEvaluation;
         return send(res, 200, {
           valid,
           renderedInstructions: rendered,
           missingTokens: unresolved,
           validationErrors: missing.map((label) => `$.${label} is required.`),
-          message: valid ? "Dry-run passed." : missing.length ? `Missing required fields: ${missing.join(", ")}.` : `Unresolved template tokens: ${unresolved.join(", ")}.`,
+          evaluationPrompt: draft.evaluationPrompt || "",
+          knowledgeAttachmentCount: knowledgeCount,
+          message: valid
+            ? knowledgeCount > 0
+              ? `Dry-run passed. Evaluation criteria on file. ${knowledgeCount} knowledge attachment(s).`
+              : "Dry-run passed. Evaluation criteria on file."
+            : missing.length
+              ? `Missing required fields: ${missing.join(", ")}.`
+              : unresolved.length
+                ? `Unresolved template tokens: ${unresolved.join(", ")}.`
+                : missingEvaluation
+                  ? "Evaluation prompt is required before the dry-run can pass."
+                  : "Example output is required before the dry-run can pass.",
         });
       }
       if (action === "publish" && req.method === "POST") {
-        draft.summary.state = "published";
-        draft.summary.version = "1.0.0";
-        draft.summary.digest = crypto.createHash("sha256").update(`${id}:published`).digest("hex");
-        return send(res, 200, studioDetail(draft));
+        const publishedVersion = {
+          versionId: draft.summary.versionId,
+          version: draft.summary.version,
+          digest: crypto.createHash("sha256").update(`${id}:published:${draft.summary.version}`).digest("hex"),
+        };
+        const versionParts = String(publishedVersion.version).split(".").map(Number);
+        while (versionParts.length < 3) versionParts.push(0);
+        versionParts[1] = (versionParts[1] || 0) + 1;
+        versionParts[2] = 0;
+        draft.summary.version = versionParts.join(".");
+        draft.summary.versionId = crypto.randomUUID();
+        draft.summary.state = "draft";
+        draft.summary.digest = crypto.createHash("sha256").update(`${id}:${draft.summary.version}`).digest("hex");
+        return send(res, 200, {
+          ...studioDetail(draft),
+          publishedVersion,
+          message: `Published ${publishedVersion.version}. Successor draft ${draft.summary.version} is ready.`,
+        });
       }
     }
   }
@@ -2267,7 +2762,19 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         digest: "q".repeat(64),
       },
-      workflow: { endpoint: "comparison-brief", artifactType: "comparisonBrief.v1" },
+      workflow: {
+        endpoint: "comparison-brief",
+        artifactType: "comparisonBrief.v1",
+        uiSchema: {
+          fields: [
+            { id: "subjectName", label: "Subject name", type: "shortText", required: true },
+            { id: "competitorName", label: "Competitor name", type: "shortText", required: true },
+            { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
+          ],
+        },
+      },
       resultRenderer: { kind: "comparison-brief", artifactType: "comparisonBrief.v1" },
     });
   }
@@ -2282,7 +2789,19 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         digest: "r".repeat(64),
       },
-      workflow: { endpoint: "pillar-outline", artifactType: "pillarOutline.v1" },
+      workflow: {
+        endpoint: "pillar-outline",
+        artifactType: "pillarOutline.v1",
+        uiSchema: {
+          fields: [
+            { id: "topic", label: "Topic", type: "shortText", required: true },
+            { id: "relatedQueries", label: "Related queries", type: "longText", required: false },
+            { id: "supportingContentHints", label: "Supporting content hints", type: "longText", required: false },
+            { id: "sourceContent", label: "Source content", type: "longText", required: false },
+            { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
+          ],
+        },
+      },
       resultRenderer: { kind: "outline", artifactType: "pillarOutline.v1" },
     });
   }
@@ -2297,7 +2816,20 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         digest: "s".repeat(64),
       },
-      workflow: { endpoint: "competitive-response", artifactType: "competitiveResponse.v1" },
+      workflow: {
+        endpoint: "competitive-response",
+        artifactType: "competitiveResponse.v1",
+        uiSchema: {
+          fields: [
+            { id: "brandName", label: "Brand name", type: "shortText", required: true },
+            { id: "competitorName", label: "Competitor name", type: "shortText", required: true },
+            { id: "brandContent", label: "Brand page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "focusQuery", label: "Focus query", type: "shortText", required: false },
+            { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
+          ],
+        },
+      },
       resultRenderer: { kind: "response-plan", artifactType: "competitiveResponse.v1" },
     });
   }

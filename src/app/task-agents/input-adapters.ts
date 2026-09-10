@@ -39,6 +39,30 @@ function pageSnapshot(sourceId: string, url: string, title: string, visibleConte
   };
 }
 
+function competitorSlug(name: string) {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return slug || "competitor";
+}
+
+function competitorPage(
+  competitorName: string,
+  visibleContent: string,
+  sourceUrl = "",
+) {
+  const name = competitorName.trim() || "Competitor";
+  const competitorId = competitorSlug(name);
+  return {
+    ...pageSnapshot(
+      `competitor:${competitorId}`,
+      sourceUrl,
+      name,
+      visibleContent,
+    ),
+    competitorId,
+    competitorName: name,
+  };
+}
+
 /** Default Studio-compatible uiSchema for first-party seeded agents. */
 export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = {
   "ai-readiness": [
@@ -130,6 +154,116 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: false,
       placeholder: "Our product is trusted by many teams",
+    },
+  ],
+  "comparison-brief": [
+    {
+      id: "subjectName",
+      label: "Subject name",
+      type: "shortText",
+      required: true,
+    },
+    {
+      id: "competitorName",
+      label: "Competitor name",
+      type: "shortText",
+      required: true,
+    },
+    {
+      id: "subjectContent",
+      label: "Subject page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste the complete visible page copy or Markdown…",
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste competitor visible copy…",
+    },
+    {
+      id: "sourceUrl",
+      label: "Subject URL",
+      type: "shortText",
+      required: false,
+    },
+  ],
+  "pillar-outline": [
+    {
+      id: "topic",
+      label: "Topic",
+      type: "shortText",
+      required: true,
+      placeholder: "AI content operations",
+    },
+    {
+      id: "relatedQueries",
+      label: "Related queries",
+      type: "longText",
+      required: false,
+      placeholder: "One query per line",
+    },
+    {
+      id: "supportingContentHints",
+      label: "Supporting content hints",
+      type: "longText",
+      required: false,
+      placeholder: "One hint per line",
+    },
+    {
+      id: "sourceContent",
+      label: "Source content",
+      type: "longText",
+      required: false,
+      placeholder: "Optional source Markdown…",
+    },
+    {
+      id: "sourceUrl",
+      label: "Source URL",
+      type: "shortText",
+      required: false,
+    },
+  ],
+  "competitive-response": [
+    {
+      id: "brandName",
+      label: "Brand name",
+      type: "shortText",
+      required: true,
+    },
+    {
+      id: "competitorName",
+      label: "Competitor name",
+      type: "shortText",
+      required: true,
+    },
+    {
+      id: "brandContent",
+      label: "Brand page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste brand visible copy…",
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste competitor visible copy…",
+    },
+    {
+      id: "focusQuery",
+      label: "Focus query",
+      type: "shortText",
+      required: false,
+    },
+    {
+      id: "sourceUrl",
+      label: "Brand URL",
+      type: "shortText",
+      required: false,
     },
   ],
 };
@@ -237,18 +371,95 @@ export function adaptTaskAgentInput(
   if (capabilityId === "citable-claims") {
     const sourceContent = (values.sourceContent ?? "").trim();
     if (!sourceContent) return null;
+    const sourceUrl = (values.sourceUrl ?? "").trim();
     return {
       contractVersion,
-      document: {
+      sourceDocument: {
         ...pageSnapshot(
-          `claims-source:${crypto.randomUUID()}`,
-          "",
+          sourceUrl || `claims-source:${crypto.randomUUID()}`,
+          sourceUrl,
           "Claims source",
           sourceContent,
         ),
         queries: [],
       },
-      vagueStatements: lines(values.vagueStatements),
+      targetStatements: lines(values.vagueStatements),
+      maxClaims: 20,
+      insertionTarget: null,
+    };
+  }
+  if (capabilityId === "comparison-brief") {
+    const subjectName = (values.subjectName ?? "").trim();
+    const competitorName = (values.competitorName ?? "").trim();
+    const subjectContent = (values.subjectContent ?? "").trim();
+    const competitorContent = (values.competitorContent ?? "").trim();
+    if (!subjectName || !competitorName || !subjectContent || !competitorContent) return null;
+    const sourceUrl = (values.sourceUrl ?? "").trim();
+    return {
+      contractVersion,
+      subjectName,
+      competitorName,
+      subjectPages: [
+        pageSnapshot(
+          sourceUrl || `subject:${crypto.randomUUID()}`,
+          sourceUrl,
+          subjectName,
+          subjectContent,
+        ),
+      ],
+      competitorPages: [competitorPage(competitorName, competitorContent)],
+      decisionCriteria: [],
+    };
+  }
+  if (capabilityId === "pillar-outline") {
+    const topic = (values.topic ?? "").trim();
+    if (!topic) return null;
+    const sourceContent = (values.sourceContent ?? "").trim();
+    const sourceUrl = (values.sourceUrl ?? "").trim();
+    const input: Record<string, unknown> = {
+      contractVersion,
+      topic,
+      queries: lines(values.relatedQueries).map((query) => ({
+        query,
+        origin: "imported",
+        sourceReference: "manual-import",
+      })),
+      supportingContentHints: lines(values.supportingContentHints),
+    };
+    if (sourceContent) {
+      input.sourceDocument = {
+        ...pageSnapshot(
+          sourceUrl || `pillar-source:${crypto.randomUUID()}`,
+          sourceUrl,
+          topic,
+          sourceContent,
+        ),
+        queries: [],
+      };
+    }
+    return input;
+  }
+  if (capabilityId === "competitive-response") {
+    const brandName = (values.brandName ?? "").trim();
+    const competitorName = (values.competitorName ?? "").trim();
+    const brandContent = (values.brandContent ?? "").trim();
+    const competitorContent = (values.competitorContent ?? "").trim();
+    if (!brandName || !competitorName || !brandContent || !competitorContent) return null;
+    const sourceUrl = (values.sourceUrl ?? "").trim();
+    const focusQuery = (values.focusQuery ?? "").trim();
+    return {
+      contractVersion,
+      brandPages: [
+        pageSnapshot(
+          sourceUrl || `brand:${crypto.randomUUID()}`,
+          sourceUrl,
+          brandName,
+          brandContent,
+        ),
+      ],
+      competitorPages: [competitorPage(competitorName, competitorContent)],
+      responseMode: "auto",
+      focusQuery: focusQuery || null,
     };
   }
   return null;
@@ -268,6 +479,21 @@ export function schemaFormCanStart(
     const topic = (values.topic ?? "").trim();
     return topic.length > 0
       && ((values.sourceContent ?? "").trim().length > 0 || lines(values.faqQuestions).length > 0);
+  }
+  if (capabilityId === "comparison-brief") {
+    return (values.subjectName ?? "").trim().length > 0
+      && (values.competitorName ?? "").trim().length > 0
+      && (values.subjectContent ?? "").trim().length > 0
+      && (values.competitorContent ?? "").trim().length > 0;
+  }
+  if (capabilityId === "competitive-response") {
+    return (values.brandName ?? "").trim().length > 0
+      && (values.competitorName ?? "").trim().length > 0
+      && (values.brandContent ?? "").trim().length > 0
+      && (values.competitorContent ?? "").trim().length > 0;
+  }
+  if (capabilityId === "pillar-outline") {
+    return (values.topic ?? "").trim().length > 0;
   }
   return fields.every((field) => !field.required || (values[field.id] ?? "").trim().length > 0);
 }

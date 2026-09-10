@@ -86,6 +86,105 @@ export async function appendProjectAssetVersion(
   return body.project;
 }
 
+type EditorialTransitionInput = {
+  createdAt: string;
+  createdBy: string;
+  summary: string;
+  evidence: AppendVersionInput["evidence"];
+  provenance: AppendVersionInput["provenance"];
+};
+
+export async function requestProjectAssetApproval(
+  projectId: string,
+  assetId: string,
+  input: EditorialTransitionInput,
+) {
+  return appendProjectAssetVersion(projectId, assetId, {
+    ...input,
+    status: "in-review",
+  });
+}
+
+export async function approveProjectAsset(
+  projectId: string,
+  assetId: string,
+  input: EditorialTransitionInput,
+) {
+  return appendProjectAssetVersion(projectId, assetId, {
+    ...input,
+    status: "approved",
+  });
+}
+
+export async function publishProjectAsset(
+  projectId: string,
+  assetId: string,
+  input: EditorialTransitionInput,
+) {
+  return appendProjectAssetVersion(projectId, assetId, {
+    ...input,
+    status: "published",
+  });
+}
+
+export async function addProjectAssetComment(
+  projectId: string,
+  assetId: string,
+  input: { message: string; createdBy?: string },
+) {
+  const body = await projectsFetch(
+    `/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ) as { project: CanvasProject };
+  return body.project;
+}
+
+export async function convertProjectAssetToGrid(
+  projectId: string,
+  assetId: string,
+  input?: { capability?: "faq-generator" | "pillar-outline"; createdBy?: string },
+) {
+  const body = await projectsFetch(
+    `/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/to-grid`,
+    {
+      method: "POST",
+      body: JSON.stringify(input ?? {}),
+    },
+  ) as {
+    project: CanvasProject;
+    gridId: string;
+    gridName: string;
+    capability: string;
+    rowCount: number;
+  };
+  return body;
+}
+
+export type SendToAgentCapability = "faq-generator" | "pillar-outline" | "citable-claims";
+
+export async function sendProjectAssetToAgent(
+  projectId: string,
+  assetId: string,
+  input?: { capabilityId?: SendToAgentCapability; createdBy?: string },
+) {
+  const body = await projectsFetch(
+    `/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/to-agent`,
+    {
+      method: "POST",
+      body: JSON.stringify(input ?? {}),
+    },
+  ) as {
+    project: CanvasProject;
+    capabilityId: SendToAgentCapability;
+    agentLabel: string;
+    redirectPath: string;
+  };
+  return body;
+}
+
 export async function attachTaskArtifactToProject(
   projectId: string,
   input: {
@@ -102,5 +201,28 @@ export async function attachTaskArtifactToProject(
       body: JSON.stringify(input),
     },
   ) as { project: CanvasProject; assetId?: string };
+  return body;
+}
+
+export async function attachGridRowsToProject(
+  projectId: string,
+  input: {
+    gridId: string;
+    rowIds?: string[];
+    titlePrefix?: string;
+    kind?: AssetKind;
+  },
+) {
+  const body = await projectsFetch(
+    `/${encodeURIComponent(projectId)}/assets/from-grid`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ) as {
+    project: CanvasProject;
+    attachedCount: number;
+    attached: Array<{ assetId: string; title: string; rowId: string }>;
+  };
   return body;
 }

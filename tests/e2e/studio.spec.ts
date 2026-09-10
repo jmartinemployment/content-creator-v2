@@ -31,7 +31,15 @@ test("studio dry-run validates required inputs and template tokens", () => {
   const passed = dryRunStudioDraft(draft, { topic: "AI readiness", audience: "CMOs" });
   expect(passed.valid).toBe(true);
   expect(passed.renderedInstructions).toContain("aimed at CMOs");
+  expect(passed.message).toContain("Evaluation criteria on file");
   expect(buildInputSchema(draft).required).toEqual(["topic", "audience"]);
+
+  const missingEval = dryRunStudioDraft({ ...draft, evaluationPrompt: "" }, {
+    topic: "AI readiness",
+    audience: "CMOs",
+  });
+  expect(missingEval.valid).toBe(false);
+  expect(missingEval.message).toContain("Evaluation prompt is required");
 });
 
 test("studio pages create, save, dry-run, and publish a durable agent", async ({ page }) => {
@@ -44,6 +52,10 @@ test("studio pages create, save, dry-run, and publish a durable agent", async ({
   await page.getByLabel("Instructions template").fill(
     "Write a launch brief for {{inputs.audience}}. Outcome: {{outcome}}",
   );
+  await page.getByLabel("Evaluation prompt").fill(
+    "Response must include audience, launch summary, and JSON sections.",
+  );
+  await page.getByRole("checkbox", { name: /Editorial Handbook/ }).check();
   await page.getByLabel("New field label").fill("Audience");
   await page.getByRole("button", { name: "Add field" }).click();
   await expect(page.getByText("shortText · required · {{inputs.audience}}")).toBeVisible();
@@ -54,8 +66,15 @@ test("studio pages create, save, dry-run, and publish a durable agent", async ({
   await page.getByLabel("Audience").fill("Product marketers");
   await page.getByRole("button", { name: "Run dry-run" }).click();
   await expect(page.getByTestId("studio-dry-run-status")).toContainText("passed");
+  await expect(page.getByTestId("studio-dry-run-status")).toContainText("1 knowledge attachment");
 
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByTestId("studio-dry-run-status")).toContainText("Published");
-  await expect(page.getByRole("button", { name: "Published" })).toBeDisabled();
+  await expect(page.getByTestId("studio-dry-run-status")).toContainText("Successor draft");
+  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
+
+  await page.getByLabel("Audience").fill("Product marketers");
+  await page.getByRole("button", { name: "Run dry-run" }).click();
+  await expect(page.getByTestId("studio-dry-run-status")).toContainText("passed");
+  await expect(page.getByRole("button", { name: "Publish" })).toBeEnabled();
 });

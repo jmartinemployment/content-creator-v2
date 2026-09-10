@@ -31,6 +31,10 @@ export type RoiProjection = Readonly<{
   grossBenefit: number;
   netBenefit: number;
   roiPercent: number | null;
+  /** Months for TCO to be repaid from gross annual benefit (directional). */
+  paybackMonths: number | null;
+  /** Months until productivity value alone covers TCO (capacity path, no agency savings). */
+  timeToValueMonths: number | null;
 }>;
 
 export type ObservedTelemetry = Readonly<{
@@ -43,6 +47,22 @@ export type ObservedTelemetry = Readonly<{
   source: "demo" | "telemetry" | "empty";
   notes?: readonly string[];
   cancelledCount?: number;
+  /** Lookback window used by the observed feed (days). */
+  lookbackDays?: number;
+}>;
+
+export type RoiReconciliation = Readonly<{
+  assumedSuccessRate: number;
+  observedAcceptanceRate: number | null;
+  successRateDeltaPp: number | null;
+  assumedAssistedMinutes: number;
+  observedAvgReviewMinutes: number | null;
+  assistedMinutesDelta: number | null;
+  projectedAnnualAccepted: number;
+  observedAnnualizedAccepted: number | null;
+  projectedAnnualPublished: number;
+  observedAnnualizedPublished: number | null;
+  notes: readonly string[];
 }>;
 
 export const defaultAssumptions: RoiAssumptions = {
@@ -73,6 +93,7 @@ export const demoObservedTelemetry: ObservedTelemetry = {
   reviewMinutes: 410,
   periodLabel: "Last 90 days (demo)",
   source: "demo",
+  lookbackDays: 90,
 };
 
 export function clampRate(value: number) {
@@ -104,6 +125,12 @@ export function projectScenario(
     assumptions.totalCostOfOwnership > 0
       ? (netBenefit / assumptions.totalCostOfOwnership) * 100
       : null;
+  const paybackMonths =
+    grossBenefit > 0 ? (assumptions.totalCostOfOwnership / grossBenefit) * 12 : null;
+  const timeToValueMonths =
+    productivityValue > 0
+      ? (assumptions.totalCostOfOwnership / productivityValue) * 12
+      : null;
 
   return {
     scenario: factors.id,
@@ -114,6 +141,8 @@ export function projectScenario(
     grossBenefit,
     netBenefit,
     roiPercent,
+    paybackMonths,
+    timeToValueMonths,
   };
 }
 
@@ -132,6 +161,139 @@ export function observedPublishRate(telemetry: ObservedTelemetry) {
   return telemetry.publishedCount / telemetry.acceptedCount;
 }
 
+export function observedAvgReviewMinutes(telemetry: ObservedTelemetry) {
+  const terminal = telemetry.acceptedCount + telemetry.rejectedCount + (telemetry.cancelledCount ?? 0);
+  if (terminal <= 0) return null;
+  return telemetry.reviewMinutes / terminal;
+}
+
+/**
+ * Compare editable assumptions to observed TaskRun/Canvas outcomes.
+ * Deltas are diagnostic only — never rewritten into dollar ROI automatically.
+ */
+export function reconcileProjectedVsObserved(
+  assumptions: RoiAssumptions,
+  telemetry: ObservedTelemetry,
+  factors: RoiScenarioFactors = scenarioFactors.find((item) => item.id === "expected")!,
+): RoiReconciliation {
+  const assumedSuccessRate = clampRate(assumptions.successfulUseRate * factors.successFactor);
+  const observedAcceptance = observedAcceptanceRate(telemetry);
+  const successRateDeltaPp =
+    observedAcceptance == null ? null : (observedAcceptance - assumedSuccessRate) * 100;
+
+  const assumedAssistedMinutes = assumptions.assistedMinutes;
+  const observedAvg = observedAvgReviewMinutes(telemetry);
+  const assistedMinutesDelta =
+    observedAvg == null ? null : observedAvg - assumedAssistedMinutes;
+
+  const volume = assumptions.workflowVolume * factors.volumeFactor;
+  const adoption = clampRate(assumptions.adoptionRate * factors.adoptionFactor);
+  const projectedAnnualAccepted = volume * adoption * assumedSuccessRate;
+  const projectedAnnualPublished =
+    projectedAnnualAccepted * (observedPublishRate(telemetry) ?? assumedSuccessRate);
+
+  const lookbackDays = telemetry.lookbackDays && telemetry.lookbackDays > 0
+    ? telemetry.lookbackDays
+    : 90;
+  const annualize = 365 / lookbackDays;
+  const observedAnnualizedAccepted =
+    telemetry.source === "empty" ? null : telemetry.acceptedCount * annualize;
+  const observedAnnualizedPublished =
+    telemetry.source === "empty" ? null : telemetry.publishedCount * annualize;
+
+  const notes: string[] = [
+    "Reconciliation compares modeled assumptions to observed workflow capacity — not cash claims.",
+  ];
+  if (successRateDeltaPp != null) {
+    notes.push(
+      successRateDeltaPp >= 0
+        ? `Observed acceptance is ${successRateDeltaPp.toFixed(1)} pp above the assumed success rate.`
+        : `Observed acceptance is ${Math.abs(successRateDeltaPp).toFixed(1)} pp below the assumed success rate.`,
+    );
+  }
+  if (assistedMinutesDelta != null) {
+    notes.push(
+      assistedMinutesDelta >= 0
+        ? `Observed average review minutes are ${assistedMinutesDelta.toFixed(1)} above assisted minutes.`
+        : `Observed average review minutes are ${Math.abs(assistedMinutesDelta).toFixed(1)} below assisted minutes.`,
+    );
+  }
+
+  return {
+    assumedSuccessRate,
+    observedAcceptanceRate: observedAcceptance,
+    successRateDeltaPp,
+    assumedAssistedMinutes,
+    observedAvgReviewMinutes: observedAvg,
+    assistedMinutesDelta,
+    projectedAnnualAccepted,
+    observedAnnualizedAccepted,
+    projectedAnnualPublished,
+    observedAnnualizedPublished,
+    notes,
+  };
+}
+
+export const lookbackDayOptions = [30, 90, 180, 365] as const;
+export type RoiLookbackDays = (typeof lookbackDayOptions)[number];
+
+export const ROI_ASSUMPTIONS_STORAGE_KEY = "gcc-v2-roi-assumptions.v1";
+export const ROI_LOOKBACK_STORAGE_KEY = "gcc-v2-roi-lookback.v1";
+
+export function normalizeLookbackDays(value: unknown): RoiLookbackDays {
+  const parsed = Number(value);
+  return (lookbackDayOptions as readonly number[]).includes(parsed)
+    ? (parsed as RoiLookbackDays)
+    : 90;
+}
+
+export function readStoredAssumptions(): RoiAssumptions {
+  if (typeof window === "undefined") return defaultAssumptions;
+  try {
+    const raw = window.localStorage.getItem(ROI_ASSUMPTIONS_STORAGE_KEY);
+    if (!raw) return defaultAssumptions;
+    const parsed = JSON.parse(raw) as Partial<RoiAssumptions>;
+    return {
+      ...defaultAssumptions,
+      ...Object.fromEntries(
+        (Object.keys(defaultAssumptions) as Array<keyof RoiAssumptions>).map((key) => {
+          const value = Number(parsed[key]);
+          return [key, Number.isFinite(value) ? value : defaultAssumptions[key]];
+        }),
+      ),
+    } as RoiAssumptions;
+  } catch {
+    return defaultAssumptions;
+  }
+}
+
+export function writeStoredAssumptions(assumptions: RoiAssumptions) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ROI_ASSUMPTIONS_STORAGE_KEY, JSON.stringify(assumptions));
+  } catch {
+    // Ignore quota / private-mode failures; projections still work in-memory.
+  }
+}
+
+export function readStoredLookbackDays(): RoiLookbackDays {
+  if (typeof window === "undefined") return 90;
+  try {
+    return normalizeLookbackDays(window.localStorage.getItem(ROI_LOOKBACK_STORAGE_KEY));
+  } catch {
+    return 90;
+  }
+}
+
+export function writeStoredLookbackDays(days: RoiLookbackDays) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ROI_LOOKBACK_STORAGE_KEY, String(days));
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -147,4 +309,9 @@ export function formatPercent(value: number | null) {
 
 export function formatHours(value: number) {
   return `${value.toFixed(1)} h`;
+}
+
+export function formatMonths(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1)} mo`;
 }

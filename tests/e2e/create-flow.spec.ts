@@ -238,7 +238,13 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await expect(page.getByRole("radio", { name: /Best available/ })).toBeChecked();
   await page.getByRole("button", { name: "Create content" }).click();
   await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
-  await expect(page.getByText("Evidence Engine", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Confirm the partners we found" }) })
+      .getByRole("listitem")
+      .filter({ hasText: "Evidence Engine" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Confirm partners & create" }).click();
 
   await expect(page).toHaveURL(/\/creates\/create-1\?jobId=job-1/);
@@ -267,19 +273,21 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await page.getByRole("tab", { name: "Canvas" }).click();
   await expect(page.getByRole("heading", { name: "Why reliability matters" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible();
-  await expect(page.getByText("Verified citations", { exact: true }).first()).toBeVisible();
-  await page.getByText("Technical details", { exact: true }).click();
-  await expect(page.getByText("Status: ready")).toBeVisible();
-  await expect(page.getByText("Model: o1-pro")).toBeVisible();
-  await expect(page.getByText("Retrieval: hybrid", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Agent: content-producer/).last()).toBeVisible();
-  await expect(page.getByText(/Stage execution execution-write-1/).last()).toBeVisible();
-  await expect(page.getByText(/Specialist team \(2\)/)).toBeVisible();
-  await expect(page.getByText(/contribution: marketing-strategist → content-producer/)).toBeVisible();
-  await expect(page.getByText(/Activated skills: Citation Discipline 2.0.0/).last()).toBeVisible();
-  await expect(page.getByText(/Tools: search_corpus ×2/).last()).toBeVisible();
-  await expect(page.getByText(/Stop reason: completed/).last()).toBeVisible();
-  await expect(page.getByText(/Immutable attempt lineage \(2\)/)).toBeVisible();
+  await expect(page.getByLabel("Job citations")).toBeVisible();
+  await expect(page.getByLabel("Job citations").getByLabel("Verified citations")).toContainText("verified");
+  const technicalDetails = page.getByLabel("Technical details");
+  await technicalDetails.locator(":scope > summary").click();
+  await expect(technicalDetails).toContainText("Status: ready");
+  await expect(technicalDetails).toContainText("Model: o1-pro");
+  await expect(technicalDetails).toContainText("Retrieval: hybrid");
+  await expect(technicalDetails).toContainText("Agent: content-producer");
+  await expect(technicalDetails).toContainText("Stage execution execution-write-1");
+  await expect(technicalDetails).toContainText("Specialist team (2)");
+  await expect(technicalDetails).toContainText("contribution: marketing-strategist → content-producer");
+  await expect(technicalDetails).toContainText("Activated skills: Citation Discipline 2.0.0");
+  await expect(technicalDetails).toContainText("Tools: search_corpus ×2");
+  await expect(technicalDetails).toContainText("Stop reason: completed");
+  await expect(technicalDetails).toContainText("Immutable attempt lineage (2)");
   await expect(page.getByRole("link", { name: "Reliable content operations" }).first()).toHaveAttribute(
     "href",
     "https://example.test/reliable-content",

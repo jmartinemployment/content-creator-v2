@@ -42,6 +42,60 @@ export default async function HomePage() {
         <section>
           <div className="flex items-center justify-between">
             <div>
+              <h2 className="text-xl font-semibold text-[var(--cc-ink)]">Workspace</h2>
+              <p className="mt-1 text-sm text-[var(--cc-muted)]">
+                Projects, batch Grid, Studio, Task Agents, and transparent ROI.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Workspace surfaces">
+            {[
+              {
+                href: "/projects",
+                label: "Projects",
+                detail: "Multi-asset Canvas with review, publish, and handoffs.",
+              },
+              {
+                href: "/grid",
+                label: "Grid",
+                detail: "Sample/full batches with due schedules.",
+              },
+              {
+                href: "/task-agents",
+                label: "Task Agents",
+                detail: "Outcome agents with durable runs and artifacts.",
+              },
+              {
+                href: "/studio",
+                label: "Studio",
+                detail: "Author, dry-run, and publish custom agents.",
+              },
+              {
+                href: "/roi",
+                label: "ROI",
+                detail: "Projected scenarios vs observed TaskRun and Canvas telemetry.",
+              },
+              {
+                href: "/creates/new",
+                label: "Guided create",
+                detail: "Evidence-backed content from brief through canvas.",
+              },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-xl border border-[var(--cc-line)] bg-white p-4 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-sm"
+              >
+                <p className="font-semibold text-[var(--cc-ink)]">{item.label}</p>
+                <p className="mt-2 text-sm leading-5 text-[var(--cc-muted)]">{item.detail}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between">
+            <div>
               <h2 className="text-xl font-semibold text-[var(--cc-ink)]">Recent content</h2>
               <p className="mt-1 text-sm text-[var(--cc-muted)]">Continue your latest work.</p>
             </div>

@@ -1,7 +1,14 @@
 export type ProjectStatus = "planning" | "in-progress" | "review" | "complete";
 export type AssetStatus = "draft" | "in-review" | "approved" | "published";
 export type AssetKind = "brief" | "article" | "social" | "image" | "email" | "report";
-export type ActivityKind = "created" | "versioned" | "handoff" | "review";
+export type ActivityKind =
+  | "created"
+  | "versioned"
+  | "handoff"
+  | "review"
+  | "approval"
+  | "publish"
+  | "comment";
 
 export type EvidenceReference = Readonly<{
   id: string;

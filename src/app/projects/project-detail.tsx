@@ -1,14 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   getAssetLineage,
   getProjectEdges,
   latestVersion,
 } from "@/app/projects/project-model";
-import { appendProjectAssetVersion, getProject } from "@/app/projects/projects-api";
-import type { AssetStatus, CanvasProject } from "@/app/projects/project-types";
+import {
+  addProjectAssetComment,
+  appendProjectAssetVersion,
+  approveProjectAsset,
+  convertProjectAssetToGrid,
+  getProject,
+  publishProjectAsset,
+  requestProjectAssetApproval,
+  sendProjectAssetToAgent,
+  type SendToAgentCapability,
+} from "@/app/projects/projects-api";
+import type { AssetKind, AssetStatus, CanvasProject } from "@/app/projects/project-types";
 
 const assetGlyph = { brief: "▤", article: "¶", social: "▦", image: "▧", email: "✉", report: "▣" } as const;
 const statusStyles: Record<AssetStatus, string> = {
@@ -18,12 +29,26 @@ const statusStyles: Record<AssetStatus, string> = {
   published: "border-blue-200 bg-blue-50 text-blue-800",
 };
 
+const sendAgentOptions: ReadonlyArray<{ id: SendToAgentCapability; label: string }> = [
+  { id: "faq-generator", label: "FAQ Generator" },
+  { id: "pillar-outline", label: "Pillar Article Outline" },
+  { id: "citable-claims", label: "Citable Claims" },
+];
+
+function defaultSendCapability(kind: AssetKind): SendToAgentCapability {
+  return kind === "article" || kind === "brief" ? "pillar-outline" : "faq-generator";
+}
+
 export function ProjectDetail({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const [project, setProject] = useState<CanvasProject | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [batchNotice, setBatchNotice] = useState<{ gridId: string; gridName: string } | null>(null);
+  const [sendCapability, setSendCapability] = useState<SendToAgentCapability>("faq-generator");
 
   useEffect(() => {
     void getProject(projectId)
@@ -39,6 +64,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     if (!project) return null;
     return project.assets.find((asset) => asset.id === selectedAssetId) ?? project.assets[0] ?? null;
   }, [project, selectedAssetId]);
+
+  useEffect(() => {
+    if (selectedAsset) {
+      setSendCapability(defaultSendCapability(selectedAsset.kind));
+    }
+  }, [selectedAsset?.id, selectedAsset?.kind]);
 
   if (!ready) {
     return <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-[var(--cc-muted)]">Loading project…</main>;
@@ -85,6 +116,135 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     }
   }
 
+  async function requestApproval() {
+    if (!selectedAsset || !currentVersion || !project) return;
+    if (currentVersion.status !== "draft") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await requestProjectAssetApproval(project.id, selectedAsset.id, {
+        createdAt: new Date().toISOString(),
+        createdBy: "You",
+        summary: `Submitted v${currentVersion.version} for review.`,
+        evidence: currentVersion.evidence,
+        provenance: {
+          origin: "human",
+          note: `Requested approval from ${currentVersion.id}.`,
+        },
+      });
+      setProject(updated);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not request approval.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function approveAsset() {
+    if (!selectedAsset || !currentVersion || !project) return;
+    if (currentVersion.status !== "in-review") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await approveProjectAsset(project.id, selectedAsset.id, {
+        createdAt: new Date().toISOString(),
+        createdBy: "You",
+        summary: `Approved v${currentVersion.version}.`,
+        evidence: currentVersion.evidence,
+        provenance: {
+          origin: "human",
+          note: `Approved from ${currentVersion.id}.`,
+        },
+      });
+      setProject(updated);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not approve asset.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function publishAsset() {
+    if (!selectedAsset || !currentVersion || !project) return;
+    if (currentVersion.status !== "approved") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await publishProjectAsset(project.id, selectedAsset.id, {
+        createdAt: new Date().toISOString(),
+        createdBy: "You",
+        summary: `Published v${currentVersion.version}.`,
+        evidence: currentVersion.evidence,
+        provenance: {
+          origin: "human",
+          note: `Published from ${currentVersion.id}.`,
+        },
+      });
+      setProject(updated);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not publish asset.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addComment() {
+    if (!selectedAsset || !project) return;
+    const message = commentDraft.trim();
+    if (!message) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await addProjectAssetComment(project.id, selectedAsset.id, {
+        message,
+        createdBy: "You",
+      });
+      setProject(updated);
+      setCommentDraft("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not add comment.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function convertToBatch() {
+    if (!selectedAsset || !project) return;
+    setSaving(true);
+    setError(null);
+    setBatchNotice(null);
+    try {
+      const result = await convertProjectAssetToGrid(project.id, selectedAsset.id, {
+        createdBy: "You",
+      });
+      setProject(result.project);
+      setBatchNotice({ gridId: result.gridId, gridName: result.gridName });
+      router.push(`/grid/${result.gridId}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not convert to batch.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sendToAgent() {
+    if (!selectedAsset || !project) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await sendProjectAssetToAgent(project.id, selectedAsset.id, {
+        capabilityId: sendCapability,
+        createdBy: "You",
+      });
+      setProject(result.project);
+      router.push(result.redirectPath);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not send to agent.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
       <Link href="/projects" className="text-sm font-semibold text-[var(--cc-accent)] hover:underline">
@@ -111,6 +271,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           </dl>
         </div>
         {error ? <p role="alert" className="mt-4 text-sm text-red-800">{error}</p> : null}
+        {batchNotice ? (
+          <p className="mt-4 text-sm text-[var(--cc-ink)]">
+            Converted to{" "}
+            <Link href={`/grid/${batchNotice.gridId}`} className="font-semibold text-[var(--cc-accent)] hover:underline">
+              {batchNotice.gridName}
+            </Link>
+            .
+          </p>
+        ) : null}
       </header>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -208,13 +377,83 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 ))}
               </ul>
 
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button type="button" disabled className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50">
-                  Add comment · Coming soon
-                </button>
-                <button type="button" disabled className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50">
-                  Request approval · Coming soon
-                </button>
+              <div className="mt-5 space-y-3">
+                <label className="block">
+                  <span className="text-xs font-semibold text-[var(--cc-ink)]">Comment</span>
+                  <textarea
+                    aria-label="Asset comment"
+                    value={commentDraft}
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Leave editorial feedback on this asset…"
+                    className="mt-1 w-full rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)] outline-none focus:border-[var(--cc-accent)]"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={saving || commentDraft.trim().length === 0}
+                    onClick={() => void addComment()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {saving ? "Saving…" : "Add comment"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving || currentVersion.status !== "draft"}
+                    onClick={() => void requestApproval()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Request approval
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving || currentVersion.status !== "in-review"}
+                    onClick={() => void approveAsset()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving || currentVersion.status !== "approved"}
+                    onClick={() => void publishAsset()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Publish
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void convertToBatch()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Convert to batch
+                  </button>
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="sr-only">Send to agent</span>
+                    <select
+                      aria-label="Send to agent"
+                      value={sendCapability}
+                      onChange={(event) => setSendCapability(event.target.value as SendToAgentCapability)}
+                      disabled={saving}
+                      className="rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      {sendAgentOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void sendToAgent()}
+                    className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Send to agent
+                  </button>
+                </div>
               </div>
             </section>
           ) : null}

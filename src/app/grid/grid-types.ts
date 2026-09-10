@@ -3,6 +3,16 @@ export type GridRowStatus = "pending" | "running" | "succeeded" | "failed" | "sk
 export type GridRunMode = "sample" | "full";
 export type GridRunStatus = "queued" | "running" | "succeeded" | "failed";
 export type GridColumnKind = "input" | "agent" | "output";
+export type GridScheduleCadence = "none" | "daily" | "weekly" | "monthly";
+
+export type GridSchedule = Readonly<{
+  cadence: GridScheduleCadence;
+  enabled: boolean;
+  mode: GridRunMode;
+  sampleSize: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+}>;
 
 export type GridColumn = Readonly<{
   key: string;
@@ -15,6 +25,7 @@ export type GridConfig = Readonly<{
   columns: readonly GridColumn[];
   creditsPerRow: number;
   executionNote: string;
+  schedule?: GridSchedule;
 }>;
 
 export type GridRow = Readonly<{
@@ -80,4 +91,13 @@ export type GridSummary = Readonly<{
   rowCount: number;
   lastRunStatus: string | null;
   persistence: "server";
+  schedule?: Readonly<{
+    cadence: GridScheduleCadence;
+    enabled: boolean;
+    mode: GridRunMode;
+    sampleSize: number;
+    nextRunAt: string | null;
+    lastRunAt: string | null;
+    due: boolean;
+  }>;
 }>;

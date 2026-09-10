@@ -2,15 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { createGridRun, getGrid } from "@/app/grid/grid-api";
+import {
+  createGridRow,
+  createGridRun,
+  getGrid,
+  putGridSchedule,
+  runDueGridSchedule,
+} from "@/app/grid/grid-api";
 import {
   estimateBudget,
   inputPreview,
   outputPreview,
+  readGridSchedule,
+  scheduleIsDue,
+  scheduleLabel,
   selectRowsForRun,
   succeededCount,
 } from "@/app/grid/grid-model";
-import type { Grid, GridRowStatus } from "@/app/grid/grid-types";
+import type { Grid, GridRowStatus, GridRunMode, GridScheduleCadence } from "@/app/grid/grid-types";
+import {
+  attachGridRowsToProject,
+  listProjects,
+  type ProjectSummary,
+} from "@/app/projects/projects-api";
 
 const rowStatusStyles: Record<GridRowStatus, string> = {
   pending: "border-slate-200 bg-slate-50 text-slate-700",
@@ -25,19 +39,52 @@ export function GridDetail({ gridId }: { gridId: string }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [topicDraft, setTopicDraft] = useState("");
+  const [addingRow, setAddingRow] = useState(false);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachNotice, setAttachNotice] = useState<string | null>(null);
+  const [scheduleCadence, setScheduleCadence] = useState<GridScheduleCadence>("none");
+  const [scheduleMode, setScheduleMode] = useState<GridRunMode>("sample");
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
 
   useEffect(() => {
     void getGrid(gridId)
-      .then(setGrid)
+      .then((next) => {
+        setGrid(next);
+        const schedule = readGridSchedule(next.config);
+        setScheduleCadence(schedule.cadence);
+        setScheduleMode(schedule.mode);
+        setScheduleEnabled(schedule.enabled);
+      })
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load grid."))
       .finally(() => setReady(true));
   }, [gridId]);
+
+  useEffect(() => {
+    void listProjects()
+      .then((items) => {
+        setProjects(items);
+        setSelectedProjectId((current) => current || items[0]?.id || "");
+      })
+      .catch(() => setProjects([]));
+  }, []);
 
   const samplePreview = useMemo(() => {
     if (!grid) return null;
     const rows = selectRowsForRun(grid.rows, "sample", 10);
     return estimateBudget(grid.config, rows.length);
   }, [grid]);
+
+  const sampleSize = samplePreview?.rowCount ?? 0;
+  const succeededRows = useMemo(
+    () => (grid ? grid.rows.filter((row) => row.status === "succeeded") : []),
+    [grid],
+  );
+  const schedule = useMemo(() => readGridSchedule(grid?.config), [grid]);
+  const due = scheduleIsDue(schedule);
 
   if (!ready) {
     return <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-[var(--cc-muted)]">Loading grid…</main>;
@@ -62,6 +109,7 @@ export function GridDetail({ gridId }: { gridId: string }) {
   async function run(mode: "sample" | "full") {
     setRunning(true);
     setError(null);
+    setAttachNotice(null);
     try {
       const updated = await createGridRun(grid!.id, {
         mode,
@@ -72,6 +120,89 @@ export function GridDetail({ gridId }: { gridId: string }) {
       setError(cause instanceof Error ? cause.message : "Could not start run.");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function addRow() {
+    const topic = topicDraft.trim();
+    if (!topic) return;
+    setAddingRow(true);
+    setError(null);
+    try {
+      const updated = await createGridRow(grid!.id, { topic });
+      setGrid(updated);
+      setTopicDraft("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not add row.");
+    } finally {
+      setAddingRow(false);
+    }
+  }
+
+  async function attachSucceeded() {
+    if (!selectedProjectId || succeededRows.length === 0) return;
+    setAttachBusy(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const result = await attachGridRowsToProject(selectedProjectId, {
+        gridId: grid!.id,
+        rowIds: succeededRows.map((row) => row.id),
+      });
+      setAttachNotice(
+        `Attached ${result.attachedCount} row${result.attachedCount === 1 ? "" : "s"} to the project.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not attach rows to project.");
+    } finally {
+      setAttachBusy(false);
+    }
+  }
+
+  async function saveSchedule() {
+    setScheduleBusy(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const updated = await putGridSchedule(grid!.id, {
+        cadence: scheduleCadence,
+        enabled: scheduleEnabled && scheduleCadence !== "none",
+        mode: scheduleMode,
+        sampleSize: 10,
+      });
+      setGrid(updated);
+      const next = readGridSchedule(updated.config);
+      setScheduleCadence(next.cadence);
+      setScheduleMode(next.mode);
+      setScheduleEnabled(next.enabled);
+      setAttachNotice(`Schedule saved: ${scheduleLabel(next)}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save schedule.");
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
+  async function fireDueSchedule() {
+    setScheduleBusy(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const result = await runDueGridSchedule(grid!.id);
+      setGrid(result.grid);
+      const next = readGridSchedule(result.grid.config);
+      setScheduleCadence(next.cadence);
+      setScheduleMode(next.mode);
+      setScheduleEnabled(next.enabled);
+      setAttachNotice(
+        result.ran
+          ? `Scheduled ${next.mode} run completed. Next run ${next.nextRunAt ?? "unset"}.`
+          : `Schedule not due yet (${result.reason ?? "not-due"}).`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not run due schedule.");
+    } finally {
+      setScheduleBusy(false);
     }
   }
 
@@ -99,15 +230,15 @@ export function GridDetail({ gridId }: { gridId: string }) {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              disabled={running}
+              disabled={running || sampleSize === 0}
               onClick={() => void run("sample")}
               className="rounded-lg border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--cc-ink)] disabled:opacity-50"
             >
-              {running ? "Running…" : "Run sample (10)"}
+              {running ? "Running…" : `Run sample (${sampleSize})`}
             </button>
             <button
               type="button"
-              disabled={running}
+              disabled={running || grid.rows.length === 0}
               onClick={() => void run("full")}
               className="rounded-lg bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
@@ -122,6 +253,7 @@ export function GridDetail({ gridId }: { gridId: string }) {
           </p>
         ) : null}
         {error ? <p role="alert" className="mt-4 text-sm text-red-800">{error}</p> : null}
+        {attachNotice ? <p role="status" className="mt-4 text-sm text-[var(--cc-ink)]">{attachNotice}</p> : null}
       </header>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -133,6 +265,32 @@ export function GridDetail({ gridId }: { gridId: string }) {
                 {grid.rows.length} rows · {succeededCount(grid)} succeeded
               </p>
             </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-3 border-b border-[var(--cc-line)] px-5 py-4">
+            <label className="min-w-[16rem] flex-1">
+              <span className="text-xs font-semibold text-[var(--cc-ink)]">New topic</span>
+              <input
+                aria-label="New grid topic"
+                value={topicDraft}
+                onChange={(event) => setTopicDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void addRow();
+                  }
+                }}
+                placeholder="Add another work-item topic…"
+                className="mt-1 w-full rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--cc-accent)]"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={addingRow || topicDraft.trim().length === 0}
+              onClick={() => void addRow()}
+              className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {addingRow ? "Adding…" : "Add row"}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -200,19 +358,139 @@ export function GridDetail({ gridId }: { gridId: string }) {
                 </div>
               </dl>
             ) : (
-              <p className="mt-4 text-sm text-[var(--cc-muted)]">No runs yet. Start with a 10-row sample.</p>
+              <p className="mt-4 text-sm text-[var(--cc-muted)]">No runs yet. Start with a sample run.</p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
+            <h2 className="font-semibold text-[var(--cc-ink)]">Schedule</h2>
+            <p className="mt-2 text-xs leading-5 text-[var(--cc-muted)]">
+              Server-owned cadence for sample or full runs. Due runs are fired from this panel
+              (cron can call the same run-due endpoint).
+            </p>
+            <p className="mt-3 text-sm text-[var(--cc-ink)]" aria-live="polite">
+              {scheduleLabel(schedule)}
+              {schedule.nextRunAt ? ` · next ${new Date(schedule.nextRunAt).toLocaleString()}` : ""}
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-semibold text-[var(--cc-ink)]">
+                Cadence
+                <select
+                  aria-label="Grid schedule cadence"
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+                  value={scheduleCadence}
+                  onChange={(event) => {
+                    const value = event.target.value as GridScheduleCadence;
+                    setScheduleCadence(value);
+                    if (value === "none") setScheduleEnabled(false);
+                  }}
+                >
+                  <option value="none">Off</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-[var(--cc-ink)]">
+                Run mode
+                <select
+                  aria-label="Grid schedule run mode"
+                  className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+                  value={scheduleMode}
+                  onChange={(event) => setScheduleMode(event.target.value as GridRunMode)}
+                >
+                  <option value="sample">Sample (10)</option>
+                  <option value="full">All rows</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--cc-ink)]">
+                <input
+                  type="checkbox"
+                  aria-label="Enable grid schedule"
+                  checked={scheduleEnabled && scheduleCadence !== "none"}
+                  disabled={scheduleCadence === "none"}
+                  onChange={(event) => setScheduleEnabled(event.target.checked)}
+                />
+                Enabled
+              </label>
+              <button
+                type="button"
+                disabled={scheduleBusy}
+                onClick={() => void saveSchedule()}
+                className="w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {scheduleBusy ? "Saving…" : "Save schedule"}
+              </button>
+              <button
+                type="button"
+                disabled={scheduleBusy || !schedule.enabled}
+                onClick={() => void fireDueSchedule()}
+                className="w-full rounded-lg bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {due ? "Run due now" : "Check / run if due"}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
+            <h2 className="font-semibold text-[var(--cc-ink)]">Attach to project</h2>
+            <p className="mt-2 text-xs leading-5 text-[var(--cc-muted)]">
+              Copy succeeded row outputs into a Canvas project as draft report assets.
+            </p>
+            {projects.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--cc-muted)]">
+                No projects yet.{" "}
+                <Link href="/projects" className="font-semibold text-[var(--cc-accent)] underline">
+                  Create one
+                </Link>
+                .
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-semibold text-[var(--cc-ink)]">
+                  Project
+                  <select
+                    aria-label="Attach grid rows to project"
+                    className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+                    value={selectedProjectId}
+                    onChange={(event) => setSelectedProjectId(event.target.value)}
+                  >
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={attachBusy || succeededRows.length === 0 || !selectedProjectId}
+                  onClick={() => void attachSucceeded()}
+                  className="w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {attachBusy
+                    ? "Attaching…"
+                    : `Attach succeeded (${succeededRows.length})`}
+                </button>
+                {selectedProjectId ? (
+                  <Link
+                    href={`/projects/${encodeURIComponent(selectedProjectId)}`}
+                    className="inline-block text-xs font-semibold text-[var(--cc-accent)] underline"
+                  >
+                    Open project
+                  </Link>
+                ) : null}
+              </div>
             )}
           </section>
 
           <section className="rounded-2xl border border-[var(--cc-line)] bg-white p-5 shadow-sm">
             <h2 className="font-semibold text-[var(--cc-ink)]">History</h2>
             <ul aria-label="Grid run history" className="mt-4 space-y-3">
-              {grid.runs.flatMap((run) => run.history).length === 0 ? (
+              {grid.runs.flatMap((runItem) => runItem.history).length === 0 ? (
                 <li className="text-sm text-[var(--cc-muted)]">History appears after the first run.</li>
               ) : (
-                grid.runs.flatMap((run) =>
-                  run.history.map((entry, index) => (
-                    <li key={`${run.id}-${index}`} className="text-sm">
+                grid.runs.flatMap((runItem) =>
+                  runItem.history.map((entry, index) => (
+                    <li key={`${runItem.id}-${index}`} className="text-sm">
                       <p className="font-medium text-[var(--cc-ink)]">
                         {entry.mode} · {entry.outputCount} outputs · {entry.estimatedCredits} credits
                       </p>

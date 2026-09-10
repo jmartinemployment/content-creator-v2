@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  currentVersion,
+  normalizeCatalog,
+  type GovernedCatalogItem,
+} from "@/app/brand-sources/context-contract";
+import {
   detailToEditorState,
   dryRunStudioAgent,
   getStudioAgent,
@@ -24,6 +29,8 @@ type EditorState = {
   exampleOutput: string;
   allowedModel: string;
   temperature: number;
+  evaluationPrompt: string;
+  contextKnowledgeIds: string[];
 };
 
 function fieldIdFromLabel(label: string) {
@@ -40,6 +47,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
   const [saving, setSaving] = useState(false);
   const [dryRunPassed, setDryRunPassed] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [knowledgeItems, setKnowledgeItems] = useState<GovernedCatalogItem[]>([]);
 
   useEffect(() => {
     void getStudioAgent(draftId)
@@ -50,6 +58,30 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       })
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load Studio agent."));
   }, [draftId]);
+
+  useEffect(() => {
+    void fetch("/api/gcc-v2/knowledge", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Knowledge catalog failed (HTTP ${response.status}).`);
+        return response.json();
+      })
+      .then((body) => setKnowledgeItems(normalizeCatalog(body)))
+      .catch(() => setKnowledgeItems([]));
+  }, []);
+
+  const approvedKnowledge = useMemo(
+    () => knowledgeItems.flatMap((item) => {
+      const version = currentVersion(item);
+      if (!version || (version.lifecycle !== "approved" && version.lifecycle !== "deprecated")) {
+        return [];
+      }
+      return [{
+        versionId: version.id,
+        label: `${item.name} v${version.versionNumber}`,
+      }];
+    }),
+    [knowledgeItems],
+  );
 
   const schemaPreview = useMemo(
     () => (editor ? JSON.stringify(buildInputSchema({
@@ -62,8 +94,8 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       exampleOutput: editor.exampleOutput,
       allowedModel: editor.allowedModel,
       temperature: editor.temperature,
-      contextKnowledgeIds: [],
-      evaluationPrompt: "",
+      contextKnowledgeIds: editor.contextKnowledgeIds,
+      evaluationPrompt: editor.evaluationPrompt,
       updatedAt: "",
       testStatus: "untested",
     }), null, 2) : ""),
@@ -85,6 +117,8 @@ export function StudioEditor({ draftId }: { draftId: string }) {
         exampleOutput: next.exampleOutput,
         allowedModel: next.allowedModel,
         temperature: next.temperature,
+        evaluationPrompt: next.evaluationPrompt,
+        contextKnowledgeIds: next.contextKnowledgeIds,
       });
       setEditor(detailToEditorState(detail));
       setStatusMessage(`Draft saved as ${detail.agent.version}.`);
@@ -118,7 +152,13 @@ export function StudioEditor({ draftId }: { draftId: string }) {
     try {
       const detail = await publishStudioAgent(editor.id);
       setEditor(detailToEditorState(detail));
-      setStatusMessage(`Published ${detail.agent.version}. Runnable from Task Agents.`);
+      setDryRunPassed(false);
+      setStatusMessage(
+        detail.message
+          ?? (detail.publishedVersion
+            ? `Published ${detail.publishedVersion.version}. Successor draft ${detail.agent.version} is ready.`
+            : `Published ${detail.agent.version}.`),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Publish failed.");
     } finally {
@@ -264,6 +304,47 @@ export function StudioEditor({ draftId }: { draftId: string }) {
           rows={6}
           className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 font-mono text-sm"
         />
+        <label className="mt-5 block text-sm font-semibold" htmlFor="studioEvaluation">Evaluation prompt</label>
+        <textarea
+          id="studioEvaluation"
+          value={editor.evaluationPrompt}
+          onChange={(event) => setEditor({ ...editor, evaluationPrompt: event.target.value })}
+          rows={4}
+          className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 font-mono text-sm"
+          placeholder="Criteria a dry-run or reviewer should check against the example output."
+        />
+        <fieldset className="mt-5">
+          <legend className="text-sm font-semibold">Approved knowledge attachments</legend>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            Optional. Select up to 10 approved Knowledge versions to pin on this agent definition.
+          </p>
+          {approvedKnowledge.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--cc-muted)]">No approved Knowledge versions are available.</p>
+          ) : (
+            <ul className="mt-3 space-y-2" aria-label="Approved knowledge attachments">
+              {approvedKnowledge.map((item) => {
+                const checked = editor.contextKnowledgeIds.includes(item.versionId);
+                return (
+                  <li key={item.versionId}>
+                    <label className="flex items-center gap-2 text-sm text-[var(--cc-ink)]">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const nextIds = event.target.checked
+                            ? [...editor.contextKnowledgeIds, item.versionId].slice(0, 10)
+                            : editor.contextKnowledgeIds.filter((id) => id !== item.versionId);
+                          setEditor({ ...editor, contextKnowledgeIds: nextIds });
+                        }}
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </fieldset>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-semibold" htmlFor="studioModel">Allowed model</label>
@@ -301,7 +382,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       <section className="mt-5 rounded-xl border border-[var(--cc-line)] bg-white p-5">
         <h2 className="text-lg font-bold">Dry-run test</h2>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
-          Sample inputs are validated against the saved draft schema and instruction template.
+          Sample inputs are validated against the saved draft schema, instruction template, and evaluation prompt.
         </p>
         <div className="mt-4 space-y-3">
           {editor.fields.map((field) => (
@@ -337,7 +418,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
           Status: <span className="font-semibold">{dryRunPassed ? "passed" : editor.state}</span>
           {statusMessage ? ` · ${statusMessage}` : ""}
         </p>
-        {error ? <p role="alert" className="mt-3 text-sm text-red-800">{error}</p> : null}
+        {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
       </section>
     </main>
   );

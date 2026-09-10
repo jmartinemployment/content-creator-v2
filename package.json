@@ -11,7 +11,9 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
-    "test:ci": "npm run typecheck && npm run build && npm run test:e2e"
+    "test:e2e:citation": "playwright test tests/e2e/create-flow.spec.ts tests/e2e/rag.spec.ts",
+    "test:ci": "npm run typecheck && npm run build && npm run test:e2e",
+    "test:ci:citation": "npm run typecheck && npm run build && npm run test:e2e:citation"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",

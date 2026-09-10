@@ -1562,7 +1562,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
         )) : null}
 
         {activeTab === "canvas" && jobCitations.length > 0 ? (
-          <div className="rounded-lg border border-[var(--cc-line)] p-4">
+          <div className="rounded-lg border border-[var(--cc-line)] p-4" aria-label="Job citations">
             <SectionCitations citations={jobCitations} />
           </div>
         ) : null}
@@ -1677,7 +1677,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                     ? reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} to review` : "No open quality issues"
                     : evidenceManifest ? `${evidenceManifest.sources?.length ?? 0} research source(s)` : "Brief and brand context"}
           </p>
-          <details className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs">
+          <details className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs" aria-label="Technical details">
             <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">Technical details</summary>
           <div className="mt-2 flex flex-col gap-1 text-[var(--cc-muted)]">
             <p className="font-mono">Job {jobId}</p>

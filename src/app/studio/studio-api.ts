@@ -20,9 +20,17 @@ export type StudioAgentDetail = {
     instructionsTemplate?: string;
     exampleOutput?: string;
     temperature?: number;
+    evaluationPrompt?: string;
+    contextKnowledgeIds?: string[];
     uiSchema?: { fields?: StudioFormField[] };
   };
   allowedModels?: string[];
+  publishedVersion?: {
+    versionId: string;
+    version: string;
+    digest: string;
+  };
+  message?: string;
 };
 
 export type StudioDryRunResponse = {
@@ -30,6 +38,8 @@ export type StudioDryRunResponse = {
   renderedInstructions: string;
   missingTokens: string[];
   validationErrors: string[];
+  evaluationPrompt?: string;
+  knowledgeAttachmentCount?: number;
   message: string;
 };
 
@@ -84,6 +94,7 @@ export function saveStudioDraft(
     allowedModel: string;
     temperature: number;
     evaluationPrompt?: string;
+    contextKnowledgeIds?: string[];
   },
 ) {
   return studioFetch(`agents/${encodeURIComponent(id)}/draft`, {
@@ -109,6 +120,11 @@ export function publishStudioAgent(id: string) {
   }) as Promise<StudioAgentDetail>;
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+}
+
 export function detailToEditorState(detail: StudioAgentDetail) {
   const fields = detail.workflow.uiSchema?.fields ?? [];
   return {
@@ -123,5 +139,7 @@ export function detailToEditorState(detail: StudioAgentDetail) {
     exampleOutput: detail.workflow.exampleOutput ?? "",
     allowedModel: detail.allowedModels?.[0] ?? "gpt-5.4",
     temperature: detail.workflow.temperature ?? 0.2,
+    evaluationPrompt: detail.workflow.evaluationPrompt ?? "",
+    contextKnowledgeIds: stringList(detail.workflow.contextKnowledgeIds),
   };
 }

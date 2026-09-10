@@ -4,7 +4,7 @@ export function SectionCitations({ citations }: { citations: RagCitation[] }) {
   if (citations.length === 0) return null;
 
   return (
-    <div className="mt-3 border-t border-[var(--cc-line)] pt-3">
+    <div className="mt-3 border-t border-[var(--cc-line)] pt-3" aria-label="Verified citations">
       <p className="text-xs font-semibold text-[var(--cc-ink)]">
         Verified citations
       </p>
