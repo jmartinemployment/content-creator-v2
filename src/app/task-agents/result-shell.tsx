@@ -87,6 +87,18 @@ const FALLBACK_NEXT: Record<string, ResultNextAction[]> = {
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "pillar-outline", label: "Pillar Article Outline", artifactType: "pillarOutline.v1" },
   ],
+  "comparison-brief": [
+    { capabilityId: "competitive-response", label: "Competitive Response", artifactType: "competitiveResponse.v1" },
+    { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+  ],
+  "pillar-outline": [
+    { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+    { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+  ],
+  "competitive-response": [
+    { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+    { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
+  ],
 };
 
 function shortId(value: string | undefined | null) {

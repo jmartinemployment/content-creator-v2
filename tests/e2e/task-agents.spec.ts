@@ -200,6 +200,51 @@ test("competitor page analysis renders competitor-report dimensions", async ({ p
   await expect(page.getByText(/competitorPageAnalysis\.v1 · valid/)).toBeVisible();
 });
 
+test("comparison brief content agent renders criteria and verdict", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/comparison-brief");
+  await expect(page.getByRole("heading", { name: "Comparison Brief" })).toBeVisible();
+  await page.getByLabel("Subject name").fill("Subject Analyzer");
+  await page.getByLabel("Competitor name").fill("Competitor Inc.");
+  await page.getByLabel("Subject page content").fill("# Subject\n\nPlans start at $15 per month.");
+  await page.getByLabel("Competitor page content").fill("# Competitor\n\nPlans start at $20 per month.");
+  await page.getByRole("button", { name: "Run Comparison Brief" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="comparison-brief"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Comparison criteria" })).toContainText("pricing");
+  await expect(page.getByTestId("brief-verdict")).toContainText("Subject Analyzer");
+  await expect(page.getByText(/comparisonBrief\.v1 · valid/)).toBeVisible();
+});
+
+test("pillar outline content agent renders supporting content plan", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/pillar-outline");
+  await expect(page.getByRole("heading", { name: "Pillar Article Outline" })).toBeVisible();
+  await page.getByLabel("Topic").fill("AI content readiness");
+  await page.getByLabel("Source content").fill(
+    "# AI Content Readiness Guide\n\n## What is AI content readiness?\n\nAnswer-first structure with evidence.",
+  );
+  await page.getByRole("button", { name: "Run Pillar Article Outline" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="outline"]')).toBeVisible();
+  await expect(page.getByRole("list", { name: "Pillar outline sections" })).toContainText("What is AI content readiness?");
+  await expect(page.getByTestId("supporting-content-plan")).toContainText("AI content readiness FAQ");
+  await expect(page.getByText(/pillarOutline\.v1 · valid/)).toBeVisible();
+});
+
+test("competitive response content agent renders response-plan mode", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/competitive-response");
+  await expect(page.getByRole("heading", { name: "Competitive Response" })).toBeVisible();
+  await page.getByLabel("Brand name").fill("Brand Analyzer");
+  await page.getByLabel("Competitor name").fill("Competitor Inc.");
+  await page.getByLabel("Brand page content").fill("# Brand Analyzer\n\nSupports Markdown analysis.");
+  await page.getByLabel("Competitor page content").fill("# Competitor\n\nTrusted by 500 teams.");
+  await page.getByRole("button", { name: "Run Competitive Response" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.locator('[data-result-renderer="response-plan"]')).toBeVisible();
+  await expect(page.getByTestId("response-mode")).toHaveText("counterNarrative");
+  await expect(page.getByRole("list", { name: "Response outline" })).toContainText("Why choose Brand Analyzer?");
+  await expect(page.getByText(/competitiveResponse\.v1 · valid/)).toBeVisible();
+});
+
 test("task agent pins governed context digest on the result shell", async ({ page }) => {
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await expect(page.getByRole("region", { name: "Run context" })).toBeVisible();

@@ -1950,6 +1950,39 @@ const server = http.createServer(async (req, res) => {
           workflowGroup: "originate",
           facets: { category: "content" },
         },
+        {
+          id: "comparison-brief",
+          definitionId: "task-agent-13",
+          displayName: "Comparison Brief",
+          description: "Structure subject-versus-competitor page signals into a brief with labeled hypotheses.",
+          versionId: "task-agent-version-13",
+          version: "1.0.0",
+          digest: "q".repeat(64),
+          workflowGroup: "originate",
+          facets: { category: "content" },
+        },
+        {
+          id: "pillar-outline",
+          definitionId: "task-agent-14",
+          displayName: "Pillar Article Outline",
+          description: "Produce a topic-cluster pillar outline and supporting-content plan from supplied inputs.",
+          versionId: "task-agent-version-14",
+          version: "1.0.0",
+          digest: "r".repeat(64),
+          workflowGroup: "originate",
+          facets: { category: "content" },
+        },
+        {
+          id: "competitive-response",
+          definitionId: "task-agent-15",
+          displayName: "Competitive Response",
+          description: "Choose a response mode and emit brand-aligned angles, proof points, and outline sections.",
+          versionId: "task-agent-version-15",
+          version: "1.0.0",
+          digest: "s".repeat(64),
+          workflowGroup: "outrank",
+          facets: { category: "content" },
+        },
       ],
     });
   }
@@ -2223,6 +2256,51 @@ const server = http.createServer(async (req, res) => {
       resultRenderer: { kind: "competitor-report", artifactType: "competitorPageAnalysis.v1" },
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/comparison-brief" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "comparison-brief",
+        displayName: "Comparison Brief",
+        description: "Structure subject-versus-competitor page signals into a brief with labeled hypotheses.",
+        versionId: "task-agent-version-13",
+        version: "1.0.0",
+        digest: "q".repeat(64),
+      },
+      workflow: { endpoint: "comparison-brief", artifactType: "comparisonBrief.v1" },
+      resultRenderer: { kind: "comparison-brief", artifactType: "comparisonBrief.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/pillar-outline" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "pillar-outline",
+        displayName: "Pillar Article Outline",
+        description: "Produce a topic-cluster pillar outline and supporting-content plan from supplied inputs.",
+        versionId: "task-agent-version-14",
+        version: "1.0.0",
+        digest: "r".repeat(64),
+      },
+      workflow: { endpoint: "pillar-outline", artifactType: "pillarOutline.v1" },
+      resultRenderer: { kind: "outline", artifactType: "pillarOutline.v1" },
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "competitive-response",
+        displayName: "Competitive Response",
+        description: "Choose a response mode and emit brand-aligned angles, proof points, and outline sections.",
+        versionId: "task-agent-version-15",
+        version: "1.0.0",
+        digest: "s".repeat(64),
+      },
+      workflow: { endpoint: "competitive-response", artifactType: "competitiveResponse.v1" },
+      resultRenderer: { kind: "response-plan", artifactType: "competitiveResponse.v1" },
+    });
+  }
   function createTaskRun(capabilityId, runId, body) {
     const selection = body?.contextSelection;
     const hasPins = selection && (
@@ -2353,6 +2431,18 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitor-page/runs" && req.method === "POST") {
     const created = createTaskRun("competitor-page", "task-run-9", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/comparison-brief/runs" && req.method === "POST") {
+    const created = createTaskRun("comparison-brief", "task-run-13", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/pillar-outline/runs" && req.method === "POST") {
+    const created = createTaskRun("pillar-outline", "task-run-14", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response/runs" && req.method === "POST") {
+    const created = createTaskRun("competitive-response", "task-run-15", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
   }
   const taskRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/task-agents\/runs\/([^/]+)(?:\/(result|cancel))?$/);
@@ -2861,6 +2951,159 @@ const server = http.createServer(async (req, res) => {
             { capabilityId: "content-gap", label: "Content Gap Finder", artifactType: "contentGapAnalysis.v1" },
           ],
           rerun: { capabilityId: "competitor-page", versionId: "task-agent-version-3", retryOfRunId: "task-run-9" },
+        }));
+      }
+      if (runId === "task-run-13") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: {
+            capabilityId: "comparison-brief",
+            displayName: "Comparison Brief",
+            objective: "Structure a subject-versus-competitor brief.",
+          },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-13",
+            artifactType: "comparisonBrief.v1",
+            versions: [{
+              id: "artifact-version-13",
+              payloadJson: JSON.stringify({
+                artifactType: "comparisonBrief.v1",
+                subjectName: "Subject Analyzer",
+                competitorName: "Competitor Inc.",
+                criteria: [{
+                  criterion: "pricing",
+                  subjectSignals: ["Plans start at $15 per month."],
+                  competitorSignals: ["Plans start at $20 per month."],
+                  evidenceIds: ["ev-1"],
+                  summary: "pricing: subject coverage present; competitor coverage present.",
+                }],
+                differentiators: [{
+                  origin: "generatedHypothesis",
+                  text: "Lead with transparent mid-market pricing.",
+                  disclaimer: "generatedHypothesis only; not measured demand, ranking, or market perception.",
+                }],
+                proofRequirements: [{
+                  origin: "generatedHypothesis",
+                  text: "Cite a concrete plan price on the subject page.",
+                }],
+                positioningAngles: [{
+                  origin: "generatedHypothesis",
+                  text: "Frame as evidence-linked analysis at a clearer price.",
+                }],
+                recommendedVerdict: {
+                  framing: "Choose Subject Analyzer when buyers need evidence-linked analysis at a lower entry price.",
+                  disclaimer: "Heuristic recommendation from supplied page signals only; not a measured ranking, win rate, or market outcome.",
+                },
+                warnings: ["Differentiators are labeled generatedHypothesis."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "t".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "competitive-response", label: "Competitive Response", artifactType: "competitiveResponse.v1" },
+            { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+          ],
+          rerun: { capabilityId: "comparison-brief", versionId: "task-agent-version-13", retryOfRunId: "task-run-13" },
+        }));
+      }
+      if (runId === "task-run-14") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: {
+            capabilityId: "pillar-outline",
+            displayName: "Pillar Article Outline",
+            objective: "Produce a topic-cluster outline.",
+          },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-14",
+            artifactType: "pillarOutline.v1",
+            versions: [{
+              id: "artifact-version-14",
+              payloadJson: JSON.stringify({
+                artifactType: "pillarOutline.v1",
+                topic: "AI content readiness",
+                sections: [{
+                  sectionId: "sec-1",
+                  heading: "What is AI content readiness?",
+                  objective: "Define readiness in answer-first language.",
+                  answerFirstPrompt: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
+                  relatedQueries: ["What is AI content readiness?"],
+                  evidenceIds: [],
+                }],
+                supportingContentPlan: [{
+                  contentType: "faq",
+                  title: "AI content readiness FAQ",
+                  rationale: "Capture definitional queries as reusable FAQ pairs.",
+                  origin: "generatedHypothesis",
+                  disclaimer: "generatedHypothesis only; not measured demand or cluster coverage.",
+                }],
+                warnings: ["Supporting content plans are labeled generatedHypothesis."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "u".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+            { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+          ],
+          rerun: { capabilityId: "pillar-outline", versionId: "task-agent-version-14", retryOfRunId: "task-run-14" },
+        }));
+      }
+      if (runId === "task-run-15") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: {
+            capabilityId: "competitive-response",
+            displayName: "Competitive Response",
+            objective: "Plan a brand-aligned competitive response.",
+          },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-15",
+            artifactType: "competitiveResponse.v1",
+            versions: [{
+              id: "artifact-version-15",
+              payloadJson: JSON.stringify({
+                artifactType: "competitiveResponse.v1",
+                selectedMode: "counterNarrative",
+                rationale: "Competitor cites social proof that the brand page does not answer directly.",
+                contentAngles: [{
+                  origin: "generatedHypothesis",
+                  text: "Answer why buyers should choose the brand with concrete capability proof.",
+                  disclaimer: "generatedHypothesis only; not measured demand, ranking, or market perception.",
+                }],
+                requiredProofPoints: [{
+                  proofId: "proof-1",
+                  statement: "Document Markdown analysis support with a visible capability claim.",
+                  evidenceIds: [],
+                  origin: "suppliedEvidence",
+                }],
+                outlineSections: [{
+                  heading: "Answer: Why choose Brand Analyzer?",
+                  objective: "Lead with a direct brand answer, then required proof.",
+                  evidenceIds: [],
+                }],
+                warnings: ["Does not copy competitor prose into draft body."],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "v".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
+            { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
+          ],
+          rerun: { capabilityId: "competitive-response", versionId: "task-agent-version-15", retryOfRunId: "task-run-15" },
         }));
       }
       return send(res, 404, { error: "Result not found." });

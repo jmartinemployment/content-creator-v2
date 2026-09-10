@@ -393,20 +393,258 @@ function QueryPlanView({ payload }: { payload: ArtifactPayload }) {
   );
 }
 
+function hypothesisItems(value: unknown): Array<{ text: string; disclaimer?: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const row = asEntry(entry);
+    if (typeof row.text !== "string" || !row.text) return [];
+    return [{
+      text: row.text,
+      disclaimer: typeof row.disclaimer === "string" ? row.disclaimer : undefined,
+    }];
+  });
+}
+
+function stringWarnings(payload: ArtifactPayload): string[] {
+  return Array.isArray(payload.warnings)
+    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function ComparisonBriefView({ payload }: { payload: ArtifactPayload }) {
+  const criteria = Array.isArray(payload.criteria) ? payload.criteria : [];
+  const differentiators = hypothesisItems(payload.differentiators);
+  const proofRequirements = hypothesisItems(payload.proofRequirements);
+  const positioningAngles = hypothesisItems(payload.positioningAngles);
+  const verdict = asEntry(payload.recommendedVerdict);
+  const warnings = stringWarnings(payload);
+
+  return (
+    <div className="mt-4 space-y-6">
+      <p className="text-sm text-[var(--cc-muted)]">
+        <span className="font-semibold text-[var(--cc-ink)]">{String(payload.subjectName || "Subject")}</span>
+        {" vs "}
+        <span className="font-semibold text-[var(--cc-ink)]">{String(payload.competitorName || "Competitor")}</span>
+      </p>
+      {criteria.length ? (
+        <ul className="space-y-4" aria-label="Comparison criteria">
+          {criteria.map((entry) => {
+            const row = asEntry(entry);
+            const subjectSignals = Array.isArray(row.subjectSignals)
+              ? row.subjectSignals.map(String)
+              : [];
+            const competitorSignals = Array.isArray(row.competitorSignals)
+              ? row.competitorSignals.map(String)
+              : [];
+            return (
+              <li key={String(row.criterion)} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+                <p className="font-semibold text-[var(--cc-ink)]">{String(row.criterion)}</p>
+                {typeof row.summary === "string" && row.summary ? (
+                  <p className="mt-1 text-[var(--cc-muted)]">{row.summary}</p>
+                ) : null}
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--cc-ink)]">Subject</p>
+                    <ul className="mt-1 space-y-1 text-xs text-[var(--cc-muted)]">
+                      {subjectSignals.map((signal) => <li key={signal}>{signal}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--cc-ink)]">Competitor</p>
+                    <ul className="mt-1 space-y-1 text-xs text-[var(--cc-muted)]">
+                      {competitorSignals.map((signal) => <li key={signal}>{signal}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {differentiators.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="brief-differentiators">
+          <p className="text-sm font-semibold text-amber-950">Differentiators</p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-950/90">
+            {differentiators.map((item) => (
+              <li key={item.text}>
+                {item.text}
+                {item.disclaimer ? <span className="mt-1 block text-xs opacity-80">{item.disclaimer}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
+      {proofRequirements.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="brief-proof-requirements">
+          <p className="text-sm font-semibold text-amber-950">Proof requirements</p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-950/90">
+            {proofRequirements.map((item) => <li key={item.text}>{item.text}</li>)}
+          </ul>
+        </aside>
+      ) : null}
+      {positioningAngles.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="brief-positioning-angles">
+          <p className="text-sm font-semibold text-amber-950">Positioning angles</p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-950/90">
+            {positioningAngles.map((item) => <li key={item.text}>{item.text}</li>)}
+          </ul>
+        </aside>
+      ) : null}
+      {typeof verdict.framing === "string" && verdict.framing ? (
+        <div className="border-l-2 border-[var(--cc-accent)] pl-3" data-testid="brief-verdict">
+          <p className="text-sm font-semibold text-[var(--cc-ink)]">Recommended framing</p>
+          <p className="mt-1 text-sm text-[var(--cc-ink)]">{verdict.framing}</p>
+          {typeof verdict.disclaimer === "string" && verdict.disclaimer ? (
+            <p className="mt-2 text-xs text-[var(--cc-muted)]">{verdict.disclaimer}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {warnings.length ? (
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Comparison warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function ResponsePlanView({ payload }: { payload: ArtifactPayload }) {
+  const contentAngles = hypothesisItems(payload.contentAngles);
+  const proofPoints = Array.isArray(payload.requiredProofPoints) ? payload.requiredProofPoints : [];
+  const sections = Array.isArray(payload.outlineSections) ? payload.outlineSections : [];
+  const warnings = stringWarnings(payload);
+
+  return (
+    <div className="mt-4 space-y-6">
+      <div>
+        <p className="text-sm text-[var(--cc-muted)]">Selected mode</p>
+        <p className="mt-1 font-semibold text-[var(--cc-ink)]" data-testid="response-mode">
+          {String(payload.selectedMode || "—")}
+        </p>
+        {typeof payload.rationale === "string" && payload.rationale ? (
+          <p className="mt-2 max-w-prose text-sm text-[var(--cc-muted)]">{payload.rationale}</p>
+        ) : null}
+      </div>
+      {contentAngles.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="response-content-angles">
+          <p className="text-sm font-semibold text-amber-950">Content angles</p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-950/90">
+            {contentAngles.map((item) => (
+              <li key={item.text}>
+                {item.text}
+                {item.disclaimer ? <span className="mt-1 block text-xs opacity-80">{item.disclaimer}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
+      {proofPoints.length ? (
+        <ul className="space-y-3" aria-label="Required proof points">
+          {proofPoints.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.proofId || row.statement)} className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-sm">
+                <p className="font-semibold text-[var(--cc-ink)]">{String(row.statement)}</p>
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                  {[row.proofId, row.origin].filter(Boolean).map(String).join(" · ")}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {sections.length ? (
+        <ol className="list-decimal space-y-3 pl-5" aria-label="Response outline">
+          {sections.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.heading)} className="text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.heading)}</span>
+                {typeof row.objective === "string" && row.objective ? (
+                  <span className="mt-1 block text-[var(--cc-muted)]">{row.objective}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+      {warnings.length ? (
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Response warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function OutlineView({ payload }: { payload: ArtifactPayload }) {
   const sections = Array.isArray(payload.sections) ? payload.sections : [];
+  const plan = Array.isArray(payload.supportingContentPlan) ? payload.supportingContentPlan : [];
+  const warnings = stringWarnings(payload);
+
   return (
-    <ol className="mt-4 list-decimal space-y-3 pl-5">
-      {sections.map((section) => {
-        const row = section as { heading?: string; objective?: string };
-        return (
-          <li key={row.heading} className="text-sm">
-            <span className="font-semibold text-[var(--cc-ink)]">{row.heading}</span>
-            {row.objective ? <span className="mt-1 block text-[var(--cc-muted)]">{row.objective}</span> : null}
-          </li>
-        );
-      })}
-    </ol>
+    <div className="mt-4 space-y-6">
+      {typeof payload.topic === "string" && payload.topic ? (
+        <p className="text-sm text-[var(--cc-muted)]">
+          Topic <span className="font-semibold text-[var(--cc-ink)]">{payload.topic}</span>
+        </p>
+      ) : null}
+      <ol className="list-decimal space-y-3 pl-5" aria-label="Pillar outline sections">
+        {sections.map((section) => {
+          const row = asEntry(section);
+          const related = Array.isArray(row.relatedQueries)
+            ? row.relatedQueries.map(String)
+            : [];
+          return (
+            <li key={String(row.sectionId || row.heading)} className="text-sm">
+              <span className="font-semibold text-[var(--cc-ink)]">{String(row.heading)}</span>
+              {typeof row.objective === "string" && row.objective ? (
+                <span className="mt-1 block text-[var(--cc-muted)]">{row.objective}</span>
+              ) : null}
+              {typeof row.answerFirstPrompt === "string" && row.answerFirstPrompt ? (
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  Answer first: {row.answerFirstPrompt}
+                </span>
+              ) : null}
+              {related.length ? (
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  Related: {related.join(" · ")}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+      {plan.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="supporting-content-plan">
+          <p className="text-sm font-semibold text-amber-950">Supporting content plan</p>
+          <ul className="mt-2 space-y-3 text-sm text-amber-950/90">
+            {plan.map((entry) => {
+              const row = asEntry(entry);
+              return (
+                <li key={String(row.title)}>
+                  <span className="font-semibold">{String(row.title)}</span>
+                  {typeof row.contentType === "string" ? (
+                    <span className="ml-2 text-xs opacity-80">{row.contentType}</span>
+                  ) : null}
+                  {typeof row.rationale === "string" && row.rationale ? (
+                    <span className="mt-1 block text-xs opacity-90">{row.rationale}</span>
+                  ) : null}
+                  {typeof row.disclaimer === "string" && row.disclaimer ? (
+                    <span className="mt-1 block text-xs opacity-70">{row.disclaimer}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      ) : null}
+      {warnings.length ? (
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Outline warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -712,6 +950,13 @@ function resolveKind(kind: string | undefined, payload: ArtifactPayload): string
   if (Array.isArray(payload.opportunities) && Array.isArray(payload.dimensions)) {
     return "competitor-report";
   }
+  if (Array.isArray(payload.criteria) && payload.recommendedVerdict) return "comparison-brief";
+  if (
+    typeof payload.selectedMode === "string"
+    && (Array.isArray(payload.outlineSections) || Array.isArray(payload.contentAngles))
+  ) {
+    return "response-plan";
+  }
   if ("overallScore" in payload) return "scorecard";
   if ("pairs" in payload) return "faq-list";
   if ("claims" in payload) return "claim-ledger";
@@ -753,6 +998,8 @@ export function TaskAgentResultRenderer({
       {resolved === "faq-list" ? <FaqListView payload={payload} /> : null}
       {resolved === "claim-ledger" ? <ClaimLedgerView payload={payload} /> : null}
       {resolved === "query-plan" ? <QueryPlanView payload={payload} /> : null}
+      {resolved === "comparison-brief" ? <ComparisonBriefView payload={payload} /> : null}
+      {resolved === "response-plan" ? <ResponsePlanView payload={payload} /> : null}
       {resolved === "outline" ? <OutlineView payload={payload} /> : null}
       {resolved === "json" ? (
         <p className="mt-4 text-sm text-[var(--cc-muted)]">
