@@ -39,8 +39,6 @@ export default async function HomePage() {
           </Link>
         </section>
 
-        <WorkspaceOpsCard />
-
         <section>
           <div className="flex items-center justify-between">
             <div>
