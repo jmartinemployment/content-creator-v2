@@ -14,7 +14,7 @@ const primaryNav = [
   { href: "/studio", label: "Studio", glyph: "✎" },
   { href: "/agents", label: "Agent Settings", glyph: "⚙" },
   { href: "/skills", label: "Skills", glyph: "✦" },
-  { href: "/brand-sources", label: "Brand & Source Library", glyph: "◉" },
+  { href: "/brand-sources", label: "Geek IQ", glyph: "◉" },
 ] as const;
 
 const futureNav: ReadonlyArray<{ label: string; glyph: string }> = [];

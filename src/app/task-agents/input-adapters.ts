@@ -200,11 +200,11 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
   ],
   "query-planner": [
     {
-      id: "seoProjectId",
-      label: "SEO project ID (GSC)",
+      id: "gscConnectionId",
+      label: "GSC connection ID",
       type: "shortText",
       required: false,
-      placeholder: "Guid of a Geek SEO project with GSC connected",
+      placeholder: "Content Creator GSC connection Guid",
     },
     {
       id: "observedQueries",

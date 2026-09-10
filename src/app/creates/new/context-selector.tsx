@@ -214,20 +214,23 @@ export function ContextSelector({
   }
 
   return (
-    <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50/40 p-5" aria-label="Run context">
+    <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50/40 p-5" aria-label="Geek IQ">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-[var(--cc-ink)]">Content context</h3>
-          <p className="mt-1 text-xs text-[var(--cc-muted)]">Your project website research is included automatically. Add optional approved references or brand guidance below.</p>
+          <h3 className="font-bold text-[var(--cc-ink)]">Geek IQ</h3>
+          <p className="mt-1 text-xs text-[var(--cc-muted)]">
+            How this run should represent the organization — Brand Voice, Audience, Style Guide, Knowledge, and Products.
+            Independent of the task inputs above.
+          </p>
         </div>
-        <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage source library</a>
+        <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage Geek IQ</a>
       </div>
-      {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading governed catalogs…</p> : null}
+      {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading Geek IQ catalogs…</p> : null}
       {error ? <p role="alert" className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-800">{error}</p> : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {([
-          ["Brand Kit", "brandKitVersionId", brandKitOptions],
+          ["Brand Voice", "brandKitVersionId", brandKitOptions],
           ["Audience", "audienceVersionId", audienceOptions],
           ["Style Guide", "styleGuideVersionId", styleOptions],
         ] as const).map(([label, field, options]) => (

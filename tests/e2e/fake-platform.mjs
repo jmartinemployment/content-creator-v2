@@ -44,6 +44,8 @@ let grids = new Map();
 let contextUploads;
 let manifests;
 let taskRuns;
+let libraryPrefs;
+let gscConnections;
 
 function reset() {
   scenario = { ragAvailable: true };
@@ -57,6 +59,11 @@ function reset() {
   adminAgentHistory = [];
   contextUploads = new Map();
   taskRuns = new Map();
+  gscConnections = new Map();
+  libraryPrefs = {
+    favorites: [],
+    savedConfigs: [],
+  };
   ingestionEvents = [{
     id: "ingestion-event-1",
     jobId: "ingestion-1",
@@ -1166,6 +1173,16 @@ const server = http.createServer(async (req, res) => {
         lifecycle: condition === "revoked" ? "revoked" : "approved",
         digest: `sha256:${"a".repeat(64)}`, freshness: "fresh", temporary: false,
       })),
+      ...(selection.brandKitVersionId ? [{
+        kind: "brand-kit", stableId: "brand-1", versionId: selection.brandKitVersionId,
+        name: "Example Systems", versionNumber: 1, lifecycle: "approved",
+        digest: `sha256:${"b".repeat(64)}`, freshness: "fresh", temporary: false,
+      }] : []),
+      ...(selection.audienceVersionId ? [{
+        kind: "audience", stableId: "audience-1", versionId: selection.audienceVersionId,
+        name: "Technical Leaders", versionNumber: 1, lifecycle: "approved",
+        digest: `sha256:${"u".repeat(64)}`, freshness: "fresh", temporary: false,
+      }] : []),
       ...(selection.styleGuideVersionId ? [{
         kind: "style-guide", stableId: "style-1", versionId: selection.styleGuideVersionId,
         name: "Clear Technical Style", versionNumber: 1, lifecycle: "approved",
@@ -2309,6 +2326,74 @@ const server = http.createServer(async (req, res) => {
       }
     }
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/library" && req.method === "GET") {
+    const recentByCapability = new Map();
+    for (const run of taskRuns.values()) {
+      const capabilityId = typeof run.capabilityId === "string" ? run.capabilityId : "";
+      if (!capabilityId) continue;
+      const stamp = run.updatedAtUtc || run.createdAtUtc || new Date().toISOString();
+      const prior = recentByCapability.get(capabilityId);
+      if (!prior || String(stamp) > String(prior)) recentByCapability.set(capabilityId, stamp);
+    }
+    const recent = [...recentByCapability.entries()]
+      .sort((a, b) => String(b[1]).localeCompare(String(a[1])))
+      .slice(0, 12)
+      .map(([capabilityId, lastRunAtUtc]) => ({ capabilityId, lastRunAtUtc }));
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-library.v1",
+      favorites: libraryPrefs.favorites,
+      recent,
+      savedConfigs: libraryPrefs.savedConfigs,
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/library" && req.method === "PUT") {
+    const body = JSON.parse(rawBody || "{}");
+    const favorites = Array.isArray(body.favorites)
+      ? body.favorites.filter((entry) => typeof entry === "string" && entry.trim())
+      : [];
+    const savedConfigs = Array.isArray(body.savedConfigs)
+      ? body.savedConfigs.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const capabilityId = typeof entry.capabilityId === "string" ? entry.capabilityId.trim() : "";
+        const name = typeof entry.name === "string" ? entry.name.trim() : "";
+        const id = typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : crypto.randomUUID();
+        if (!capabilityId || !name) return [];
+        const values = entry.values && typeof entry.values === "object" && !Array.isArray(entry.values)
+          ? Object.fromEntries(
+            Object.entries(entry.values).filter(([, value]) => typeof value === "string"),
+          )
+          : {};
+        return [{
+          id,
+          capabilityId,
+          name,
+          values,
+          updatedAtUtc: typeof entry.updatedAtUtc === "string"
+            ? entry.updatedAtUtc
+            : new Date().toISOString(),
+        }];
+      })
+      : [];
+    libraryPrefs = { favorites: [...new Set(favorites)], savedConfigs };
+    const recentByCapability = new Map();
+    for (const run of taskRuns.values()) {
+      const capabilityId = typeof run.capabilityId === "string" ? run.capabilityId : "";
+      if (!capabilityId) continue;
+      const stamp = run.updatedAtUtc || run.createdAtUtc || new Date().toISOString();
+      const prior = recentByCapability.get(capabilityId);
+      if (!prior || String(stamp) > String(prior)) recentByCapability.set(capabilityId, stamp);
+    }
+    const recent = [...recentByCapability.entries()]
+      .sort((a, b) => String(b[1]).localeCompare(String(a[1])))
+      .slice(0, 12)
+      .map(([capabilityId, lastRunAtUtc]) => ({ capabilityId, lastRunAtUtc }));
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-library.v1",
+      favorites: libraryPrefs.favorites,
+      recent,
+      savedConfigs: libraryPrefs.savedConfigs,
+    });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents" && req.method === "GET") {
     return send(res, 200, {
       contractVersion: "gcc-task-agent-catalog.v1",
@@ -2322,6 +2407,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "a".repeat(64),
           workflowGroup: "diagnostic",
+          visibilityScope: "public",
           facets: { workflow: "optimize", marketingFunction: ["aeo", "seo"], contentType: ["page", "article"], funnelStage: ["awareness", "consideration"], process: ["audit", "score"] },
         },
         {
@@ -2611,7 +2697,7 @@ const server = http.createServer(async (req, res) => {
         artifactType: "queryPlan.v1",
         uiSchema: {
           fields: [
-            { id: "seoProjectId", label: "SEO project ID (GSC)", type: "shortText", required: false },
+            { id: "gscConnectionId", label: "GSC connection ID", type: "shortText", required: false },
             { id: "observedQueries", label: "Observed GSC queries", type: "longText", required: false },
             { id: "hypothesisTopics", label: "Hypothesis topics", type: "longText", required: false },
             { id: "importedQueries", label: "Imported queries", type: "longText", required: false },
@@ -2621,33 +2707,66 @@ const server = http.createServer(async (req, res) => {
       resultRenderer: { kind: "query-plan", artifactType: "queryPlan.v1" },
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/gsc/oauth/connect-url" && req.method === "GET") {
+    return send(res, 503, {
+      error: "GSC Google OAuth is not configured in the fake platform.",
+      mode: "stub",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/gsc/connections" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-gsc-connections.v1",
+      connections: [...gscConnections.values()],
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/gsc/connections" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const siteUrl = typeof body.siteUrl === "string" && body.siteUrl.trim()
+      ? body.siteUrl.trim()
+      : "sc-domain:example.test";
+    const connection = {
+      id: "11111111-1111-4111-8111-111111111111",
+      siteUrl,
+      status: "stub",
+      connectedAtUtc: "2026-09-09T12:00:00.000Z",
+    };
+    gscConnections.set(connection.id, connection);
+    return send(res, 200, { contractVersion: "gcc-gsc-connections.v1", connection });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/observed-queries" && req.method === "GET") {
-    const seoProjectId = url.searchParams.get("seoProjectId") || "seo-project-1";
+    const connectionId = url.searchParams.get("connectionId") || "11111111-1111-4111-8111-111111111111";
+    const connection = gscConnections.get(connectionId) || {
+      id: connectionId,
+      siteUrl: "sc-domain:example.test",
+      status: "stub",
+    };
+    const sourceId = `gsc:${connectionId}:2026-06-01:2026-09-01`;
     return send(res, 200, {
       contractVersion: "gcc-query-planner-observed.v1",
-      seoProjectId,
-      siteUrl: "sc-domain:example.test",
+      connectionId,
+      siteUrl: connection.siteUrl,
       startDate: "2026-06-01",
       endDate: "2026-09-01",
       fetchedAtUtc: "2026-09-09T12:00:00.000Z",
       source: {
-        sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+        sourceId,
         kind: "google-search-console",
-        label: "sc-domain:example.test",
-        siteUrl: "sc-domain:example.test",
+        label: connection.siteUrl,
+        siteUrl: connection.siteUrl,
+        connectionId,
       },
       demandDisclaimer: "Observed GSC queries are first-party search analytics, not traffic, volume, ranking, or demand scores for planning heuristics.",
       queries: [
         {
           query: "AI content readiness checklist",
           origin: "observed",
-          sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+          sourceId,
           observedAtUtc: "2026-09-09T12:00:00.000Z",
         },
         {
           query: "how to measure AI readiness",
           origin: "observed",
-          sourceId: `gsc:${seoProjectId}:2026-06-01:2026-09-01`,
+          sourceId,
           observedAtUtc: "2026-09-09T12:00:00.000Z",
         },
       ],
@@ -3079,6 +3198,8 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       parentArtifactVersionIds,
       lineageRelationship,
       input: body?.input ?? null,
+      createdAtUtc: new Date().toISOString(),
+      updatedAtUtc: new Date().toISOString(),
     };
     taskRuns.set(runId, run);
     return { conflict: false, payload: run };

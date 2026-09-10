@@ -35,9 +35,9 @@ async function reachContextReview(page: Page, open = true) {
   await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();
 }
 
-test("Brand and source catalogs expose lifecycle, provenance, and ingestion activity", async ({ page }) => {
+test("Geek IQ catalogs expose lifecycle, provenance, and ingestion activity", async ({ page }) => {
   await openAuthenticated(page, "/brand-sources");
-  await expect(page.getByRole("heading", { name: "Brand & Source Library" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Geek IQ" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Brand & Sources" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Editorial Handbook" })).toBeVisible();
   await expect(page.getByText("plain-text 1.0.0")).toBeVisible();

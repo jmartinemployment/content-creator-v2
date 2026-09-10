@@ -47,8 +47,8 @@ import {
 } from "./product-policy";
 
 const CATALOGS = [
-  { kind: "knowledge", path: "knowledge", label: "Approved Sources" },
-  { kind: "brand-kit", path: "brand-kits", label: "Brand Kits" },
+  { kind: "knowledge", path: "knowledge", label: "Knowledge Base" },
+  { kind: "brand-kit", path: "brand-kits", label: "Brand Voice" },
   { kind: "audience", path: "audiences", label: "Audiences" },
   { kind: "style-guide", path: "style-guides", label: "Style Guides" },
   { kind: "product-schema", path: "product-schemas", label: "Product Schemas" },
@@ -1181,9 +1181,12 @@ export function CatalogWorkspace() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--cc-accent)]">Governed context</p>
-          <h1 className="mt-2 text-3xl font-bold">Brand &amp; Source Library</h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">Manage optional reusable references and brand guidance. Project websites selected during creation are researched automatically and do not need to be uploaded again.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--cc-accent)]">Geek IQ</p>
+          <h1 className="mt-2 text-3xl font-bold">Geek IQ</h1>
+          <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">
+            Shared context for how your organization is represented — Brand Voice, Knowledge Base, Audiences,
+            Style Guides, and Product knowledge. Separate from task inputs; pinned onto every agent run.
+          </p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => void loadActivity()} className="rounded-lg border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-semibold">Connections &amp; activity</button>
@@ -1193,7 +1196,7 @@ export function CatalogWorkspace() {
         </div>
       </div>
 
-      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-[var(--cc-line)]" role="tablist" aria-label="Brand and source catalogs">
+      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-[var(--cc-line)]" role="tablist" aria-label="Geek IQ catalogs">
         {CATALOGS.map((definition) => (
           <button key={definition.kind} type="button" role="tab" aria-selected={active.kind === definition.kind && !showActivity} onClick={() => { setShowActivity(false); setActive(definition); }} className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold ${active.kind === definition.kind && !showActivity ? "border-[var(--cc-accent)] text-[var(--cc-accent)]" : "border-transparent text-[var(--cc-muted)]"}`}>
             {definition.label}

@@ -14,6 +14,11 @@ import {
   resolveTaskAgentUiFields,
   schemaFormCanStart,
 } from "@/app/task-agents/input-adapters";
+import {
+  fetchLibraryState,
+  putLibraryState,
+  type LibrarySavedConfig,
+} from "@/app/task-agents/library-preferences";
 import { SchemaForm } from "@/app/task-agents/schema-form";
 import {
   TaskAgentResultShell,
@@ -144,6 +149,9 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [competitorName, setCompetitorName] = useState("Competitor");
   const [competitorContent, setCompetitorContent] = useState("");
   const [schemaValues, setSchemaValues] = useState<Record<string, string>>({});
+  const [configName, setConfigName] = useState("");
+  const [configNotice, setConfigNotice] = useState<string | null>(null);
+  const [configBusy, setConfigBusy] = useState(false);
   const [gscLoadBusy, setGscLoadBusy] = useState(false);
   const [gscNotice, setGscNotice] = useState<string | null>(null);
   const [contextSelection, setContextSelection] = useState<ContextSelectionRequest>(EMPTY_CONTEXT_SELECTION);
@@ -216,7 +224,57 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           : {}),
       }));
     }
-  }, []);
+
+    const gscStatus = params.get("gsc")?.trim() ?? "";
+    if (gscStatus === "connected") {
+      const connectionId = params.get("connectionId")?.trim() ?? "";
+      const siteUrl = params.get("siteUrl")?.trim() ?? "";
+      if (connectionId) {
+        setSchemaValues((current) => ({
+          ...current,
+          gscConnectionId: connectionId,
+          ...(siteUrl ? { gscSiteUrl: siteUrl } : {}),
+        }));
+        setGscNotice(
+          siteUrl
+            ? `Connected GSC property ${siteUrl}.`
+            : "Connected Google Search Console property.",
+        );
+      }
+      params.delete("gsc");
+      params.delete("connectionId");
+      params.delete("siteUrl");
+      params.delete("message");
+      const next = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+    } else if (gscStatus === "error") {
+      const message = params.get("message")?.trim() || "Google Search Console connection failed.";
+      setError(message);
+      params.delete("gsc");
+      params.delete("message");
+      params.delete("connectionId");
+      params.delete("siteUrl");
+      const next = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+    }
+
+    const savedConfigId = params.get("savedConfigId")?.trim() ?? "";
+    if (!savedConfigId) return;
+    void fetchLibraryState()
+      .then((state) => {
+        const match = state.savedConfigs.find((entry) => entry.id === savedConfigId);
+        if (!match || match.capabilityId !== capabilityId) {
+          setConfigNotice("Saved configuration was not found for this agent.");
+          return;
+        }
+        setSchemaValues((current) => ({ ...current, ...match.values }));
+        setConfigName(match.name);
+        setConfigNotice(`Restored “${match.name}”.`);
+      })
+      .catch((cause) => {
+        setConfigNotice(cause instanceof Error ? cause.message : "Could not restore saved configuration.");
+      });
+  }, [capabilityId]);
 
   useEffect(() => {
     if (!run || ["succeeded", "failed", "cancelled"].includes(run.status)) return;
@@ -255,9 +313,9 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   }, [run]);
 
   async function loadObservedQueries() {
-    const seoProjectId = (schemaValues.seoProjectId ?? "").trim();
-    if (!seoProjectId) {
-      setError("Enter an SEO project ID with Google Search Console connected.");
+    const gscConnectionId = (schemaValues.gscConnectionId ?? "").trim();
+    if (!gscConnectionId) {
+      setError("Enter a Content Creator GSC connection ID first.");
       return;
     }
     setGscLoadBusy(true);
@@ -265,7 +323,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     setError(null);
     try {
       const response = await fetch(
-        `/api/gcc-v2/task-agents/query-planner/observed-queries?seoProjectId=${encodeURIComponent(seoProjectId)}&rowLimit=100`,
+        `/api/gcc-v2/task-agents/query-planner/observed-queries?connectionId=${encodeURIComponent(gscConnectionId)}&rowLimit=100`,
         { cache: "no-store" },
       );
       const body = await response.json().catch(() => null);
@@ -283,14 +341,69 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
         gscSourceId: typeof body?.source?.sourceId === "string" ? body.source.sourceId : "",
         gscSiteUrl: typeof body?.siteUrl === "string" ? body.siteUrl : "",
         gscFetchedAtUtc: typeof body?.fetchedAtUtc === "string" ? body.fetchedAtUtc : "",
+        gscConnectionId: typeof body?.connectionId === "string"
+          ? body.connectionId
+          : current.gscConnectionId,
       }));
       setGscNotice(
         queries.length
           ? `Loaded ${queries.length} observed GSC quer${queries.length === 1 ? "y" : "ies"} from ${body?.siteUrl || "Search Console"}. Metrics are not used for planning scores.`
-          : "No observed queries were returned for this SEO project and date range.",
+          : "No observed queries were returned for this GSC connection and date range.",
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load GSC observed queries.");
+    } finally {
+      setGscLoadBusy(false);
+    }
+  }
+
+  async function connectGscProperty() {
+    setGscLoadBusy(true);
+    setGscNotice(null);
+    setError(null);
+    try {
+      const preferredSite = (schemaValues.gscSiteUrl ?? "").trim();
+      const connectUrlParams = new URLSearchParams({
+        returnPath: `/task-agents/${capabilityId}`,
+      });
+      if (preferredSite) connectUrlParams.set("siteUrl", preferredSite);
+      const oauthResponse = await fetch(
+        `/api/gcc-v2/gsc/oauth/connect-url?${connectUrlParams.toString()}`,
+        { cache: "no-store" },
+      );
+      const oauthBody = await oauthResponse.json().catch(() => null);
+      if (oauthResponse.ok && typeof oauthBody?.url === "string" && oauthBody.url) {
+        window.location.assign(oauthBody.url);
+        return;
+      }
+      if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
+        throw new Error(oauthBody?.error || `GSC OAuth start failed (HTTP ${oauthResponse.status}).`);
+      }
+
+      // Local/e2e fallback when Google OAuth env is unset: register a CC-owned stub connection.
+      const response = await fetch("/api/gcc-v2/gsc/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ siteUrl: preferredSite || "sc-domain:example.test" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `GSC connect failed (HTTP ${response.status}).`);
+      }
+      const connectionId = body?.connection?.id;
+      if (typeof connectionId !== "string" || !connectionId) {
+        throw new Error("GSC connect did not return a connection id.");
+      }
+      setSchemaValues((current) => ({
+        ...current,
+        gscConnectionId: connectionId,
+        gscSiteUrl: typeof body?.connection?.siteUrl === "string"
+          ? body.connection.siteUrl
+          : current.gscSiteUrl,
+      }));
+      setGscNotice(`Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect GSC.");
     } finally {
       setGscLoadBusy(false);
     }
@@ -613,6 +726,37 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     }
   }
 
+  async function saveConfiguration() {
+    const name = configName.trim();
+    if (!name || !useSchemaDrivenForm) return;
+    setConfigBusy(true);
+    setConfigNotice(null);
+    setError(null);
+    try {
+      const state = await fetchLibraryState();
+      const existing = state.savedConfigs.find(
+        (entry) => entry.capabilityId === capabilityId && entry.name === name,
+      );
+      const nextEntry: LibrarySavedConfig = {
+        id: existing?.id ?? crypto.randomUUID(),
+        capabilityId,
+        name,
+        values: { ...schemaValues },
+        updatedAtUtc: new Date().toISOString(),
+      };
+      const savedConfigs = [
+        nextEntry,
+        ...state.savedConfigs.filter((entry) => entry.id !== nextEntry.id),
+      ];
+      await putLibraryState({ favorites: state.favorites, savedConfigs });
+      setConfigNotice(`Saved “${name}” to Agent Library.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save configuration.");
+    } finally {
+      setConfigBusy(false);
+    }
+  }
+
   async function cancelRun() {
     if (!run || ["succeeded", "failed", "cancelled"].includes(run.status)) return;
     setCancelBusy(true);
@@ -658,17 +802,28 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             {isQueryPlanner ? (
               <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3">
                 <p className="text-xs text-[var(--cc-muted)]">
-                  Load first-party Google Search Console queries as <span className="font-semibold text-[var(--cc-ink)]">observed</span> provenance.
-                  Impressions and position are not used for planner priority scores.
+                  Connect a Content Creator–owned Google Search Console property, then load queries as{" "}
+                  <span className="font-semibold text-[var(--cc-ink)]">observed</span> provenance.
+                  This path does not call Geek SEO.
                 </p>
-                <button
-                  type="button"
-                  disabled={running || gscLoadBusy}
-                  onClick={() => void loadObservedQueries()}
-                  className="mt-3 rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
-                >
-                  {gscLoadBusy ? "Loading GSC…" : "Load GSC observed queries"}
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={running || gscLoadBusy}
+                    onClick={() => void connectGscProperty()}
+                    className="rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Connect GSC property
+                  </button>
+                  <button
+                    type="button"
+                    disabled={running || gscLoadBusy}
+                    onClick={() => void loadObservedQueries()}
+                    className="rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {gscLoadBusy ? "Loading GSC…" : "Load GSC observed queries"}
+                  </button>
+                </div>
                 {gscNotice ? (
                   <p role="status" className="mt-2 text-xs text-[var(--cc-muted)]">{gscNotice}</p>
                 ) : null}
@@ -960,8 +1115,33 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           onProcessingChange={setContextUploadProcessing}
           resolvePath="/api/gcc-v2/context/resolve-task-agent"
           allowAttachments={false}
-          checkLabel="Check governed context"
+          checkLabel="Check Geek IQ"
         />
+        {useSchemaDrivenForm ? (
+          <div className="mt-5 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3" data-testid="save-agent-config">
+            <label className="block text-sm font-semibold text-[var(--cc-ink)]">
+              Save configuration name
+              <input
+                value={configName}
+                onChange={(event) => setConfigName(event.target.value)}
+                disabled={running || configBusy}
+                placeholder="Partial readiness check"
+                className="mt-2 w-full rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={running || configBusy || !configName.trim() || !canStart()}
+              onClick={() => void saveConfiguration()}
+              className="mt-3 rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {configBusy ? "Saving…" : "Save configuration"}
+            </button>
+            {configNotice ? (
+              <p role="status" className="mt-2 text-xs text-[var(--cc-muted)]">{configNotice}</p>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           disabled={!canStart() || running || contextBlocked || contextUploadProcessing}
@@ -1014,7 +1194,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           <p className="mt-2 text-sm text-[var(--cc-muted)]">{run.phase} · {run.progressPercent}%</p>
           {pinnedContext?.contextManifestDigest ? (
             <p className="mt-2 font-mono text-xs text-[var(--cc-muted)]" data-testid="shared-context-digest">
-              Context digest · {pinnedContext.contextManifestDigest}
+              Geek IQ digest · {pinnedContext.contextManifestDigest}
             </p>
           ) : null}
         </section>

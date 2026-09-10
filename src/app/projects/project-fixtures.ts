@@ -25,7 +25,7 @@ export const projectFixtures: readonly CanvasProject[] = [
             status: "draft",
             summary: "Initial positioning, audience, and launch outcomes.",
             evidence: [
-              { id: "ev-interviews", label: "Customer interview synthesis", source: "Brand & Source Library" },
+              { id: "ev-interviews", label: "Customer interview synthesis", source: "Geek IQ" },
             ],
             provenance: { origin: "human", note: "Authored from stakeholder workshop notes." },
           },
@@ -37,7 +37,7 @@ export const projectFixtures: readonly CanvasProject[] = [
             status: "approved",
             summary: "Approved positioning with proof points and channel handoffs.",
             evidence: [
-              { id: "ev-interviews", label: "Customer interview synthesis", source: "Brand & Source Library" },
+              { id: "ev-interviews", label: "Customer interview synthesis", source: "Geek IQ" },
               { id: "ev-benchmark", label: "Campaign benchmark report", source: "Research corpus" },
             ],
             provenance: { origin: "mixed", agent: "Marketing Strategist", model: "o3", note: "Human-edited strategy suggestions." },
@@ -99,7 +99,7 @@ export const projectFixtures: readonly CanvasProject[] = [
             status: "in-review",
             summary: "Concise customer announcement with article handoff.",
             evidence: [
-              { id: "ev-interviews", label: "Customer interview synthesis", source: "Brand & Source Library" },
+              { id: "ev-interviews", label: "Customer interview synthesis", source: "Geek IQ" },
             ],
             provenance: { origin: "agent", agent: "Content Producer 3.0.0", model: "o3", note: "Generated from approved brief and article draft." },
           },

@@ -5,6 +5,34 @@ test.beforeEach(async ({ request }) => {
   await resetPlatform(request);
 });
 
+test("task agent run pins Geek IQ Brand Voice and Style Guide versions", async ({ page, request }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await expect(page.getByRole("heading", { name: "AI Readiness Score" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Geek IQ" })).toBeVisible();
+  await page.getByLabel("Brand Voice").selectOption("brand-version-1");
+  await page.getByLabel("Style Guide").selectOption("style-version-1");
+  await page.getByRole("button", { name: "Check Geek IQ" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toBeVisible();
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Example Systems");
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Clear Technical Style");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("shared-context-digest")).toContainText("Geek IQ digest");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const runCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/task-agents/ai-readiness/runs");
+  expect(runCreate).toBeTruthy();
+  const body = JSON.parse(runCreate.body);
+  expect(body.contextSelection).toEqual(expect.objectContaining({
+    brandKitVersionId: "brand-version-1",
+    styleGuideVersionId: "style-version-1",
+  }));
+});
+
 test("task-agent catalog filters by Jasper workflow and opens a diagnostic", async ({ page }) => {
   await openAuthenticated(page, "/task-agents");
   await expect(page.getByRole("heading", { name: "Task Agents" })).toBeVisible();
@@ -23,6 +51,34 @@ test("task-agent catalog filters by Jasper workflow and opens a diagnostic", asy
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
 });
 
+test("agent library can favorite, save config, and restore it", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents");
+  await expect(page.getByRole("heading", { name: "Task Agents" })).toBeVisible();
+  await expect(page.getByLabel("Visibility")).toBeVisible();
+  await page.getByLabel("Visibility").selectOption("public");
+  await expect(page.getByTestId("agent-library-count")).toContainText("agent");
+
+  const readinessRow = page.locator("li").filter({ hasText: "AI Readiness Score" }).first();
+  await readinessRow.getByRole("button", { name: /Favorite AI Readiness Score/ }).click();
+  await expect(page.getByTestId("agent-library-favorites")).toContainText("AI Readiness Score");
+
+  await readinessRow.getByRole("link", { name: "Open agent" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "AI Readiness Score" })).toBeVisible();
+  await page.getByLabel("Visible page content").fill("# Partial page\n\nFragment for library config.");
+  await page.getByLabel("Source completeness").selectOption("partial");
+  await page.getByLabel("Save configuration name").fill("Partial readiness preset");
+  await page.getByRole("button", { name: "Save configuration" }).click();
+  await expect(page.getByText(/Saved “Partial readiness preset”/)).toBeVisible();
+
+  await page.getByRole("link", { name: "← Task Agents" }).click();
+  await expect(page.getByTestId("agent-library-saved-configs")).toContainText("Partial readiness preset");
+  await page.getByRole("link", { name: "Restore" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "AI Readiness Score" })).toBeVisible();
+  await expect(page.getByLabel("Visible page content")).toHaveValue(/Fragment for library config/);
+  await expect(page.getByLabel("Source completeness")).toHaveValue("partial");
+  await expect(page.getByText(/Restored “Partial readiness preset”/)).toBeVisible();
+});
+
 test("query planner intelligence agent keeps demand as heuristic", async ({ page }) => {
   await openAuthenticated(page, "/task-agents/query-planner");
   await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
@@ -39,7 +95,9 @@ test("query planner intelligence agent keeps demand as heuristic", async ({ page
 test("query planner loads observed GSC queries with provenance", async ({ page, request }) => {
   await openAuthenticated(page, "/task-agents/query-planner");
   await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
-  await page.getByLabel("SEO project ID (GSC)").fill("11111111-1111-4111-8111-111111111111");
+  await page.getByRole("button", { name: "Connect GSC property" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Connected GSC property/ })).toBeVisible();
+  await expect(page.getByLabel("GSC connection ID")).not.toHaveValue("");
   await page.getByRole("button", { name: "Load GSC observed queries" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Loaded 2 observed GSC/ })).toBeVisible();
   await expect(page.getByLabel("Observed GSC queries")).toHaveValue(
