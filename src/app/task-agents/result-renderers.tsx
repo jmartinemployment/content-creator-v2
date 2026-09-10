@@ -263,15 +263,48 @@ function JsonLdView({ payload }: { payload: ArtifactPayload }) {
 function FaqListView({ payload }: { payload: ArtifactPayload }) {
   const pairs = Array.isArray(payload.pairs) ? payload.pairs : [];
   return (
-    <ul className="mt-4 space-y-5">
+    <ul className="mt-4 space-y-5" aria-label="FAQ pairs">
       {pairs.map((pair) => {
-        const row = pair as { question?: string; answer?: string; verificationStatus?: string };
+        const row = asEntry(pair);
+        const citations = Array.isArray(row.citations) ? row.citations : [];
+        const status = typeof row.verificationStatus === "string" ? row.verificationStatus : "";
         return (
-          <li key={row.question} className="border-b border-[var(--cc-line)] pb-5 last:border-b-0 last:pb-0">
-            <p className="font-semibold text-[var(--cc-ink)]">{row.question}</p>
-            <p className="mt-2 max-w-prose text-sm leading-relaxed text-[var(--cc-muted)]">{row.answer}</p>
-            {row.verificationStatus ? (
-              <p className="mt-2 text-xs text-[var(--cc-muted)]">{row.verificationStatus}</p>
+          <li
+            key={String(row.pairId || row.question)}
+            className="border-b border-[var(--cc-line)] pb-5 last:border-b-0 last:pb-0"
+            data-verification={status || undefined}
+          >
+            <p className="font-semibold text-[var(--cc-ink)]">{String(row.question || "")}</p>
+            <p className="mt-2 max-w-prose text-sm leading-relaxed text-[var(--cc-muted)]">
+              {String(row.answer || "")}
+            </p>
+            {status ? (
+              <p className="mt-2 text-xs text-[var(--cc-muted)]">{status}</p>
+            ) : null}
+            {citations.length ? (
+              <ul className="mt-3 space-y-2" aria-label="FAQ citations" data-testid="faq-citations">
+                {citations.map((entry) => {
+                  const cite = asEntry(entry);
+                  const quote = typeof cite.quote === "string" ? cite.quote : "";
+                  if (!quote) return null;
+                  return (
+                    <li
+                      key={String(cite.evidenceId || quote)}
+                      className="border-l-2 border-[var(--cc-accent)]/40 pl-3 text-xs text-[var(--cc-muted)]"
+                    >
+                      <span className="font-medium text-[var(--cc-ink)]">Evidence</span>
+                      <blockquote className="mt-1 max-w-prose leading-relaxed">“{quote}”</blockquote>
+                      {typeof cite.url === "string" && cite.url ? (
+                        <span className="mt-1 block font-mono text-[0.65rem]">{cite.url}</span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : status === "unverifiable" ? (
+              <p className="mt-2 text-xs text-[var(--cc-muted)]" data-testid="faq-no-citation">
+                No evidence quote — pair is unverifiable from supplied sources.
+              </p>
             ) : null}
           </li>
         );
@@ -282,16 +315,21 @@ function FaqListView({ payload }: { payload: ArtifactPayload }) {
 
 function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
   const claims = Array.isArray(payload.claims) ? payload.claims : [];
-  const warnings = Array.isArray(payload.warnings)
-    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
-    : [];
+  const warnings = stringWarnings(payload);
   const contradictionWarnings = warnings.filter((warning) =>
     warning.toLowerCase().includes("possible contradiction"),
   );
-  const hasPossible = claims.some((claim) => {
-    const row = claim as { contradictionState?: string };
-    return row.contradictionState === "possible";
-  });
+  const hasPossible = claims.some((claim) => asEntry(claim).contradictionState === "possible");
+  const evidenceById = new Map<string, string>();
+  const provenance = asEntry(payload.provenance);
+  if (Array.isArray(provenance.evidence)) {
+    for (const entry of provenance.evidence) {
+      const row = asEntry(entry);
+      if (typeof row.evidenceId === "string" && typeof row.quote === "string" && row.quote) {
+        evidenceById.set(row.evidenceId, row.quote);
+      }
+    }
+  }
 
   return (
     <div className="mt-4">
@@ -316,32 +354,48 @@ function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
           ) : null}
         </aside>
       ) : null}
-      <ul className="space-y-4">
+      <ul className="space-y-4" aria-label="Citable claims">
         {claims.map((claim) => {
-          const row = claim as {
-            claimId?: string;
-            claimText?: string;
-            claimType?: string;
-            verificationStatus?: string;
-            contradictionState?: string;
-          };
-          const contradiction = row.contradictionState || "none";
+          const row = asEntry(claim);
+          const contradiction = typeof row.contradictionState === "string"
+            ? row.contradictionState
+            : "none";
           const border =
             contradiction === "possible"
               ? "border-amber-600"
               : contradiction === "unknown"
                 ? "border-[var(--cc-line)]"
                 : "border-[var(--cc-accent)]/40";
+          const evidenceIds = Array.isArray(row.evidenceIds)
+            ? row.evidenceIds.map(String)
+            : [];
+          const evidenceQuotes = evidenceIds
+            .map((id) => evidenceById.get(id))
+            .filter((quote): quote is string => Boolean(quote));
           return (
             <li
-              key={row.claimId || row.claimText}
+              key={String(row.claimId || row.claimText)}
               className={`border-l-2 ${border} pl-3`}
               data-contradiction={contradiction}
             >
-              <p className="font-semibold text-[var(--cc-ink)]">{row.claimText}</p>
+              <p className="font-semibold text-[var(--cc-ink)]">{String(row.claimText || "")}</p>
               <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                {[row.claimType, row.verificationStatus].filter(Boolean).join(" · ")}
+                {[row.claimType, row.verificationStatus].filter(Boolean).map(String).join(" · ")}
               </p>
+              {typeof row.attribution === "string" && row.attribution ? (
+                <p className="mt-2 text-xs text-[var(--cc-ink)]" data-testid="claim-attribution">
+                  Attribution: {row.attribution}
+                </p>
+              ) : null}
+              {evidenceQuotes.length ? (
+                <ul className="mt-2 space-y-1" aria-label="Claim evidence" data-testid="claim-evidence">
+                  {evidenceQuotes.map((quote) => (
+                    <li key={quote} className="text-xs leading-relaxed text-[var(--cc-muted)]">
+                      “{quote}”
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {contradiction === "possible" ? (
                 <p className="mt-1 text-xs font-medium text-amber-900">Possible contradiction</p>
               ) : null}

@@ -80,6 +80,9 @@ test("faq generator content agent renders grounded FAQ pairs", async ({ page }) 
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="faq-list"]')).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "What is AI content readiness?" })).toBeVisible();
+  await expect(page.getByTestId("faq-citations")).toContainText(
+    "AI content readiness means pages provide answer-first structure",
+  );
   await expect(page.getByText(/faqSet\.v1 · valid/)).toBeVisible();
 });
 
@@ -97,6 +100,10 @@ test("citable claims content agent never invents unsupported statistics", async 
   await expect(page.getByRole("listitem").filter({ hasText: "Trusted by 500 customer teams." })).toBeVisible();
   await expect(page.getByTestId("contradiction-summary")).toContainText("Possible contradictions");
   await expect(page.locator('[data-contradiction="possible"]').first()).toBeVisible();
+  await expect(page.getByTestId("claim-attribution").first()).toContainText("Source page proof section");
+  await expect(page.getByTestId("claim-evidence").first()).toContainText(
+    "Trusted by 500 customer teams across regulated industries.",
+  );
   await expect(page.getByText(/claimLedger\.v1 · valid/)).toBeVisible();
 });
 

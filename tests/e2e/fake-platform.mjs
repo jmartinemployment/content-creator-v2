@@ -2673,9 +2673,16 @@ const server = http.createServer(async (req, res) => {
                 artifactType: "faqSet.v1",
                 topic: "AI content readiness",
                 pairs: [{
+                  pairId: "faq-1",
                   question: "What is AI content readiness?",
                   answer: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
                   verificationStatus: "supported",
+                  citations: [{
+                    evidenceId: "ev-faq-1",
+                    sourceId: "source-1",
+                    quote: "AI content readiness means pages provide answer-first structure, evidence, and schema that systems can cite.",
+                    url: "https://example.test/readiness",
+                  }],
                 }],
                 warnings: ["FAQ answers are generated from supplied content and queries only."],
               }),
@@ -2710,6 +2717,8 @@ const server = http.createServer(async (req, res) => {
                     claimType: "quantifiableFact",
                     verificationStatus: "supported",
                     contradictionState: "possible",
+                    attribution: "Source page proof section",
+                    evidenceIds: ["ev-500"],
                   },
                   {
                     claimId: "claim-50",
@@ -2717,12 +2726,31 @@ const server = http.createServer(async (req, res) => {
                     claimType: "quantifiableFact",
                     verificationStatus: "supported",
                     contradictionState: "possible",
+                    attribution: "Source page proof section",
+                    evidenceIds: ["ev-50"],
                   },
                 ],
                 warnings: [
                   "Claims never invent statistics.",
                   "Possible contradiction (conflicting quantities) between claims claim-500 and claim-50.",
                 ],
+                provenance: {
+                  engineVersion: "deterministic-content.v1",
+                  queries: [],
+                  evidenceIds: ["ev-500", "ev-50"],
+                  evidence: [
+                    {
+                      evidenceId: "ev-500",
+                      sourceId: "source-1",
+                      quote: "Trusted by 500 customer teams across regulated industries.",
+                    },
+                    {
+                      evidenceId: "ev-50",
+                      sourceId: "source-1",
+                      quote: "Trusted by 50 customer teams across regulated industries.",
+                    },
+                  ],
+                },
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
