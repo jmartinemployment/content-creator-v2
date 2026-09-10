@@ -50,6 +50,27 @@ test("Geek IQ catalogs expose lifecycle, provenance, and ingestion activity", as
   await expect(page.getByText("Editorial handbook indexed")).toBeVisible();
 });
 
+test("Visual Guidelines policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Visual Guidelines" }).click();
+  await expect(page.getByRole("heading", { name: "Product Visual System" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Visual Guidelines policy" })).toBeVisible();
+  await expect(page.getByLabel("Palette primary")).toHaveValue("#0F172A");
+  await page.getByLabel("Palette accent").fill("#115E59");
+  await page.getByLabel("Imagery style notes").fill("Natural light product photography only.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Product Visual System as a new Visual Guidelines version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/visual-guidelines/visual-1/versions");
+  expect(versionCreate).toBeTruthy();
+  const body = JSON.parse(versionCreate.body);
+  expect(body.payload.palette.accent).toBe("#115E59");
+  expect(body.payload.imagery.styleNotes).toContain("Natural light");
+});
+
 test("Style Guide policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Style Guides" }).click();

@@ -11,10 +11,12 @@ test("task agent run pins Geek IQ Brand Voice and Style Guide versions", async (
   await expect(page.getByRole("region", { name: "Geek IQ" })).toBeVisible();
   await page.getByLabel("Brand Voice").selectOption("brand-version-1");
   await page.getByLabel("Style Guide").selectOption("style-version-1");
+  await page.getByLabel("Visual Guidelines").selectOption("visual-version-1");
   await page.getByRole("button", { name: "Check Geek IQ" }).click();
   await expect(page.getByLabel("Effective context preflight")).toBeVisible();
   await expect(page.getByLabel("Effective context preflight")).toContainText("Example Systems");
   await expect(page.getByLabel("Effective context preflight")).toContainText("Clear Technical Style");
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Product Visual System");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
   );
@@ -30,7 +32,57 @@ test("task agent run pins Geek IQ Brand Voice and Style Guide versions", async (
   expect(body.contextSelection).toEqual(expect.objectContaining({
     brandKitVersionId: "brand-version-1",
     styleGuideVersionId: "style-version-1",
+    visualGuidelineVersionId: "visual-version-1",
   }));
+});
+
+test("Product IQ blocks incomplete claim policy and accepts complete products", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await expect(page.getByRole("region", { name: "Geek IQ" })).toBeVisible();
+
+  await page.getByLabel("Incomplete Claims Catalog product version 1").check();
+  await page.getByRole("button", { name: "Check Geek IQ" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toContainText(
+    "product:product-version-2:approved_claims_required",
+  );
+  await expect(page.getByLabel("Effective context preflight")).toContainText(
+    "product:product-version-2:mandatory_disclaimers_required",
+  );
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Generation blocked");
+  await expect(page.getByRole("button", { name: "Run AI Readiness Score" })).toBeDisabled();
+
+  await page.getByLabel("Incomplete Claims Catalog product version 1").uncheck();
+  await page.getByLabel("Evidence Engine product version 1").check();
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Check Geek IQ" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Evidence Engine");
+  await expect(page.getByLabel("Effective context preflight")).toContainText(
+    "Context is eligible for manifest resolution.",
+  );
+  await expect(page.getByRole("button", { name: "Run AI Readiness Score" })).toBeEnabled();
+});
+
+test("ROI business calculator task agent projects scenarios and reconciles telemetry", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/roi-business-calculator");
+  await expect(page.getByRole("heading", { level: 1, name: "AI-Based ROI Business Calculator" })).toBeVisible();
+  await page.getByLabel("Annual workflow volume").fill("120");
+  await page.getByLabel("Baseline minutes per item").fill("90");
+  await page.getByLabel("Assisted minutes per item").fill("25");
+  await page.getByLabel("Adoption rate (0-1)").fill("0.7");
+  await page.getByLabel("Successful use rate (0-1)").fill("0.85");
+  await page.getByLabel("Loaded hourly cost (USD)").fill("85");
+  await page.getByLabel("Redeployment factor (0-1)").fill("0.6");
+  await page.getByLabel("Annual external / agency spend (USD)").fill("48000");
+  await page.getByLabel("Replaceable share of external spend (0-1)").fill("0.35");
+  await page.getByLabel("Total cost of ownership (USD)").fill("36000");
+  await page.getByRole("button", { name: /Run / }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("roi-projection-result")).toBeVisible();
+  await expect(page.getByTestId("roi-scenario-expected")).toContainText("Expected");
+  await expect(page.getByTestId("roi-reconciliation")).toContainText("not cash");
+  await expect(page.getByTestId("roi-projection-result")).toContainText("Directional model only");
 });
 
 test("task-agent catalog filters by Jasper workflow and opens a diagnostic", async ({ page }) => {

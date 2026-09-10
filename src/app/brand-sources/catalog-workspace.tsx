@@ -45,12 +45,19 @@ import {
   type ProductSchemaPolicy,
   type ProductVersionDraft,
 } from "./product-policy";
+import {
+  EMPTY_VISUAL_GUIDELINE_POLICY,
+  normalizeVisualGuidelinePolicy,
+  validateVisualGuidelinePolicy,
+  type VisualGuidelinePolicy,
+} from "./visual-guideline-policy";
 
 const CATALOGS = [
   { kind: "knowledge", path: "knowledge", label: "Knowledge Base" },
   { kind: "brand-kit", path: "brand-kits", label: "Brand Voice" },
   { kind: "audience", path: "audiences", label: "Audiences" },
   { kind: "style-guide", path: "style-guides", label: "Style Guides" },
+  { kind: "visual-guideline", path: "visual-guidelines", label: "Visual Guidelines" },
   { kind: "product-schema", path: "product-schemas", label: "Product Schemas" },
   { kind: "product", path: "products", label: "Products" },
 ] as const;
@@ -595,6 +602,157 @@ function StyleGuidePolicyEditor({
   );
 }
 
+
+function VisualGuidelinePolicyEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: VisualGuidelinePolicy;
+  busy: boolean;
+  onChange: (next: VisualGuidelinePolicy) => void;
+  onSave: () => void;
+}) {
+  return (
+    <section aria-label="Visual Guidelines policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Typed visual policy</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Palette, typography, logo usage, and layout rules for assets that need visual brand constraints.
+          Saving always creates a new immutable version.
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {([
+          ["primary", "Primary"],
+          ["secondary", "Secondary"],
+          ["accent", "Accent"],
+          ["background", "Background"],
+          ["text", "Text"],
+        ] as const).map(([key, label]) => (
+          <label key={key} className="text-xs font-semibold">
+            {label}
+            <input
+              aria-label={`Palette ${label.toLowerCase()}`}
+              className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+              value={policy.palette[key] ?? ""}
+              onChange={(event) => onChange({
+                ...policy,
+                palette: { ...policy.palette, [key]: event.target.value || null },
+              })}
+              placeholder="#0F172A"
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <label className="text-xs font-semibold">
+          Display font
+          <input
+            aria-label="Display font"
+            className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+            value={policy.typography.displayFont ?? ""}
+            onChange={(event) => onChange({
+              ...policy,
+              typography: { ...policy.typography, displayFont: event.target.value || null },
+            })}
+          />
+        </label>
+        <label className="text-xs font-semibold">
+          Body font
+          <input
+            aria-label="Body font"
+            className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+            value={policy.typography.bodyFont ?? ""}
+            onChange={(event) => onChange({
+              ...policy,
+              typography: { ...policy.typography, bodyFont: event.target.value || null },
+            })}
+          />
+        </label>
+        <label className="text-xs font-semibold">
+          Min body size (px)
+          <input
+            aria-label="Minimum body size"
+            type="number"
+            min={8}
+            max={72}
+            className="mt-1 block w-full rounded-md border border-[var(--cc-line)] bg-white px-2 py-1.5 text-sm"
+            value={policy.typography.minBodySizePx ?? 16}
+            onChange={(event) => onChange({
+              ...policy,
+              typography: {
+                ...policy.typography,
+                minBodySizePx: event.target.value ? Number(event.target.value) : null,
+              },
+            })}
+          />
+        </label>
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Prohibited logo treatments (one per line)
+        <textarea
+          aria-label="Prohibited logo treatments"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.logoUsage.prohibitedTreatments.join("\n")}
+          onChange={(event) => onChange({
+            ...policy,
+            logoUsage: {
+              ...policy.logoUsage,
+              prohibitedTreatments: linesFromMultiline(event.target.value),
+            },
+          })}
+        />
+      </label>
+
+      <GrammarToggle
+        label="Prefer full-bleed hero"
+        checked={policy.layout.preferFullBleedHero !== false}
+        onChange={(preferFullBleedHero) => onChange({
+          ...policy,
+          layout: { ...policy.layout, preferFullBleedHero },
+        })}
+      />
+
+      <label className="block text-xs font-semibold">
+        Imagery style notes
+        <textarea
+          aria-label="Imagery style notes"
+          className="mt-1 min-h-20 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.imagery.styleNotes}
+          onChange={(event) => onChange({
+            ...policy,
+            imagery: { ...policy.imagery, styleNotes: event.target.value },
+          })}
+        />
+      </label>
+
+      <label className="block text-xs font-semibold">
+        Custom instructions
+        <textarea
+          aria-label="Visual custom instructions"
+          className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.customInstructions}
+          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
+        />
+      </label>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
+  );
+}
+
 function ProductSchemaEditor({
   policy,
   busy,
@@ -810,6 +968,7 @@ export function CatalogWorkspace() {
   const [ingestionEvents, setIngestionEvents] = useState<IngestionEvent[]>([]);
   const [showActivity, setShowActivity] = useState(false);
   const [stylePolicy, setStylePolicy] = useState<StyleGuidePolicy>(EMPTY_STYLE_GUIDE_POLICY);
+  const [visualPolicy, setVisualPolicy] = useState<VisualGuidelinePolicy>(EMPTY_VISUAL_GUIDELINE_POLICY);
   const [audiencePolicy, setAudiencePolicy] = useState<AudiencePolicy>(EMPTY_AUDIENCE_POLICY);
   const [productSchemaPolicy, setProductSchemaPolicy] = useState<ProductSchemaPolicy>({
     ...EMPTY_PRODUCT_SCHEMA,
@@ -905,6 +1064,11 @@ export function CatalogWorkspace() {
   useEffect(() => {
     if (active.kind !== "style-guide") return;
     setStylePolicy(normalizeStyleGuidePolicy(selectedVersion?.data));
+  }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
+
+  useEffect(() => {
+    if (active.kind !== "visual-guideline") return;
+    setVisualPolicy(normalizeVisualGuidelinePolicy(selectedVersion?.data));
   }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
 
   useEffect(() => {
@@ -1006,10 +1170,13 @@ export function CatalogWorkspace() {
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || `Draft creation failed (HTTP ${response.status}).`);
       const catalogId = typeof body?.id === "string" ? body.id : null;
-      if ((active.kind === "style-guide" || active.kind === "product-schema" || active.kind === "audience")
+      if ((active.kind === "style-guide" || active.kind === "visual-guideline"
+        || active.kind === "product-schema" || active.kind === "audience")
         && catalogId) {
         const payload = active.kind === "style-guide"
           ? EMPTY_STYLE_GUIDE_POLICY
+          : active.kind === "visual-guideline"
+            ? EMPTY_VISUAL_GUIDELINE_POLICY
           : active.kind === "audience"
             ? EMPTY_AUDIENCE_POLICY
             : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] };
@@ -1059,6 +1226,34 @@ export function CatalogWorkspace() {
       if (typeof body?.id === "string") setSelectedVersionId(body.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Style Guide version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function saveVisualGuidelineVersion() {
+    if (!selected) return;
+    const validation = validateVisualGuidelinePolicy(visualPolicy);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setActionBusy("save-visual");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(selected.id)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payload: visualPolicy, schemaVersion: 1, locale: "en" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Visual Guidelines version.`);
+      await loadCatalog(active);
+      if (typeof body?.id === "string") setSelectedVersionId(body.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Visual Guidelines version save failed.");
     } finally {
       setActionBusy(null);
     }
@@ -1185,7 +1380,7 @@ export function CatalogWorkspace() {
           <h1 className="mt-2 text-3xl font-bold">Geek IQ</h1>
           <p className="mt-2 max-w-3xl text-sm text-[var(--cc-muted)]">
             Shared context for how your organization is represented — Brand Voice, Knowledge Base, Audiences,
-            Style Guides, and Product knowledge. Separate from task inputs; pinned onto every agent run.
+            Style Guides, Visual Guidelines, and Product knowledge. Separate from task inputs; pinned onto every agent run.
           </p>
         </div>
         <div className="flex gap-2">
@@ -1248,6 +1443,14 @@ export function CatalogWorkspace() {
                   busy={actionBusy === "save-style"}
                   onChange={setStylePolicy}
                   onSave={() => void saveStyleGuideVersion()}
+                />
+              ) : null}
+              {active.kind === "visual-guideline" ? (
+                <VisualGuidelinePolicyEditor
+                  policy={visualPolicy}
+                  busy={actionBusy === "save-visual"}
+                  onChange={setVisualPolicy}
+                  onSave={() => void saveVisualGuidelineVersion()}
                 />
               ) : null}
               {active.kind === "product-schema" ? (

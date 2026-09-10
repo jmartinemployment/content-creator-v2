@@ -41,6 +41,7 @@ let ingestionEvents;
 let studioAgents = new Map();
 let canvasProjects = new Map();
 let grids = new Map();
+let pipelines = new Map();
 let contextUploads;
 let manifests;
 let taskRuns;
@@ -133,6 +134,17 @@ function reset() {
         customInstructions: "Prefer concrete operational outcomes.",
       },
     })],
+    "visual-guidelines": [item("visual-1", "visual-guideline", "Product Visual System", "visual-version-1", {
+      policyJson: {
+        schemaVersion: 1,
+        palette: { primary: "#0F172A", secondary: "#334155", accent: "#0F766E", background: "#F8FAFC", text: "#0F172A" },
+        typography: { displayFont: "Source Serif 4", bodyFont: "IBM Plex Sans", minBodySizePx: 16 },
+        logoUsage: { clearSpaceRatio: 0.5, allowedBackgrounds: ["light", "photo"], prohibitedTreatments: ["stretch", "recolor"] },
+        layout: { maxContentWidthPx: 1200, preferFullBleedHero: true, cornerRadiusPx: 8 },
+        imagery: { styleNotes: "Natural light, documentary product shots.", prohibitedMotifs: ["stock handshake"] },
+        customInstructions: "Prefer full-bleed photography over inset cards.",
+      },
+    })],
     "product-schemas": [item("schema-1", "product-schema", "Core Product Schema", "schema-version-1", {
       fieldsJson: {
         schemaVersion: 1,
@@ -163,12 +175,22 @@ function reset() {
       approvedClaimsJson: ["Evidence Engine cites every claim"],
       prohibitedClaimsJson: ["guarantees perfect accuracy"],
       mandatoryDisclaimersJson: ["Results depend on source coverage."],
+    }), item("product-2", "product", "Incomplete Claims Catalog", "product-version-2", {
+      productSchemaVersionId: "schema-version-1",
+      fieldValuesJson: {
+        "11111111-1111-4111-8111-111111111111": "TBD",
+        "22222222-2222-4222-8222-222222222222": "Unset differentiator",
+      },
+      approvedClaimsJson: [],
+      prohibitedClaimsJson: [],
+      mandatoryDisclaimersJson: [],
     })],
   };
   manifests = new Map();
   studioAgents = new Map();
   canvasProjects = new Map();
   grids = new Map();
+  pipelines = new Map();
   adminSkill = {
     id: "community-style",
     versionId: "skill-version-1",
@@ -960,7 +982,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/geek-content-creator-v2/echo") {
     return send(res, 200, { query: Object.fromEntries(url.searchParams), body: rawBody, authorization });
   }
-  const catalogName = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|product-schemas|products)$/)?.[1];
+  const catalogName = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|visual-guidelines|product-schemas|products)$/)?.[1];
   if (catalogName && req.method === "GET") {
     return send(res, 200, { items: contextCatalogs[catalogName] });
   }
@@ -982,14 +1004,14 @@ const server = http.createServer(async (req, res) => {
         createdAtUtc: new Date().toISOString(),
         findings: [],
         audit: [],
-        policyJson: catalogName === "style-guides" ? (body.payload || body.data || {}) : undefined,
+        policyJson: (catalogName === "style-guides" || catalogName === "visual-guidelines") ? (body.payload || body.data || {}) : undefined,
         definitionJson: catalogName === "audiences" ? (body.payload || body.data || {}) : undefined,
         fieldsJson: catalogName === "product-schemas" ? (body.payload || body.data || {}) : undefined,
       }],
     });
     return send(res, 201, { id: stableId, versionId });
   }
-  const catalogVersionCreate = url.pathname.match(/^\/api\/geek-content-creator-v2\/(style-guides|audiences|product-schemas|products)\/([^/]+)\/versions$/);
+  const catalogVersionCreate = url.pathname.match(/^\/api\/geek-content-creator-v2\/(style-guides|visual-guidelines|audiences|product-schemas|products)\/([^/]+)\/versions$/);
   if (catalogVersionCreate && req.method === "POST") {
     const [, collection, catalogId] = catalogVersionCreate;
     const target = contextCatalogs[collection].find((entry) => entry.id === catalogId);
@@ -1011,6 +1033,16 @@ const server = http.createServer(async (req, res) => {
         }
       } else {
         return send(res, 400, { error: "Style Guide policy must be a JSON object." });
+      }
+    }
+    if (collection === "visual-guidelines") {
+      const payload = body.payload || {};
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return send(res, 400, { error: "Visual Guidelines policy must be a JSON object." });
+      }
+      const minSize = payload.typography?.minBodySizePx;
+      if (minSize != null && (typeof minSize !== "number" || minSize < 8 || minSize > 72)) {
+        return send(res, 400, { error: "Visual Guidelines typography.minBodySizePx must be between 8 and 72." });
       }
     }
     if (collection === "audiences") {
@@ -1057,6 +1089,25 @@ const server = http.createServer(async (req, res) => {
       if (!schema || schema.lifecycle !== "approved") {
         return send(res, 409, { error: "Product Schema must be owner-accessible and approved." });
       }
+      const approved = Array.isArray(body.approvedClaims)
+        ? body.approvedClaims.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      const mandatory = Array.isArray(body.mandatoryDisclaimers)
+        ? body.mandatoryDisclaimers.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      const prohibited = Array.isArray(body.prohibitedClaims)
+        ? body.prohibitedClaims.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      if (!approved.length) {
+        return send(res, 400, { error: "Add at least one approved Product claim." });
+      }
+      if (!mandatory.length) {
+        return send(res, 400, { error: "Add at least one mandatory Product disclaimer." });
+      }
+      const approvedFolded = new Set(approved.map((value) => value.trim().toLowerCase()));
+      if (prohibited.some((value) => approvedFolded.has(value.trim().toLowerCase()))) {
+        return send(res, 400, { error: "A Product claim cannot be both approved and prohibited." });
+      }
     }
     const versionId = `${catalogId}-version-${target.versions.length + 1}`;
     const version = {
@@ -1067,7 +1118,7 @@ const server = http.createServer(async (req, res) => {
       createdAtUtc: new Date().toISOString(),
       findings: [],
       audit: [],
-      policyJson: collection === "style-guides" ? (body.payload || {}) : undefined,
+      policyJson: (collection === "style-guides" || collection === "visual-guidelines") ? (body.payload || {}) : undefined,
       definitionJson: collection === "audiences" ? (body.payload || {}) : undefined,
       fieldsJson: collection === "product-schemas" ? (body.payload || {}) : undefined,
       fieldValuesJson: collection === "products" ? (body.payload || {}) : undefined,
@@ -1080,7 +1131,7 @@ const server = http.createServer(async (req, res) => {
     target.currentVersionId = versionId;
     return send(res, 200, version);
   }
-  const catalogAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|product-schemas|products)\/(?:versions\/)?([^/]+)\/(review|approve|deprecate|revoke|refresh)$/);
+  const catalogAction = url.pathname.match(/^\/api\/geek-content-creator-v2\/(knowledge|brand-kits|audiences|style-guides|visual-guidelines|product-schemas|products)\/(?:versions\/)?([^/]+)\/(review|approve|deprecate|revoke|refresh)$/);
   if (catalogAction && req.method === "POST") {
     const [, collection, stableOrVersionId, action] = catalogAction;
     const target = contextCatalogs[collection].find((entry) =>
@@ -1102,13 +1153,16 @@ const server = http.createServer(async (req, res) => {
     const selection = body.selection || {};
     const condition = scenario.contextCondition || "ready";
     const warnings = condition === "stale" ? [{ id: "warning-stale", severity: "warning", code: "stale", message: "Editorial Handbook is stale; verify before use." }] : [];
-    const blockingFindings = condition === "revoked"
-      ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
-      : condition === "permission"
-        ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
-        : condition === "processing"
-          ? [{ id: "blocked-processing", severity: "blocking", code: "not_ready", message: "A selected attachment is still processing." }]
-          : [];
+    const blockingFindings = [
+      ...(condition === "revoked"
+        ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
+        : condition === "permission"
+          ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
+          : condition === "processing"
+            ? [{ id: "blocked-processing", severity: "blocking", code: "not_ready", message: "A selected attachment is still processing." }]
+            : []),
+      ...productClaimFindings(selection),
+    ];
     const selectedEntries = [
       ...(selection.knowledgeAssetVersionIds || []).map(() => ({
         kind: "knowledge", stableId: "knowledge-1", versionId: "knowledge-version-1",
@@ -1120,6 +1174,7 @@ const server = http.createServer(async (req, res) => {
         kind: "run-attachment", versionId, name: "Run attachment", versionNumber: 1,
         lifecycle: "finalized", freshness: "fresh", temporary: true,
       })),
+      ...productEntries(selection),
     ];
     return send(res, 200, {
       effectiveEntries: selectedEntries,
@@ -1161,11 +1216,15 @@ const server = http.createServer(async (req, res) => {
       });
     }
     const condition = scenario.contextCondition || "ready";
-    const blockingFindings = condition === "revoked"
-      ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
-      : condition === "permission"
-        ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
-        : [];
+    const productBlocks = productClaimFindings(selection);
+    const blockingFindings = [
+      ...(condition === "revoked"
+        ? [{ id: "blocked-revoked", severity: "blocking", code: "revoked", message: "Editorial Handbook version is revoked." }]
+        : condition === "permission"
+          ? [{ id: "blocked-permission", severity: "blocking", code: "permission_denied", message: "You no longer have access to the selected Audience." }]
+          : []),
+      ...productBlocks,
+    ];
     const effectiveEntries = [
       ...(selection.knowledgeAssetVersionIds || []).map(() => ({
         kind: "knowledge", stableId: "knowledge-1", versionId: "knowledge-version-1",
@@ -1188,6 +1247,12 @@ const server = http.createServer(async (req, res) => {
         name: "Clear Technical Style", versionNumber: 1, lifecycle: "approved",
         digest: `sha256:${"s".repeat(64)}`, freshness: "fresh", temporary: false,
       }] : []),
+      ...(selection.visualGuidelineVersionId ? [{
+        kind: "visual-guideline", stableId: "visual-1", versionId: selection.visualGuidelineVersionId,
+        name: "Product Visual System", versionNumber: 1, lifecycle: "approved",
+        digest: `sha256:${"v".repeat(64)}`, freshness: "fresh", temporary: false,
+      }] : []),
+      ...(productBlocks.length ? [] : productEntries(selection)),
     ];
     const digest = "c".repeat(64);
     return send(res, 200, {
@@ -2015,6 +2080,186 @@ const server = http.createServer(async (req, res) => {
       })),
     });
   }
+  const aeoPipelineStages = [
+    { key: "plan-queries", lifecycle: "plan", kind: "task-agent", capabilityId: "query-planner", displayName: "Query Planner", dependsOn: [] },
+    { key: "create-faq", lifecycle: "create", kind: "task-agent", capabilityId: "faq-generator", displayName: "FAQ Generator", dependsOn: ["plan-queries"] },
+    { key: "adapt-canvas", lifecycle: "adapt", kind: "handoff", handoff: "canvas", displayName: "Canvas adapt", dependsOn: ["create-faq"] },
+    { key: "activate-publish", lifecycle: "activate", kind: "handoff", handoff: "publish", displayName: "Publish handoff", dependsOn: ["adapt-canvas"] },
+    { key: "optimize-readiness", lifecycle: "optimize", kind: "task-agent", capabilityId: "ai-readiness", displayName: "AI Readiness Score", dependsOn: ["activate-publish"] },
+  ];
+  function pipelineDetail(pipeline) {
+    return {
+      id: pipeline.id,
+      name: pipeline.name,
+      description: pipeline.description,
+      status: pipeline.status,
+      versionNumber: pipeline.versionNumber,
+      digest: pipeline.digest,
+      stages: pipeline.stages,
+      policyJson: pipeline.policyJson,
+      createdAtUtc: pipeline.createdAtUtc,
+      updatedAtUtc: pipeline.updatedAtUtc,
+      runs: pipeline.runs,
+    };
+  }
+  function executePipelineRun(pipeline, failStageKey = null) {
+    const now = new Date().toISOString();
+    let failed = false;
+    const stageAttempts = [];
+    for (const stage of pipeline.stages) {
+      let status = "succeeded";
+      let error = null;
+      let output = stage.kind === "task-agent"
+        ? { artifactType: `${stage.capabilityId}.stub.v1`, capabilityId: stage.capabilityId, summary: `Stub artifact from ${stage.displayName}.`, lifecycle: stage.lifecycle }
+        : { handoff: stage.handoff, summary: `Completed ${stage.displayName} handoff.`, lifecycle: stage.lifecycle };
+      if (failed) {
+        status = "skipped";
+        error = "Skipped after earlier stage failure.";
+        output = null;
+      } else if (failStageKey && failStageKey === stage.key) {
+        status = "failed";
+        error = `Injected isolation failure at stage '${stage.key}'.`;
+        output = null;
+        failed = true;
+      }
+      stageAttempts.push({
+        id: crypto.randomUUID(),
+        stageKey: stage.key,
+        lifecycleStage: stage.lifecycle,
+        kind: stage.kind,
+        displayName: stage.displayName,
+        capabilityId: stage.capabilityId || null,
+        handoff: stage.handoff || null,
+        attemptNumber: 1,
+        status,
+        output,
+        error,
+        startedAtUtc: now,
+        completedAtUtc: now,
+      });
+    }
+    const run = {
+      id: `pipeline-run-${pipeline.runs.length + 1}`,
+      definitionVersionNumber: pipeline.versionNumber,
+      definitionDigest: pipeline.digest,
+      status: failed ? "failed" : "succeeded",
+      actorUserId: "e2e-user",
+      startedAtUtc: now,
+      completedAtUtc: now,
+      pausedAtUtc: null,
+      error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
+      history: stageAttempts.map((attempt) => ({
+        atUtc: attempt.completedAtUtc,
+        stageKey: attempt.stageKey,
+        lifecycle: attempt.lifecycleStage,
+        status: attempt.status,
+      })),
+      workItems: [{
+        id: crypto.randomUUID(),
+        workItemIndex: 0,
+        status: failed ? "failed" : "succeeded",
+        error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
+        updatedAtUtc: now,
+        stageAttempts,
+      }],
+    };
+    pipeline.runs = [run, ...pipeline.runs];
+    pipeline.updatedAtUtc = now;
+    return pipeline;
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/pipelines" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-content-pipelines.v1",
+      lifecycleStages: ["plan", "create", "adapt", "activate", "optimize"],
+      pipelines: [...pipelines.values()].map((pipeline) => ({
+        id: pipeline.id,
+        name: pipeline.name,
+        description: pipeline.description,
+        status: pipeline.status,
+        versionNumber: pipeline.versionNumber,
+        digest: pipeline.digest,
+        updatedAtUtc: pipeline.updatedAtUtc,
+        runCount: pipeline.runs.length,
+      })),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/pipelines" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const id = `pipeline-${pipelines.size + 1}`;
+    const now = new Date().toISOString();
+    const pipeline = {
+      id,
+      name: body.name || "AEO content pipeline",
+      description: body.description
+        || "Plan → Create → Adapt → Activate → Optimize using Query Planner, FAQ Generator, Canvas, publish, and AI Readiness.",
+      status: body.publish === false ? "draft" : "published",
+      versionNumber: 1,
+      digest: "p".repeat(64),
+      stages: aeoPipelineStages,
+      policyJson: body.policyJson || "{}",
+      createdAtUtc: now,
+      updatedAtUtc: now,
+      runs: [],
+    };
+    pipelines.set(id, pipeline);
+    return send(res, 200, {
+      contractVersion: "gcc-content-pipelines.v1",
+      pipeline: pipelineDetail(pipeline),
+    });
+  }
+  const pipelineMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/pipelines\/([^/]+)(?:\/(runs|publish))?$/);
+  if (pipelineMatch) {
+    const pipelineId = pipelineMatch[1];
+    const action = pipelineMatch[2] || null;
+    const pipeline = pipelines.get(pipelineId);
+    if (!pipeline) return send(res, 404, { error: "Pipeline not found." });
+    if (!action && req.method === "GET") {
+      return send(res, 200, {
+        contractVersion: "gcc-content-pipelines.v1",
+        lifecycleStages: ["plan", "create", "adapt", "activate", "optimize"],
+        pipeline: pipelineDetail(pipeline),
+      });
+    }
+    if (action === "publish" && req.method === "POST") {
+      pipeline.status = "published";
+      pipeline.updatedAtUtc = new Date().toISOString();
+      return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
+    }
+    if (action === "runs" && req.method === "POST") {
+      if (pipeline.status !== "published") {
+        return send(res, 409, { error: "Only published pipelines can be run." });
+      }
+      const body = JSON.parse(rawBody || "{}");
+      executePipelineRun(pipeline, body.failStageKey || null);
+      return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
+    }
+  }
+  const pipelineRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/pipelines\/runs\/([^/]+)\/(pause|resume|cancel)$/);
+  if (pipelineRunMatch && req.method === "POST") {
+    const runId = pipelineRunMatch[1];
+    const action = pipelineRunMatch[2];
+    for (const pipeline of pipelines.values()) {
+      const run = pipeline.runs.find((entry) => entry.id === runId);
+      if (!run) continue;
+      if (action === "cancel") {
+        if (["succeeded", "failed", "cancelled"].includes(run.status)) {
+          return send(res, 409, { error: "Run is already terminal." });
+        }
+        run.status = "cancelled";
+        run.completedAtUtc = new Date().toISOString();
+        run.error = "Cancelled by operator.";
+      } else if (action === "pause") {
+        run.status = "paused";
+        run.pausedAtUtc = new Date().toISOString();
+      } else if (action === "resume") {
+        run.status = "running";
+        run.pausedAtUtc = null;
+      }
+      pipeline.updatedAtUtc = new Date().toISOString();
+      return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
+    }
+    return send(res, 404, { error: "Pipeline run not found." });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/grids/schedules/run-due" && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
     const force = body.force === true;
@@ -2574,6 +2819,18 @@ const server = http.createServer(async (req, res) => {
           digest: "s".repeat(64),
           workflowGroup: "outrank",
           facets: { workflow: "outrank", marketingFunction: ["competitive", "content"], contentType: ["response", "article"], funnelStage: ["consideration", "decision"], process: ["respond", "originate"] },
+        },
+        {
+          id: "roi-business-calculator",
+          definitionId: "task-agent-17",
+          displayName: "AI-Based ROI Business Calculator",
+          description: "Project directional ROI from editable assumptions and reconcile against observed workflow telemetry.",
+          versionId: "task-agent-version-17",
+          version: "1.0.0",
+          digest: "t".repeat(64),
+          workflowGroup: "business",
+          visibilityScope: "public",
+          facets: { workflow: "optimize", marketingFunction: ["ops", "content"], contentType: ["business-case"], funnelStage: ["decision"], process: ["measure", "forecast"] },
         },
       ],
     });
@@ -3151,12 +3408,126 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       resultRenderer: { kind: "response-plan", artifactType: "competitiveResponse.v1" },
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/roi-business-calculator" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "roi-business-calculator",
+        displayName: "AI-Based ROI Business Calculator",
+        description: "Project directional ROI from editable assumptions and reconcile against observed workflow telemetry.",
+        versionId: "task-agent-version-17",
+        version: "1.0.0",
+        digest: "t".repeat(64),
+      },
+      workflow: {
+        engine: "roi-projection",
+        artifactType: "roiProjection.v1",
+        formulaVersion: "gcc-roi-formulas.v1",
+        uiSchema: {
+          fields: [
+            { id: "lookbackDays", label: "Telemetry lookback (days)", type: "select", required: false, options: ["30", "90", "180", "365"], placeholder: "90" },
+            { id: "workflowVolume", label: "Annual workflow volume", type: "shortText", required: true, placeholder: "120" },
+            { id: "baselineMinutes", label: "Baseline minutes per item", type: "shortText", required: true, placeholder: "90" },
+            { id: "assistedMinutes", label: "Assisted minutes per item", type: "shortText", required: true, placeholder: "25" },
+            { id: "adoptionRate", label: "Adoption rate (0-1)", type: "shortText", required: true, placeholder: "0.7" },
+            { id: "successfulUseRate", label: "Successful use rate (0-1)", type: "shortText", required: true, placeholder: "0.85" },
+            { id: "loadedHourlyCost", label: "Loaded hourly cost (USD)", type: "shortText", required: true, placeholder: "85" },
+            { id: "redeploymentFactor", label: "Redeployment factor (0-1)", type: "shortText", required: true, placeholder: "0.6" },
+            { id: "externalSpend", label: "Annual external / agency spend (USD)", type: "shortText", required: true, placeholder: "48000" },
+            { id: "replaceableShare", label: "Replaceable share of external spend (0-1)", type: "shortText", required: true, placeholder: "0.35" },
+            { id: "totalCostOfOwnership", label: "Total cost of ownership (USD)", type: "shortText", required: true, placeholder: "36000" },
+            { id: "attributableGrossMargin", label: "Attributable gross margin (0-1)", type: "shortText", required: false, placeholder: "0.55" },
+          ],
+        },
+      },
+      resultRenderer: { kind: "roi-projection", artifactType: "roiProjection.v1" },
+    });
+  }
+  function productVersionById(versionId) {
+    for (const product of contextCatalogs.products || []) {
+      const version = (product.versions || []).find((entry) => entry.id === versionId);
+      if (version) return { product, version };
+    }
+    return null;
+  }
+
+  function productClaimFindings(selection) {
+    const findings = [];
+    for (const selected of selection.productSelections || []) {
+      const versionId = selected.productVersionId;
+      const match = productVersionById(versionId);
+      if (!match) {
+        findings.push({
+          id: `product-missing-${versionId}`,
+          severity: "blocking",
+          code: `product:${versionId}:not_owned_or_missing`,
+          message: `product:${versionId}:not_owned_or_missing`,
+        });
+        continue;
+      }
+      const approved = Array.isArray(match.version.approvedClaimsJson)
+        ? match.version.approvedClaimsJson.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      const mandatory = Array.isArray(match.version.mandatoryDisclaimersJson)
+        ? match.version.mandatoryDisclaimersJson.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      const prohibited = Array.isArray(match.version.prohibitedClaimsJson)
+        ? match.version.prohibitedClaimsJson.filter((value) => typeof value === "string" && value.trim())
+        : [];
+      if (!approved.length) {
+        findings.push({
+          id: `product-claims-${versionId}`,
+          severity: "blocking",
+          code: `product:${versionId}:approved_claims_required`,
+          message: `product:${versionId}:approved_claims_required`,
+        });
+      }
+      if (!mandatory.length) {
+        findings.push({
+          id: `product-disclaimers-${versionId}`,
+          severity: "blocking",
+          code: `product:${versionId}:mandatory_disclaimers_required`,
+          message: `product:${versionId}:mandatory_disclaimers_required`,
+        });
+      }
+      const approvedFolded = new Set(approved.map((value) => value.trim().toLowerCase()));
+      if (approved.length && prohibited.some((value) => approvedFolded.has(value.trim().toLowerCase()))) {
+        findings.push({
+          id: `product-conflict-${versionId}`,
+          severity: "blocking",
+          code: `product:${versionId}:claim_policy_conflict`,
+          message: `product:${versionId}:claim_policy_conflict`,
+        });
+      }
+    }
+    return findings;
+  }
+
+  function productEntries(selection) {
+    return (selection.productSelections || []).flatMap((selected) => {
+      const match = productVersionById(selected.productVersionId);
+      if (!match) return [];
+      return [{
+        kind: "product",
+        stableId: match.product.id,
+        versionId: match.version.id,
+        name: match.product.name,
+        versionNumber: match.version.versionNumber,
+        lifecycle: match.version.lifecycle,
+        digest: match.version.digest,
+        freshness: match.version.freshness || "fresh",
+        temporary: false,
+      }];
+    });
+  }
+
   function createTaskRun(capabilityId, runId, body) {
     const selection = body?.contextSelection;
     const hasPins = selection && (
       (selection.knowledgeAssetVersionIds || []).length > 0
       || selection.audienceVersionId
       || selection.styleGuideVersionId
+      || selection.visualGuidelineVersionId
       || (selection.productSelections || []).length > 0
       || selection.brandKitVersionId
     );
@@ -3175,6 +3546,16 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
         payload: {
           error: "Governed context is not eligible for this task-agent run.",
           blockingFindings: ["run_attachment:task_agent:not_supported"],
+        },
+      };
+    }
+    const productBlocks = hasPins ? productClaimFindings(selection) : [];
+    if (productBlocks.length > 0) {
+      return {
+        conflict: true,
+        payload: {
+          error: "Governed context is not eligible for this task-agent run.",
+          blockingFindings: productBlocks.map((finding) => finding.message),
         },
       };
     }
@@ -3300,6 +3681,10 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response/runs" && req.method === "POST") {
     const created = createTaskRun("competitive-response", "task-run-15", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/roi-business-calculator/runs" && req.method === "POST") {
+    const created = createTaskRun("roi-business-calculator", "task-run-17", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
   }
   const taskRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/task-agents\/runs\/([^/]+)(?:\/(result|cancel))?$/);
@@ -4142,6 +4527,79 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
             { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
           ],
           rerun: { capabilityId: "competitive-response", versionId: "task-agent-version-15", retryOfRunId: "task-run-15" },
+        }));
+      }
+      if (runId === "task-run-17") {
+        const assumptions = existing?.input?.assumptions || {};
+        const volume = Number(assumptions.workflowVolume ?? 120);
+        const baseline = Number(assumptions.baselineMinutes ?? 90);
+        const assisted = Number(assumptions.assistedMinutes ?? 25);
+        const adoption = Number(assumptions.adoptionRate ?? 0.7);
+        const success = Number(assumptions.successfulUseRate ?? 0.85);
+        const hourly = Number(assumptions.loadedHourlyCost ?? 85);
+        const redeploy = Number(assumptions.redeploymentFactor ?? 0.6);
+        const externalSpend = Number(assumptions.externalSpend ?? 48000);
+        const replaceable = Number(assumptions.replaceableShare ?? 0.35);
+        const tco = Number(assumptions.totalCostOfOwnership ?? 36000);
+        const minutesSaved = Math.max(0, baseline - assisted);
+        const savedHours = volume * minutesSaved / 60 * adoption * success;
+        const productivity = savedHours * hourly * redeploy;
+        const external = externalSpend * replaceable * adoption;
+        const gross = productivity + external;
+        const net = gross - tco;
+        const roiPercent = tco > 0 ? (net / tco) * 100 : null;
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: {
+            capabilityId: "roi-business-calculator",
+            displayName: "AI-Based ROI Business Calculator",
+            objective: "Project directional ROI and reconcile to observed capacity.",
+          },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-17",
+            artifactType: "roiProjection.v1",
+            versions: [{
+              id: "artifact-version-17",
+              payloadJson: JSON.stringify({
+                artifactType: "roiProjection.v1",
+                formulaVersion: "gcc-roi-formulas.v1",
+                contractVersion: "roiBusinessCalculatorInput.v1",
+                assumptions,
+                lookbackDays: existing?.input?.lookbackDays ?? 90,
+                scenarios: [
+                  { scenario: "conservative", label: "Conservative", savedHours: savedHours * 0.75, netBenefit: net * 0.75, roiPercent: roiPercent == null ? null : roiPercent * 0.75 },
+                  { scenario: "expected", label: "Expected", savedHours, productivityValue: productivity, externalCostAvoided: external, grossBenefit: gross, netBenefit: net, roiPercent },
+                  { scenario: "upside", label: "Upside", savedHours: savedHours * 1.25, netBenefit: net * 1.25, roiPercent: roiPercent == null ? null : roiPercent * 1.25 },
+                ],
+                reconciliation: {
+                  assumedSuccessRate: success,
+                  observedAcceptanceRate: 31 / 48,
+                  notes: [
+                    "Reconciliation compares modeled assumptions to observed workflow capacity — not cash claims.",
+                    "Observed acceptance is above the assumed success rate.",
+                  ],
+                },
+                evidenceLabels: {
+                  projections: "modeled",
+                  reconciliation: "telemetry-measured",
+                  cashClaims: "not-asserted",
+                },
+                warnings: [
+                  "Directional model only — not a quote, guarantee, or audited finance result.",
+                  "Capacity created is not cash saved. Revenue contribution requires attributable gross margin.",
+                ],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "t".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "ai-readiness", label: "AI Readiness Score", artifactType: "readinessScore.v1" },
+          ],
+          rerun: { capabilityId: "roi-business-calculator", versionId: "task-agent-version-17", retryOfRunId: "task-run-17" },
         }));
       }
       return send(res, 404, { error: "Result not found." });

@@ -17,6 +17,7 @@ const contractVersions: Record<string, string> = {
   "pillar-outline": "pillarOutlineInput.v1",
   "pillar-article": "pillarArticleInput.v1",
   "competitive-response": "competitiveResponseInput.v1",
+  "roi-business-calculator": "roiBusinessCalculatorInput.v1",
 };
 
 function lines(value: string | undefined): string[] {
@@ -499,6 +500,93 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: false,
     },
   ],
+  "roi-business-calculator": [
+    {
+      id: "lookbackDays",
+      label: "Telemetry lookback (days)",
+      type: "select",
+      required: false,
+      options: ["30", "90", "180", "365"],
+      placeholder: "90",
+    },
+    {
+      id: "workflowVolume",
+      label: "Annual workflow volume",
+      type: "shortText",
+      required: true,
+      placeholder: "120",
+    },
+    {
+      id: "baselineMinutes",
+      label: "Baseline minutes per item",
+      type: "shortText",
+      required: true,
+      placeholder: "90",
+    },
+    {
+      id: "assistedMinutes",
+      label: "Assisted minutes per item",
+      type: "shortText",
+      required: true,
+      placeholder: "25",
+    },
+    {
+      id: "adoptionRate",
+      label: "Adoption rate (0-1)",
+      type: "shortText",
+      required: true,
+      placeholder: "0.7",
+    },
+    {
+      id: "successfulUseRate",
+      label: "Successful use rate (0-1)",
+      type: "shortText",
+      required: true,
+      placeholder: "0.85",
+    },
+    {
+      id: "loadedHourlyCost",
+      label: "Loaded hourly cost (USD)",
+      type: "shortText",
+      required: true,
+      placeholder: "85",
+    },
+    {
+      id: "redeploymentFactor",
+      label: "Redeployment factor (0-1)",
+      type: "shortText",
+      required: true,
+      placeholder: "0.6",
+    },
+    {
+      id: "externalSpend",
+      label: "Annual external / agency spend (USD)",
+      type: "shortText",
+      required: true,
+      placeholder: "48000",
+    },
+    {
+      id: "replaceableShare",
+      label: "Replaceable share of external spend (0-1)",
+      type: "shortText",
+      required: true,
+      placeholder: "0.35",
+    },
+    {
+      id: "totalCostOfOwnership",
+      label: "Total cost of ownership (USD)",
+      type: "shortText",
+      required: true,
+      placeholder: "36000",
+    },
+    {
+      id: "attributableGrossMargin",
+      label: "Attributable gross margin (0-1)",
+      type: "shortText",
+      required: false,
+      placeholder: "0.55",
+    },
+  ],
 };
 
 export function resolveTaskAgentUiFields(
@@ -777,6 +865,43 @@ export function adaptTaskAgentInput(
       focusQuery: focusQuery || null,
     };
   }
+  if (capabilityId === "roi-business-calculator") {
+    const numberOr = (raw: string | undefined, fallback: number) => {
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const lookbackRaw = Number(values.lookbackDays ?? "90");
+    const lookbackDays = [30, 90, 180, 365].includes(lookbackRaw) ? lookbackRaw : 90;
+    return {
+      contractVersion,
+      lookbackDays,
+      assumptions: {
+        workflowVolume: numberOr(values.workflowVolume, 120),
+        baselineMinutes: numberOr(values.baselineMinutes, 90),
+        assistedMinutes: numberOr(values.assistedMinutes, 25),
+        adoptionRate: numberOr(values.adoptionRate, 0.7),
+        successfulUseRate: numberOr(values.successfulUseRate, 0.85),
+        loadedHourlyCost: numberOr(values.loadedHourlyCost, 85),
+        redeploymentFactor: numberOr(values.redeploymentFactor, 0.6),
+        externalSpend: numberOr(values.externalSpend, 48000),
+        replaceableShare: numberOr(values.replaceableShare, 0.35),
+        totalCostOfOwnership: numberOr(values.totalCostOfOwnership, 36000),
+        attributableGrossMargin: numberOr(values.attributableGrossMargin, 0.55),
+      },
+      observedTelemetry: {
+        generatedCount: 48,
+        acceptedCount: 31,
+        publishedCount: 22,
+        rejectedCount: 9,
+        cancelledCount: 0,
+        reviewMinutes: 410,
+        periodLabel: `Last ${lookbackDays} days (stub)`,
+        source: "telemetry",
+        lookbackDays,
+        notes: ["Counts are workflow outcomes, not cash ROI."],
+      },
+    };
+  }
   return null;
 }
 
@@ -813,6 +938,9 @@ export function schemaFormCanStart(
   if (capabilityId === "pillar-article") {
     return (values.topic ?? "").trim().length > 0
       && (values.sourceContent ?? "").trim().length > 0;
+  }
+  if (capabilityId === "roi-business-calculator") {
+    return true;
   }
   return fields.every((field) => !field.required || (values[field.id] ?? "").trim().length > 0);
 }

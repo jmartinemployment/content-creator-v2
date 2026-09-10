@@ -4,6 +4,7 @@ export type ContextKind =
   | "brand-kit"
   | "audience"
   | "style-guide"
+  | "visual-guideline"
   | "product-schema"
   | "product";
 export type IngestionState =
@@ -97,6 +98,7 @@ export type ContextSelectionRequest = {
   runAttachmentIds: string[];
   audienceVersionId?: string;
   styleGuideVersionId?: string;
+  visualGuidelineVersionId?: string;
   productSelections: ProductSelection[];
   brandKitVersionId?: string;
   locale: string;

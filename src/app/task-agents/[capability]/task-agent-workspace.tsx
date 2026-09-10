@@ -63,6 +63,7 @@ function selectionHasPins(selection: ContextSelectionRequest) {
     || selection.runAttachmentIds.length > 0
     || Boolean(selection.audienceVersionId)
     || Boolean(selection.styleGuideVersionId)
+    || Boolean(selection.visualGuidelineVersionId)
     || selection.productSelections.length > 0
     || Boolean(selection.brandKitVersionId);
 }

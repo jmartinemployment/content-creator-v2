@@ -39,6 +39,8 @@ export default async function HomePage() {
           </Link>
         </section>
 
+        <WorkspaceOpsCard />
+
         <section>
           <div className="flex items-center justify-between">
             <div>
@@ -59,6 +61,11 @@ export default async function HomePage() {
                 href: "/grid",
                 label: "Grid",
                 detail: "Sample/full batches with due schedules.",
+              },
+              {
+                href: "/pipelines",
+                label: "Pipelines",
+                detail: "Plan → Create → Adapt → Activate → Optimize stage runs.",
               },
               {
                 href: "/task-agents",

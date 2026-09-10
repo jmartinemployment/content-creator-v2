@@ -32,6 +32,7 @@ type Catalogs = {
   brandKits: GovernedCatalogItem[];
   audiences: GovernedCatalogItem[];
   styleGuides: GovernedCatalogItem[];
+  visualGuidelines: GovernedCatalogItem[];
   products: GovernedCatalogItem[];
   productSchemas: GovernedCatalogItem[];
 };
@@ -41,6 +42,7 @@ const EMPTY_CATALOGS: Catalogs = {
   brandKits: [],
   audiences: [],
   styleGuides: [],
+  visualGuidelines: [],
   products: [],
   productSchemas: [],
 };
@@ -90,6 +92,7 @@ export function ContextSelector({
       ["brandKits", "brand-kits"],
       ["audiences", "audiences"],
       ["styleGuides", "style-guides"],
+      ["visualGuidelines", "visual-guidelines"],
       ["products", "products"],
       ["productSchemas", "product-schemas"],
     ] as const;
@@ -114,6 +117,7 @@ export function ContextSelector({
   const brandKitOptions = useMemo(() => approvedOptions(catalogs.brandKits), [catalogs.brandKits]);
   const audienceOptions = useMemo(() => approvedOptions(catalogs.audiences), [catalogs.audiences]);
   const styleOptions = useMemo(() => approvedOptions(catalogs.styleGuides), [catalogs.styleGuides]);
+  const visualOptions = useMemo(() => approvedOptions(catalogs.visualGuidelines), [catalogs.visualGuidelines]);
   const productOptions = useMemo(() => approvedOptions(catalogs.products), [catalogs.products]);
 
   const canCheckContext = Boolean(resolvePath || createId);
@@ -174,7 +178,7 @@ export function ContextSelector({
     }
   }
 
-  function setSingle(field: "brandKitVersionId" | "audienceVersionId" | "styleGuideVersionId", next: string) {
+  function setSingle(field: "brandKitVersionId" | "audienceVersionId" | "styleGuideVersionId" | "visualGuidelineVersionId", next: string) {
     onChange({ ...value, [field]: next || undefined });
     setPreview(null);
     onPreviewChange(null);
@@ -219,8 +223,8 @@ export function ContextSelector({
         <div>
           <h3 className="font-bold text-[var(--cc-ink)]">Geek IQ</h3>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
-            How this run should represent the organization — Brand Voice, Audience, Style Guide, Knowledge, and Products.
-            Independent of the task inputs above.
+            How this run should represent the organization — Brand Voice, Audience, Style Guide, Visual Guidelines,
+            Knowledge, and Products. Independent of the task inputs above.
           </p>
         </div>
         <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage Geek IQ</a>
@@ -233,6 +237,7 @@ export function ContextSelector({
           ["Brand Voice", "brandKitVersionId", brandKitOptions],
           ["Audience", "audienceVersionId", audienceOptions],
           ["Style Guide", "styleGuideVersionId", styleOptions],
+          ["Visual Guidelines", "visualGuidelineVersionId", visualOptions],
         ] as const).map(([label, field, options]) => (
           <label key={field} className="text-xs font-semibold">{label}
             <select aria-label={label} disabled={options.length === 0} value={value[field] ?? ""} onChange={(event) => setSingle(field, event.target.value)} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal disabled:bg-slate-100 disabled:text-[var(--cc-muted)]">

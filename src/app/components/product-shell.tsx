@@ -9,6 +9,7 @@ const primaryNav = [
   { href: "/creates", label: "Content", glyph: "▤" },
   { href: "/projects", label: "Projects", glyph: "◇" },
   { href: "/grid", label: "Grid", glyph: "▦" },
+  { href: "/pipelines", label: "Pipelines", glyph: "⇢" },
   { href: "/roi", label: "ROI", glyph: "%" },
   { href: "/task-agents", label: "Task Agents", glyph: "◎" },
   { href: "/studio", label: "Studio", glyph: "✎" },

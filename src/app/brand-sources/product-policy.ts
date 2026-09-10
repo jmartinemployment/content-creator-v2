@@ -135,6 +135,10 @@ export function validateProductDraft(
       return `Required field "${field.label}" is empty.`;
     }
   }
+  if (draft.approvedClaims.length === 0) return "Add at least one approved Product claim.";
+  if (draft.mandatoryDisclaimers.length === 0) {
+    return "Add at least one mandatory Product disclaimer.";
+  }
   const approved = new Set(draft.approvedClaims.map((value) => value.toLowerCase()));
   for (const claim of draft.prohibitedClaims) {
     if (approved.has(claim.toLowerCase())) {

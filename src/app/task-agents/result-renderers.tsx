@@ -1125,7 +1125,73 @@ function resolveKind(kind: string | undefined, payload: ArtifactPayload): string
   }
   if ("sections" in payload) return "outline";
   if (typeof payload.methodology === "object" && payload.methodology !== null) return "query-plan";
+  if (Array.isArray(payload.scenarios) && payload.formulaVersion) return "roi-projection";
   return "json";
+}
+
+function RoiProjectionView({ payload }: { payload: ArtifactPayload }) {
+  const scenarios = Array.isArray(payload.scenarios) ? payload.scenarios : [];
+  const reconciliation = payload.reconciliation && typeof payload.reconciliation === "object"
+    ? payload.reconciliation as Record<string, unknown>
+    : null;
+  const notes = reconciliation && Array.isArray(reconciliation.notes)
+    ? reconciliation.notes.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const formulaVersion = typeof payload.formulaVersion === "string" ? payload.formulaVersion : "";
+  return (
+    <div className="mt-2" data-testid="roi-projection-result">
+      <p className="text-sm text-[var(--cc-muted)]">
+        Directional scenarios · formula {formulaVersion || "unpinned"}
+      </p>
+      {warnings.length ? (
+        <ul className="mt-3 space-y-1" aria-label="ROI warnings">
+          {warnings.map((warning) => (
+            <li key={warning} className="text-sm text-amber-900">{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+      {scenarios.length ? (
+        <ul className="mt-6 grid gap-3 sm:grid-cols-3" aria-label="ROI scenarios">
+          {scenarios.map((entry) => {
+            const row = entry as {
+              label?: string;
+              scenario?: string;
+              netBenefit?: number;
+              roiPercent?: number | null;
+              savedHours?: number;
+            };
+            return (
+              <li
+                key={row.scenario || row.label}
+                className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm"
+                data-testid={`roi-scenario-${row.scenario || "unknown"}`}
+              >
+                <span className="font-semibold text-[var(--cc-ink)]">{row.label || row.scenario}</span>
+                <span className="mt-1 block tabular-nums text-[var(--cc-muted)]">
+                  Net {typeof row.netBenefit === "number" ? row.netBenefit.toFixed(0) : "—"}
+                  {" · "}
+                  ROI {typeof row.roiPercent === "number" ? `${row.roiPercent.toFixed(1)}%` : "—"}
+                </span>
+                <span className="mt-0.5 block text-xs text-[var(--cc-muted)]">
+                  Saved hours {typeof row.savedHours === "number" ? row.savedHours.toFixed(1) : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {notes.length ? (
+        <ul className="mt-6 space-y-1" aria-label="ROI reconciliation" data-testid="roi-reconciliation">
+          {notes.map((note) => (
+            <li key={note} className="text-sm text-[var(--cc-muted)]">{note}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 export function TaskAgentResultRenderer({
@@ -1165,6 +1231,7 @@ export function TaskAgentResultRenderer({
       {resolved === "response-plan" ? <ResponsePlanView payload={payload} /> : null}
       {resolved === "outline" ? <OutlineView payload={payload} /> : null}
       {resolved === "pillar-article" ? <PillarArticleView payload={payload} /> : null}
+      {resolved === "roi-projection" ? <RoiProjectionView payload={payload} /> : null}
       {resolved === "json" ? (
         <p className="mt-4 text-sm text-[var(--cc-muted)]">
           No purpose renderer is registered for this artifact yet.
