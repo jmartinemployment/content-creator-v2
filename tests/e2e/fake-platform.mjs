@@ -2322,7 +2322,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "a".repeat(64),
           workflowGroup: "diagnostic",
-          facets: { category: "analysis" },
+          facets: { workflow: "optimize", marketingFunction: ["aeo", "seo"], contentType: ["page", "article"], funnelStage: ["awareness", "consideration"], process: ["audit", "score"] },
         },
         {
           id: "fact-density",
@@ -2333,7 +2333,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "n".repeat(64),
           workflowGroup: "diagnostic",
-          facets: { category: "analysis" },
+          facets: { workflow: "optimize", marketingFunction: ["aeo", "content"], contentType: ["page", "article"], funnelStage: ["awareness", "consideration"], process: ["audit"] },
         },
         {
           id: "entity-mapper",
@@ -2344,7 +2344,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "o".repeat(64),
           workflowGroup: "diagnostic",
-          facets: { category: "analysis" },
+          facets: { workflow: "optimize", marketingFunction: ["aeo", "seo"], contentType: ["page", "topic"], funnelStage: ["awareness"], process: ["audit", "map"] },
         },
         {
           id: "schema-markup",
@@ -2355,7 +2355,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "p".repeat(64),
           workflowGroup: "diagnostic",
-          facets: { category: "analysis" },
+          facets: { workflow: "optimize", marketingFunction: ["seo", "aeo"], contentType: ["page", "article", "faq"], funnelStage: ["awareness", "consideration"], process: ["markup", "publish-prep"] },
         },
         {
           id: "query-planner",
@@ -2366,7 +2366,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "c".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "originate", marketingFunction: ["seo", "aeo", "content"], contentType: ["query", "brief"], funnelStage: ["awareness", "consideration"], process: ["plan"] },
         },
         {
           id: "ai-readiness-comparison",
@@ -2377,7 +2377,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "g".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "optimize", marketingFunction: ["aeo", "competitive"], contentType: ["page", "comparison"], funnelStage: ["consideration"], process: ["compare", "audit"] },
         },
         {
           id: "content-gap",
@@ -2388,7 +2388,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "e".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "outrank", marketingFunction: ["aeo", "competitive", "content"], contentType: ["page", "gap-report"], funnelStage: ["consideration"], process: ["gap-find", "audit"] },
         },
         {
           id: "competitor-audit",
@@ -2399,7 +2399,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "h".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "outrank", marketingFunction: ["competitive", "aeo"], contentType: ["audit", "page"], funnelStage: ["consideration", "decision"], process: ["audit"] },
         },
         {
           id: "competitor-positioning",
@@ -2410,7 +2410,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "i".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "outrank", marketingFunction: ["competitive", "brand"], contentType: ["positioning", "narrative"], funnelStage: ["consideration", "decision"], process: ["position"] },
         },
         {
           id: "competitor-page",
@@ -2421,7 +2421,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "d".repeat(64),
           workflowGroup: "intelligence",
-          facets: { category: "analysis" },
+          facets: { workflow: "outrank", marketingFunction: ["competitive", "aeo"], contentType: ["page", "audit"], funnelStage: ["consideration"], process: ["audit"] },
         },
         {
           id: "faq-generator",
@@ -2432,7 +2432,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "j".repeat(64),
           workflowGroup: "originate",
-          facets: { category: "content" },
+          facets: { workflow: "originate", marketingFunction: ["content", "aeo", "seo"], contentType: ["faq"], funnelStage: ["awareness", "consideration"], process: ["originate"] },
         },
         {
           id: "citable-claims",
@@ -2443,7 +2443,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "l".repeat(64),
           workflowGroup: "originate",
-          facets: { category: "content" },
+          facets: { workflow: "originate", marketingFunction: ["content", "aeo"], contentType: ["claims", "article"], funnelStage: ["awareness", "consideration"], process: ["originate", "optimize"] },
         },
         {
           id: "comparison-brief",
@@ -2454,7 +2454,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "q".repeat(64),
           workflowGroup: "originate",
-          facets: { category: "content" },
+          facets: { workflow: "originate", marketingFunction: ["competitive", "content"], contentType: ["brief", "comparison"], funnelStage: ["consideration", "decision"], process: ["originate", "brief"] },
         },
         {
           id: "pillar-outline",
@@ -2465,7 +2465,18 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "r".repeat(64),
           workflowGroup: "originate",
-          facets: { category: "content" },
+          facets: { workflow: "originate", marketingFunction: ["content", "seo", "aeo"], contentType: ["pillar", "outline"], funnelStage: ["awareness"], process: ["originate", "plan"] },
+        },
+        {
+          id: "pillar-article",
+          definitionId: "task-agent-16",
+          displayName: "Pillar Article",
+          description: "Produce a grounded topic-cluster pillar Markdown draft with supporting-content plan.",
+          versionId: "task-agent-version-16",
+          version: "1.1.0",
+          digest: "q".repeat(64),
+          workflowGroup: "originate",
+          facets: { workflow: "originate", marketingFunction: ["content", "seo", "aeo"], contentType: ["pillar", "article"], funnelStage: ["awareness"], process: ["originate", "draft"] },
         },
         {
           id: "competitive-response",
@@ -2476,7 +2487,7 @@ const server = http.createServer(async (req, res) => {
           version: "1.0.0",
           digest: "s".repeat(64),
           workflowGroup: "outrank",
-          facets: { category: "content" },
+          facets: { workflow: "outrank", marketingFunction: ["competitive", "content"], contentType: ["response", "article"], funnelStage: ["consideration", "decision"], process: ["respond", "originate"] },
         },
       ],
     });
@@ -2499,6 +2510,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
             { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
+            {
+              id: "contentCompleteness",
+              label: "Source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
           ],
         },
       },
@@ -2509,6 +2528,14 @@ const server = http.createServer(async (req, res) => {
     fields: [
       { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
       { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
+      {
+        id: "contentCompleteness",
+        label: "Source completeness",
+        type: "select",
+        required: false,
+        options: ["full", "partial"],
+        placeholder: "full",
+      },
     ],
   };
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/fact-density" && req.method === "GET") {
@@ -2660,7 +2687,7 @@ const server = http.createServer(async (req, res) => {
         displayName: "Citable Claims",
         description: "Convert source material into precise attributable claims without inventing statistics.",
         versionId: "task-agent-version-9",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "l".repeat(64),
       },
       workflow: {
@@ -2670,6 +2697,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceContent", label: "Source content", type: "longText", required: true },
             { id: "vagueStatements", label: "Vague statements to rewrite", type: "longText", required: false },
+            {
+              id: "contentCompleteness",
+              label: "Source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
           ],
         },
       },
@@ -2684,10 +2719,36 @@ const server = http.createServer(async (req, res) => {
         displayName: "AI Readiness Comparison",
         description: "Compare one owned page with up to four competitor pages under one AEO/GEO rubric.",
         versionId: "task-agent-version-5",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "g".repeat(64),
       },
-      workflow: { endpoint: "readiness-comparison", artifactType: "readinessComparison.v1" },
+      workflow: {
+        endpoint: "readiness-comparison",
+        artifactType: "readinessComparison.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
+            { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+          ],
+        },
+      },
       resultRenderer: { kind: "score-matrix", artifactType: "readinessComparison.v1" },
     });
   }
@@ -2699,10 +2760,36 @@ const server = http.createServer(async (req, res) => {
         displayName: "Content Gap Finder",
         description: "Find evidence-linked content gaps between subject and competitor pages.",
         versionId: "task-agent-version-4",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "e".repeat(64),
       },
-      workflow: { endpoint: "content-gap", artifactType: "contentGapAnalysis.v1" },
+      workflow: {
+        endpoint: "content-gap",
+        artifactType: "contentGapAnalysis.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
+            { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+          ],
+        },
+      },
       resultRenderer: { kind: "gap-report", artifactType: "contentGapAnalysis.v1" },
     });
   }
@@ -2714,10 +2801,36 @@ const server = http.createServer(async (req, res) => {
         displayName: "Competitor Audit",
         description: "Explain competitor strengths from supplied pages with evidence-linked prioritized actions.",
         versionId: "task-agent-version-6",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "h".repeat(64),
       },
-      workflow: { endpoint: "competitor-audit", artifactType: "competitorAudit.v1" },
+      workflow: {
+        endpoint: "competitor-audit",
+        artifactType: "competitorAudit.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
+            { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+          ],
+        },
+      },
       resultRenderer: { kind: "audit-report", artifactType: "competitorAudit.v1" },
     });
   }
@@ -2729,10 +2842,36 @@ const server = http.createServer(async (req, res) => {
         displayName: "Competitor Positioning",
         description: "Map brand-versus-competitor narrative attributes without treating generated opinions as market perception.",
         versionId: "task-agent-version-7",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "i".repeat(64),
       },
-      workflow: { endpoint: "competitor-positioning", artifactType: "competitorPositioning.v1" },
+      workflow: {
+        endpoint: "competitor-positioning",
+        artifactType: "competitorPositioning.v1",
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
+            { id: "subjectContent", label: "Brand page content", type: "longText", required: true },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+          ],
+        },
+      },
       resultRenderer: { kind: "positioning-map", artifactType: "competitorPositioning.v1" },
     });
   }
@@ -2759,7 +2898,7 @@ const server = http.createServer(async (req, res) => {
         displayName: "Comparison Brief",
         description: "Structure subject-versus-competitor page signals into a brief with labeled hypotheses.",
         versionId: "task-agent-version-13",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "q".repeat(64),
       },
       workflow: {
@@ -2772,6 +2911,22 @@ const server = http.createServer(async (req, res) => {
             { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
             { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
             { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
           ],
         },
       },
@@ -2805,7 +2960,35 @@ const server = http.createServer(async (req, res) => {
       resultRenderer: { kind: "outline", artifactType: "pillarOutline.v1" },
     });
   }
-  if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response" && req.method === "GET") {
+  
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/pillar-article" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-detail.v1",
+      agent: {
+        id: "pillar-article",
+        displayName: "Pillar Article",
+        description: "Produce a grounded topic-cluster pillar Markdown draft with supporting-content plan.",
+        versionId: "task-agent-version-16",
+        version: "1.1.0",
+        digest: "q".repeat(64),
+      },
+      workflow: {
+        endpoint: "pillar-article",
+        artifactType: "pillarArticle.v1",
+        uiSchema: {
+          fields: [
+            { id: "topic", label: "Topic", type: "shortText", required: true },
+            { id: "relatedQueries", label: "Related queries", type: "longText", required: false },
+            { id: "supportingContentHints", label: "Supporting content hints", type: "longText", required: false },
+            { id: "sourceContent", label: "Source content", type: "longText", required: true },
+            { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
+          ],
+        },
+      },
+      resultRenderer: { kind: "pillar-article", artifactType: "pillarArticle.v1" },
+    });
+  }
+if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response" && req.method === "GET") {
     return send(res, 200, {
       contractVersion: "gcc-task-agent-detail.v1",
       agent: {
@@ -2813,7 +2996,7 @@ const server = http.createServer(async (req, res) => {
         displayName: "Competitive Response",
         description: "Choose a response mode and emit brand-aligned angles, proof points, and outline sections.",
         versionId: "task-agent-version-15",
-        version: "1.0.0",
+        version: "1.1.0",
         digest: "s".repeat(64),
       },
       workflow: {
@@ -2827,6 +3010,22 @@ const server = http.createServer(async (req, res) => {
             { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
             { id: "focusQuery", label: "Focus query", type: "shortText", required: false },
             { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
+            {
+              id: "subjectCompleteness",
+              label: "Subject source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+            {
+              id: "competitorCompleteness",
+              label: "Competitor source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
           ],
         },
       },
@@ -2879,6 +3078,7 @@ const server = http.createServer(async (req, res) => {
       sharedContext,
       parentArtifactVersionIds,
       lineageRelationship,
+      input: body?.input ?? null,
     };
     taskRuns.set(runId, run);
     return { conflict: false, payload: run };
@@ -2973,6 +3173,10 @@ const server = http.createServer(async (req, res) => {
     const created = createTaskRun("pillar-outline", "task-run-14", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/pillar-article/runs" && req.method === "POST") {
+    const created = createTaskRun("pillar-article", "task-run-16", JSON.parse(rawBody || "{}"));
+    return send(res, created.conflict ? 409 : 202, created.payload);
+  }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-response/runs" && req.method === "POST") {
     const created = createTaskRun("competitive-response", "task-run-15", JSON.parse(rawBody || "{}"));
     return send(res, created.conflict ? 409 : 202, created.payload);
@@ -2998,6 +3202,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (action === "result" && req.method === "GET") {
       if (runId === "task-run-1") {
+        const completeness = existing?.input?.document?.contentCompleteness;
+        const isPartial = completeness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "ai-readiness", displayName: "AI Readiness Score", objective: "Score visible content." },
@@ -3007,7 +3213,30 @@ const server = http.createServer(async (req, res) => {
             artifactType: "readinessScore.v1",
             versions: [{
               id: "artifact-version-1",
-              payloadJson: JSON.stringify({ artifactType: "readinessScore.v1", overallScore: 82, prioritizedFixes: [] }),
+              payloadJson: JSON.stringify(isPartial
+                ? {
+                  artifactType: "readinessScore.v1",
+                  overallScore: null,
+                  dimensions: [
+                    {
+                      dimension: "headingHierarchy",
+                      score: null,
+                      explanation: "Partial input does not establish whether headings are absent.",
+                    },
+                  ],
+                  prioritizedFixes: [],
+                  warnings: [
+                    "Input is marked partial; absence-based findings are omitted where completeness is required.",
+                  ],
+                }
+                : {
+                  artifactType: "readinessScore.v1",
+                  overallScore: 82,
+                  prioritizedFixes: [],
+                  warnings: [
+                    "Scores and classifications are deterministic heuristics, not measured search-engine or AI-citation outcomes.",
+                  ],
+                }),
               evidenceJson: "[]",
               citationsJson: "[]",
               digest: "b".repeat(64),
@@ -3231,6 +3460,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-4") {
+        const completeness = existing?.input?.sourceDocument?.contentCompleteness;
+        const isPartial = completeness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "citable-claims", displayName: "Citable Claims", objective: "Extract attributable claims." },
@@ -3247,8 +3478,9 @@ const server = http.createServer(async (req, res) => {
                     claimId: "claim-500",
                     claimText: "Trusted by 500 customer teams.",
                     claimType: "quantifiableFact",
-                    verificationStatus: "supported",
-                    contradictionState: "possible",
+                    verificationStatus: isPartial ? "unverifiable" : "supported",
+                    confidence: isPartial ? "unknown" : "high",
+                    contradictionState: isPartial ? "unknown" : "possible",
                     attribution: "Source page proof section",
                     evidenceIds: ["ev-500"],
                   },
@@ -3256,16 +3488,22 @@ const server = http.createServer(async (req, res) => {
                     claimId: "claim-50",
                     claimText: "Trusted by 50 customer teams.",
                     claimType: "quantifiableFact",
-                    verificationStatus: "supported",
-                    contradictionState: "possible",
+                    verificationStatus: isPartial ? "unverifiable" : "supported",
+                    confidence: isPartial ? "unknown" : "high",
+                    contradictionState: isPartial ? "unknown" : "possible",
                     attribution: "Source page proof section",
                     evidenceIds: ["ev-50"],
                   },
                 ],
-                warnings: [
-                  "Claims never invent statistics.",
-                  "Possible contradiction (conflicting quantities) between claims claim-500 and claim-50.",
-                ],
+                warnings: isPartial
+                  ? [
+                    "Source document is partial; confidence is unknown and verification stays unverifiable.",
+                    "Claims never invent statistics.",
+                  ]
+                  : [
+                    "Claims never invent statistics.",
+                    "Possible contradiction (conflicting quantities) between claims claim-500 and claim-50.",
+                  ],
                 provenance: {
                   engineVersion: "deterministic-content.v1",
                   queries: [],
@@ -3297,6 +3535,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-5") {
+        const subjectCompleteness = existing?.input?.subjectPage?.contentCompleteness;
+        const isPartial = subjectCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "ai-readiness-comparison", displayName: "AI Readiness Comparison", objective: "Compare readiness scores." },
@@ -3308,7 +3548,15 @@ const server = http.createServer(async (req, res) => {
               id: "artifact-version-5",
               payloadJson: JSON.stringify({
                 artifactType: "readinessComparison.v1",
-                subject: { role: "subject", sourceId: "subject-1", overallScore: 78, dimensions: [], prioritizedFixes: [], warnings: [], evidenceIds: [] },
+                subject: {
+                  role: "subject",
+                  sourceId: "subject-1",
+                  overallScore: isPartial ? null : 78,
+                  dimensions: [],
+                  prioritizedFixes: [],
+                  warnings: [],
+                  evidenceIds: [],
+                },
                 competitors: [{
                   role: "competitor",
                   sourceId: "competitor-1",
@@ -3322,14 +3570,22 @@ const server = http.createServer(async (req, res) => {
                 }],
                 dimensionDeltas: [{
                   dimension: "factDensity",
-                  subjectScore: 70,
+                  subjectScore: isPartial ? null : 70,
                   competitorScores: [{ sourceId: "competitor-1", competitorId: "rival", score: 88 }],
                   bestCompetitorScore: 88,
-                  deltaVsBestCompetitor: -18,
-                  summary: "Competitor cites more specific evidence.",
+                  deltaVsBestCompetitor: isPartial ? null : -18,
+                  summary: isPartial
+                    ? "Subject score unknown because the subject page is partial."
+                    : "Competitor cites more specific evidence.",
                 }],
-                prioritizedFixes: ["Add supported quantitative claims to the subject page."],
-                warnings: [],
+                prioritizedFixes: isPartial
+                  ? []
+                  : ["Add supported quantitative claims to the subject page."],
+                warnings: isPartial
+                  ? [
+                    "Subject page is marked partial; scores that depend on absences stay unknown.",
+                  ]
+                  : [],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -3344,6 +3600,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-6") {
+        const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
+        const isPartial = subjectCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "content-gap", displayName: "Content Gap Finder", objective: "Find comparative gaps." },
@@ -3357,24 +3615,32 @@ const server = http.createServer(async (req, res) => {
                 artifactType: "contentGapAnalysis.v1",
                 dimensions: [{
                   dimension: "proof",
-                  subjectCoverage: false,
+                  subjectCoverage: isPartial ? null : false,
                   competitorCoverageCount: 1,
                   competitorPageCount: 1,
                   subjectEvidenceIds: [],
                   competitorEvidenceIds: ["ev-1"],
-                  summary: "Competitor shows proof signals the subject lacks.",
+                  summary: isPartial
+                    ? "Subject coverage is unknown due to partial input."
+                    : "Competitor shows proof signals the subject lacks.",
                 }],
                 gaps: [{
                   gapId: "gap-proof-1",
                   dimension: "proof",
                   signal: "customer count",
-                  status: "supportedGap",
-                  opportunity: "Publish a citeable customer-count proof block.",
+                  status: isPartial ? "coverageUnknown" : "supportedGap",
+                  opportunity: isPartial
+                    ? "Re-run with fuller subject content before asserting a gap."
+                    : "Publish a citeable customer-count proof block.",
                   competitorSourceIds: ["competitor-1"],
                   evidenceIds: ["ev-1"],
-                  confidence: "high",
+                  confidence: isPartial ? "unknown" : "high",
                 }],
-                warnings: [],
+                warnings: isPartial
+                  ? [
+                    "At least one subject page is partial; uncovered subject dimensions are coverageUnknown rather than asserted gaps.",
+                  ]
+                  : [],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -3389,6 +3655,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-7") {
+        const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
+        const isPartial = subjectCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "competitor-audit", displayName: "Competitor Audit", objective: "Prioritize remediation actions." },
@@ -3407,17 +3675,28 @@ const server = http.createServer(async (req, res) => {
                   opportunities: ["Add FAQ answers"],
                   warnings: [],
                 }],
-                contentGap: { gaps: [{ gapId: "gap-1" }] },
+                contentGap: {
+                  gaps: [{
+                    gapId: "gap-1",
+                    status: isPartial ? "coverageUnknown" : "supportedGap",
+                  }],
+                },
                 prioritizedActions: [{
                   actionId: "action-1",
                   priority: "high",
                   dimension: "proof",
                   action: "Add a verified customer-count claim with source evidence.",
-                  rationale: "Competitor proof signals are present while subject coverage is absent.",
+                  rationale: isPartial
+                    ? "Subject coverage is unknown because at least one subject page is partial."
+                    : "Competitor proof signals are present while subject coverage is absent.",
                   evidenceIds: ["ev-1"],
-                  origin: "supportedGap",
+                  origin: isPartial ? "coverageUnknown" : "supportedGap",
                 }],
-                warnings: [],
+                warnings: isPartial
+                  ? [
+                    "At least one subject page is partial; uncovered subject dimensions are coverageUnknown rather than asserted gaps.",
+                  ]
+                  : [],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -3430,6 +3709,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-8") {
+        const brandCompleteness = existing?.input?.brandPages?.[0]?.contentCompleteness;
+        const isPartial = brandCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "competitor-positioning", displayName: "Competitor Positioning", objective: "Map narrative attributes." },
@@ -3452,8 +3733,10 @@ const server = http.createServer(async (req, res) => {
                 perceptionGaps: [{
                   gapId: "pg-1",
                   attribute: "Speed claims",
-                  status: "supportedGap",
-                  summary: "Competitor emphasizes speed; brand does not.",
+                  status: isPartial ? "coverageUnknown" : "supportedGap",
+                  summary: isPartial
+                    ? "Brand coverage is unknown because at least one brand page is partial."
+                    : "Competitor emphasizes speed; brand does not.",
                   evidenceIds: ["ev-2"],
                   competitorIds: ["rival"],
                 }],
@@ -3466,7 +3749,11 @@ const server = http.createServer(async (req, res) => {
                   evidenceIds: ["ev-2"],
                 }],
                 observations: [],
-                warnings: [],
+                warnings: isPartial
+                  ? [
+                    "At least one brand page is partial; missing brand attributes are coverageUnknown rather than asserted absences.",
+                  ]
+                  : [],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -3514,6 +3801,8 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       if (runId === "task-run-13") {
+        const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
+        const isPartial = subjectCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: {
@@ -3533,10 +3822,12 @@ const server = http.createServer(async (req, res) => {
                 competitorName: "Competitor Inc.",
                 criteria: [{
                   criterion: "pricing",
-                  subjectSignals: ["Plans start at $15 per month."],
+                  subjectSignals: isPartial ? [] : ["Plans start at $15 per month."],
                   competitorSignals: ["Plans start at $20 per month."],
                   evidenceIds: ["ev-1"],
-                  summary: "pricing: subject coverage present; competitor coverage present.",
+                  summary: isPartial
+                    ? "pricing: subject coverage unknown due to partial input; competitor coverage present."
+                    : "pricing: subject coverage present; competitor coverage present.",
                 }],
                 differentiators: [{
                   origin: "generatedHypothesis",
@@ -3552,10 +3843,17 @@ const server = http.createServer(async (req, res) => {
                   text: "Frame as evidence-linked analysis at a clearer price.",
                 }],
                 recommendedVerdict: {
-                  framing: "Choose Subject Analyzer when buyers need evidence-linked analysis at a lower entry price.",
+                  framing: isPartial
+                    ? "Verdict unknown while subject input remains partial."
+                    : "Choose Subject Analyzer when buyers need evidence-linked analysis at a lower entry price.",
                   disclaimer: "Heuristic recommendation from supplied page signals only; not a measured ranking, win rate, or market outcome.",
                 },
-                warnings: ["Differentiators are labeled generatedHypothesis."],
+                warnings: isPartial
+                  ? [
+                    "Subject coverage is unknown due to partial input.",
+                    "Differentiators are labeled generatedHypothesis.",
+                  ]
+                  : ["Differentiators are labeled generatedHypothesis."],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -3617,7 +3915,59 @@ const server = http.createServer(async (req, res) => {
           rerun: { capabilityId: "pillar-outline", versionId: "task-agent-version-14", retryOfRunId: "task-run-14" },
         }));
       }
+      if (runId === "task-run-16") {
+        return send(res, 200, taskResultShell(runId, existing, {
+          contractVersion: "gcc-task-result-shell.v1",
+          identity: {
+            capabilityId: "pillar-article",
+            displayName: "Pillar Article",
+            objective: "Draft a grounded pillar article.",
+          },
+          progress: { status: "succeeded", phase: "complete", progressPercent: 100 },
+          artifacts: [{
+            id: "artifact-16",
+            artifactType: "pillarArticle.v1",
+            versions: [{
+              id: "artifact-version-16",
+              payloadJson: JSON.stringify({
+                artifactType: "pillarArticle.v1",
+                topic: "AI content readiness",
+                title: "AI content readiness",
+                markdown: "# AI content readiness\n\n## What is AI content readiness?\n\nAI content readiness means pages answer questions with evidence.\n",
+                sections: [{
+                  sectionId: "sec-1",
+                  heading: "What is AI content readiness?",
+                  bodyMarkdown: "AI content readiness means pages answer questions with evidence.",
+                  evidenceIds: ["ev-1"],
+                  grounded: true,
+                }],
+                supportingContentPlan: [{
+                  contentType: "faq",
+                  title: "AI content readiness FAQ",
+                  rationale: "Capture questions as pairs.",
+                  origin: "generatedHypothesis",
+                  disclaimer: "generatedHypothesis only",
+                }],
+                warnings: [
+                  "Pillar article bodies are grounded in supplied source spans when present; ungrounded sections are scaffolds and must not be treated as verified claims.",
+                ],
+              }),
+              evidenceJson: "[]",
+              citationsJson: "[]",
+              digest: "r".repeat(64),
+              validationState: "valid",
+            }],
+          }],
+          nextActions: [
+            { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+            { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
+          ],
+          rerun: { capabilityId: "pillar-article", versionId: "task-agent-version-16", retryOfRunId: "task-run-16" },
+        }));
+      }
       if (runId === "task-run-15") {
+        const brandCompleteness = existing?.input?.brandPages?.[0]?.contentCompleteness;
+        const isPartial = brandCompleteness === "partial";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: {
@@ -3634,7 +3984,9 @@ const server = http.createServer(async (req, res) => {
               payloadJson: JSON.stringify({
                 artifactType: "competitiveResponse.v1",
                 selectedMode: "counterNarrative",
-                rationale: "Competitor cites social proof that the brand page does not answer directly.",
+                rationale: isPartial
+                  ? "Brand coverage is unknown because at least one brand page is partial."
+                  : "Competitor cites social proof that the brand page does not answer directly.",
                 contentAngles: [{
                   origin: "generatedHypothesis",
                   text: "Answer why buyers should choose the brand with concrete capability proof.",
@@ -3651,7 +4003,12 @@ const server = http.createServer(async (req, res) => {
                   objective: "Lead with a direct brand answer, then required proof.",
                   evidenceIds: [],
                 }],
-                warnings: ["Does not copy competitor prose into draft body."],
+                warnings: isPartial
+                  ? [
+                    "At least one brand page is partial; missing brand signals stay unknown.",
+                    "Does not copy competitor prose into draft body.",
+                  ]
+                  : ["Does not copy competitor prose into draft body."],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",

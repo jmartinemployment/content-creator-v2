@@ -15,6 +15,7 @@ const contractVersions: Record<string, string> = {
   "citable-claims": "citableClaimsInput.v1",
   "comparison-brief": "comparisonBriefInput.v1",
   "pillar-outline": "pillarOutlineInput.v1",
+  "pillar-article": "pillarArticleInput.v1",
   "competitive-response": "competitiveResponseInput.v1",
 };
 
@@ -25,7 +26,17 @@ function lines(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function pageSnapshot(sourceId: string, url: string, title: string, visibleContent: string) {
+function normalizeContentCompleteness(value: string | undefined): "full" | "partial" {
+  return value?.trim().toLowerCase() === "partial" ? "partial" : "full";
+}
+
+function pageSnapshot(
+  sourceId: string,
+  url: string,
+  title: string,
+  visibleContent: string,
+  contentCompleteness: "full" | "partial" = "full",
+) {
   return {
     source: {
       sourceId,
@@ -34,10 +45,55 @@ function pageSnapshot(sourceId: string, url: string, title: string, visibleConte
     },
     visibleContent,
     mediaType: "text/markdown",
-    contentCompleteness: "full",
+    contentCompleteness,
     evidence: [],
   };
 }
+
+const DIAGNOSTIC_COMPLETENESS_FIELD: StudioFormField = {
+  id: "contentCompleteness",
+  label: "Source completeness",
+  type: "select",
+  required: false,
+  options: ["full", "partial"],
+  placeholder: "full",
+};
+
+const DOCUMENT_DIAGNOSTIC_IDS = new Set([
+  "ai-readiness",
+  "fact-density",
+  "entity-mapper",
+  "schema-markup",
+  "citable-claims",
+]);
+
+const PAIR_COMPARE_IDS = new Set([
+  "content-gap",
+  "ai-readiness-comparison",
+  "competitor-audit",
+  "competitor-positioning",
+  "comparison-brief",
+  "competitive-response",
+]);
+
+const PAIR_COMPLETENESS_FIELDS: StudioFormField[] = [
+  {
+    id: "subjectCompleteness",
+    label: "Subject source completeness",
+    type: "select",
+    required: false,
+    options: ["full", "partial"],
+    placeholder: "full",
+  },
+  {
+    id: "competitorCompleteness",
+    label: "Competitor source completeness",
+    type: "select",
+    required: false,
+    options: ["full", "partial"],
+    placeholder: "full",
+  },
+];
 
 function competitorSlug(name: string) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -48,6 +104,7 @@ function competitorPage(
   competitorName: string,
   visibleContent: string,
   sourceUrl = "",
+  contentCompleteness: "full" | "partial" = "full",
 ) {
   const name = competitorName.trim() || "Competitor";
   const competitorId = competitorSlug(name);
@@ -57,6 +114,7 @@ function competitorPage(
       sourceUrl,
       name,
       visibleContent,
+      contentCompleteness,
     ),
     competitorId,
     competitorName: name,
@@ -80,6 +138,65 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: true,
       placeholder: "Paste the complete visible page copy or Markdown…",
     },
+    DIAGNOSTIC_COMPLETENESS_FIELD,
+  ],
+  "fact-density": [
+    {
+      id: "sourceUrl",
+      label: "Source URL",
+      type: "shortText",
+      required: false,
+      placeholder: "https://example.com/page",
+    },
+    {
+      id: "visibleContent",
+      label: "Visible page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste the complete visible page copy or Markdown…",
+    },
+    DIAGNOSTIC_COMPLETENESS_FIELD,
+  ],
+  "entity-mapper": [
+    {
+      id: "sourceUrl",
+      label: "Source URL",
+      type: "shortText",
+      required: false,
+      placeholder: "https://example.com/page",
+    },
+    {
+      id: "visibleContent",
+      label: "Visible page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste the complete visible page copy or Markdown…",
+    },
+    {
+      id: "entitySeeds",
+      label: "Entity seeds",
+      type: "shortText",
+      required: false,
+      placeholder: "Comma-separated entity names",
+    },
+    DIAGNOSTIC_COMPLETENESS_FIELD,
+  ],
+  "schema-markup": [
+    {
+      id: "sourceUrl",
+      label: "Source URL",
+      type: "shortText",
+      required: false,
+      placeholder: "https://example.com/page",
+    },
+    {
+      id: "visibleContent",
+      label: "Visible page content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste the complete visible page copy or Markdown…",
+    },
+    DIAGNOSTIC_COMPLETENESS_FIELD,
   ],
   "query-planner": [
     {
@@ -190,6 +307,86 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: false,
     },
   ],
+  "ai-readiness-comparison": [
+    {
+      id: "sourceUrl",
+      label: "Subject URL",
+      type: "shortText",
+      required: false,
+    },
+    {
+      id: "subjectContent",
+      label: "Subject page content",
+      type: "longText",
+      required: true,
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+    },
+  ],
+  "content-gap": [
+    {
+      id: "sourceUrl",
+      label: "Subject URL",
+      type: "shortText",
+      required: false,
+    },
+    {
+      id: "subjectContent",
+      label: "Subject page content",
+      type: "longText",
+      required: true,
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+    },
+  ],
+  "competitor-audit": [
+    {
+      id: "sourceUrl",
+      label: "Subject URL",
+      type: "shortText",
+      required: false,
+    },
+    {
+      id: "subjectContent",
+      label: "Subject page content",
+      type: "longText",
+      required: true,
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+    },
+  ],
+  "competitor-positioning": [
+    {
+      id: "sourceUrl",
+      label: "Brand URL",
+      type: "shortText",
+      required: false,
+    },
+    {
+      id: "subjectContent",
+      label: "Brand page content",
+      type: "longText",
+      required: true,
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: true,
+    },
+  ],
   "pillar-outline": [
     {
       id: "topic",
@@ -218,6 +415,42 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: false,
       placeholder: "Optional source Markdown…",
+    },
+    {
+      id: "sourceUrl",
+      label: "Source URL",
+      type: "shortText",
+      required: false,
+    },
+  ],
+  "pillar-article": [
+    {
+      id: "topic",
+      label: "Topic",
+      type: "shortText",
+      required: true,
+      placeholder: "AI content operations",
+    },
+    {
+      id: "relatedQueries",
+      label: "Related queries",
+      type: "longText",
+      required: false,
+      placeholder: "One query per line",
+    },
+    {
+      id: "supportingContentHints",
+      label: "Supporting content hints",
+      type: "longText",
+      required: false,
+      placeholder: "One hint per line",
+    },
+    {
+      id: "sourceContent",
+      label: "Source content",
+      type: "longText",
+      required: true,
+      placeholder: "Paste source Markdown to ground the pillar draft…",
     },
     {
       id: "sourceUrl",
@@ -273,8 +506,21 @@ export function resolveTaskAgentUiFields(
   workflow: { uiSchema?: { fields?: StudioFormField[] } } | null | undefined,
 ): StudioFormField[] {
   const fromWorkflow = workflow?.uiSchema?.fields;
-  if (Array.isArray(fromWorkflow) && fromWorkflow.length > 0) return fromWorkflow;
-  return DEFAULT_TASK_AGENT_UI_SCHEMAS[capabilityId] ?? [];
+  const base = Array.isArray(fromWorkflow) && fromWorkflow.length > 0
+    ? fromWorkflow
+    : (DEFAULT_TASK_AGENT_UI_SCHEMAS[capabilityId] ?? []);
+  let fields = base;
+  if (DOCUMENT_DIAGNOSTIC_IDS.has(capabilityId)
+    && !fields.some((field) => field.id === "contentCompleteness")) {
+    fields = [...fields, DIAGNOSTIC_COMPLETENESS_FIELD];
+  }
+  if (PAIR_COMPARE_IDS.has(capabilityId) && fields.length > 0) {
+    const missing = PAIR_COMPLETENESS_FIELDS.filter(
+      (field) => !fields.some((existing) => existing.id === field.id),
+    );
+    if (missing.length) fields = [...fields, ...missing];
+  }
+  return fields;
 }
 
 export function adaptTaskAgentInput(
@@ -290,7 +536,8 @@ export function adaptTaskAgentInput(
     const visibleContent = (values.visibleContent ?? "").trim();
     if (!visibleContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
-    return {
+    const completeness = normalizeContentCompleteness(values.contentCompleteness);
+    const input: Record<string, unknown> = {
       contractVersion,
       document: {
         ...pageSnapshot(
@@ -298,10 +545,24 @@ export function adaptTaskAgentInput(
           sourceUrl,
           "Source page",
           visibleContent,
+          completeness,
         ),
         queries: [],
       },
     };
+    if (capabilityId === "entity-mapper") {
+      input.seeds = (values.entitySeeds ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => ({
+          canonicalName: value,
+          entityType: "concept",
+          aliases: [],
+        }));
+    }
+    if (capabilityId === "schema-markup") input.requestedTypes = ["Article", "FAQPage"];
+    return input;
   }
   if (capabilityId === "query-planner") {
     const topics = lines(values.hypothesisTopics);
@@ -372,6 +633,7 @@ export function adaptTaskAgentInput(
     const sourceContent = (values.sourceContent ?? "").trim();
     if (!sourceContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
+    const completeness = normalizeContentCompleteness(values.contentCompleteness);
     return {
       contractVersion,
       sourceDocument: {
@@ -380,6 +642,7 @@ export function adaptTaskAgentInput(
           sourceUrl,
           "Claims source",
           sourceContent,
+          completeness,
         ),
         queries: [],
       },
@@ -395,6 +658,8 @@ export function adaptTaskAgentInput(
     const competitorContent = (values.competitorContent ?? "").trim();
     if (!subjectName || !competitorName || !subjectContent || !competitorContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
+    const subjectCompleteness = normalizeContentCompleteness(values.subjectCompleteness);
+    const competitorCompleteness = normalizeContentCompleteness(values.competitorCompleteness);
     return {
       contractVersion,
       subjectName,
@@ -405,16 +670,61 @@ export function adaptTaskAgentInput(
           sourceUrl,
           subjectName,
           subjectContent,
+          subjectCompleteness,
         ),
       ],
-      competitorPages: [competitorPage(competitorName, competitorContent)],
+      competitorPages: [
+        competitorPage(competitorName, competitorContent, "", competitorCompleteness),
+      ],
       decisionCriteria: [],
     };
   }
-  if (capabilityId === "pillar-outline") {
+  if (
+    capabilityId === "content-gap"
+    || capabilityId === "competitor-audit"
+    || capabilityId === "ai-readiness-comparison"
+    || capabilityId === "competitor-positioning"
+  ) {
+    const subjectContent = (values.subjectContent ?? "").trim();
+    const competitorContent = (values.competitorContent ?? "").trim();
+    if (!subjectContent || !competitorContent) return null;
+    const sourceUrl = (values.sourceUrl ?? "").trim();
+    const subjectCompleteness = normalizeContentCompleteness(values.subjectCompleteness);
+    const competitorCompleteness = normalizeContentCompleteness(values.competitorCompleteness);
+    const subject = pageSnapshot(
+      sourceUrl || `subject:${crypto.randomUUID()}`,
+      sourceUrl,
+      "Subject page",
+      subjectContent,
+      subjectCompleteness,
+    );
+    const competitor = competitorPage("Competitor", competitorContent, "", competitorCompleteness);
+    if (capabilityId === "ai-readiness-comparison") {
+      return {
+        contractVersion,
+        subjectPage: subject,
+        competitorPages: [competitor],
+      };
+    }
+    if (capabilityId === "competitor-positioning") {
+      return {
+        contractVersion,
+        brandPages: [subject],
+        competitorPages: [competitor],
+        aiAnswerObservations: [],
+      };
+    }
+    return {
+      contractVersion,
+      subjectPages: [subject],
+      competitorPages: [competitor],
+    };
+  }
+  if (capabilityId === "pillar-outline" || capabilityId === "pillar-article") {
     const topic = (values.topic ?? "").trim();
     if (!topic) return null;
     const sourceContent = (values.sourceContent ?? "").trim();
+    if (capabilityId === "pillar-article" && !sourceContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
     const input: Record<string, unknown> = {
       contractVersion,
@@ -447,6 +757,8 @@ export function adaptTaskAgentInput(
     if (!brandName || !competitorName || !brandContent || !competitorContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
     const focusQuery = (values.focusQuery ?? "").trim();
+    const subjectCompleteness = normalizeContentCompleteness(values.subjectCompleteness);
+    const competitorCompleteness = normalizeContentCompleteness(values.competitorCompleteness);
     return {
       contractVersion,
       brandPages: [
@@ -455,9 +767,12 @@ export function adaptTaskAgentInput(
           sourceUrl,
           brandName,
           brandContent,
+          subjectCompleteness,
         ),
       ],
-      competitorPages: [competitorPage(competitorName, competitorContent)],
+      competitorPages: [
+        competitorPage(competitorName, competitorContent, "", competitorCompleteness),
+      ],
       responseMode: "auto",
       focusQuery: focusQuery || null,
     };
@@ -494,6 +809,10 @@ export function schemaFormCanStart(
   }
   if (capabilityId === "pillar-outline") {
     return (values.topic ?? "").trim().length > 0;
+  }
+  if (capabilityId === "pillar-article") {
+    return (values.topic ?? "").trim().length > 0
+      && (values.sourceContent ?? "").trim().length > 0;
   }
   return fields.every((field) => !field.required || (values[field.id] ?? "").trim().length > 0);
 }

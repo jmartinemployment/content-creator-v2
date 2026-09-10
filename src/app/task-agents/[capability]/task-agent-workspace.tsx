@@ -77,6 +77,7 @@ const contractVersions: Record<string, string> = {
   "citable-claims": "citableClaimsInput.v1",
   "comparison-brief": "comparisonBriefInput.v1",
   "pillar-outline": "pillarOutlineInput.v1",
+  "pillar-article": "pillarArticleInput.v1",
   "competitive-response": "competitiveResponseInput.v1",
 };
 
@@ -94,6 +95,7 @@ const contentIds = new Set([
   "citable-claims",
   "comparison-brief",
   "pillar-outline",
+  "pillar-article",
   "competitive-response",
 ]);
 
@@ -106,7 +108,13 @@ const pairCompareIds = new Set([
   "competitive-response",
 ]);
 
-function pageSnapshot(sourceId: string, url: string, title: string, visibleContent: string) {
+function pageSnapshot(
+  sourceId: string,
+  url: string,
+  title: string,
+  visibleContent: string,
+  contentCompleteness: "full" | "partial" = "full",
+) {
   return {
     source: {
       sourceId,
@@ -115,7 +123,7 @@ function pageSnapshot(sourceId: string, url: string, title: string, visibleConte
     },
     visibleContent,
     mediaType: "text/markdown",
-    contentCompleteness: "full",
+    contentCompleteness,
     evidence: [],
   };
 }
@@ -532,7 +540,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
         },
         visibleContent: content,
         mediaType: "text/markdown",
-        contentCompleteness: "full",
+        contentCompleteness: schemaValues.contentCompleteness === "partial" ? "partial" : "full",
         queries: [],
         evidence: [],
       },

@@ -13,14 +13,36 @@ type ResultRendererProps = {
 function ScorecardView({ payload }: { payload: ArtifactPayload }) {
   const score = payload.overallScore;
   const numeric = typeof score === "number" ? score : Number(score);
+  const hasOverall = score !== null && score !== undefined && Number.isFinite(numeric);
   const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
   const fixes = Array.isArray(payload.prioritizedFixes) ? payload.prioritizedFixes : [];
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
   return (
     <div className="mt-2">
       <p className="text-sm text-[var(--cc-muted)]">Overall readiness</p>
-      <p className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]" style={{ fontSize: "clamp(2.75rem, 6vw, 4.5rem)", lineHeight: 1 }}>
-        {Number.isFinite(numeric) ? numeric : "—"}
+      <p
+        className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]"
+        style={{ fontSize: "clamp(2.75rem, 6vw, 4.5rem)", lineHeight: 1 }}
+        data-testid="readiness-overall-score"
+      >
+        {hasOverall ? numeric : "—"}
       </p>
+      {!hasOverall ? (
+        <p className="mt-2 text-sm text-[var(--cc-muted)]" data-testid="readiness-partial-overall">
+          Overall score omitted — source marked partial or dimensions lack evidence.
+        </p>
+      ) : null}
+      {warnings.length ? (
+        <ul className="mt-4 space-y-1" aria-label="Readiness warnings" data-testid="readiness-warnings">
+          {warnings.map((warning) => (
+            <li key={warning} className="text-sm text-amber-900">
+              {warning}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {dimensions.length ? (
         <ul className="mt-6 grid gap-2 sm:grid-cols-2" aria-label="Readiness dimensions">
           {dimensions.map((entry) => {
@@ -333,6 +355,11 @@ function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
 
   return (
     <div className="mt-4">
+      {warnings.length ? (
+        <ul className="mb-4 space-y-1 text-sm text-amber-900" aria-label="Claim ledger warnings" data-testid="claim-ledger-warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
       {hasPossible || contradictionWarnings.length ? (
         <aside
           aria-label="Possible contradictions"
@@ -554,7 +581,7 @@ function ComparisonBriefView({ payload }: { payload: ArtifactPayload }) {
         </div>
       ) : null}
       {warnings.length ? (
-        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Comparison warnings">
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Comparison warnings" data-testid="comparison-brief-warnings">
           {warnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       ) : null}
@@ -623,7 +650,7 @@ function ResponsePlanView({ payload }: { payload: ArtifactPayload }) {
         </ol>
       ) : null}
       {warnings.length ? (
-        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Response warnings">
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Response warnings" data-testid="response-plan-warnings">
           {warnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       ) : null}
@@ -702,6 +729,56 @@ function OutlineView({ payload }: { payload: ArtifactPayload }) {
   );
 }
 
+function PillarArticleView({ payload }: { payload: ArtifactPayload }) {
+  const markdown = typeof payload.markdown === "string" ? payload.markdown : "";
+  const sections = Array.isArray(payload.sections) ? payload.sections : [];
+  const plan = Array.isArray(payload.supportingContentPlan) ? payload.supportingContentPlan : [];
+  const warnings = stringWarnings(payload);
+  const groundedCount = sections.filter((section) => asEntry(section).grounded === true).length;
+
+  return (
+    <div className="mt-4 space-y-6">
+      {typeof payload.title === "string" && payload.title ? (
+        <p className="text-sm text-[var(--cc-muted)]">
+          Title <span className="font-semibold text-[var(--cc-ink)]">{payload.title}</span>
+        </p>
+      ) : null}
+      <p className="text-sm text-[var(--cc-muted)]" data-testid="pillar-grounded-count">
+        {groundedCount} of {sections.length} sections grounded in supplied source
+      </p>
+      <pre
+        className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-4 text-sm leading-relaxed text-[var(--cc-ink)]"
+        data-testid="pillar-article-markdown"
+      >
+        {markdown || "No markdown draft was produced."}
+      </pre>
+      {plan.length ? (
+        <aside className="border-l-2 border-amber-600 bg-amber-50/70 px-3 py-3" data-testid="supporting-content-plan">
+          <p className="text-sm font-semibold text-amber-950">Supporting content plan</p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-950/90">
+            {plan.map((entry) => {
+              const row = asEntry(entry);
+              return (
+                <li key={String(row.title)}>
+                  <span className="font-semibold">{String(row.title)}</span>
+                  {typeof row.contentType === "string" ? (
+                    <span className="ml-2 text-xs opacity-80">{row.contentType}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      ) : null}
+      {warnings.length ? (
+        <ul className="space-y-1 text-xs text-[var(--cc-muted)]" aria-label="Pillar article warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function asEntry(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -709,6 +786,7 @@ function asEntry(value: unknown): Record<string, unknown> {
 }
 
 function scoreLabel(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
   const numeric = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numeric) ? String(numeric) : "—";
 }
@@ -718,13 +796,23 @@ function ScoreMatrixView({ payload }: { payload: ArtifactPayload }) {
   const competitors = Array.isArray(payload.competitors) ? payload.competitors : [];
   const deltas = Array.isArray(payload.dimensionDeltas) ? payload.dimensionDeltas : [];
   const fixes = Array.isArray(payload.prioritizedFixes) ? payload.prioritizedFixes : [];
+  const warnings = stringWarnings(payload);
 
   return (
     <div className="mt-2 space-y-6">
+      {warnings.length ? (
+        <ul className="space-y-1 text-sm text-amber-900" aria-label="Comparison warnings" data-testid="score-matrix-warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <p className="text-sm text-[var(--cc-muted)]">Subject readiness</p>
-          <p className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]" style={{ fontSize: "clamp(2rem, 4vw, 3.25rem)", lineHeight: 1 }}>
+          <p
+            className="mt-1 font-semibold tabular-nums tracking-tight text-[var(--cc-ink)]"
+            style={{ fontSize: "clamp(2rem, 4vw, 3.25rem)", lineHeight: 1 }}
+            data-testid="score-matrix-subject-score"
+          >
             {scoreLabel(subject.overallScore)}
           </p>
         </div>
@@ -784,8 +872,14 @@ function ScoreMatrixView({ payload }: { payload: ArtifactPayload }) {
 function GapReportView({ payload }: { payload: ArtifactPayload }) {
   const gaps = Array.isArray(payload.gaps) ? payload.gaps : [];
   const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+  const warnings = stringWarnings(payload);
   return (
     <div className="mt-4 space-y-6">
+      {warnings.length ? (
+        <ul className="space-y-1 text-sm text-amber-900" aria-label="Gap report warnings" data-testid="gap-report-warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
       {gaps.length ? (
         <ul className="space-y-3" aria-label="Content gaps">
           {gaps.map((entry) => {
@@ -842,9 +936,15 @@ function AuditReportView({ payload }: { payload: ArtifactPayload }) {
   const pageAnalyses = Array.isArray(payload.pageAnalyses) ? payload.pageAnalyses : [];
   const contentGap = asEntry(payload.contentGap);
   const gapCount = Array.isArray(contentGap.gaps) ? contentGap.gaps.length : 0;
+  const warnings = stringWarnings(payload);
 
   return (
     <div className="mt-4 space-y-6">
+      {warnings.length ? (
+        <ul className="space-y-1 text-sm text-amber-900" aria-label="Audit warnings" data-testid="audit-report-warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
       <p className="text-sm text-[var(--cc-muted)]">
         {pageAnalyses.length} competitor page{pageAnalyses.length === 1 ? "" : "s"} analyzed
         {gapCount ? ` · ${gapCount} comparative gap${gapCount === 1 ? "" : "s"}` : ""}
@@ -877,9 +977,15 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
   const attributes = Array.isArray(payload.attributeMap) ? payload.attributeMap : [];
   const gaps = Array.isArray(payload.perceptionGaps) ? payload.perceptionGaps : [];
   const hypotheses = Array.isArray(payload.messagingHypotheses) ? payload.messagingHypotheses : [];
+  const warnings = stringWarnings(payload);
 
   return (
     <div className="mt-4 space-y-6">
+      {warnings.length ? (
+        <ul className="space-y-1 text-sm text-amber-900" aria-label="Positioning warnings" data-testid="positioning-warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
       {attributes.length ? (
         <ul className="space-y-3" aria-label="Positioning attributes">
           {attributes.map((entry) => {
@@ -1014,6 +1120,9 @@ function resolveKind(kind: string | undefined, payload: ArtifactPayload): string
   if ("overallScore" in payload) return "scorecard";
   if ("pairs" in payload) return "faq-list";
   if ("claims" in payload) return "claim-ledger";
+  if (typeof payload.markdown === "string" && Array.isArray(payload.sections)) {
+    return "pillar-article";
+  }
   if ("sections" in payload) return "outline";
   if (typeof payload.methodology === "object" && payload.methodology !== null) return "query-plan";
   return "json";
@@ -1055,6 +1164,7 @@ export function TaskAgentResultRenderer({
       {resolved === "comparison-brief" ? <ComparisonBriefView payload={payload} /> : null}
       {resolved === "response-plan" ? <ResponsePlanView payload={payload} /> : null}
       {resolved === "outline" ? <OutlineView payload={payload} /> : null}
+      {resolved === "pillar-article" ? <PillarArticleView payload={payload} /> : null}
       {resolved === "json" ? (
         <p className="mt-4 text-sm text-[var(--cc-muted)]">
           No purpose renderer is registered for this artifact yet.
