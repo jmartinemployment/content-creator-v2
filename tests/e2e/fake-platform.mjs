@@ -3554,6 +3554,39 @@ const server = http.createServer(async (req, res) => {
     gscConnections.set(connection.id, connection);
     return send(res, 200, { contractVersion: "gcc-gsc-connections.v1", connection });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/task-agents/fetch-page" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const urlValue = typeof body.url === "string" ? body.url.trim() : "";
+    if (!urlValue) {
+      return send(res, 400, {
+        contractVersion: "gcc-task-agent-page-hydrate.v1",
+        error: "URL is required.",
+        errorCode: "ssrf",
+      });
+    }
+    if (/localhost|127\.0\.0\.1|169\.254\.|10\.|192\.168\.|metadata/i.test(urlValue)) {
+      return send(res, 400, {
+        contractVersion: "gcc-task-agent-page-hydrate.v1",
+        error: "Host is not allowed.",
+        errorCode: "ssrf",
+      });
+    }
+    return send(res, 200, {
+      contractVersion: "gcc-task-agent-page-hydrate.v1",
+      finalUrl: urlValue,
+      title: "Fetched readiness page",
+      visibleContent:
+        "# Fetched readiness page\n\n"
+        + "This content was hydrated from the Source URL without pasting. "
+        + "It includes concrete evidence for AI readiness scoring and schema coverage checks.\n\n"
+        + "## Checklist\n\n"
+        + "Operators verify crawlability, factual density, and answer clarity on public pages.",
+      statusCode: 200,
+      loadTimeMs: 42,
+      contentCompleteness: "full",
+      crawlable: "yes",
+    });
+  }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/observed-queries" && req.method === "GET") {
     const connectionId = url.searchParams.get("connectionId") || "11111111-1111-4111-8111-111111111111";
     const connection = gscConnections.get(connectionId) || {

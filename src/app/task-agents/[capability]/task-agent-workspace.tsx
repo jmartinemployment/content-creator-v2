@@ -25,6 +25,10 @@ import {
 } from "@/app/task-agents/merge-parent-artifact";
 import { SchemaForm } from "@/app/task-agents/schema-form";
 import {
+  applyPageHydrateToSchemaValues,
+  fetchTaskAgentPage,
+} from "@/app/task-agents/page-hydrate";
+import {
   TaskAgentResultShell,
   type ResultShellModel,
 } from "@/app/task-agents/result-shell";
@@ -159,6 +163,8 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [configBusy, setConfigBusy] = useState(false);
   const [gscLoadBusy, setGscLoadBusy] = useState(false);
   const [gscNotice, setGscNotice] = useState<string | null>(null);
+  const [fetchPageBusy, setFetchPageBusy] = useState(false);
+  const [fetchPageNotice, setFetchPageNotice] = useState<string | null>(null);
   const [contextSelection, setContextSelection] = useState<ContextSelectionRequest>(EMPTY_CONTEXT_SELECTION);
   const [contextPreview, setContextPreview] = useState<ResolvedContextPreview | null>(null);
   const [contextUploadProcessing, setContextUploadProcessing] = useState(false);
@@ -192,6 +198,13 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const isCompetitiveResponse = capabilityId === "competitive-response";
   const isIntelligence = intelligenceIds.has(capabilityId);
   const isContent = contentIds.has(capabilityId);
+  const schemaHasPageHydrate = schemaFields.some((field) => field.id === "sourceUrl")
+    && schemaFields.some((field) => field.id === "visibleContent");
+  const legacyHasPageHydrate = !useSchemaDrivenForm
+    && !isQueryPlanner
+    && !isPillarOutline
+    && !isPairCompare;
+  const showPageHydrate = useSchemaDrivenForm ? schemaHasPageHydrate : legacyHasPageHydrate;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -402,6 +415,35 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       setError(cause instanceof Error ? cause.message : "Could not load GSC observed queries.");
     } finally {
       setGscLoadBusy(false);
+    }
+  }
+
+  async function hydrateFromSourceUrl() {
+    const url = (useSchemaDrivenForm
+      ? (schemaValues.sourceUrl ?? "")
+      : sourceUrl).trim();
+    if (!url) {
+      setError("Enter a Source URL before fetching the page.");
+      return;
+    }
+    setFetchPageBusy(true);
+    setFetchPageNotice(null);
+    setError(null);
+    try {
+      const result = await fetchTaskAgentPage(url);
+      if (useSchemaDrivenForm) {
+        setSchemaValues((current) => applyPageHydrateToSchemaValues(current, result));
+      } else {
+        setSourceUrl(result.finalUrl || url);
+        setContent(result.visibleContent);
+      }
+      setFetchPageNotice(
+        `Fetched ${result.finalUrl || url} (${result.statusCode}, ${result.loadTimeMs} ms, ${result.contentCompleteness}).`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not fetch the page.");
+    } finally {
+      setFetchPageBusy(false);
     }
   }
 
@@ -854,6 +896,27 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const running = run !== null && !["succeeded", "failed", "cancelled"].includes(run.status);
   const contextBlocked = (contextPreview?.blockingFindings.length ?? 0) > 0;
   const pinnedContext = result?.sharedContext ?? run?.sharedContext ?? null;
+  const pageHydrateControls = (
+    <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3">
+      <p className="text-xs text-[var(--cc-muted)]">
+        Fetch public page HTML over HTTP (SSRF-gated). Fills visible content from the Source URL.
+        JavaScript-rendered pages may be incomplete.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={running || fetchPageBusy}
+          onClick={() => void hydrateFromSourceUrl()}
+          className="rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          {fetchPageBusy ? "Fetching page…" : "Fetch page"}
+        </button>
+      </div>
+      {fetchPageNotice ? (
+        <p role="status" className="mt-2 text-xs text-[var(--cc-muted)]">{fetchPageNotice}</p>
+      ) : null}
+    </div>
+  );
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
@@ -873,6 +936,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
               onChange={setSchemaValues}
               disabled={running}
             />
+            {showPageHydrate ? pageHydrateControls : null}
             {isQueryPlanner ? (
               <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3">
                 <p className="text-xs text-[var(--cc-muted)]">
@@ -963,6 +1027,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
               placeholder="https://example.com/page"
               className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm"
             />
+            {pageHydrateControls}
             <label className="mt-5 block text-sm font-semibold" htmlFor="taskContent">
               Source content <span className="font-normal text-[var(--cc-muted)]">(ground answers in visible copy)</span>
             </label>
@@ -990,6 +1055,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
               placeholder="https://example.com/page"
               className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm"
             />
+            {pageHydrateControls}
             <label className="mt-5 block text-sm font-semibold" htmlFor="taskContent">Source content</label>
             <textarea
               id="taskContent"
@@ -1072,6 +1138,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
                   placeholder="https://example.com/page"
                   className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm"
                 />
+                {!isPairCompare ? pageHydrateControls : null}
               </>
             ) : null}
             {(isCompetitorPage || isPairCompare) ? (
@@ -1112,6 +1179,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
                   placeholder="https://competitor.example/page"
                   className="mt-2 w-full rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm"
                 />
+                {pageHydrateControls}
               </>
             ) : null}
             <label className="mt-5 block text-sm font-semibold" htmlFor="taskContent">

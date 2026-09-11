@@ -967,3 +967,15 @@ test("stale evidence warns before treating results as fresh", async ({ page, req
   await expect(page.getByTestId("stale-evidence-warning")).toContainText("Do not treat these findings as fresh");
   await expect(page.getByTestId("readiness-warnings")).toContainText("stale relative to visible content");
 });
+
+test("Fetch page hydrates visible content from Source URL without paste", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Source URL").fill("https://example.com/readiness-guide");
+  await page.getByRole("button", { name: "Fetch page" }).click();
+  await expect(page.getByRole("status")).toContainText("Fetched https://example.com/readiness-guide");
+  await expect(page.getByLabel("Visible page content")).toHaveValue(/hydrated from the Source URL/);
+  await expect(page.getByLabel("HTTP status code")).toHaveValue("200");
+  await expect(page.getByLabel("Load time (ms)")).toHaveValue("42");
+  await expect(page.getByLabel("Page crawlable")).toHaveValue("yes");
+  await expect(page.getByLabel("Source completeness")).toHaveValue("full");
+});
