@@ -127,6 +127,26 @@ test("grid detail can append a topic row and run it", async ({ page }) => {
   await expect(page.getByText("Owner isolation follow-up")).toBeVisible();
 });
 
+test("grid detail can paste CSV topics and run the imported rows", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+  await expect(page.getByText("12 rows")).toBeVisible();
+
+  await page.getByLabel("Paste grid topics").fill(
+    "Topic Alpha\nTopic Beta,extra\n\"Topic, Gamma\"\nTopic Alpha\n",
+  );
+  await page.getByRole("button", { name: "Import topics" }).click();
+  await expect(page.getByText("Imported 3 topics into the grid.")).toBeVisible();
+  await expect(page.getByText("15 rows")).toBeVisible();
+  await expect(page.getByText("Topic Alpha")).toBeVisible();
+  await expect(page.getByText("Topic Beta")).toBeVisible();
+  await expect(page.getByText("Topic, Gamma")).toBeVisible();
+
+  await page.getByRole("button", { name: "Run sample (10)" }).click();
+  await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
+});
+
 test("succeeded grid rows can attach into a Canvas project", async ({ page }) => {
   await openAuthenticated(page, "/projects");
   await page.getByRole("button", { name: "New demo project" }).click();

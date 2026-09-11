@@ -2589,6 +2589,71 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, { contractVersion: "gcc-grid.v1", grid });
   }
   {
+    const importMatch = url.pathname.match(
+      /^\/api\/geek-content-creator-v2\/grids\/([^/]+)\/rows\/import$/,
+    );
+    if (importMatch && req.method === "POST") {
+      const gridId = decodeURIComponent(importMatch[1]);
+      const grid = grids.get(gridId);
+      if (!grid) return send(res, 404, { error: "Grid not found." });
+      const body = JSON.parse(rawBody || "{}");
+      const topics = [];
+      const seen = new Set();
+      const pushTopic = (raw) => {
+        if (typeof raw !== "string") return;
+        const topic = raw.trim().replace(/^\uFEFF/, "");
+        if (!topic) return;
+        const key = topic.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        topics.push(topic);
+      };
+      if (Array.isArray(body.topics)) body.topics.forEach(pushTopic);
+      if (typeof body.text === "string") {
+        for (const line of body.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed.startsWith("\"")) {
+            const end = trimmed.indexOf("\"", 1);
+            pushTopic(end > 0 ? trimmed.slice(1, end).replace(/\"\"/g, "\"") : trimmed.slice(1));
+          } else {
+            const comma = trimmed.indexOf(",");
+            pushTopic(comma < 0 ? trimmed : trimmed.slice(0, comma).trim());
+          }
+        }
+      }
+      if (topics.length === 0) {
+        return send(res, 400, {
+          error: "No topics found. Paste one topic per line (CSV first column) or supply topics[].",
+        });
+      }
+      if (topics.length > 100) {
+        return send(res, 400, { error: "Import is limited to 100 topics per request." });
+      }
+      if (grid.rows.length + topics.length > 500) {
+        return send(res, 400, { error: "Grid would exceed 500 rows." });
+      }
+      const now = new Date().toISOString();
+      for (const topic of topics) {
+        grid.rows.push({
+          id: crypto.randomUUID(),
+          rowIndex: grid.rows.length,
+          input: { topic },
+          output: null,
+          status: "pending",
+          error: "",
+          updatedAt: now,
+        });
+      }
+      grid.updatedAt = now;
+      return send(res, 200, {
+        contractVersion: "gcc-grid.v1",
+        importedCount: topics.length,
+        grid,
+      });
+    }
+  }
+  {
     const match = url.pathname.match(
       /^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs|pipeline-runs|pipeline|roi-projection|schedule(?:\/run-due)?))?$/,
     );

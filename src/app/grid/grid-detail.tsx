@@ -6,6 +6,7 @@ import {
   createGridRow,
   createGridRun,
   getGrid,
+  importGridRows,
   putGridPipeline,
   putGridSchedule,
   runDueGridSchedule,
@@ -44,7 +45,9 @@ export function GridDetail({ gridId }: { gridId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [topicDraft, setTopicDraft] = useState("");
+  const [importDraft, setImportDraft] = useState("");
   const [addingRow, setAddingRow] = useState(false);
+  const [importingRows, setImportingRows] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [attachBusy, setAttachBusy] = useState(false);
@@ -160,6 +163,27 @@ export function GridDetail({ gridId }: { gridId: string }) {
       setError(cause instanceof Error ? cause.message : "Could not add row.");
     } finally {
       setAddingRow(false);
+    }
+  }
+
+  async function importRows() {
+    const text = importDraft.trim();
+    if (!text) return;
+    setImportingRows(true);
+    setError(null);
+    setAttachNotice(null);
+    try {
+      const result = await importGridRows(grid!.id, { text });
+      setGrid(result.grid);
+      setImportDraft("");
+      const count = result.importedCount ?? 0;
+      setAttachNotice(
+        `Imported ${count} topic${count === 1 ? "" : "s"} into the grid.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not import topics.");
+    } finally {
+      setImportingRows(false);
     }
   }
 
@@ -363,6 +387,34 @@ export function GridDetail({ gridId }: { gridId: string }) {
             >
               {addingRow ? "Adding…" : "Add row"}
             </button>
+          </div>
+          <div className="border-b border-[var(--cc-line)] px-5 py-4">
+            <label className="block">
+              <span className="text-xs font-semibold text-[var(--cc-ink)]">
+                Paste topics (CSV / one per line)
+              </span>
+              <textarea
+                aria-label="Paste grid topics"
+                value={importDraft}
+                onChange={(event) => setImportDraft(event.target.value)}
+                rows={4}
+                placeholder={"What is Evidence Engine?\nHow does citation verification work?\nCan grids reuse canvas assets?"}
+                className="mt-1 w-full rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[var(--cc-accent)]"
+              />
+            </label>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={importingRows || importDraft.trim().length === 0}
+                onClick={() => void importRows()}
+                className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {importingRows ? "Importing…" : "Import topics"}
+              </button>
+              <p className="text-xs text-[var(--cc-muted)]">
+                First CSV column becomes the topic. Duplicates are skipped.
+              </p>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">

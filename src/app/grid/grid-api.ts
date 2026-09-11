@@ -67,6 +67,17 @@ export async function createGridRow(
   return body.grid;
 }
 
+export async function importGridRows(
+  gridId: string,
+  input: { text?: string; topics?: string[] },
+) {
+  const body = await gridsFetch(`/${encodeURIComponent(gridId)}/rows/import`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }) as { grid: Grid; importedCount?: number };
+  return body;
+}
+
 export async function putGridSchedule(
   gridId: string,
   input: {
