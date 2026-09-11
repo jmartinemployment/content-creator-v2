@@ -2486,12 +2486,24 @@ const server = http.createServer(async (req, res) => {
           warnings: ["Directional model only — not a quote, guarantee, or audited finance result."],
         };
       } else if (stage.kind === "task-agent") {
+        const artifactType = stage.capabilityId === "query-planner"
+          ? "queryPlan.v1"
+          : stage.capabilityId === "faq-generator"
+            ? "faqSet.v1"
+            : stage.capabilityId === "ai-readiness"
+              ? "readinessScore.v1"
+              : `${stage.capabilityId}.v1`;
+        const taskRunId = crypto.randomUUID();
+        const artifactVersionId = crypto.randomUUID();
         output = {
-          artifactType: `${stage.capabilityId}.stub.v1`,
+          artifactType,
           capabilityId: stage.capabilityId,
-          summary: `Stub artifact from ${stage.displayName}.`,
+          summary: `TaskRun output from ${stage.displayName}.`,
           lifecycle: stage.lifecycle,
           workItemIndex: index,
+          mode: "task-run",
+          taskRunId,
+          artifactVersionId,
         };
       } else {
         output = {
@@ -2511,6 +2523,10 @@ const server = http.createServer(async (req, res) => {
         output = null;
         failed = true;
       }
+        const taskRunId = status === "succeeded" && output?.taskRunId ? output.taskRunId : null;
+        const artifactVersionId = status === "succeeded" && output?.artifactVersionId
+          ? output.artifactVersionId
+          : null;
         stageAttempts.push({
           id: crypto.randomUUID(),
           stageKey: stage.key,
@@ -2525,6 +2541,8 @@ const server = http.createServer(async (req, res) => {
           error,
           startedAtUtc: now,
           completedAtUtc: now,
+          taskRunId,
+          artifactVersionId,
         });
         history.push({
           atUtc: now,
@@ -2532,6 +2550,7 @@ const server = http.createServer(async (req, res) => {
           stageKey: stage.key,
           lifecycle: stage.lifecycle,
           status,
+          taskRunId,
         });
       }
       workItems.push({

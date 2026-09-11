@@ -168,6 +168,17 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
                   {attempt.error ? (
                     <p className="mt-1 text-xs text-red-700">{attempt.error}</p>
                   ) : null}
+                  {attempt.taskRunId || (attempt.output as { taskRunId?: string } | null)?.taskRunId ? (
+                    <p className="mt-1 font-mono text-xs text-[var(--cc-muted)]" data-testid={`pipeline-task-run-${attempt.stageKey}`}>
+                      TaskRun {(attempt.taskRunId
+                        ?? (attempt.output as { taskRunId?: string }).taskRunId)}
+                      {(attempt.artifactVersionId
+                        || (attempt.output as { artifactVersionId?: string } | null)?.artifactVersionId)
+                        ? ` · artifact ${(attempt.artifactVersionId
+                          ?? (attempt.output as { artifactVersionId?: string }).artifactVersionId)}`
+                        : ""}
+                    </p>
+                  ) : null}
                   {attempt.output && typeof attempt.output === "object" ? (
                     <p className="mt-1 text-xs text-[var(--cc-muted)]">
                       {String(

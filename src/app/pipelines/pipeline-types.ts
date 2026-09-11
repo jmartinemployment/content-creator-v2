@@ -56,6 +56,8 @@ export type PipelineStageAttempt = Readonly<{
   error: string | null;
   startedAtUtc: string;
   completedAtUtc: string | null;
+  taskRunId?: string | null;
+  artifactVersionId?: string | null;
 }>;
 
 export type PipelineWorkItem = Readonly<{
