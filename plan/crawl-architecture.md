@@ -36,6 +36,38 @@ Outputs:
 2. **BrandKit** → built from owned project-site crawl facts, not Geek-SEO profiles.
 3. **`siteHierarchy`** → mobile heading/link tree on brief for tool preflight and on-site `/tools/…` hrefs.
 
+### Runtime: Chromium comes from the base image (2026-09-11)
+
+The mobile Playwright crawl runs inside **GeekAPI**, so GeekAPI's container needs
+Chromium. It now inherits it:
+
+```dockerfile
+# GeekBackend/Dockerfile
+FROM mcr.microsoft.com/playwright/dotnet:v1.51.0-noble AS final
+COPY --from=build /app/publish .
+```
+
+This matches `Dockerfile.repository`, which has always used that base — which is
+why GeekRepository never showed the problem described below.
+
+**What it replaced.** GeekAPI previously built from `dotnet/aspnet:10.0-noble` and
+installed Chromium by hand — adding the Microsoft package repo, installing
+PowerShell, then `pwsh ./playwright.ps1 install --with-deps chromium`. That block
+sat *below* `COPY --from=build /app/publish .`, so every code change invalidated
+the layer and each deploy re-downloaded ~28 MB of Ubuntu package indexes plus a
+full browser. Normally ~3 minutes; on 2026-09-11 `archive.ubuntu.com` was slow and
+a single deploy took **28 minutes**, with builds stacking on top of each other.
+
+**Version coupling.** The image tag tracks `Microsoft.Playwright` in
+`GeekAPI.csproj` — both are `1.51.0`. **Bump them together**; a mismatch means the
+driver and the bundled browser disagree. `Dockerfile.repository` carries the same
+tag, so all three move as one.
+
+**Consequences worth knowing.** Chromium now updates only on a Playwright version
+bump rather than drifting on every deploy — more reproducible, but a stale browser
+persists until you bump. And GeekAPI deploys no longer depend on Ubuntu's CDN
+being healthy.
+
 ---
 
 ## Geek-Crawler (external crawls)
