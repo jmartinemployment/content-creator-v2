@@ -26,6 +26,8 @@ export function createEmptyStudioDraft(now = new Date().toISOString()): StudioAg
     temperature: 0.2,
     contextKnowledgeIds: [],
     evaluationPrompt: "Output must be valid JSON matching the example shape.",
+    testCases: [],
+    minTestCases: 1,
     updatedAt: now,
     testStatus: "untested",
   };

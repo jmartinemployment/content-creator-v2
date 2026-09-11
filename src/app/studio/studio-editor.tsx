@@ -8,14 +8,18 @@ import {
   type GovernedCatalogItem,
 } from "@/app/brand-sources/context-contract";
 import {
+  deprecateStudioAgent,
   detailToEditorState,
   dryRunStudioAgent,
+  evaluateStudioAgent,
   getStudioAgent,
   publishStudioAgent,
+  revokeStudioAgent,
   saveStudioDraft,
+  type StudioAuditEvent,
 } from "@/app/studio/studio-api";
 import { buildInputSchema } from "@/app/studio/studio-model";
-import type { StudioFieldType, StudioFormField, StudioVisibility } from "@/app/studio/studio-types";
+import type { StudioFieldType, StudioFormField, StudioTestCase, StudioVisibility } from "@/app/studio/studio-types";
 
 type EditorState = {
   id: string;
@@ -31,6 +35,11 @@ type EditorState = {
   temperature: number;
   evaluationPrompt: string;
   contextKnowledgeIds: string[];
+  testCases: StudioTestCase[];
+  minTestCases: number;
+  publishedVersion: { versionId: string; version: string; digest: string; state?: string } | null;
+  lifecycleVersion: { versionId: string; version: string; digest: string; state: string } | null;
+  audit: StudioAuditEvent[];
 };
 
 function fieldIdFromLabel(label: string) {
@@ -46,7 +55,9 @@ export function StudioEditor({ draftId }: { draftId: string }) {
   const [newFieldType, setNewFieldType] = useState<StudioFieldType>("shortText");
   const [saving, setSaving] = useState(false);
   const [dryRunPassed, setDryRunPassed] = useState(false);
+  const [suitePassed, setSuitePassed] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [knowledgeItems, setKnowledgeItems] = useState<GovernedCatalogItem[]>([]);
 
   useEffect(() => {
@@ -96,6 +107,8 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       temperature: editor.temperature,
       contextKnowledgeIds: editor.contextKnowledgeIds,
       evaluationPrompt: editor.evaluationPrompt,
+      testCases: editor.testCases,
+      minTestCases: editor.minTestCases,
       updatedAt: "",
       testStatus: "untested",
     }), null, 2) : ""),
@@ -107,6 +120,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
     setError(null);
     setStatusMessage(null);
     setDryRunPassed(false);
+    setSuitePassed(false);
     try {
       const detail = await saveStudioDraft(next.id, {
         name: next.name,
@@ -119,6 +133,8 @@ export function StudioEditor({ draftId }: { draftId: string }) {
         temperature: next.temperature,
         evaluationPrompt: next.evaluationPrompt,
         contextKnowledgeIds: next.contextKnowledgeIds,
+        testCases: next.testCases,
+        minTestCases: next.minTestCases,
       });
       setEditor(detailToEditorState(detail));
       setStatusMessage(`Draft saved as ${detail.agent.version}.`);
@@ -137,12 +153,44 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       await persist(editor);
       const result = await dryRunStudioAgent(editor.id, sampleInputs);
       setDryRunPassed(result.valid);
+      setSuitePassed(false);
       setStatusMessage(result.message);
       if (!result.valid) setError(result.message);
     } catch (cause) {
       setDryRunPassed(false);
+      setSuitePassed(false);
       setError(cause instanceof Error ? cause.message : "Dry-run failed.");
     }
+  }
+
+  async function onEvaluateSuite() {
+    if (!editor) return;
+    setError(null);
+    setStatusMessage(null);
+    try {
+      await persist(editor);
+      const result = await evaluateStudioAgent(editor.id);
+      setSuitePassed(result.valid);
+      setDryRunPassed(result.valid);
+      setStatusMessage(result.message);
+      if (!result.valid) setError(result.message);
+    } catch (cause) {
+      setSuitePassed(false);
+      setDryRunPassed(false);
+      setError(cause instanceof Error ? cause.message : "Test suite failed.");
+    }
+  }
+
+  function addTestCaseFromSample() {
+    if (!editor) return;
+    const nextCase: StudioTestCase = {
+      id: `case-${crypto.randomUUID().slice(0, 8)}`,
+      name: `Case ${editor.testCases.length + 1}`,
+      input: { ...sampleInputs },
+    };
+    setEditor({ ...editor, testCases: [...editor.testCases, nextCase] });
+    setDryRunPassed(false);
+    setSuitePassed(false);
   }
 
   async function onPublish() {
@@ -153,6 +201,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       const detail = await publishStudioAgent(editor.id);
       setEditor(detailToEditorState(detail));
       setDryRunPassed(false);
+      setSuitePassed(false);
       setStatusMessage(
         detail.message
           ?? (detail.publishedVersion
@@ -163,6 +212,44 @@ export function StudioEditor({ draftId }: { draftId: string }) {
       setError(cause instanceof Error ? cause.message : "Publish failed.");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function onDeprecate() {
+    if (!editor) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      const detail = await deprecateStudioAgent(editor.id);
+      setEditor(detailToEditorState(detail));
+      setStatusMessage(
+        detail.lifecycleVersion
+          ? `Deprecated ${detail.lifecycleVersion.version}.`
+          : "Published version deprecated.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Deprecate failed.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function onRevoke() {
+    if (!editor) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      const detail = await revokeStudioAgent(editor.id);
+      setEditor(detailToEditorState(detail));
+      setStatusMessage(
+        detail.lifecycleVersion
+          ? `Revoked ${detail.lifecycleVersion.version}.`
+          : "Version revoked.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Revoke failed.");
+    } finally {
+      setLifecycleBusy(false);
     }
   }
 
@@ -383,6 +470,7 @@ export function StudioEditor({ draftId }: { draftId: string }) {
         <h2 className="text-lg font-bold">Dry-run test</h2>
         <p className="mt-2 text-sm text-[var(--cc-muted)]">
           Sample inputs are validated against the saved draft schema, instruction template, and evaluation prompt.
+          Save at least {editor.minTestCases} suite case(s), then run the suite before publish.
         </p>
         <div className="mt-4 space-y-3">
           {editor.fields.map((field) => (
@@ -407,18 +495,119 @@ export function StudioEditor({ draftId }: { draftId: string }) {
           </button>
           <button
             type="button"
-            disabled={!dryRunPassed || publishing || editor.state === "published"}
+            onClick={addTestCaseFromSample}
+            className="rounded-lg border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold"
+          >
+            Add sample as test case
+          </button>
+          <button
+            type="button"
+            onClick={() => void onEvaluateSuite()}
+            className="rounded-lg border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold"
+          >
+            Run test suite
+          </button>
+          <button
+            type="button"
+            disabled={!suitePassed || publishing || editor.state === "published"}
             onClick={() => void onPublish()}
             className="rounded-lg border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
             {editor.state === "published" ? "Published" : publishing ? "Publishing…" : "Publish"}
           </button>
         </div>
+        {editor.testCases.length ? (
+          <ul className="mt-4 space-y-2" aria-label="Studio test cases" data-testid="studio-test-cases">
+            {editor.testCases.map((item) => (
+              <li key={item.id} className="border-l-2 border-[var(--cc-line)] pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{item.name}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {Object.entries(item.input).map(([key, value]) => `${key}=${value}`).join(" · ") || "empty input"}
+                </span>
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-semibold text-red-700 underline"
+                  onClick={() => {
+                    setEditor({
+                      ...editor,
+                      testCases: editor.testCases.filter((entry) => entry.id !== item.id),
+                    });
+                    setDryRunPassed(false);
+                    setSuitePassed(false);
+                  }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-[var(--cc-muted)]" data-testid="studio-test-cases-empty">
+            No suite cases yet. Add the sample as a test case, then run the suite.
+          </p>
+        )}
         <p className="mt-3 text-sm" data-testid="studio-dry-run-status">
-          Status: <span className="font-semibold">{dryRunPassed ? "passed" : editor.state}</span>
+          Status:{" "}
+          <span className="font-semibold">
+            {suitePassed ? "passed" : dryRunPassed ? "dry-run passed" : editor.state}
+          </span>
           {statusMessage ? ` · ${statusMessage}` : ""}
         </p>
         {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
+      </section>
+
+      <section className="mt-5 rounded-xl border border-[var(--cc-line)] bg-white p-5">
+        <h2 className="text-lg font-bold">Lifecycle</h2>
+        <p className="mt-2 text-sm text-[var(--cc-muted)]">
+          Deprecate or revoke the latest published Studio version. Successor drafts stay editable.
+        </p>
+        <p className="mt-3 text-sm" data-testid="studio-lifecycle-status">
+          Published:{" "}
+          <span className="font-semibold">
+            {editor.publishedVersion
+              ? `${editor.publishedVersion.version} (${editor.publishedVersion.state ?? "published"})`
+              : editor.lifecycleVersion
+                ? `${editor.lifecycleVersion.version} (${editor.lifecycleVersion.state})`
+                : "none"}
+          </span>
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={lifecycleBusy || !editor.publishedVersion}
+            onClick={() => void onDeprecate()}
+            className="rounded-lg border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            Deprecate published
+          </button>
+          <button
+            type="button"
+            disabled={
+              lifecycleBusy
+              || !(editor.publishedVersion || editor.lifecycleVersion?.state === "deprecated")
+            }
+            onClick={() => void onRevoke()}
+            className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-800 disabled:opacity-50"
+          >
+            Revoke
+          </button>
+        </div>
+        {editor.audit.length ? (
+          <ol className="mt-5 space-y-2" aria-label="Studio audit history" data-testid="studio-audit-history">
+            {editor.audit.map((entry) => (
+              <li key={entry.id} className="rounded-lg bg-slate-50 p-3 text-xs text-[var(--cc-muted)]">
+                <strong className="text-[var(--cc-ink)]">{entry.action}</strong>
+                {" · "}
+                {entry.actor}
+                {" · "}
+                {entry.atUtc}
+                {entry.detail ? <p className="mt-1">{entry.detail}</p> : null}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-4 text-sm text-[var(--cc-muted)]">No lifecycle events yet.</p>
+        )}
       </section>
     </main>
   );

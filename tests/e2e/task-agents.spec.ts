@@ -764,6 +764,8 @@ test("AI Readiness technical signals populate the seventh dimension", async ({ p
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("readiness-overall-score")).not.toHaveText("—");
+  await expect(page.getByTestId("change-over-time")).toContainText("+6 overall");
+  await expect(page.getByTestId("change-over-time")).toContainText("was 78");
   await expect(
     page.locator('[data-result-renderer="scorecard"]').getByText("technicalCrawlabilityPerformance", { exact: true }),
   ).toBeVisible();
@@ -934,4 +936,29 @@ test("comparison brief partial subject keeps unknown coverage", async ({ page, r
     input?: { subjectPages?: Array<{ contentCompleteness?: string }> };
   };
   expect(payload.input?.subjectPages?.[0]?.contentCompleteness).toBe("partial");
+});
+
+test("task result provenance exposes snapshot digests", async ({ page }) => {
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Provenance" })).toBeVisible();
+  await expect(page.getByTestId("result-root-run-id")).toContainText("task-run");
+  await expect(page.getByTestId("result-input-digest")).toContainText("eeeeeeee");
+});
+
+test("stale evidence warns before treating results as fresh", async ({ page, request }) => {
+  await request.post(`${platformOrigin}/__scenario`, { data: { evidenceCondition: "stale" } });
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("stale-evidence-warning")).toContainText("stale");
+  await expect(page.getByTestId("stale-evidence-warning")).toContainText("Do not treat these findings as fresh");
+  await expect(page.getByTestId("readiness-warnings")).toContainText("stale relative to visible content");
 });

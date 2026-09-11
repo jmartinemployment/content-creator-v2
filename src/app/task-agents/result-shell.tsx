@@ -34,6 +34,23 @@ export type ResultNextAction = {
   relationship?: string;
 };
 
+export type ResultChangeOverTime = {
+  available: boolean;
+  priorRunId?: string | null;
+  priorCompletedAtUtc?: string | null;
+  subjectKey?: string | null;
+  currentOverall?: number | null;
+  priorOverall?: number | null;
+  overallDelta?: number | null;
+  dimensions?: Array<{
+    dimension: string;
+    current?: number | null;
+    prior?: number | null;
+    delta?: number | null;
+  }>;
+  message?: string;
+};
+
 export type ResultShellModel = {
   contractVersion: string;
   identity: { displayName: string; objective: string; capabilityId?: string };
@@ -45,6 +62,7 @@ export type ResultShellModel = {
   lineage?: ResultLineageNode[];
   nextActions?: ResultNextAction[];
   compatibleNextActions?: unknown;
+  changeOverTime?: ResultChangeOverTime | null;
   artifacts: Array<{
     id: string;
     artifactType: string;
@@ -156,6 +174,12 @@ export function TaskAgentResultShell({
   const fromArtifactId = artifactVersion?.id;
   const contextDigest = result.sharedContext?.contextManifestDigest;
   const runId = result.rerun.retryOfRunId || result.snapshot?.rootRunId || "";
+  const payloadWarnings = Array.isArray(payload?.warnings)
+    ? payload.warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const staleEvidenceWarning = payloadWarnings.find((warning) =>
+    /stale/i.test(warning) && /evidence/i.test(warning)
+  );
 
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -283,10 +307,40 @@ export function TaskAgentResultShell({
             Run again
           </button>
         </div>
+        {staleEvidenceWarning ? (
+          <p
+            role="status"
+            data-testid="stale-evidence-warning"
+            className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+          >
+            {staleEvidenceWarning} Do not treat these findings as fresh until evidence is refreshed.
+          </p>
+        ) : null}
       </header>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_14rem]">
         <div className="border-b border-[var(--cc-line)] px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
+          {result.changeOverTime?.available ? (
+            <div
+              className="mb-5 border-l-2 border-[var(--cc-accent)] pl-3"
+              data-testid="change-over-time"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cc-muted)]">
+                Since last run
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--cc-ink)]">
+                {typeof result.changeOverTime.overallDelta === "number"
+                  ? `${result.changeOverTime.overallDelta > 0 ? "+" : ""}${result.changeOverTime.overallDelta} overall`
+                  : "Compared"}
+                {typeof result.changeOverTime.priorOverall === "number"
+                  ? ` · was ${result.changeOverTime.priorOverall}`
+                  : ""}
+              </p>
+              {result.changeOverTime.message ? (
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">{result.changeOverTime.message}</p>
+              ) : null}
+            </div>
+          ) : null}
           <TaskAgentResultRenderer
             kind={rendererKind}
             artifactType={rendererArtifactType ?? artifact.artifactType}
@@ -343,6 +397,14 @@ export function TaskAgentResultShell({
                 </dd>
               </div>
             ) : null}
+            {result.snapshot?.rootRunId ? (
+              <div>
+                <dt className="font-semibold text-[var(--cc-ink)]">Root run</dt>
+                <dd className="mt-1 font-mono text-[0.7rem] text-[var(--cc-muted)]" data-testid="result-root-run-id">
+                  {shortId(result.snapshot.rootRunId)}
+                </dd>
+              </div>
+            ) : null}
             {result.snapshot?.retryOfRunId ? (
               <div>
                 <dt className="font-semibold text-[var(--cc-ink)]">Retry of</dt>
@@ -354,7 +416,7 @@ export function TaskAgentResultShell({
             {result.snapshot?.inputDigest ? (
               <div>
                 <dt className="font-semibold text-[var(--cc-ink)]">Input digest</dt>
-                <dd className="mt-1 font-mono text-[0.7rem] text-[var(--cc-muted)]">
+                <dd className="mt-1 font-mono text-[0.7rem] text-[var(--cc-muted)]" data-testid="result-input-digest">
                   {shortId(result.snapshot.inputDigest)}
                 </dd>
               </div>

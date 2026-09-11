@@ -47,6 +47,7 @@ let manifests;
 let taskRuns;
 let libraryPrefs;
 let gscConnections;
+let customerOutcomes;
 
 function reset() {
   scenario = { ragAvailable: true };
@@ -61,6 +62,7 @@ function reset() {
   contextUploads = new Map();
   taskRuns = new Map();
   gscConnections = new Map();
+  customerOutcomes = new Map();
   libraryPrefs = {
     favorites: [],
     savedConfigs: [],
@@ -327,7 +329,30 @@ async function readBody(req) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+function pushStudioAudit(draft, action, detail, versionMeta = null) {
+  if (!Array.isArray(draft.audit)) draft.audit = [];
+  const version = versionMeta?.version || draft.summary.version;
+  const versionId = versionMeta?.versionId || draft.summary.versionId;
+  draft.audit.unshift({
+    id: `${versionId}:${action}:${crypto.randomUUID().slice(0, 8)}`,
+    action,
+    actor: "owner",
+    atUtc: new Date().toISOString(),
+    detail,
+    versionId,
+    version,
+  });
+}
+
 function studioDetail(draft) {
+  const minTestCases = Number.isFinite(draft.minTestCases) ? Math.max(1, Math.min(20, draft.minTestCases)) : 1;
+  const publishedVersion = draft.publishedVersion && draft.publishedVersion.state === "published"
+    ? draft.publishedVersion
+    : null;
+  const lifecycleVersion = draft.publishedVersion
+    && (draft.publishedVersion.state === "published" || draft.publishedVersion.state === "deprecated")
+    ? draft.publishedVersion
+    : null;
   return {
     contractVersion: "gcc-studio-agent.v1",
     agent: draft.summary,
@@ -340,10 +365,90 @@ function studioDetail(draft) {
       temperature: draft.temperature,
       evaluationPrompt: draft.evaluationPrompt || "",
       contextKnowledgeIds: Array.isArray(draft.contextKnowledgeIds) ? draft.contextKnowledgeIds : [],
+      testCases: Array.isArray(draft.testCases) ? draft.testCases : [],
+      minTestCases,
       uiSchema: { fields: draft.fields },
     },
     allowedModels: [draft.allowedModel],
+    evaluationThresholds: {
+      requiresExampleOutput: true,
+      dryRunRequired: true,
+      minTestCases,
+    },
+    publishedVersion,
+    lifecycleVersion,
+    audit: Array.isArray(draft.audit) ? draft.audit : [],
   };
+}
+
+function normalizeStudioTestCases(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") return [];
+    const id = typeof entry.id === "string" && entry.id.trim() ? entry.id : `case-${index + 1}`;
+    const name = typeof entry.name === "string" && entry.name.trim() ? entry.name : `Case ${index + 1}`;
+    const input = {};
+    if (entry.input && typeof entry.input === "object" && !Array.isArray(entry.input)) {
+      for (const [key, raw] of Object.entries(entry.input)) {
+        if (typeof raw === "string") input[key] = raw;
+        else if (raw != null) input[key] = String(raw);
+      }
+    }
+    return [{ id, name, input }];
+  }).slice(0, 20);
+}
+
+function evaluateStudioCase(draft, testCase) {
+  const input = testCase.input || {};
+  const missing = (draft.fields || [])
+    .filter((field) => field.required && !String(input[field.id] || "").trim())
+    .map((field) => field.label);
+  let rendered = String(draft.instructionsTemplate || "")
+    .replaceAll("{{outcome}}", draft.summary.description)
+    .replaceAll("{{agent.name}}", draft.summary.displayName);
+  for (const field of draft.fields || []) {
+    rendered = rendered.replaceAll(`{{inputs.${field.id}}}`, input[field.id] || "");
+  }
+  const unresolved = [...rendered.matchAll(/\{\{[^}]+\}\}/g)].map((item) => item[0]);
+  const missingEvaluation = !String(draft.evaluationPrompt || "").trim();
+  const missingExample = !String(draft.exampleOutput || "").trim();
+  const valid = missing.length === 0
+    && unresolved.length === 0
+    && !missingExample
+    && !missingEvaluation;
+  const message = valid
+    ? `Case '${testCase.name}' passed.`
+    : missing.length
+      ? `Case '${testCase.name}' failed schema: Missing required fields: ${missing.join(", ")}.`
+      : unresolved.length
+        ? `Case '${testCase.name}' has unresolved tokens: ${unresolved.join(", ")}.`
+        : missingExample
+          ? `Case '${testCase.name}' blocked: example output is required.`
+          : `Case '${testCase.name}' blocked: evaluation prompt is required.`;
+  return {
+    id: testCase.id,
+    name: testCase.name,
+    valid,
+    validationErrors: missing.map((label) => `$.${label} is required.`),
+    missingTokens: unresolved,
+    message,
+  };
+}
+
+function evaluateStudioSuite(draft) {
+  const minTestCases = Number.isFinite(draft.minTestCases) ? Math.max(1, Math.min(20, draft.minTestCases)) : 1;
+  const cases = normalizeStudioTestCases(draft.testCases).map((item) => evaluateStudioCase(draft, item));
+  const passedCount = cases.filter((item) => item.valid).length;
+  const enough = cases.length >= minTestCases;
+  const valid = enough && cases.length > 0 && passedCount === cases.length;
+  const message = valid
+    ? `Test suite passed (${passedCount}/${cases.length} cases; min ${minTestCases}).`
+    : !enough
+      ? `Test suite needs at least ${minTestCases} case(s); found ${cases.length}.`
+      : cases.length === 0
+        ? `Add at least ${minTestCases} test case(s) before publish.`
+        : `Test suite failed (${passedCount}/${cases.length} passed).`;
+  return { valid, minTestCases, caseCount: cases.length, passedCount, cases, message };
 }
 
 function seedCanvasProject() {
@@ -2043,7 +2148,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     return send(res, 200, {
-      contractVersion: "gcc-roi-observed.v2",
+      contractVersion: "gcc-roi-observed.v4",
       observed: {
         generatedCount: 48,
         acceptedCount: 31,
@@ -2054,14 +2159,85 @@ const server = http.createServer(async (req, res) => {
         lookbackDays,
         periodLabel: `Last ${lookbackDays} days (TaskRuns + Canvas publishes)`,
         source: "telemetry",
+        groundednessRate: 0.72,
+        groundedHits: 36,
+        groundedTotal: 50,
+        schemaValidityRate: 0.9,
+        schemaValidHits: 18,
+        schemaValidTotal: 20,
+        qualityRunsSampled: 12,
+        meanEditDistance: 0.18,
+        editDistanceSamples: 8,
         notes: [
           "Counts are owner-scoped workflow outcomes, not cash ROI.",
           "generated/accepted/rejected come from TaskRuns in the lookback window.",
           "publishedCount counts Canvas asset versions whose latest status is published in the window.",
           "reviewMinutes approximates wall-clock TaskRun duration for terminal runs.",
+          "groundednessRate uses sections.grounded and claim/FAQ verificationStatus=supported.",
+          "schemaValidityRate uses artifact validationState plus schemaMarkup validation[].valid.",
+          "meanEditDistance compares first vs latest Canvas asset Summary text when both exist.",
+          "Rates are workflow quality outcomes from TaskRun artifacts — not cash ROI.",
+          "meanEditDistance is normalized rewrite effort (0 identical → 1 fully rewritten), not cash ROI.",
         ],
       },
     });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/roi/outcomes" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-roi-outcomes.v1",
+      outcomes: [...customerOutcomes.values()].sort((a, b) => String(b.periodEnd).localeCompare(String(a.periodEnd))),
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/roi/outcomes" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const allowed = new Set([
+      "customer-reported",
+      "telemetry-measured",
+      "modeled",
+      "experimental",
+      "independently-audited",
+    ]);
+    if (!body.title || !body.metricDefinition || !body.source || !body.periodStart || !body.periodEnd) {
+      return send(res, 400, { error: "title, metricDefinition, source, periodStart, and periodEnd are required." });
+    }
+    const evidenceStatus = String(body.evidenceStatus || "customer-reported").toLowerCase();
+    if (!allowed.has(evidenceStatus)) {
+      return send(res, 400, { error: "Invalid evidenceStatus." });
+    }
+    const now = new Date().toISOString();
+    const outcome = {
+      id: `outcome-${crypto.randomUUID()}`,
+      title: String(body.title).trim(),
+      metricDefinition: String(body.metricDefinition).trim(),
+      periodStart: String(body.periodStart),
+      periodEnd: String(body.periodEnd),
+      baseline: body.baseline ? String(body.baseline) : null,
+      denominator: body.denominator ? String(body.denominator) : null,
+      observedValue: body.observedValue ? String(body.observedValue) : null,
+      source: String(body.source).trim(),
+      evidenceStatus,
+      attributionMethod: body.attributionMethod ? String(body.attributionMethod) : null,
+      attributionConfidence: Number.isFinite(Number(body.attributionConfidence))
+        ? Number(body.attributionConfidence)
+        : null,
+      workflowVersionsJson: body.workflowVersionsJson ? String(body.workflowVersionsJson) : "[]",
+      generatedCount: body.generatedCount == null ? null : Number(body.generatedCount),
+      acceptedCount: body.acceptedCount == null ? null : Number(body.acceptedCount),
+      publishedCount: body.publishedCount == null ? null : Number(body.publishedCount),
+      rejectedCount: body.rejectedCount == null ? null : Number(body.rejectedCount),
+      reviewMinutes: body.reviewMinutes == null ? null : Number(body.reviewMinutes),
+      notes: body.notes ? String(body.notes) : null,
+      createdAtUtc: now,
+      updatedAtUtc: now,
+    };
+    customerOutcomes.set(outcome.id, outcome);
+    return send(res, 200, { contractVersion: "gcc-roi-outcomes.v1", outcome });
+  }
+  const outcomeDelete = url.pathname.match(/^\/api\/geek-content-creator-v2\/roi\/outcomes\/([^/]+)$/);
+  if (outcomeDelete && req.method === "DELETE") {
+    if (!customerOutcomes.has(outcomeDelete[1])) return send(res, 404, { error: "Not found" });
+    customerOutcomes.delete(outcomeDelete[1]);
+    return send(res, 204, "");
   }
   if (url.pathname === "/api/geek-content-creator-v2/grids" && req.method === "GET") {
     return send(res, 200, {
@@ -2679,12 +2855,17 @@ const server = http.createServer(async (req, res) => {
       temperature: 0.2,
       evaluationPrompt: "Output must be valid JSON matching the example shape.",
       contextKnowledgeIds: [],
+      testCases: [],
+      minTestCases: 1,
+      publishedVersion: null,
+      audit: [],
     };
+    pushStudioAudit(draft, "created", `Draft ${draft.summary.version} created.`);
     studioAgents.set(id, draft);
     return send(res, 201, studioDetail(draft));
   }
   {
-    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/studio\/agents\/([^/]+)(?:\/(draft|dry-run|publish))?$/);
+    const match = url.pathname.match(/^\/api\/geek-content-creator-v2\/studio\/agents\/([^/]+)(?:\/(draft|dry-run|evaluate|publish|deprecate|revoke))?$/);
     if (match) {
       const id = decodeURIComponent(match[1]);
       const action = match[2] || null;
@@ -2705,6 +2886,10 @@ const server = http.createServer(async (req, res) => {
         draft.contextKnowledgeIds = Array.isArray(body.contextKnowledgeIds)
           ? body.contextKnowledgeIds.filter((id) => typeof id === "string" && id.trim()).slice(0, 10)
           : [];
+        draft.testCases = normalizeStudioTestCases(body.testCases);
+        draft.minTestCases = Number.isFinite(body.minTestCases)
+          ? Math.max(1, Math.min(20, Number(body.minTestCases)))
+          : 1;
         const versionParts = draft.summary.version.split(".").map(Number);
         versionParts[1] += 1;
         draft.summary.version = versionParts.join(".");
@@ -2752,12 +2937,42 @@ const server = http.createServer(async (req, res) => {
                   : "Example output is required before the dry-run can pass.",
         });
       }
+      if (action === "evaluate" && req.method === "POST") {
+        const suite = evaluateStudioSuite(draft);
+        return send(res, 200, {
+          contractVersion: "gcc-studio-evaluate.v1",
+          ...suite,
+        });
+      }
       if (action === "publish" && req.method === "POST") {
+        const suite = evaluateStudioSuite(draft);
+        if (!suite.valid) {
+          return send(res, 409, {
+            error: suite.message,
+            minTestCases: suite.minTestCases,
+            caseCount: suite.caseCount,
+            passedCount: suite.passedCount,
+            cases: suite.cases.map((item) => ({
+              id: item.id,
+              name: item.name,
+              valid: item.valid,
+              message: item.message,
+            })),
+          });
+        }
         const publishedVersion = {
           versionId: draft.summary.versionId,
           version: draft.summary.version,
           digest: crypto.createHash("sha256").update(`${id}:published:${draft.summary.version}`).digest("hex"),
+          state: "published",
         };
+        pushStudioAudit(
+          draft,
+          "published",
+          `Published ${publishedVersion.version}.`,
+          publishedVersion,
+        );
+        draft.publishedVersion = publishedVersion;
         const versionParts = String(publishedVersion.version).split(".").map(Number);
         while (versionParts.length < 3) versionParts.push(0);
         versionParts[1] = (versionParts[1] || 0) + 1;
@@ -2766,11 +2981,33 @@ const server = http.createServer(async (req, res) => {
         draft.summary.versionId = crypto.randomUUID();
         draft.summary.state = "draft";
         draft.summary.digest = crypto.createHash("sha256").update(`${id}:${draft.summary.version}`).digest("hex");
+        pushStudioAudit(draft, "created", `Draft ${draft.summary.version} created.`);
         return send(res, 200, {
           ...studioDetail(draft),
-          publishedVersion,
           message: `Published ${publishedVersion.version}. Successor draft ${draft.summary.version} is ready.`,
         });
+      }
+      if (action === "deprecate" && req.method === "POST") {
+        if (!draft.publishedVersion || draft.publishedVersion.state !== "published") {
+          return send(res, 409, { error: "No Studio version is eligible for deprecate." });
+        }
+        draft.publishedVersion = { ...draft.publishedVersion, state: "deprecated" };
+        pushStudioAudit(
+          draft,
+          "deprecated",
+          `Deprecated ${draft.publishedVersion.version}.`,
+          draft.publishedVersion,
+        );
+        return send(res, 200, studioDetail(draft));
+      }
+      if (action === "revoke" && req.method === "POST") {
+        if (!draft.publishedVersion || !["published", "deprecated"].includes(draft.publishedVersion.state)) {
+          return send(res, 409, { error: "No Studio version is eligible for revoke." });
+        }
+        const revoked = { ...draft.publishedVersion, state: "revoked" };
+        pushStudioAudit(draft, "revoked", `Revoked ${revoked.version}.`, revoked);
+        draft.publishedVersion = revoked;
+        return send(res, 200, studioDetail(draft));
       }
     }
   }
@@ -4048,10 +4285,20 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   ],
                   prioritizedFixes: [],
                   warnings: [
+                    ...(scenario.evidenceCondition === "stale"
+                      ? ["Supplied evidence is stale relative to visible content."]
+                      : []),
                     "Scores and classifications are deterministic heuristics, not measured search-engine or AI-citation outcomes.",
                   ],
                 }),
-              evidenceJson: "[]",
+              evidenceJson: scenario.evidenceCondition === "stale"
+                ? JSON.stringify([{
+                  evidenceId: "ev-stale",
+                  sourceId: "page-1",
+                  quote: "Outdated crawl excerpt",
+                  freshness: "stale",
+                }])
+                : "[]",
               citationsJson: "[]",
               digest: "b".repeat(64),
               validationState: "valid",
@@ -4067,6 +4314,28 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
             { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
           ],
           rerun: { capabilityId: "ai-readiness", versionId: "task-agent-version-1", retryOfRunId: "task-run-1" },
+          changeOverTime: isPartial
+            ? { available: false, message: "No prior succeeded run for this subject." }
+            : {
+              available: true,
+              priorRunId: "task-run-prior-readiness",
+              priorCompletedAtUtc: "2026-09-10T12:00:00Z",
+              subjectKey: "body:demo",
+              currentOverall: hasTechnical ? 84 : 82,
+              priorOverall: 78,
+              overallDelta: hasTechnical ? 6 : 4,
+              dimensions: [
+                {
+                  dimension: "technicalCrawlabilityPerformance",
+                  current: hasTechnical ? 100 : null,
+                  prior: 70,
+                  delta: hasTechnical ? 30 : null,
+                },
+              ],
+              message: hasTechnical
+                ? "Overall score up +6 since last run."
+                : "Overall score up +4 since last run.",
+            },
         }));
       }
       if (runId === "task-run-10") {

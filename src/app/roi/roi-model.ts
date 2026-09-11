@@ -49,7 +49,76 @@ export type ObservedTelemetry = Readonly<{
   cancelledCount?: number;
   /** Lookback window used by the observed feed (days). */
   lookbackDays?: number;
+  groundednessRate?: number | null;
+  groundedHits?: number;
+  groundedTotal?: number;
+  schemaValidityRate?: number | null;
+  schemaValidHits?: number;
+  schemaValidTotal?: number;
+  qualityRunsSampled?: number;
+  meanEditDistance?: number | null;
+  editDistanceSamples?: number;
 }>;
+
+export type CustomerOutcomeEvidenceStatus =
+  | "customer-reported"
+  | "telemetry-measured"
+  | "modeled"
+  | "experimental"
+  | "independently-audited";
+
+export type CustomerOutcomeRecord = Readonly<{
+  id: string;
+  title: string;
+  metricDefinition: string;
+  periodStart: string;
+  periodEnd: string;
+  baseline: string | null;
+  denominator: string | null;
+  observedValue: string | null;
+  source: string;
+  evidenceStatus: CustomerOutcomeEvidenceStatus;
+  attributionMethod: string | null;
+  attributionConfidence: number | null;
+  workflowVersionsJson: string;
+  generatedCount: number | null;
+  acceptedCount: number | null;
+  publishedCount: number | null;
+  rejectedCount: number | null;
+  reviewMinutes: number | null;
+  notes: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}>;
+
+export type CreateCustomerOutcomeInput = Readonly<{
+  title: string;
+  metricDefinition: string;
+  periodStart: string;
+  periodEnd: string;
+  baseline?: string;
+  denominator?: string;
+  observedValue?: string;
+  source: string;
+  evidenceStatus?: CustomerOutcomeEvidenceStatus;
+  attributionMethod?: string;
+  attributionConfidence?: number | null;
+  workflowVersionsJson?: string;
+  generatedCount?: number | null;
+  acceptedCount?: number | null;
+  publishedCount?: number | null;
+  rejectedCount?: number | null;
+  reviewMinutes?: number | null;
+  notes?: string;
+}>;
+
+export const customerOutcomeEvidenceStatuses: readonly CustomerOutcomeEvidenceStatus[] = [
+  "customer-reported",
+  "telemetry-measured",
+  "modeled",
+  "experimental",
+  "independently-audited",
+];
 
 export type RoiReconciliation = Readonly<{
   assumedSuccessRate: number;
@@ -94,6 +163,15 @@ export const demoObservedTelemetry: ObservedTelemetry = {
   periodLabel: "Last 90 days (demo)",
   source: "demo",
   lookbackDays: 90,
+  groundednessRate: 0.72,
+  groundedHits: 36,
+  groundedTotal: 50,
+  schemaValidityRate: 0.9,
+  schemaValidHits: 18,
+  schemaValidTotal: 20,
+  qualityRunsSampled: 12,
+  meanEditDistance: 0.18,
+  editDistanceSamples: 8,
 };
 
 export function clampRate(value: number) {

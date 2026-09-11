@@ -11,6 +11,12 @@ export type StudioFormField = {
 
 export type StudioVisibility = "private" | "admin_shared";
 
+export type StudioTestCase = {
+  id: string;
+  name: string;
+  input: Record<string, string>;
+};
+
 export type StudioAgentDraft = {
   id: string;
   name: string;
@@ -23,6 +29,8 @@ export type StudioAgentDraft = {
   temperature: number;
   contextKnowledgeIds: string[];
   evaluationPrompt: string;
+  testCases: StudioTestCase[];
+  minTestCases: number;
   updatedAt: string;
   testStatus: "untested" | "passed" | "failed";
   lastTestMessage?: string;

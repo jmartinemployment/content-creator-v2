@@ -68,8 +68,11 @@ test("workspace smoke: dashboard hub → Canvas publish → Grid due schedules �
   await page.getByRole("button", { name: "Save draft" }).click();
   await page.getByLabel("Audience").fill("Operators");
   await page.getByRole("button", { name: "Run dry-run" }).click();
-  await expect(page.getByTestId("studio-dry-run-status")).toContainText("passed");
-  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByTestId("studio-dry-run-status")).toContainText("dry-run passed");
+  await page.getByRole("button", { name: "Add sample as test case" }).click();
+  await page.getByRole("button", { name: "Run test suite" }).click();
+  await expect(page.getByTestId("studio-dry-run-status")).toContainText("Test suite passed");
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByTestId("studio-dry-run-status")).toContainText("Successor draft");
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "ROI" }).click();
