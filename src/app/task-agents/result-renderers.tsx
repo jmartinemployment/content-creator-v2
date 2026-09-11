@@ -1234,7 +1234,64 @@ function CompetitorReportView({ payload }: { payload: ArtifactPayload }) {
   );
 }
 
+function CustomAgentView({ payload }: { payload: ArtifactPayload }) {
+  const generated = typeof payload.generatedOutput === "string" ? payload.generatedOutput : "";
+  const rendered = typeof payload.renderedInstructions === "string" ? payload.renderedInstructions : "";
+  const example = typeof payload.exampleOutput === "string" ? payload.exampleOutput : "";
+  const modelUsed = typeof payload.modelUsed === "string" ? payload.modelUsed : "";
+  const methodology = typeof payload.methodology === "string" ? payload.methodology : "";
+  const warnings = stringWarnings(payload);
+
+  return (
+    <div className="mt-4 space-y-6" data-testid="custom-agent-output">
+      {methodology || modelUsed ? (
+        <p className="text-sm text-[var(--cc-muted)]">
+          {[methodology, modelUsed ? `model ${modelUsed}` : ""].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
+      {warnings.length ? (
+        <ul className="space-y-1 text-sm text-amber-900" aria-label="Custom agent warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+      {generated ? (
+        <pre
+          className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-4 text-sm leading-relaxed text-[var(--cc-ink)]"
+          data-testid="custom-agent-generated"
+        >
+          {generated}
+        </pre>
+      ) : (
+        <p className="text-sm text-[var(--cc-muted)]">No generated output was produced.</p>
+      )}
+      {rendered ? (
+        <aside className="border-l-2 border-[var(--cc-line)] pl-3" data-testid="custom-agent-instructions">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cc-muted)]">
+            Rendered instructions
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--cc-muted)]">{rendered}</pre>
+        </aside>
+      ) : null}
+      {example ? (
+        <aside className="border-l-2 border-[var(--cc-line)] pl-3" data-testid="custom-agent-example">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cc-muted)]">
+            Example output
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--cc-muted)]">{example}</pre>
+        </aside>
+      ) : null}
+    </div>
+  );
+}
+
 function resolveKind(kind: string | undefined, payload: ArtifactPayload): string {
+  if (
+    kind === "custom-agent"
+    || payload.artifactType === "customAgentOutput.v1"
+    || typeof payload.generatedOutput === "string"
+  ) {
+    return "custom-agent";
+  }
   if (kind) return kind;
   if (Array.isArray(payload.jsonLd)) return "json-ld";
   if (Array.isArray(payload.entities)) return "entity-graph";
@@ -1376,6 +1433,7 @@ export function TaskAgentResultRenderer({
       {resolved === "outline" ? <OutlineView payload={payload} /> : null}
       {resolved === "pillar-article" ? <PillarArticleView payload={payload} /> : null}
       {resolved === "roi-projection" ? <RoiProjectionView payload={payload} /> : null}
+      {resolved === "custom-agent" ? <CustomAgentView payload={payload} /> : null}
       {resolved === "json" ? (
         <p className="mt-4 text-sm text-[var(--cc-muted)]">
           No purpose renderer is registered for this artifact yet.
