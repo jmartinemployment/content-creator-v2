@@ -2654,6 +2654,39 @@ const server = http.createServer(async (req, res) => {
     }
   }
   {
+    const exportMatch = url.pathname.match(
+      /^\/api\/geek-content-creator-v2\/grids\/([^/]+)\/export\.csv$/,
+    );
+    if (exportMatch && req.method === "GET") {
+      const gridId = decodeURIComponent(exportMatch[1]);
+      const grid = grids.get(gridId);
+      if (!grid) return send(res, 404, { error: "Grid not found." });
+      const escape = (value) => {
+        const text = String(value ?? "");
+        return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      };
+      const lines = ["topic,status,rowIndex,result,error,updatedAt"];
+      for (const row of [...grid.rows].sort((a, b) => a.rowIndex - b.rowIndex)) {
+        const topic = typeof row.input?.topic === "string" ? row.input.topic : "";
+        const result = typeof row.output?.result === "string" ? row.output.result : "";
+        lines.push([
+          escape(topic),
+          escape(row.status),
+          String(row.rowIndex),
+          escape(result),
+          escape(row.error || ""),
+          escape(row.updatedAt || ""),
+        ].join(","));
+      }
+      const csv = `${lines.join("\n")}\n`;
+      res.writeHead(200, cors({
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="${(grid.name || "grid").replace(/[^\w.-]+/g, "-")}.csv"`,
+      }));
+      return res.end(csv);
+    }
+  }
+  {
     const match = url.pathname.match(
       /^\/api\/geek-content-creator-v2\/grids\/([^/]+)(?:\/(rows|runs|pipeline-runs|pipeline|roi-projection|schedule(?:\/run-due)?))?$/,
     );

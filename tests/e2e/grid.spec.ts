@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 import {
   advanceScheduleNextRunAt,
+  buildGridCsv,
   estimateBudget,
   normalizeGridSchedule,
+  parseGridCsvTopics,
   scheduleIsDue,
   selectRowsForRun,
 } from "../../src/app/grid/grid-model";
-import type { GridConfig, GridRow } from "../../src/app/grid/grid-types";
+import type { Grid, GridConfig, GridRow } from "../../src/app/grid/grid-types";
 import { openAuthenticated, resetPlatform } from "./helpers";
 
 const config: GridConfig = {
@@ -30,6 +32,39 @@ function rows(count: number): GridRow[] {
     updatedAt: "2026-09-09T12:00:00.000Z",
   }));
 }
+
+test("grid CSV export round-trips topics including commas", () => {
+  const grid = {
+    rows: [
+      {
+        id: "a",
+        rowIndex: 0,
+        input: { topic: "Topic Alpha" },
+        output: null,
+        status: "pending" as const,
+        error: "",
+        updatedAt: "2026-09-09T12:00:00.000Z",
+      },
+      {
+        id: "b",
+        rowIndex: 1,
+        input: { topic: "Topic, Gamma" },
+        output: { result: "FAQ draft for: Topic, Gamma" },
+        status: "succeeded" as const,
+        error: "",
+        updatedAt: "2026-09-09T12:01:00.000Z",
+      },
+    ],
+    config,
+  } satisfies Pick<Grid, "rows" | "config">;
+
+  const csv = buildGridCsv(grid);
+  expect(csv.split("\n")[0]).toBe("topic,status,rowIndex,result,error,updatedAt");
+  expect(csv).toContain("Topic Alpha,pending,0,");
+  expect(csv).toContain('"Topic, Gamma",succeeded,1,');
+  expect(parseGridCsvTopics(csv)).toEqual(["Topic Alpha", "Topic, Gamma"]);
+});
+
 
 test.beforeEach(async ({ request }) => {
   await resetPlatform(request);
@@ -145,6 +180,34 @@ test("grid detail can paste CSV topics and run the imported rows", async ({ page
 
   await page.getByRole("button", { name: "Run sample (10)" }).click();
   await expect(page.getByText("FAQ draft for: What is Evidence Engine?")).toBeVisible();
+});
+
+test("grid detail export CSV recovers imported topics", async ({ page }) => {
+  await openAuthenticated(page, "/grid");
+  await page.getByRole("button", { name: "New FAQ demo" }).click();
+  await page.getByRole("link", { name: "FAQ launch batch" }).click();
+  await expect(page.getByText("12 rows")).toBeVisible();
+
+  await page.getByLabel("Paste grid topics").fill(
+    "Export Alpha\nExport Beta,extra\n\"Export, Gamma\"\n",
+  );
+  await page.getByRole("button", { name: "Import topics" }).click();
+  await expect(page.getByText("Imported 3 topics into the grid.")).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export CSV" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.csv$/i);
+  const stream = await download.createReadStream();
+  expect(stream).toBeTruthy();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const csv = Buffer.concat(chunks).toString("utf8");
+  expect(csv.split("\n")[0]).toContain("topic,status,rowIndex");
+  expect(csv).toContain("Export Alpha");
+  expect(csv).toContain("Export Beta");
+  expect(csv).toContain('"Export, Gamma"');
+  await expect(page.getByText(/Exported \d+ rows to CSV/)).toBeVisible();
 });
 
 test("succeeded grid rows can attach into a Canvas project", async ({ page }) => {

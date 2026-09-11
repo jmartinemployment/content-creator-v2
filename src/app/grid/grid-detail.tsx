@@ -13,6 +13,7 @@ import {
   startGridPipelineRun,
 } from "@/app/grid/grid-api";
 import {
+  buildGridCsv,
   estimateBudget,
   inputPreview,
   outputPreview,
@@ -185,6 +186,21 @@ export function GridDetail({ gridId }: { gridId: string }) {
     } finally {
       setImportingRows(false);
     }
+  }
+
+  function exportCsv() {
+    if (!grid || grid.rows.length === 0) return;
+    setError(null);
+    const csv = buildGridCsv(grid, inputColumn?.key ?? "topic");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const safeName = (grid.name || "grid").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "grid";
+    anchor.href = url;
+    anchor.download = `${safeName}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setAttachNotice(`Exported ${grid.rows.length} row${grid.rows.length === 1 ? "" : "s"} to CSV.`);
   }
 
   async function attachSucceeded() {
@@ -361,6 +377,14 @@ export function GridDetail({ gridId }: { gridId: string }) {
                 {grid.rows.length} rows · {succeededCount(grid)} succeeded
               </p>
             </div>
+            <button
+              type="button"
+              disabled={grid.rows.length === 0}
+              onClick={exportCsv}
+              className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Export CSV
+            </button>
           </div>
           <div className="flex flex-wrap items-end gap-3 border-b border-[var(--cc-line)] px-5 py-4">
             <label className="min-w-[16rem] flex-1">

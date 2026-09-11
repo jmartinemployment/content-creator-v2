@@ -106,3 +106,74 @@ export function outputPreview(row: GridRow): string {
 export function succeededCount(grid: Grid) {
   return grid.rows.filter((row) => row.status === "succeeded").length;
 }
+
+export function escapeCsvField(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replaceAll('"', '""')}"`;
+  }
+  return value;
+}
+
+/** Build a CSV that re-imports via first-column topic parsing. */
+export function buildGridCsv(
+  grid: Pick<Grid, "rows" | "config">,
+  inputKey = "topic",
+): string {
+  const header = ["topic", "status", "rowIndex", "result", "error", "updatedAt"];
+  const lines = [header.join(",")];
+  const ordered = [...grid.rows].sort((a, b) => a.rowIndex - b.rowIndex);
+  for (const row of ordered) {
+    const topic = inputPreview(row, inputKey);
+    const result = outputPreview(row);
+    lines.push([
+      escapeCsvField(topic === "(empty input)" ? "" : topic),
+      escapeCsvField(row.status),
+      String(row.rowIndex),
+      escapeCsvField(result === "—" ? "" : result),
+      escapeCsvField(row.error || ""),
+      escapeCsvField(row.updatedAt || ""),
+    ].join(","));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/** Recover topics from an exported Grid CSV (first column, skipping header). */
+export function parseGridCsvTopics(csv: string): string[] {
+  const normalized = csv.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!normalized) return [];
+  const lines = normalized.split("\n");
+  const start = lines[0]?.toLowerCase().startsWith("topic") ? 1 : 0;
+  const topics: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines.slice(start)) {
+    if (!line.trim()) continue;
+    const topic = firstCsvField(line).trim();
+    if (!topic) continue;
+    const key = topic.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    topics.push(topic);
+  }
+  return topics;
+}
+
+function firstCsvField(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith('"')) {
+    let end = 1;
+    while (end < trimmed.length) {
+      if (trimmed[end] === '"' && trimmed[end + 1] === '"') {
+        end += 2;
+        continue;
+      }
+      if (trimmed[end] === '"') {
+        return trimmed.slice(1, end).replaceAll('""', '"');
+      }
+      end += 1;
+    }
+    return trimmed.slice(1).replaceAll('""', '"');
+  }
+  const comma = trimmed.indexOf(",");
+  return comma < 0 ? trimmed : trimmed.slice(0, comma).trim();
+}
