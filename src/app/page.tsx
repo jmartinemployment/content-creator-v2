@@ -2,6 +2,7 @@ import { ACCESS_COOKIE } from "@/app/auth/cookies";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { fetchGccV2 } from "@/app/auth/server-bff";
+import { WorkspaceOpsCard } from "@/app/components/workspace-ops-card";
 
 type ContentSummary = {
   id: string;
@@ -38,6 +39,8 @@ export default async function HomePage() {
             Start new content
           </Link>
         </section>
+
+        <WorkspaceOpsCard />
 
         <section>
           <div className="flex items-center justify-between">
