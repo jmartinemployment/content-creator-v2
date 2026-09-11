@@ -1116,6 +1116,40 @@ const server = http.createServer(async (req, res) => {
     });
     return send(res, 201, { id: stableId, versionId });
   }
+  const brandKitVersionCreate = url.pathname.match(/^\/api\/geek-content-creator-v2\/brand-kits\/([^/]+)\/versions$/);
+  if (brandKitVersionCreate && req.method === "POST") {
+    const profileId = brandKitVersionCreate[1];
+    const target = contextCatalogs["brand-kits"].find((entry) => entry.id === profileId);
+    if (!target) return send(res, 404, { error: "Brand Kit profile was not found." });
+    const body = JSON.parse(rawBody || "{}");
+    const voicePolicy = body.voicePolicy;
+    if (!voicePolicy || typeof voicePolicy !== "object" || Array.isArray(voicePolicy)) {
+      return send(res, 400, { error: "voicePolicy object is required." });
+    }
+    const versionNumber = target.versions.length + 1;
+    const versionId = `${profileId}-version-${versionNumber}`;
+    const previousData = target.versions[0]?.data || {};
+    target.versions.unshift({
+      id: versionId,
+      versionNumber,
+      lifecycle: "approved",
+      digest: `sha256:${"b".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      freshness: "current",
+      data: { ...previousData, voicePolicy },
+      findings: [],
+      audit: [],
+    });
+    target.currentVersionId = versionId;
+    return send(res, 200, {
+      id: versionId,
+      profileId,
+      versionNumber,
+      lifecycle: "approved",
+      digest: `sha256:${"b".repeat(64)}`,
+      data: { ...previousData, voicePolicy },
+    });
+  }
   const catalogVersionCreate = url.pathname.match(/^\/api\/geek-content-creator-v2\/(style-guides|visual-guidelines|audiences|product-schemas|products)\/([^/]+)\/versions$/);
   if (catalogVersionCreate && req.method === "POST") {
     const [, collection, catalogId] = catalogVersionCreate;

@@ -72,6 +72,32 @@ test("Knowledge Add URL creates a version with source URL provenance", async ({ 
   });
 });
 
+test("Brand Voice policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Brand Voice" }).click();
+  await expect(page.getByRole("heading", { name: "Example Systems" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Brand Voice policy" })).toBeVisible();
+  await page.getByLabel("Brand Voice avoid phrases").fill("synergy\ngame-changer");
+  await page.getByLabel("Brand Voice banned claims").fill("guaranteed ROI");
+  await page.getByLabel("Brand Voice custom instructions").fill("Sound like a careful operator.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Example Systems as a new Brand Voice version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/brand-kits/brand-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate.body)).toMatchObject({
+    voicePolicy: {
+      schemaVersion: 1,
+      avoidPhrases: ["synergy", "game-changer"],
+      bannedClaims: ["guaranteed ROI"],
+      customInstructions: "Sound like a careful operator.",
+    },
+  });
+});
+
 test("Visual Guidelines policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Visual Guidelines" }).click();

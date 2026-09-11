@@ -36,6 +36,12 @@ import {
   type AudienceValueProposition,
 } from "./audience-policy";
 import {
+  brandVoicePolicyPayload,
+  EMPTY_BRAND_VOICE_POLICY,
+  normalizeBrandVoicePolicy,
+  type BrandVoicePolicy,
+} from "./brand-voice-policy";
+import {
   EMPTY_PRODUCT_SCHEMA,
   emptyProductSchemaField,
   normalizeProductFieldValues,
@@ -403,6 +409,76 @@ function AudiencePolicyEditor({
         Custom instructions
         <textarea
           aria-label="Audience custom instructions"
+          className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
+          value={policy.customInstructions}
+          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
+        />
+      </label>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
+  );
+}
+
+function BrandVoicePolicyEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: BrandVoicePolicy;
+  busy: boolean;
+  onChange: (next: BrandVoicePolicy) => void;
+  onSave: () => void;
+}) {
+  return (
+    <section aria-label="Brand Voice policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-sm font-semibold">Typed Brand Voice policy</h3>
+        <p className="mt-1 text-xs text-[var(--cc-muted)]">
+          Gateable avoid/banned phrases for generation. Crawl identity samples stay soft.
+          Saving always creates a new accepted Brand Kit revision.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AudienceListField
+          label="Tone attributes (one per line)"
+          ariaLabel="Brand Voice tone attributes"
+          values={policy.toneAttributes}
+          onChange={(toneAttributes) => onChange({ ...policy, toneAttributes })}
+        />
+        <AudienceListField
+          label="Preferred phrases (one per line)"
+          ariaLabel="Brand Voice preferred phrases"
+          values={policy.preferredPhrases}
+          onChange={(preferredPhrases) => onChange({ ...policy, preferredPhrases })}
+        />
+        <AudienceListField
+          label="Avoid phrases (one per line)"
+          ariaLabel="Brand Voice avoid phrases"
+          values={policy.avoidPhrases}
+          onChange={(avoidPhrases) => onChange({ ...policy, avoidPhrases })}
+        />
+        <AudienceListField
+          label="Banned claims (one per line)"
+          ariaLabel="Brand Voice banned claims"
+          values={policy.bannedClaims}
+          onChange={(bannedClaims) => onChange({ ...policy, bannedClaims })}
+        />
+      </div>
+
+      <label className="block text-xs font-semibold">
+        Custom instructions
+        <textarea
+          aria-label="Brand Voice custom instructions"
           className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
           value={policy.customInstructions}
           onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
@@ -970,6 +1046,7 @@ export function CatalogWorkspace() {
   const [stylePolicy, setStylePolicy] = useState<StyleGuidePolicy>(EMPTY_STYLE_GUIDE_POLICY);
   const [visualPolicy, setVisualPolicy] = useState<VisualGuidelinePolicy>(EMPTY_VISUAL_GUIDELINE_POLICY);
   const [audiencePolicy, setAudiencePolicy] = useState<AudiencePolicy>(EMPTY_AUDIENCE_POLICY);
+  const [brandVoicePolicy, setBrandVoicePolicy] = useState<BrandVoicePolicy>(EMPTY_BRAND_VOICE_POLICY);
   const [productSchemaPolicy, setProductSchemaPolicy] = useState<ProductSchemaPolicy>({
     ...EMPTY_PRODUCT_SCHEMA,
     fields: [emptyProductSchemaField()],
@@ -1084,6 +1161,15 @@ export function CatalogWorkspace() {
   useEffect(() => {
     if (active.kind !== "audience") return;
     setAudiencePolicy(normalizeAudiencePolicy(selectedVersion?.data));
+  }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
+
+  useEffect(() => {
+    if (active.kind !== "brand-kit") return;
+    const data = selectedVersion?.data;
+    const voicePolicy = data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>).voicePolicy
+      : null;
+    setBrandVoicePolicy(normalizeBrandVoicePolicy(voicePolicy));
   }, [active.kind, selectedVersion?.id, selectedVersion?.data]);
 
   useEffect(() => {
@@ -1296,6 +1382,36 @@ export function CatalogWorkspace() {
       if (typeof body?.id === "string") setSelectedVersionId(body.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Audience version save failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function saveBrandVoiceVersion() {
+    if (!selected) return;
+    setActionBusy("save-brand-voice");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(
+        `/api/gcc-v2/brand-kits/${encodeURIComponent(selected.id)}/versions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            voicePolicy: brandVoicePolicyPayload(brandVoicePolicy),
+          }),
+        },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setNotice(`Saved ${selected.name} as a new Brand Voice version.`);
+      await loadCatalog(active, {
+        assetId: selected.id,
+        versionId: typeof body?.id === "string" ? body.id : undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Brand Voice version save failed.");
     } finally {
       setActionBusy(null);
     }
@@ -1523,6 +1639,14 @@ export function CatalogWorkspace() {
                   busy={actionBusy === "save-audience"}
                   onChange={setAudiencePolicy}
                   onSave={() => void saveAudienceVersion()}
+                />
+              ) : null}
+              {active.kind === "brand-kit" ? (
+                <BrandVoicePolicyEditor
+                  policy={brandVoicePolicy}
+                  busy={actionBusy === "save-brand-voice"}
+                  onChange={setBrandVoicePolicy}
+                  onSave={() => void saveBrandVoiceVersion()}
                 />
               ) : null}
               {active.kind === "style-guide" ? (
