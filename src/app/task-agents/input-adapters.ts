@@ -503,19 +503,7 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: true,
     },
-    {
-      id: "competitorName",
-      label: "Competitor name",
-      type: "shortText",
-      required: false,
-      placeholder: "Rival Co",
-    },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
     {
       id: "aiObservationModel",
       label: "AI answer model / engine",
@@ -995,7 +983,7 @@ export function adaptTaskAgentInput(
       return {
         contractVersion,
         brandPages: [subject],
-        competitorPages: [primaryCompetitor],
+        competitorPages: competitors,
         aiAnswerObservations: parseAiAnswerObservations(
           values,
           primaryCompetitor.competitorId,

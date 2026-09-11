@@ -3478,8 +3478,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
             { id: "subjectContent", label: "Brand page content", type: "longText", required: true },
-            { id: "competitorName", label: "Competitor name", type: "shortText", required: false },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             { id: "aiObservationModel", label: "AI answer model / engine", type: "shortText", required: false },
             { id: "aiObservationQuery", label: "AI answer query", type: "shortText", required: false },
             { id: "aiObservationRawResponse", label: "AI answer raw response", type: "longText", required: false },
@@ -4583,6 +4589,9 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-8") {
         const brandCompleteness = existing?.input?.brandPages?.[0]?.contentCompleteness;
         const isPartial = brandCompleteness === "partial";
+        const competitorPageCount = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages.length
+          : 1;
         const observations = Array.isArray(existing?.input?.aiAnswerObservations)
           ? existing.input.aiAnswerObservations
           : [];
@@ -4643,11 +4652,16 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   disclaimer: "Generated only — not measured market perception.",
                 }],
                 observations,
-                warnings: isPartial
-                  ? [
-                    "At least one brand page is partial; missing brand attributes are coverageUnknown rather than asserted absences.",
-                  ]
-                  : [],
+                warnings: [
+                  ...(competitorPageCount > 1
+                    ? [`Positioning map considers ${competitorPageCount} competitor pages.`]
+                    : []),
+                  ...(isPartial
+                    ? [
+                      "At least one brand page is partial; missing brand attributes are coverageUnknown rather than asserted absences.",
+                    ]
+                    : []),
+                ],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",

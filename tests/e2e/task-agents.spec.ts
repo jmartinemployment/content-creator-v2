@@ -415,7 +415,7 @@ test("competitor positioning renders positioning-map hypotheses", async ({ page 
   await openAuthenticated(page, "/task-agents/competitor-positioning");
   await expect(page.getByRole("heading", { name: "Competitor Positioning" })).toBeVisible();
   await page.getByLabel("Brand page content").fill("# Brand\n\nEvidence-first drafting.");
-  await page.getByLabel("Competitor page content").fill("# Rival\n\nThe fastest AI writing tool.");
+  await page.getByLabel("Competitor 1 page content").fill("# Rival\n\nThe fastest AI writing tool.");
   await page.getByRole("button", { name: "Run Competitor Positioning" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="positioning-map"]')).toBeVisible();
@@ -426,8 +426,8 @@ test("competitor positioning renders positioning-map hypotheses", async ({ page 
 test("competitor positioning preserves AI-answer observations", async ({ page, request }) => {
   await openAuthenticated(page, "/task-agents/competitor-positioning");
   await page.getByLabel("Brand page content").fill("# Brand\n\nEvidence-first drafting.");
-  await page.getByLabel("Competitor name").fill("Rival Co");
-  await page.getByLabel("Competitor page content").fill("# Rival\n\nThe fastest AI writing tool.");
+  await page.getByLabel("Competitor 1 name").fill("Rival Co");
+  await page.getByLabel("Competitor 1 page content").fill("# Rival\n\nThe fastest AI writing tool.");
   await page.getByLabel("AI answer model / engine").fill("example-engine/v1");
   await page.getByLabel("AI answer query").fill("best document analyzer");
   await page.getByLabel("AI answer raw response").fill("Competitor Inc. leads on speed for document analysis.");
@@ -455,6 +455,34 @@ test("competitor positioning preserves AI-answer observations", async ({ page, r
   expect(body.input?.aiAnswerObservations?.length).toBe(1);
   expect(body.input?.aiAnswerObservations?.[0]?.modelOrEngine).toBe("example-engine/v1");
   expect(body.input?.aiAnswerObservations?.[0]?.competitorIdsMentioned).toEqual(["rival-co"]);
+});
+
+test("competitor positioning accepts a two-competitor cohort", async ({ page, request }) => {
+  await openAuthenticated(page, "/task-agents/competitor-positioning");
+  await page.getByLabel("Brand page content").fill("# Brand\n\nEvidence-first drafting.");
+  await page.getByLabel("Competitor 1 name").fill("Rival Co");
+  await page.getByLabel("Competitor 1 page content").fill("# Rival\n\nThe fastest AI writing tool.");
+  await page.getByLabel("Competitor 2 name").fill("Alt Co");
+  await page.getByLabel("Competitor 2 page content").fill("# Alt\n\nTrusted by 200 teams.");
+  await page.getByRole("button", { name: "Run Competitor Positioning" }).click();
+  await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
+  await expect(page.getByTestId("positioning-competitor-cohort")).toContainText(
+    "Positioning map considers 2 competitor pages.",
+  );
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+    path?: string;
+    method?: string;
+    body?: string;
+  }>;
+  const runPost = [...requests].reverse().find((entry) =>
+    entry.method === "POST"
+    && entry.path === "/api/geek-content-creator-v2/task-agents/competitor-positioning/runs"
+  );
+  expect(runPost?.body).toBeTruthy();
+  const body = JSON.parse(runPost!.body!) as {
+    input?: { competitorPages?: unknown[] };
+  };
+  expect(body.input?.competitorPages?.length).toBe(2);
 });
 
 test("competitor page analysis renders competitor-report dimensions", async ({ page }) => {
@@ -833,7 +861,7 @@ test("competitor positioning partial brand yields coverageUnknown gaps", async (
   await expect(page.getByLabel("Subject source completeness")).toBeVisible();
   await page.getByLabel("Subject source completeness").selectOption("partial");
   await page.getByLabel("Brand page content").fill("# Brand\n\nFragment.");
-  await page.getByLabel("Competitor page content").fill("# Rival\n\nThe fastest AI writing tool.");
+  await page.getByLabel("Competitor 1 page content").fill("# Rival\n\nThe fastest AI writing tool.");
   await page.getByRole("button", { name: "Run Competitor Positioning" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Perception gaps" })).toContainText("coverageUnknown");

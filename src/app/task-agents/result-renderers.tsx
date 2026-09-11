@@ -1064,9 +1064,17 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
   const hypotheses = Array.isArray(payload.messagingHypotheses) ? payload.messagingHypotheses : [];
   const observations = Array.isArray(payload.observations) ? payload.observations : [];
   const warnings = stringWarnings(payload);
+  const competitorCohort = warnings.find((warning) =>
+    /considers \d+ competitor pages/i.test(warning),
+  );
 
   return (
     <div className="mt-4 space-y-6">
+      {competitorCohort ? (
+        <p className="text-xs text-[var(--cc-muted)]" data-testid="positioning-competitor-cohort">
+          {competitorCohort}
+        </p>
+      ) : null}
       {warnings.length ? (
         <ul className="space-y-1 text-sm text-amber-900" aria-label="Positioning warnings" data-testid="positioning-warnings">
           {warnings.map((warning) => <li key={warning}>{warning}</li>)}
