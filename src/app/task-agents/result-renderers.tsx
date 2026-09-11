@@ -831,6 +831,28 @@ function PillarArticleView({ payload }: { payload: ArtifactPayload }) {
       <p className="text-sm text-[var(--cc-muted)]" data-testid="pillar-grounded-count">
         {groundedCount} of {sections.length} sections grounded in supplied source
       </p>
+      {sections.length ? (
+        <ul className="space-y-3" aria-label="Pillar article sections" data-testid="pillar-article-sections">
+          {sections.map((entry) => {
+            const row = asEntry(entry);
+            const grounded = row.grounded === true;
+            return (
+              <li
+                key={String(row.sectionId || row.heading)}
+                className={`border-l-2 pl-3 text-sm ${
+                  grounded ? "border-[var(--cc-accent)]/40" : "border-amber-600"
+                }`}
+                data-grounded={grounded ? "true" : "false"}
+              >
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.heading || "")}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  {grounded ? "Grounded in source" : "Scaffold — no source span"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
       <pre
         className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-4 text-sm leading-relaxed text-[var(--cc-ink)]"
         data-testid="pillar-article-markdown"

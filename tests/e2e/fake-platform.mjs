@@ -4861,9 +4861,15 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                 sections: [{
                   sectionId: "sec-1",
                   heading: "What is AI content readiness?",
-                  bodyMarkdown: "AI content readiness means pages answer questions with evidence.",
-                  evidenceIds: ["ev-1"],
+                  bodyMarkdown: "AI content readiness means pages answer questions with evidence.\n\nTeams use readiness before publishing.",
+                  evidenceIds: ["ev-1", "ev-2"],
                   grounded: true,
+                }, {
+                  sectionId: "sec-2",
+                  heading: "AI content readiness compared to alternatives",
+                  bodyMarkdown: "Lead with the key takeaway for 'AI content readiness compared to alternatives', then expand. [Scaffold — no supplied source span grounded this section.]",
+                  evidenceIds: [],
+                  grounded: false,
                 }],
                 supportingContentPlan: [{
                   contentType: "faq",
@@ -4873,7 +4879,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   disclaimer: "generatedHypothesis only",
                 }],
                 warnings: [
-                  "Pillar article bodies are grounded in supplied source spans when present; ungrounded sections are scaffolds and must not be treated as verified claims.",
+                  "Pillar article bodies prefer multi-paragraph source spans under matching headings; ungrounded sections stay scaffolds and must not be treated as verified claims.",
                 ],
               }),
               evidenceJson: "[]",
@@ -4884,6 +4890,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
           }],
           nextActions: [
             { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
+            { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
             { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
           ],
           rerun: { capabilityId: "pillar-article", versionId: "task-agent-version-16", retryOfRunId: "task-run-16" },

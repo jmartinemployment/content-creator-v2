@@ -716,12 +716,13 @@ test("Pillar Article drafts grounded markdown from source content", async ({ pag
   await openAuthenticated(page, "/task-agents/pillar-article");
   await page.getByLabel("Topic", { exact: true }).fill("AI content readiness");
   await page.getByLabel("Source content").fill(
-    "# AI content readiness\n\nAI content readiness means pages answer questions with evidence.\n\n## How it works\n\nTeams ground answers in owned source material before publishing.",
+    "# AI content readiness\n\nAI content readiness means pages answer questions with evidence.\n\n## How it works\n\nTeams ground answers in owned source material before publishing.\n\nOwned spans stay citable in the draft.",
   );
   await page.getByRole("button", { name: "Run Pillar Article" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("pillar-article-markdown")).toContainText("AI content readiness");
   await expect(page.getByTestId("pillar-grounded-count")).toContainText("grounded");
+  await expect(page.getByTestId("pillar-article-sections")).toContainText("Grounded in source");
   await expect(page.getByText(/pillarArticle\.v1 · valid/)).toBeVisible();
 });
 
