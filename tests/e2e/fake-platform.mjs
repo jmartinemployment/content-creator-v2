@@ -4918,6 +4918,42 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
           }],
           nextActions: [],
           rerun: { capabilityId: "competitor-audit", versionId: "task-agent-version-6", retryOfRunId: "task-run-7" },
+          changeOverTime: isPartial
+            ? { available: false, message: "No prior succeeded run for this subject." }
+            : {
+              available: true,
+              priorRunId: "task-run-prior-audit",
+              priorCompletedAtUtc: "2026-09-10T12:00:00Z",
+              subjectKey: "body:competitor-audit-demo",
+              currentOverall: null,
+              priorOverall: null,
+              overallDelta: null,
+              dimensions: [],
+              findings: [
+                {
+                  key: "action:action-new",
+                  change: "added",
+                  currentPriority: "high",
+                  priorPriority: null,
+                  summary: "Clarify pricing against competitor plans.",
+                },
+                {
+                  key: "action:action-old",
+                  change: "removed",
+                  currentPriority: null,
+                  priorPriority: "medium",
+                  summary: "Old FAQ remediation.",
+                },
+                {
+                  key: "action:action-1",
+                  change: "priorityChanged",
+                  currentPriority: "high",
+                  priorPriority: "medium",
+                  summary: "Add a verified customer-count claim with source evidence.",
+                },
+              ],
+              message: "1 finding added, 1 removed, 1 priority shifted since last audit.",
+            },
         }));
       }
       if (runId === "task-run-8") {

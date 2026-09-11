@@ -372,6 +372,11 @@ test("competitor audit renders prioritized audit-report actions", async ({ page 
   await expect(page.locator('[data-result-renderer="audit-report"]')).toBeVisible();
   await expect(page.getByRole("list", { name: "Prioritized actions" })).toContainText("customer-count");
   await expect(page.getByText(/competitorAudit\.v1 · valid/)).toBeVisible();
+  await expect(page.getByTestId("change-over-time")).toContainText("Findings changed");
+  await expect(page.getByTestId("change-over-time")).toContainText("priority shifted");
+  await expect(page.getByTestId("change-over-time")).not.toContainText("overall");
+  await expect(page.getByTestId("change-over-time-findings")).toContainText("added");
+  await expect(page.getByTestId("change-over-time-findings")).toContainText("priorityChanged");
 });
 
 test("content gap finder accepts a two-competitor cohort", async ({ page, request }) => {

@@ -48,6 +48,13 @@ export type ResultChangeOverTime = {
     prior?: number | null;
     delta?: number | null;
   }>;
+  findings?: Array<{
+    key: string;
+    change: string;
+    currentPriority?: string | null;
+    priorPriority?: string | null;
+    summary?: string;
+  }>;
   message?: string;
 };
 
@@ -331,13 +338,30 @@ export function TaskAgentResultShell({
               <p className="mt-1 text-sm font-semibold text-[var(--cc-ink)]">
                 {typeof result.changeOverTime.overallDelta === "number"
                   ? `${result.changeOverTime.overallDelta > 0 ? "+" : ""}${result.changeOverTime.overallDelta} overall`
-                  : "Compared"}
+                  : (result.changeOverTime.findings?.length
+                    ? "Findings changed"
+                    : "Compared")}
                 {typeof result.changeOverTime.priorOverall === "number"
                   ? ` · was ${result.changeOverTime.priorOverall}`
                   : ""}
               </p>
               {result.changeOverTime.message ? (
                 <p className="mt-1 text-xs text-[var(--cc-muted)]">{result.changeOverTime.message}</p>
+              ) : null}
+              {result.changeOverTime.findings?.length ? (
+                <ul className="mt-2 space-y-1 text-xs text-[var(--cc-muted)]" data-testid="change-over-time-findings">
+                  {result.changeOverTime.findings.slice(0, 5).map((finding) => (
+                    <li key={`${finding.change}-${finding.key}`}>
+                      <span className="font-semibold text-[var(--cc-ink)]">{finding.change}</span>
+                      {finding.summary ? ` · ${finding.summary}` : ""}
+                      {finding.change === "priorityChanged"
+                        && finding.priorPriority
+                        && finding.currentPriority
+                        ? ` (${finding.priorPriority} → ${finding.currentPriority})`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
             </div>
           ) : null}
