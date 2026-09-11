@@ -19,6 +19,8 @@ import {
   sendProjectAssetToAgent,
   type SendToAgentCapability,
 } from "@/app/projects/projects-api";
+import { listGrids } from "@/app/grid/grid-api";
+import type { GridSummary } from "@/app/grid/grid-types";
 import type { AssetKind, AssetStatus, CanvasProject } from "@/app/projects/project-types";
 
 const assetGlyph = { brief: "▤", article: "¶", social: "▦", image: "▧", email: "✉", report: "▣" } as const;
@@ -49,6 +51,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [commentDraft, setCommentDraft] = useState("");
   const [batchNotice, setBatchNotice] = useState<{ gridId: string; gridName: string } | null>(null);
   const [sendCapability, setSendCapability] = useState<SendToAgentCapability>("faq-generator");
+  const [grids, setGrids] = useState<GridSummary[]>([]);
+  const [gridsLoading, setGridsLoading] = useState(false);
+  const [targetGridId, setTargetGridId] = useState("");
 
   useEffect(() => {
     void getProject(projectId)
@@ -58,6 +63,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       })
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load project."))
       .finally(() => setReady(true));
+  }, [projectId]);
+
+  useEffect(() => {
+    setGridsLoading(true);
+    void listGrids()
+      .then((items) => {
+        setGrids(items);
+        setTargetGridId((current) => current || items[0]?.id || "");
+      })
+      .catch(() => setGrids([]))
+      .finally(() => setGridsLoading(false));
   }, [projectId]);
 
   const selectedAsset = useMemo(() => {
@@ -219,9 +235,47 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       });
       setProject(result.project);
       setBatchNotice({ gridId: result.gridId, gridName: result.gridName });
+      setGrids((current) => {
+        if (current.some((grid) => grid.id === result.gridId)) return current;
+        return [
+          {
+            id: result.gridId,
+            name: result.gridName,
+            description: "",
+            status: "ready",
+            updatedAt: new Date().toISOString(),
+            owner: "You",
+            rowCount: result.rowCount,
+            lastRunStatus: null,
+            persistence: "server",
+          },
+          ...current,
+        ];
+      });
+      setTargetGridId(result.gridId);
       router.push(`/grid/${result.gridId}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not convert to batch.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function appendToExistingBatch() {
+    if (!selectedAsset || !project || !targetGridId) return;
+    setSaving(true);
+    setError(null);
+    setBatchNotice(null);
+    try {
+      const result = await convertProjectAssetToGrid(project.id, selectedAsset.id, {
+        createdBy: "You",
+        targetGridId,
+      });
+      setProject(result.project);
+      setBatchNotice({ gridId: result.gridId, gridName: result.gridName });
+      router.push(`/grid/${result.gridId}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not append to batch.");
     } finally {
       setSaving(false);
     }
@@ -431,6 +485,34 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   >
                     Convert to batch
                   </button>
+                  <div className="flex flex-wrap items-end gap-2" data-testid="append-to-existing-batch">
+                    <label className="text-xs font-semibold text-[var(--cc-ink)]">
+                      Existing batch
+                      <select
+                        aria-label="Existing batch grid"
+                        className="mt-1 block min-w-[14rem] rounded-lg border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                        value={targetGridId}
+                        disabled={saving || gridsLoading || grids.length === 0}
+                        onChange={(event) => setTargetGridId(event.target.value)}
+                      >
+                        {grids.length === 0 ? (
+                          <option value="">No grids yet</option>
+                        ) : (
+                          grids.map((grid) => (
+                            <option key={grid.id} value={grid.id}>{grid.name}</option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={saving || !targetGridId || grids.length === 0}
+                      onClick={() => void appendToExistingBatch()}
+                      className="rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      Add to existing batch
+                    </button>
+                  </div>
                   <label className="flex items-center gap-2 text-sm">
                     <span className="sr-only">Send to agent</span>
                     <select

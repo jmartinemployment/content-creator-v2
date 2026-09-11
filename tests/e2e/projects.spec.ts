@@ -178,6 +178,35 @@ test("convert to batch opens a Grid seeded from the Canvas asset", async ({ page
   await expect(page.getByText("Converted Reliable content operations to batch grid Reliable content operations batch")).toBeVisible();
 });
 
+test("add to existing batch appends a Canvas asset row without creating a new grid", async ({ page }) => {
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("button", { name: "New demo project" }).click();
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+
+  await page.getByRole("button", { name: "Select Reliable content operations" }).click();
+  await page.getByRole("button", { name: "Convert to batch" }).click();
+  await expect(page).toHaveURL(/\/grid\/([^/]+)$/);
+  const gridUrl = page.url();
+  const gridId = gridUrl.match(/\/grid\/([^/]+)$/)?.[1];
+  expect(gridId).toBeTruthy();
+
+  await openAuthenticated(page, `/projects`);
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+  await page.getByRole("button", { name: "Select Launch carousel" }).click();
+  await expect(page.getByTestId("append-to-existing-batch")).toBeVisible();
+  await page.getByLabel("Existing batch grid").selectOption({ label: "Reliable content operations batch" });
+  await page.getByRole("button", { name: "Add to existing batch" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/grid/${gridId}$`));
+  await expect(page.getByRole("heading", { name: "Reliable content operations batch" })).toBeVisible();
+  await expect(page.getByText("Launch carousel").first()).toBeVisible();
+  await expect(page.getByText("Reliable content operations").first()).toBeVisible();
+
+  await openAuthenticated(page, "/projects");
+  await page.getByRole("link", { name: "Evidence Engine launch" }).click();
+  await expect(page.getByText("Appended Launch carousel to batch grid Reliable content operations batch")).toBeVisible();
+});
+
 test("send to agent opens a task agent with Canvas prefills", async ({ page }) => {
   await openAuthenticated(page, "/projects");
   await page.getByRole("button", { name: "New demo project" }).click();

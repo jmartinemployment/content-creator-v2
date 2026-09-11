@@ -2028,54 +2028,87 @@ const server = http.createServer(async (req, res) => {
       if (capability !== "faq-generator" && capability !== "pillar-outline") {
         return send(res, 400, { error: "capability must be faq-generator or pillar-outline." });
       }
-      const gridName = `${asset.title} batch`;
-      const grid = {
-        id: crypto.randomUUID(),
-        name: gridName,
-        description: `Batch converted from Canvas asset “${asset.title}” (v${latest.version}) in project “${project.name}”.`,
-        status: "ready",
-        updatedAt: new Date().toISOString(),
-        owner: "owner",
-        persistence: "server",
-        config: defaultGridConfig(capability),
-        rows: [{
+      const rowInput = {
+        topic: asset.title,
+        sourceSummary: latest.summary,
+        sourceProjectId: project.id,
+        sourceAssetId: asset.id,
+        sourceVersionId: latest.id,
+        sourceVersionNumber: latest.version,
+      };
+      const actor = body.createdBy || "You";
+      let grid;
+      let appended = false;
+      if (typeof body.targetGridId === "string" && body.targetGridId.trim()) {
+        grid = grids.get(body.targetGridId.trim());
+        if (!grid) return send(res, 404, { error: "Grid not found." });
+        if (grid.rows.length + 1 > 500) {
+          return send(res, 400, { error: "Grid would exceed 500 rows." });
+        }
+        grid.rows.push({
           id: crypto.randomUUID(),
-          rowIndex: 0,
-          input: {
-            topic: asset.title,
-            sourceSummary: latest.summary,
-            sourceProjectId: project.id,
-            sourceAssetId: asset.id,
-            sourceVersionId: latest.id,
-            sourceVersionNumber: latest.version,
-          },
+          rowIndex: grid.rows.length,
+          input: rowInput,
           output: null,
           status: "pending",
           error: "",
           updatedAt: new Date().toISOString(),
-        }],
-        runs: [],
-      };
-      grids.set(grid.id, grid);
-      const actor = body.createdBy || "You";
-      project.activity = [
-        {
+        });
+        grid.updatedAt = new Date().toISOString();
+        appended = true;
+        project.activity = [
+          {
+            id: crypto.randomUUID(),
+            kind: "handoff",
+            actor,
+            occurredAt: new Date().toISOString(),
+            message: `Appended ${asset.title} to batch grid ${grid.name}`,
+          },
+          ...project.activity,
+        ];
+      } else {
+        const gridName = `${asset.title} batch`;
+        grid = {
           id: crypto.randomUUID(),
-          kind: "handoff",
-          actor,
-          occurredAt: new Date().toISOString(),
-          message: `Converted ${asset.title} to batch grid ${gridName}`,
-        },
-        ...project.activity,
-      ];
+          name: gridName,
+          description: `Batch converted from Canvas asset “${asset.title}” (v${latest.version}) in project “${project.name}”.`,
+          status: "ready",
+          updatedAt: new Date().toISOString(),
+          owner: "owner",
+          persistence: "server",
+          config: defaultGridConfig(capability),
+          rows: [{
+            id: crypto.randomUUID(),
+            rowIndex: 0,
+            input: rowInput,
+            output: null,
+            status: "pending",
+            error: "",
+            updatedAt: new Date().toISOString(),
+          }],
+          runs: [],
+        };
+        grids.set(grid.id, grid);
+        project.activity = [
+          {
+            id: crypto.randomUUID(),
+            kind: "handoff",
+            actor,
+            occurredAt: new Date().toISOString(),
+            message: `Converted ${asset.title} to batch grid ${gridName}`,
+          },
+          ...project.activity,
+        ];
+      }
       project.updatedAt = new Date().toISOString();
       return send(res, 200, {
         contractVersion: "gcc-canvas-project.v1",
         project,
         gridId: grid.id,
-        gridName,
+        gridName: grid.name,
         capability,
         rowCount: grid.rows.length,
+        appended,
       });
     }
     const commentMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/projects\/([^/]+)\/assets\/([^/]+)\/comments$/);

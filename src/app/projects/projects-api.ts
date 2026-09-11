@@ -145,7 +145,11 @@ export async function addProjectAssetComment(
 export async function convertProjectAssetToGrid(
   projectId: string,
   assetId: string,
-  input?: { capability?: "faq-generator" | "pillar-outline"; createdBy?: string },
+  input?: {
+    capability?: "faq-generator" | "pillar-outline";
+    createdBy?: string;
+    targetGridId?: string;
+  },
 ) {
   const body = await projectsFetch(
     `/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/to-grid`,
@@ -159,6 +163,7 @@ export async function convertProjectAssetToGrid(
     gridName: string;
     capability: string;
     rowCount: number;
+    appended?: boolean;
   };
   return body;
 }
