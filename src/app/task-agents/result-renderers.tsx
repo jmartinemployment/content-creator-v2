@@ -161,6 +161,10 @@ function ClaimAuditView({ payload }: { payload: ArtifactPayload }) {
 function EntityGraphView({ payload }: { payload: ArtifactPayload }) {
   const entities = Array.isArray(payload.entities) ? payload.entities : [];
   const relationships = Array.isArray(payload.relationships) ? payload.relationships : [];
+  const coverageComparisons = Array.isArray(payload.coverageComparisons)
+    ? payload.coverageComparisons
+    : [];
+  const recommendations = Array.isArray(payload.recommendations) ? payload.recommendations : [];
   const nameById = new Map(
     entities.map((entry) => {
       const row = entry as { entityId?: string; canonicalName?: string };
@@ -216,6 +220,47 @@ function EntityGraphView({ payload }: { payload: ArtifactPayload }) {
                 {row.confidence != null ? (
                   <span className="ml-2 text-xs text-[var(--cc-muted)]">{row.confidence}</span>
                 ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {coverageComparisons.length ? (
+        <ul className="mt-6 space-y-2" aria-label="Entity coverage comparisons">
+          {coverageComparisons.map((entry) => {
+            const row = entry as {
+              entityId?: string;
+              canonicalName?: string;
+              onSubject?: boolean;
+              onCompetitor?: boolean;
+              status?: string;
+            };
+            return (
+              <li key={row.entityId || row.canonicalName} className="text-sm text-[var(--cc-ink)]">
+                <span className="font-semibold">{row.canonicalName}</span>
+                <span className="mx-2 text-[var(--cc-muted)]">{row.status}</span>
+                <span className="text-xs text-[var(--cc-muted)]">
+                  subject {row.onSubject ? "yes" : "no"} · competitor {row.onCompetitor ? "yes" : "no"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {recommendations.length ? (
+        <ul className="mt-6 space-y-2" aria-label="Entity coverage recommendations">
+          {recommendations.map((entry) => {
+            const row = entry as {
+              recommendationId?: string;
+              relatedEntityId?: string;
+              action?: string;
+            };
+            return (
+              <li
+                key={row.recommendationId || row.relatedEntityId || row.action}
+                className="border-l-2 border-[var(--cc-accent)] pl-3 text-sm text-[var(--cc-ink)]"
+              >
+                {row.action}
               </li>
             );
           })}
@@ -337,11 +382,15 @@ function FaqListView({ payload }: { payload: ArtifactPayload }) {
 
 function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
   const claims = Array.isArray(payload.claims) ? payload.claims : [];
+  const contradictionPairs = Array.isArray(payload.contradictionPairs)
+    ? payload.contradictionPairs
+    : [];
   const warnings = stringWarnings(payload);
   const contradictionWarnings = warnings.filter((warning) =>
     warning.toLowerCase().includes("possible contradiction"),
   );
-  const hasPossible = claims.some((claim) => asEntry(claim).contradictionState === "possible");
+  const hasPossible = claims.some((claim) => asEntry(claim).contradictionState === "possible")
+    || contradictionPairs.length > 0;
   const evidenceById = new Map<string, string>();
   const provenance = asEntry(payload.provenance);
   if (Array.isArray(provenance.evidence)) {
@@ -352,6 +401,12 @@ function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
       }
     }
   }
+  const claimTextById = new Map(
+    claims.map((entry) => {
+      const row = asEntry(entry);
+      return [String(row.claimId || ""), String(row.claimText || "")] as const;
+    }),
+  );
 
   return (
     <div className="mt-4">
@@ -370,7 +425,23 @@ function ClaimLedgerView({ payload }: { payload: ArtifactPayload }) {
           <p className="mt-1 max-w-prose text-xs leading-relaxed text-amber-950/80">
             These claims share a subject but disagree on quantity or polarity. Review before citing.
           </p>
-          {contradictionWarnings.length ? (
+          {contradictionPairs.length ? (
+            <ul className="mt-2 space-y-2 text-xs text-amber-950/90" aria-label="Contradiction pairs" data-testid="contradiction-pairs">
+              {contradictionPairs.map((entry) => {
+                const row = asEntry(entry);
+                const left = claimTextById.get(String(row.leftClaimId || "")) || String(row.leftClaimId || "");
+                const right = claimTextById.get(String(row.rightClaimId || "")) || String(row.rightClaimId || "");
+                return (
+                  <li key={`${row.leftClaimId}-${row.rightClaimId}-${row.reason}`}>
+                    <span className="font-mono text-[0.7rem]">{String(row.reason || "conflict")}</span>
+                    <span className="mt-1 block leading-relaxed">
+                      “{left}” vs “{right}”
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : contradictionWarnings.length ? (
             <ul className="mt-2 space-y-1 text-xs text-amber-950/90">
               {contradictionWarnings.map((warning) => (
                 <li key={warning} className="font-mono text-[0.7rem] leading-relaxed">
@@ -499,13 +570,19 @@ function ComparisonBriefView({ payload }: { payload: ArtifactPayload }) {
   const positioningAngles = hypothesisItems(payload.positioningAngles);
   const verdict = asEntry(payload.recommendedVerdict);
   const warnings = stringWarnings(payload);
+  const competitorCohort = warnings.find((warning) =>
+    /compared against \d+ competitor pages/i.test(warning),
+  );
 
   return (
     <div className="mt-4 space-y-6">
-      <p className="text-sm text-[var(--cc-muted)]">
+      <p className="text-sm text-[var(--cc-muted)]" data-testid="comparison-brief-parties">
         <span className="font-semibold text-[var(--cc-ink)]">{String(payload.subjectName || "Subject")}</span>
         {" vs "}
         <span className="font-semibold text-[var(--cc-ink)]">{String(payload.competitorName || "Competitor")}</span>
+        {competitorCohort ? (
+          <span className="mt-1 block text-xs">{competitorCohort}</span>
+        ) : null}
       </p>
       {criteria.length ? (
         <ul className="space-y-4" aria-label="Comparison criteria">
@@ -594,6 +671,9 @@ function ResponsePlanView({ payload }: { payload: ArtifactPayload }) {
   const proofPoints = Array.isArray(payload.requiredProofPoints) ? payload.requiredProofPoints : [];
   const sections = Array.isArray(payload.outlineSections) ? payload.outlineSections : [];
   const warnings = stringWarnings(payload);
+  const competitorCohort = warnings.find((warning) =>
+    /considers \d+ competitor pages/i.test(warning),
+  );
 
   return (
     <div className="mt-4 space-y-6">
@@ -604,6 +684,11 @@ function ResponsePlanView({ payload }: { payload: ArtifactPayload }) {
         </p>
         {typeof payload.rationale === "string" && payload.rationale ? (
           <p className="mt-2 max-w-prose text-sm text-[var(--cc-muted)]">{payload.rationale}</p>
+        ) : null}
+        {competitorCohort ? (
+          <p className="mt-2 text-xs text-[var(--cc-muted)]" data-testid="response-competitor-cohort">
+            {competitorCohort}
+          </p>
         ) : null}
       </div>
       {contentAngles.length ? (
@@ -977,6 +1062,7 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
   const attributes = Array.isArray(payload.attributeMap) ? payload.attributeMap : [];
   const gaps = Array.isArray(payload.perceptionGaps) ? payload.perceptionGaps : [];
   const hypotheses = Array.isArray(payload.messagingHypotheses) ? payload.messagingHypotheses : [];
+  const observations = Array.isArray(payload.observations) ? payload.observations : [];
   const warnings = stringWarnings(payload);
 
   return (
@@ -984,6 +1070,29 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
       {warnings.length ? (
         <ul className="space-y-1 text-sm text-amber-900" aria-label="Positioning warnings" data-testid="positioning-warnings">
           {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+      {observations.length ? (
+        <ul
+          className="space-y-3"
+          aria-label="Supplied AI-answer observations"
+          data-testid="positioning-observations"
+        >
+          {observations.map((entry) => {
+            const row = asEntry(entry);
+            return (
+              <li key={String(row.observationId || row.query)} className="border-l-2 border-[var(--cc-line)] pl-3 text-sm">
+                <span className="font-semibold text-[var(--cc-ink)]">{String(row.modelOrEngine || "Model")}</span>
+                <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                  Query: {String(row.query || "")}
+                  {row.observedAtUtc ? ` · ${String(row.observedAtUtc)}` : ""}
+                </span>
+                {typeof row.rawResponse === "string" && row.rawResponse ? (
+                  <span className="mt-1 block whitespace-pre-wrap text-[var(--cc-muted)]">{row.rawResponse}</span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       {attributes.length ? (
@@ -1007,7 +1116,7 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
         </ul>
       ) : null}
       {gaps.length ? (
-        <ul className="space-y-3" aria-label="Perception gaps">
+        <ul className="space-y-3" aria-label="Perception gaps" data-testid="positioning-perception-gaps">
           {gaps.map((entry) => {
             const row = asEntry(entry);
             return (
@@ -1016,6 +1125,11 @@ function PositioningMapView({ payload }: { payload: ArtifactPayload }) {
                 <span className="mt-1 block text-xs text-[var(--cc-muted)]">{String(row.status || "")}</span>
                 {typeof row.summary === "string" && row.summary ? (
                   <span className="mt-1 block text-[var(--cc-muted)]">{row.summary}</span>
+                ) : null}
+                {Array.isArray(row.observationIds) && row.observationIds.length ? (
+                  <span className="mt-1 block text-xs text-[var(--cc-muted)]">
+                    Observation IDs: {row.observationIds.filter((id): id is string => typeof id === "string").join(", ")}
+                  </span>
                 ) : null}
               </li>
             );

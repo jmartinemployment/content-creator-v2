@@ -19,6 +19,10 @@ import {
   putLibraryState,
   type LibrarySavedConfig,
 } from "@/app/task-agents/library-preferences";
+import {
+  findArtifactVersionPayload,
+  mergeParentArtifactIntoForm,
+} from "@/app/task-agents/merge-parent-artifact";
 import { SchemaForm } from "@/app/task-agents/schema-form";
 import {
   TaskAgentResultShell,
@@ -164,6 +168,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [lineageParents, setLineageParents] = useState<string[]>([]);
   const [lineageRelationship, setLineageRelationship] = useState<string | undefined>();
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [canvasHandoff, setCanvasHandoff] = useState<{
     projectId: string;
     assetId: string;
@@ -194,6 +199,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     if (fromArtifact) setLineageParents([fromArtifact]);
     const relationship = params.get("lineageRelationship");
     if (relationship) setLineageRelationship(relationship);
+    const fromRunId = params.get("fromRunId")?.trim() ?? "";
 
     const topic = params.get("topic")?.trim() ?? "";
     const sourceContent = params.get("sourceContent")?.trim() ?? "";
@@ -224,6 +230,47 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             }
           : {}),
       }));
+    }
+
+    if (fromArtifact && fromRunId) {
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/gcc-v2/task-agents/runs/${encodeURIComponent(fromRunId)}/result`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) return;
+          const parentResult = await response.json() as ResultShellModel & {
+            taskInputs?: unknown;
+          };
+          const found = findArtifactVersionPayload(parentResult, fromArtifact);
+          if (!found) return;
+          const merged = mergeParentArtifactIntoForm(
+            capabilityId,
+            found.artifactType,
+            found.payload,
+            found.taskInputs ?? parentResult.taskInputs,
+          );
+          if (!merged) return;
+          setHandoffNotice(merged.notice);
+          if (merged.values.topic) setFaqTopic(merged.values.topic);
+          if (merged.values.sourceContent) {
+            setContent(merged.values.sourceContent);
+            setVagueStatements((current) => current || merged.values.sourceContent!);
+          }
+          if (merged.values.visibleContent) {
+            setContent((current) => current || merged.values.visibleContent!);
+          }
+          setSchemaValues((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              Object.entries(merged.values).filter(([, value]) => value.length > 0),
+            ),
+          }));
+        } catch {
+          /* handoff is best-effort; lineage still recorded */
+        }
+      })();
     }
 
     const gscStatus = params.get("gsc")?.trim() ?? "";
@@ -583,6 +630,32 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       };
     }
     if (capabilityId === "competitor-positioning") {
+      const page = buildCompetitorPage(competitorContent.trim());
+      const subjectMentionedRaw = (schemaValues.aiObservationSubjectMentioned
+        ?? "").trim().toLowerCase();
+      const observations = (() => {
+        const model = (schemaValues.aiObservationModel ?? "").trim();
+        const query = (schemaValues.aiObservationQuery ?? "").trim();
+        const rawResponse = (schemaValues.aiObservationRawResponse ?? "").trim();
+        const observedAtUtc = (schemaValues.aiObservationObservedAtUtc ?? "").trim();
+        if (!model || !query || !rawResponse || !observedAtUtc) return [];
+        return [{
+          observationId: `obs:${crypto.randomUUID()}`,
+          modelOrEngine: model,
+          query,
+          rawResponse,
+          observedAtUtc,
+          subjectMentioned: subjectMentionedRaw === "yes"
+            ? true
+            : subjectMentionedRaw === "no"
+              ? false
+              : null,
+          competitorIdsMentioned:
+            (schemaValues.aiObservationCompetitorMentioned ?? "").trim().toLowerCase() === "yes"
+              ? [page.competitorId]
+              : [],
+        }];
+      })();
       return {
         contractVersion,
         brandPages: [
@@ -593,8 +666,8 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             content.trim(),
           ),
         ],
-        competitorPages: [buildCompetitorPage(competitorContent.trim())],
-        aiAnswerObservations: [],
+        competitorPages: [page],
+        aiAnswerObservations: observations,
       };
     }
     if (isComparisonBrief) {
@@ -1157,6 +1230,16 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
         <p role="status" className="mt-5 rounded-lg border border-teal-200 bg-teal-50/50 px-4 py-3 text-sm text-teal-950">
           This run will derive from artifact <span className="font-mono text-xs">{lineageParents[0]}</span>
           {lineageRelationship ? ` (${lineageRelationship})` : ""}.
+        </p>
+      ) : null}
+
+      {handoffNotice ? (
+        <p
+          role="status"
+          data-testid="artifact-handoff-notice"
+          className="mt-3 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] px-4 py-3 text-sm text-[var(--cc-ink)]"
+        >
+          {handoffNotice}
         </p>
       ) : null}
 

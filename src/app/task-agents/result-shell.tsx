@@ -94,6 +94,7 @@ const FALLBACK_NEXT: Record<string, ResultNextAction[]> = {
     { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
   ],
   "pillar-outline": [
+    { capabilityId: "pillar-article", label: "Pillar Article", artifactType: "pillarArticle.v1" },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
   ],

@@ -60,6 +60,60 @@ const DIAGNOSTIC_COMPLETENESS_FIELD: StudioFormField = {
   placeholder: "full",
 };
 
+const OPTIONAL_COMPETITOR_FIELDS: StudioFormField[] = [
+  {
+    id: "competitorName",
+    label: "Competitor 1 name",
+    type: "shortText",
+    required: false,
+    placeholder: "Rival Co",
+  },
+  {
+    id: "competitorContent",
+    label: "Competitor 1 page content",
+    type: "longText",
+    required: true,
+  },
+  {
+    id: "competitor2Name",
+    label: "Competitor 2 name",
+    type: "shortText",
+    required: false,
+    placeholder: "Optional second rival",
+  },
+  {
+    id: "competitor2Content",
+    label: "Competitor 2 page content",
+    type: "longText",
+    required: false,
+    placeholder: "Optional — up to four competitors",
+  },
+  {
+    id: "competitor3Name",
+    label: "Competitor 3 name",
+    type: "shortText",
+    required: false,
+  },
+  {
+    id: "competitor3Content",
+    label: "Competitor 3 page content",
+    type: "longText",
+    required: false,
+  },
+  {
+    id: "competitor4Name",
+    label: "Competitor 4 name",
+    type: "shortText",
+    required: false,
+  },
+  {
+    id: "competitor4Content",
+    label: "Competitor 4 page content",
+    type: "longText",
+    required: false,
+  },
+];
+
 const DOCUMENT_DIAGNOSTIC_IDS = new Set([
   "ai-readiness",
   "fact-density",
@@ -101,6 +155,65 @@ function competitorSlug(name: string) {
   return slug || "competitor";
 }
 
+function collectCompetitorPages(
+  values: Record<string, string>,
+  defaultCompleteness: "full" | "partial",
+): Array<ReturnType<typeof competitorPage>> {
+  const pages: Array<ReturnType<typeof competitorPage>> = [];
+  const firstContent = (values.competitorContent ?? "").trim();
+  if (firstContent) {
+    pages.push(competitorPage(
+      (values.competitorName ?? "").trim() || "Competitor 1",
+      firstContent,
+      "",
+      defaultCompleteness,
+    ));
+  }
+  for (let index = 2; index <= 4; index += 1) {
+    const content = (values[`competitor${index}Content`] ?? "").trim();
+    if (!content) continue;
+    const completeness = normalizeContentCompleteness(
+      values[`competitor${index}Completeness`] ?? values.competitorCompleteness,
+    );
+    pages.push(competitorPage(
+      (values[`competitor${index}Name`] ?? "").trim() || `Competitor ${index}`,
+      content,
+      "",
+      completeness,
+    ));
+  }
+  return pages.slice(0, 4);
+}
+
+function parseAiAnswerObservations(
+  values: Record<string, string>,
+  competitorId: string,
+): Array<Record<string, unknown>> {
+  const model = (values.aiObservationModel ?? "").trim();
+  const query = (values.aiObservationQuery ?? "").trim();
+  const rawResponse = (values.aiObservationRawResponse ?? "").trim();
+  const observedAtUtc = (values.aiObservationObservedAtUtc ?? "").trim();
+  if (!model || !query || !rawResponse || !observedAtUtc) return [];
+  const subjectRaw = (values.aiObservationSubjectMentioned ?? "").trim().toLowerCase();
+  const subjectMentioned = subjectRaw === "yes"
+    ? true
+    : subjectRaw === "no"
+      ? false
+      : null;
+  const competitorMentioned = (values.aiObservationCompetitorMentioned ?? "")
+    .trim()
+    .toLowerCase() === "yes";
+  return [{
+    observationId: `obs:${crypto.randomUUID()}`,
+    modelOrEngine: model,
+    query,
+    rawResponse,
+    observedAtUtc,
+    subjectMentioned,
+    competitorIdsMentioned: competitorMentioned && competitorId ? [competitorId] : [],
+  }];
+}
+
 function competitorPage(
   competitorName: string,
   visibleContent: string,
@@ -138,6 +251,28 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: true,
       placeholder: "Paste the complete visible page copy or Markdown…",
+    },
+    {
+      id: "technicalCrawlable",
+      label: "Page crawlable",
+      type: "select",
+      required: false,
+      options: ["yes", "no"],
+      placeholder: "yes",
+    },
+    {
+      id: "technicalStatusCode",
+      label: "HTTP status code",
+      type: "shortText",
+      required: false,
+      placeholder: "200",
+    },
+    {
+      id: "technicalLoadTimeMs",
+      label: "Load time (ms)",
+      type: "shortText",
+      required: false,
+      placeholder: "1800",
     },
     DIAGNOSTIC_COMPLETENESS_FIELD,
   ],
@@ -179,6 +314,20 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "shortText",
       required: false,
       placeholder: "Comma-separated entity names",
+    },
+    {
+      id: "competitorUrl",
+      label: "Competitor page URL",
+      type: "shortText",
+      required: false,
+      placeholder: "https://competitor.example.com/page",
+    },
+    {
+      id: "competitorContent",
+      label: "Competitor page content",
+      type: "longText",
+      required: false,
+      placeholder: "Optional: paste competitor visible copy for coverage comparison…",
     },
     DIAGNOSTIC_COMPLETENESS_FIELD,
   ],
@@ -282,25 +431,13 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: true,
     },
     {
-      id: "competitorName",
-      label: "Competitor name",
-      type: "shortText",
-      required: true,
-    },
-    {
       id: "subjectContent",
       label: "Subject page content",
       type: "longText",
       required: true,
       placeholder: "Paste the complete visible page copy or Markdown…",
     },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-      placeholder: "Paste competitor visible copy…",
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
     {
       id: "sourceUrl",
       label: "Subject URL",
@@ -321,12 +458,7 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: true,
     },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
   ],
   "content-gap": [
     {
@@ -341,12 +473,7 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: true,
     },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
   ],
   "competitor-audit": [
     {
@@ -361,12 +488,7 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       type: "longText",
       required: true,
     },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
   ],
   "competitor-positioning": [
     {
@@ -382,10 +504,61 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: true,
     },
     {
+      id: "competitorName",
+      label: "Competitor name",
+      type: "shortText",
+      required: false,
+      placeholder: "Rival Co",
+    },
+    {
       id: "competitorContent",
       label: "Competitor page content",
       type: "longText",
       required: true,
+    },
+    {
+      id: "aiObservationModel",
+      label: "AI answer model / engine",
+      type: "shortText",
+      required: false,
+      placeholder: "example-engine/v1",
+    },
+    {
+      id: "aiObservationQuery",
+      label: "AI answer query",
+      type: "shortText",
+      required: false,
+      placeholder: "best document analyzer",
+    },
+    {
+      id: "aiObservationRawResponse",
+      label: "AI answer raw response",
+      type: "longText",
+      required: false,
+      placeholder: "Paste the model’s raw answer text…",
+    },
+    {
+      id: "aiObservationObservedAtUtc",
+      label: "AI answer observed at (UTC)",
+      type: "shortText",
+      required: false,
+      placeholder: "2026-09-01T12:00:00Z",
+    },
+    {
+      id: "aiObservationSubjectMentioned",
+      label: "Subject mentioned in AI answer",
+      type: "select",
+      required: false,
+      options: ["yes", "no", "unknown"],
+      placeholder: "unknown",
+    },
+    {
+      id: "aiObservationCompetitorMentioned",
+      label: "Competitor mentioned in AI answer",
+      type: "select",
+      required: false,
+      options: ["yes", "no"],
+      placeholder: "no",
     },
   ],
   "pillar-outline": [
@@ -468,25 +641,13 @@ export const DEFAULT_TASK_AGENT_UI_SCHEMAS: Record<string, StudioFormField[]> = 
       required: true,
     },
     {
-      id: "competitorName",
-      label: "Competitor name",
-      type: "shortText",
-      required: true,
-    },
-    {
       id: "brandContent",
       label: "Brand page content",
       type: "longText",
       required: true,
       placeholder: "Paste brand visible copy…",
     },
-    {
-      id: "competitorContent",
-      label: "Competitor page content",
-      type: "longText",
-      required: true,
-      placeholder: "Paste competitor visible copy…",
-    },
+    ...OPTIONAL_COMPETITOR_FIELDS,
     {
       id: "focusQuery",
       label: "Focus query",
@@ -625,18 +786,33 @@ export function adaptTaskAgentInput(
     if (!visibleContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
     const completeness = normalizeContentCompleteness(values.contentCompleteness);
+    const document: Record<string, unknown> = {
+      ...pageSnapshot(
+        sourceUrl || `document:${crypto.randomUUID()}`,
+        sourceUrl,
+        "Source page",
+        visibleContent,
+        completeness,
+      ),
+      queries: [],
+    };
+    if (capabilityId === "ai-readiness") {
+      const crawlableRaw = (values.technicalCrawlable ?? "").trim().toLowerCase();
+      const statusRaw = (values.technicalStatusCode ?? "").trim();
+      const loadRaw = (values.technicalLoadTimeMs ?? "").trim();
+      if (crawlableRaw || statusRaw || loadRaw) {
+        const statusCode = Number(statusRaw);
+        const loadTimeMs = Number(loadRaw);
+        document.technical = {
+          crawlable: crawlableRaw === "no" ? false : true,
+          statusCode: Number.isFinite(statusCode) && statusCode > 0 ? statusCode : 200,
+          loadTimeMs: Number.isFinite(loadTimeMs) && loadTimeMs >= 0 ? loadTimeMs : 1800,
+        };
+      }
+    }
     const input: Record<string, unknown> = {
       contractVersion,
-      document: {
-        ...pageSnapshot(
-          sourceUrl || `document:${crypto.randomUUID()}`,
-          sourceUrl,
-          "Source page",
-          visibleContent,
-          completeness,
-        ),
-        queries: [],
-      },
+      document,
     };
     if (capabilityId === "entity-mapper") {
       input.seeds = (values.entitySeeds ?? "")
@@ -648,6 +824,20 @@ export function adaptTaskAgentInput(
           entityType: "concept",
           aliases: [],
         }));
+      const competitorContent = (values.competitorContent ?? "").trim();
+      if (competitorContent) {
+        const competitorUrl = (values.competitorUrl ?? "").trim();
+        input.competitorDocument = {
+          ...pageSnapshot(
+            competitorUrl || `competitor:${crypto.randomUUID()}`,
+            competitorUrl,
+            "Competitor page",
+            competitorContent,
+            normalizeContentCompleteness(values.contentCompleteness),
+          ),
+          queries: [],
+        };
+      }
     }
     if (capabilityId === "schema-markup") input.requestedTypes = ["Article", "FAQPage"];
     return input;
@@ -741,13 +931,20 @@ export function adaptTaskAgentInput(
   }
   if (capabilityId === "comparison-brief") {
     const subjectName = (values.subjectName ?? "").trim();
-    const competitorName = (values.competitorName ?? "").trim();
     const subjectContent = (values.subjectContent ?? "").trim();
-    const competitorContent = (values.competitorContent ?? "").trim();
-    if (!subjectName || !competitorName || !subjectContent || !competitorContent) return null;
+    if (!subjectName || !subjectContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
     const subjectCompleteness = normalizeContentCompleteness(values.subjectCompleteness);
     const competitorCompleteness = normalizeContentCompleteness(values.competitorCompleteness);
+    const competitors = collectCompetitorPages(values, competitorCompleteness);
+    if (competitors.length === 0) return null;
+    const competitorName = competitors
+      .map((page) => {
+        const source = page.source as { title?: string };
+        return typeof source.title === "string" ? source.title.trim() : "";
+      })
+      .filter(Boolean)
+      .join(" · ") || "Competitor";
     return {
       contractVersion,
       subjectName,
@@ -761,9 +958,7 @@ export function adaptTaskAgentInput(
           subjectCompleteness,
         ),
       ],
-      competitorPages: [
-        competitorPage(competitorName, competitorContent, "", competitorCompleteness),
-      ],
+      competitorPages: competitors,
       decisionCriteria: [],
     };
   }
@@ -786,26 +981,31 @@ export function adaptTaskAgentInput(
       subjectContent,
       subjectCompleteness,
     );
-    const competitor = competitorPage("Competitor", competitorContent, "", competitorCompleteness);
+    const competitors = collectCompetitorPages(values, competitorCompleteness);
+    if (competitors.length === 0) return null;
     if (capabilityId === "ai-readiness-comparison") {
       return {
         contractVersion,
         subjectPage: subject,
-        competitorPages: [competitor],
+        competitorPages: competitors,
       };
     }
     if (capabilityId === "competitor-positioning") {
+      const primaryCompetitor = competitors[0]!;
       return {
         contractVersion,
         brandPages: [subject],
-        competitorPages: [competitor],
-        aiAnswerObservations: [],
+        competitorPages: [primaryCompetitor],
+        aiAnswerObservations: parseAiAnswerObservations(
+          values,
+          primaryCompetitor.competitorId,
+        ),
       };
     }
     return {
       contractVersion,
       subjectPages: [subject],
-      competitorPages: [competitor],
+      competitorPages: competitors,
     };
   }
   if (capabilityId === "pillar-outline" || capabilityId === "pillar-article") {
@@ -839,14 +1039,14 @@ export function adaptTaskAgentInput(
   }
   if (capabilityId === "competitive-response") {
     const brandName = (values.brandName ?? "").trim();
-    const competitorName = (values.competitorName ?? "").trim();
     const brandContent = (values.brandContent ?? "").trim();
-    const competitorContent = (values.competitorContent ?? "").trim();
-    if (!brandName || !competitorName || !brandContent || !competitorContent) return null;
+    if (!brandName || !brandContent) return null;
     const sourceUrl = (values.sourceUrl ?? "").trim();
     const focusQuery = (values.focusQuery ?? "").trim();
     const subjectCompleteness = normalizeContentCompleteness(values.subjectCompleteness);
     const competitorCompleteness = normalizeContentCompleteness(values.competitorCompleteness);
+    const competitors = collectCompetitorPages(values, competitorCompleteness);
+    if (competitors.length === 0) return null;
     return {
       contractVersion,
       brandPages: [
@@ -858,9 +1058,7 @@ export function adaptTaskAgentInput(
           subjectCompleteness,
         ),
       ],
-      competitorPages: [
-        competitorPage(competitorName, competitorContent, "", competitorCompleteness),
-      ],
+      competitorPages: competitors,
       responseMode: "auto",
       focusQuery: focusQuery || null,
     };
@@ -922,13 +1120,11 @@ export function schemaFormCanStart(
   }
   if (capabilityId === "comparison-brief") {
     return (values.subjectName ?? "").trim().length > 0
-      && (values.competitorName ?? "").trim().length > 0
       && (values.subjectContent ?? "").trim().length > 0
       && (values.competitorContent ?? "").trim().length > 0;
   }
   if (capabilityId === "competitive-response") {
     return (values.brandName ?? "").trim().length > 0
-      && (values.competitorName ?? "").trim().length > 0
       && (values.brandContent ?? "").trim().length > 0
       && (values.competitorContent ?? "").trim().length > 0;
   }

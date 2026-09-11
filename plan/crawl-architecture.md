@@ -80,9 +80,28 @@ At **preflight**, **generate**, and **tool spawn**, gcc-v2 **queries** Geek-Craw
   `preferChild`. Those flags now only select which text a hit returns;
   `preferParent: true` additionally collapses sibling children sharing one parent.
   Callers that omit both flags are no longer penalised.
-- **Practical effect:** if a prompt was sized against the old behaviour, it will
-  now receive more distinct evidence for the same `topK`. Re-check token budgets
-  for injected context before assuming the old row count.
+- **Practical effect:** prompts sized against the old “rows ≈ unique texts”
+  assumption now receive **more distinct evidence for the same `topK`** — context
+  volume grows without changing the request. Re-check token budgets before
+  assuming the old effective fill.
+
+#### Consumer re-measure (GeekAPI callers of `/v1/query`)
+
+Family switch lives in `GeekBackend/GeekAPI/Services/Rag/RagGenerateService.cs`
+(~line 236). **Not in scope:** `QueryTemplatesAsync` (`topK: 3` → `/v1/templates/query`)
+— ad-template index, unaffected by this corpus-query change.
+
+| Call site | topK | Old parent collapse? | Exposure |
+|-----------|------|----------------------|----------|
+| `RagGenerateService` **ShortForm** (`preferParent: false`, `preferChild: true`) | 5 | **No** — `_should_collapse_parents` was false | **Worst proportional** — tightest budget previously skipped the only dedup; at `topK: 5` that plausibly meant ~3 distinct texts in the prompt |
+| `GccV2GeekCrawlerResearchResolver` (`preferParent: true`) | 12 | Yes | **Largest absolute** token growth if distinct fill lands |
+| `RagGenerateService` Slides / default (`preferParent: true`) | 10 | Yes | Moderate |
+| `RagGenerateService` Battlecard (`preferParent: true`) | 8 | Yes | Moderate |
+| `HttpGeekCrawlerRagClient.QueryAsync` default | 8 | Depends on caller flags | Any caller that omitted flags |
+
+**Re-measure order for prompt / injection tuning:** ShortForm first (quality and
+noise on a newly filled budget), then the `topK: 12` WRITE research path (token
+ceiling), then Slides/default and Battlecard.
 
 Index-side notes that affect when results appear: re-running a failed index job
 resumes rather than restarting from zero, and embedding throughput is capped well

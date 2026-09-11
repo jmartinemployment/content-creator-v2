@@ -3057,6 +3057,16 @@ const server = http.createServer(async (req, res) => {
             { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
             { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
             {
+              id: "technicalCrawlable",
+              label: "Page crawlable",
+              type: "select",
+              required: false,
+              options: ["yes", "no"],
+              placeholder: "yes",
+            },
+            { id: "technicalStatusCode", label: "HTTP status code", type: "shortText", required: false, placeholder: "200" },
+            { id: "technicalLoadTimeMs", label: "Load time (ms)", type: "shortText", required: false, placeholder: "1800" },
+            {
               id: "contentCompleteness",
               label: "Source completeness",
               type: "select",
@@ -3117,7 +3127,23 @@ const server = http.createServer(async (req, res) => {
       workflow: {
         endpoint: "entity-map",
         artifactType: "entityMap.v1",
-        uiSchema: documentDiagnosticUi,
+        uiSchema: {
+          fields: [
+            { id: "sourceUrl", label: "Source URL", type: "shortText", required: false },
+            { id: "visibleContent", label: "Visible page content", type: "longText", required: true },
+            { id: "entitySeeds", label: "Entity seeds", type: "shortText", required: false, placeholder: "Comma-separated entity names" },
+            { id: "competitorUrl", label: "Competitor page URL", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor page content", type: "longText", required: false },
+            {
+              id: "contentCompleteness",
+              label: "Source completeness",
+              type: "select",
+              required: false,
+              options: ["full", "partial"],
+              placeholder: "full",
+            },
+          ],
+        },
       },
       resultRenderer: { kind: "entity-graph", artifactType: "entityMap.v1" },
     });
@@ -3308,7 +3334,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
             { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             {
               id: "subjectCompleteness",
               label: "Subject source completeness",
@@ -3349,7 +3382,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
             { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             {
               id: "subjectCompleteness",
               label: "Subject source completeness",
@@ -3390,7 +3430,14 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
             { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             {
               id: "subjectCompleteness",
               label: "Subject source completeness",
@@ -3431,7 +3478,28 @@ const server = http.createServer(async (req, res) => {
           fields: [
             { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
             { id: "subjectContent", label: "Brand page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor name", type: "shortText", required: false },
             { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "aiObservationModel", label: "AI answer model / engine", type: "shortText", required: false },
+            { id: "aiObservationQuery", label: "AI answer query", type: "shortText", required: false },
+            { id: "aiObservationRawResponse", label: "AI answer raw response", type: "longText", required: false },
+            { id: "aiObservationObservedAtUtc", label: "AI answer observed at (UTC)", type: "shortText", required: false },
+            {
+              id: "aiObservationSubjectMentioned",
+              label: "Subject mentioned in AI answer",
+              type: "select",
+              required: false,
+              options: ["yes", "no", "unknown"],
+              placeholder: "unknown",
+            },
+            {
+              id: "aiObservationCompetitorMentioned",
+              label: "Competitor mentioned in AI answer",
+              type: "select",
+              required: false,
+              options: ["yes", "no"],
+              placeholder: "no",
+            },
             {
               id: "subjectCompleteness",
               label: "Subject source completeness",
@@ -3486,9 +3554,15 @@ const server = http.createServer(async (req, res) => {
         uiSchema: {
           fields: [
             { id: "subjectName", label: "Subject name", type: "shortText", required: true },
-            { id: "competitorName", label: "Competitor name", type: "shortText", required: true },
             { id: "subjectContent", label: "Subject page content", type: "longText", required: true },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             { id: "sourceUrl", label: "Subject URL", type: "shortText", required: false },
             {
               id: "subjectCompleteness",
@@ -3584,9 +3658,15 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
         uiSchema: {
           fields: [
             { id: "brandName", label: "Brand name", type: "shortText", required: true },
-            { id: "competitorName", label: "Competitor name", type: "shortText", required: true },
             { id: "brandContent", label: "Brand page content", type: "longText", required: true },
-            { id: "competitorContent", label: "Competitor page content", type: "longText", required: true },
+            { id: "competitorName", label: "Competitor 1 name", type: "shortText", required: false },
+            { id: "competitorContent", label: "Competitor 1 page content", type: "longText", required: true },
+            { id: "competitor2Name", label: "Competitor 2 name", type: "shortText", required: false },
+            { id: "competitor2Content", label: "Competitor 2 page content", type: "longText", required: false },
+            { id: "competitor3Name", label: "Competitor 3 name", type: "shortText", required: false },
+            { id: "competitor3Content", label: "Competitor 3 page content", type: "longText", required: false },
+            { id: "competitor4Name", label: "Competitor 4 name", type: "shortText", required: false },
+            { id: "competitor4Content", label: "Competitor 4 page content", type: "longText", required: false },
             { id: "focusQuery", label: "Focus query", type: "shortText", required: false },
             { id: "sourceUrl", label: "Brand URL", type: "shortText", required: false },
             {
@@ -3798,6 +3878,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
     const artifactVersionId = base.artifacts[0].versions[0].id;
     return {
       ...base,
+      taskInputs: existing?.input ?? base.taskInputs ?? null,
       sharedContext: existing?.sharedContext
         ?? { contextManifestId: null, contextManifestDigest: null },
       lineage: [{
@@ -3913,6 +3994,11 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-1") {
         const completeness = existing?.input?.document?.contentCompleteness;
         const isPartial = completeness === "partial";
+        const technical = existing?.input?.document?.technical;
+        const hasTechnical = technical
+          && technical.crawlable != null
+          && technical.statusCode != null
+          && technical.loadTimeMs != null;
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "ai-readiness", displayName: "AI Readiness Score", objective: "Score visible content." },
@@ -3940,7 +4026,20 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                 }
                 : {
                   artifactType: "readinessScore.v1",
-                  overallScore: 82,
+                  overallScore: hasTechnical ? 84 : 82,
+                  dimensions: [
+                    ...(hasTechnical
+                      ? [{
+                        dimension: "technicalCrawlabilityPerformance",
+                        score: 100,
+                        explanation: `crawlable=${technical.crawlable}, status=${technical.statusCode}, loadTimeMs=${technical.loadTimeMs}.`,
+                      }]
+                      : [{
+                        dimension: "technicalCrawlabilityPerformance",
+                        score: null,
+                        explanation: "crawlable, statusCode, and loadTimeMs are all required for this dimension.",
+                      }]),
+                  ],
                   prioritizedFixes: [],
                   warnings: [
                     "Scores and classifications are deterministic heuristics, not measured search-engine or AI-citation outcomes.",
@@ -4008,6 +4107,13 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
         }));
       }
       if (runId === "task-run-11") {
+        const taskInputs = existing?.input && typeof existing.input === "object"
+          ? existing.input
+          : {};
+        const hasCompetitor = Boolean(
+          taskInputs.competitorDocument
+          && typeof taskInputs.competitorDocument === "object",
+        );
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "entity-mapper", displayName: "Entity Mapper", objective: "Map canonical entities." },
@@ -4045,6 +4151,32 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   confidence: 0.75,
                   evidenceIds: ["ev-3"],
                 }],
+                coverageComparisons: hasCompetitor
+                  ? [
+                    {
+                      entityId: "entity-acme",
+                      canonicalName: "Acme Cloud",
+                      onSubject: true,
+                      onCompetitor: true,
+                      status: "presentBoth",
+                    },
+                    {
+                      entityId: "entity-rival-trust",
+                      canonicalName: "Trust Layer",
+                      onSubject: false,
+                      onCompetitor: true,
+                      status: "competitorOnly",
+                    },
+                  ]
+                  : [],
+                recommendations: hasCompetitor
+                  ? [{
+                    recommendationId: "rec-trust",
+                    relatedEntityId: "entity-rival-trust",
+                    action: "Add verified owned coverage for Trust Layer; competitor content mentions it and the subject page does not.",
+                    evidenceIds: ["ev-comp-1"],
+                  }]
+                  : [],
                 warnings: [],
               }),
               evidenceJson: "[]",
@@ -4204,6 +4336,13 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                     evidenceIds: ["ev-50"],
                   },
                 ],
+                contradictionPairs: isPartial
+                  ? []
+                  : [{
+                    leftClaimId: "claim-500",
+                    rightClaimId: "claim-50",
+                    reason: "conflictingQuantities",
+                  }],
                 warnings: isPartial
                   ? [
                     "Source document is partial; confidence is unknown and verification stays unverifiable.",
@@ -4246,6 +4385,23 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-5") {
         const subjectCompleteness = existing?.input?.subjectPage?.contentCompleteness;
         const isPartial = subjectCompleteness === "partial";
+        const competitorPages = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages
+          : [];
+        const competitors = (competitorPages.length ? competitorPages : [{
+          competitorId: "rival",
+          competitorName: "Rival Co",
+        }]).slice(0, 4).map((page, index) => ({
+          role: "competitor",
+          sourceId: page?.source?.sourceId || `competitor-${index + 1}`,
+          competitorId: page?.competitorId || `competitor-${index + 1}`,
+          competitorName: page?.competitorName || `Competitor ${index + 1}`,
+          overallScore: 80 + index * 3,
+          dimensions: [],
+          prioritizedFixes: [],
+          warnings: [],
+          evidenceIds: [],
+        }));
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "ai-readiness-comparison", displayName: "AI Readiness Comparison", objective: "Compare readiness scores." },
@@ -4266,22 +4422,16 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   warnings: [],
                   evidenceIds: [],
                 },
-                competitors: [{
-                  role: "competitor",
-                  sourceId: "competitor-1",
-                  competitorId: "rival",
-                  competitorName: "Rival Co",
-                  overallScore: 86,
-                  dimensions: [],
-                  prioritizedFixes: [],
-                  warnings: [],
-                  evidenceIds: [],
-                }],
+                competitors,
                 dimensionDeltas: [{
                   dimension: "factDensity",
                   subjectScore: isPartial ? null : 70,
-                  competitorScores: [{ sourceId: "competitor-1", competitorId: "rival", score: 88 }],
-                  bestCompetitorScore: 88,
+                  competitorScores: competitors.map((row) => ({
+                    sourceId: row.sourceId,
+                    competitorId: row.competitorId,
+                    score: row.overallScore,
+                  })),
+                  bestCompetitorScore: Math.max(...competitors.map((row) => row.overallScore)),
                   deltaVsBestCompetitor: isPartial ? null : -18,
                   summary: isPartial
                     ? "Subject score unknown because the subject page is partial."
@@ -4311,6 +4461,13 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-6") {
         const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
         const isPartial = subjectCompleteness === "partial";
+        const competitorPages = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages
+          : [];
+        const competitorPageCount = Math.max(1, competitorPages.length);
+        const competitorSourceIds = competitorPages
+          .map((page) => page?.source?.sourceId)
+          .filter((id) => typeof id === "string" && id);
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "content-gap", displayName: "Content Gap Finder", objective: "Find comparative gaps." },
@@ -4325,13 +4482,13 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                 dimensions: [{
                   dimension: "proof",
                   subjectCoverage: isPartial ? null : false,
-                  competitorCoverageCount: 1,
-                  competitorPageCount: 1,
+                  competitorCoverageCount: competitorPageCount,
+                  competitorPageCount,
                   subjectEvidenceIds: [],
                   competitorEvidenceIds: ["ev-1"],
                   summary: isPartial
                     ? "Subject coverage is unknown due to partial input."
-                    : "Competitor shows proof signals the subject lacks.",
+                    : `Competitor proof signals appear on ${competitorPageCount} supplied page(s).`,
                 }],
                 gaps: [{
                   gapId: "gap-proof-1",
@@ -4341,7 +4498,9 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   opportunity: isPartial
                     ? "Re-run with fuller subject content before asserting a gap."
                     : "Publish a citeable customer-count proof block.",
-                  competitorSourceIds: ["competitor-1"],
+                  competitorSourceIds: competitorSourceIds.length
+                    ? competitorSourceIds
+                    : ["competitor-1"],
                   evidenceIds: ["ev-1"],
                   confidence: isPartial ? "unknown" : "high",
                 }],
@@ -4366,6 +4525,16 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-7") {
         const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
         const isPartial = subjectCompleteness === "partial";
+        const competitorPages = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages
+          : [];
+        const pageAnalyses = (competitorPages.length ? competitorPages : [{ competitorId: "rival" }]).map((page, index) => ({
+          artifactType: "competitorPageAnalysis.v1",
+          competitorId: page?.competitorId || `rival-${index + 1}`,
+          dimensions: [],
+          opportunities: ["Add FAQ answers"],
+          warnings: [],
+        }));
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "competitor-audit", displayName: "Competitor Audit", objective: "Prioritize remediation actions." },
@@ -4377,13 +4546,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
               id: "artifact-version-7",
               payloadJson: JSON.stringify({
                 artifactType: "competitorAudit.v1",
-                pageAnalyses: [{
-                  artifactType: "competitorPageAnalysis.v1",
-                  competitorId: "rival",
-                  dimensions: [],
-                  opportunities: ["Add FAQ answers"],
-                  warnings: [],
-                }],
+                pageAnalyses,
                 contentGap: {
                   gaps: [{
                     gapId: "gap-1",
@@ -4397,7 +4560,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   action: "Add a verified customer-count claim with source evidence.",
                   rationale: isPartial
                     ? "Subject coverage is unknown because at least one subject page is partial."
-                    : "Competitor proof signals are present while subject coverage is absent.",
+                    : `Competitor proof signals are present across ${pageAnalyses.length} page(s) while subject coverage is absent.`,
                   evidenceIds: ["ev-1"],
                   origin: isPartial ? "coverageUnknown" : "supportedGap",
                 }],
@@ -4420,6 +4583,24 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-8") {
         const brandCompleteness = existing?.input?.brandPages?.[0]?.contentCompleteness;
         const isPartial = brandCompleteness === "partial";
+        const observations = Array.isArray(existing?.input?.aiAnswerObservations)
+          ? existing.input.aiAnswerObservations
+          : [];
+        const observationGaps = observations
+          .filter((obs) =>
+            Array.isArray(obs?.competitorIdsMentioned)
+            && obs.competitorIdsMentioned.length > 0
+            && obs.subjectMentioned !== true
+          )
+          .map((obs) => ({
+            gapId: `obs-gap-${obs.observationId || "1"}`,
+            attribute: `AI-answer mention for query: ${obs.query || ""}`,
+            status: "observationOnly",
+            summary: "Supplied AI-answer observation mentions competitor(s) without confirmed subject mention. This is an observation record, not measured market perception.",
+            evidenceIds: [],
+            observationIds: [obs.observationId].filter(Boolean),
+            competitorIds: obs.competitorIdsMentioned,
+          }));
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: { capabilityId: "competitor-positioning", displayName: "Competitor Positioning", objective: "Map narrative attributes." },
@@ -4439,16 +4620,19 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   evidenceIds: ["ev-1"],
                   sourceIds: ["brand-1"],
                 }],
-                perceptionGaps: [{
-                  gapId: "pg-1",
-                  attribute: "Speed claims",
-                  status: isPartial ? "coverageUnknown" : "supportedGap",
-                  summary: isPartial
-                    ? "Brand coverage is unknown because at least one brand page is partial."
-                    : "Competitor emphasizes speed; brand does not.",
-                  evidenceIds: ["ev-2"],
-                  competitorIds: ["rival"],
-                }],
+                perceptionGaps: [
+                  {
+                    gapId: "pg-1",
+                    attribute: "Speed claims",
+                    status: isPartial ? "coverageUnknown" : "supportedGap",
+                    summary: isPartial
+                      ? "Brand coverage is unknown because at least one brand page is partial."
+                      : "Competitor emphasizes speed; brand does not.",
+                    evidenceIds: ["ev-2"],
+                    competitorIds: ["rival"],
+                  },
+                  ...observationGaps,
+                ],
                 messagingHypotheses: [{
                   hypothesisId: "hyp-1",
                   origin: "generatedHypothesis",
@@ -4456,8 +4640,9 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   targetQuery: "fastest AI writing tool",
                   relatedAttribute: "Speed claims",
                   evidenceIds: ["ev-2"],
+                  disclaimer: "Generated only — not measured market perception.",
                 }],
-                observations: [],
+                observations,
                 warnings: isPartial
                   ? [
                     "At least one brand page is partial; missing brand attributes are coverageUnknown rather than asserted absences.",
@@ -4512,6 +4697,16 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-13") {
         const subjectCompleteness = existing?.input?.subjectPages?.[0]?.contentCompleteness;
         const isPartial = subjectCompleteness === "partial";
+        const competitorPages = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages
+          : [];
+        const competitorPageCount = Math.max(1, competitorPages.length);
+        const competitorName = existing?.input?.competitorName
+          || competitorPages
+            .map((page) => page?.source?.title)
+            .filter((title) => typeof title === "string" && title)
+            .join(" · ")
+          || "Competitor Inc.";
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: {
@@ -4527,8 +4722,8 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
               id: "artifact-version-13",
               payloadJson: JSON.stringify({
                 artifactType: "comparisonBrief.v1",
-                subjectName: "Subject Analyzer",
-                competitorName: "Competitor Inc.",
+                subjectName: existing?.input?.subjectName || "Subject Analyzer",
+                competitorName,
                 criteria: [{
                   criterion: "pricing",
                   subjectSignals: isPartial ? [] : ["Plans start at $15 per month."],
@@ -4557,12 +4752,17 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                     : "Choose Subject Analyzer when buyers need evidence-linked analysis at a lower entry price.",
                   disclaimer: "Heuristic recommendation from supplied page signals only; not a measured ranking, win rate, or market outcome.",
                 },
-                warnings: isPartial
-                  ? [
-                    "Subject coverage is unknown due to partial input.",
-                    "Differentiators are labeled generatedHypothesis.",
-                  ]
-                  : ["Differentiators are labeled generatedHypothesis."],
+                warnings: [
+                  ...(competitorPageCount > 1
+                    ? [`Compared against ${competitorPageCount} competitor pages.`]
+                    : []),
+                  ...(isPartial
+                    ? [
+                      "Subject coverage is unknown due to partial input.",
+                      "Differentiators are labeled generatedHypothesis.",
+                    ]
+                    : ["Differentiators are labeled generatedHypothesis."]),
+                ],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
@@ -4618,6 +4818,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
             }],
           }],
           nextActions: [
+            { capabilityId: "pillar-article", label: "Pillar Article", artifactType: "pillarArticle.v1" },
             { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
             { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
           ],
@@ -4677,6 +4878,10 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
       if (runId === "task-run-15") {
         const brandCompleteness = existing?.input?.brandPages?.[0]?.contentCompleteness;
         const isPartial = brandCompleteness === "partial";
+        const competitorPages = Array.isArray(existing?.input?.competitorPages)
+          ? existing.input.competitorPages
+          : [];
+        const competitorPageCount = Math.max(1, competitorPages.length);
         return send(res, 200, taskResultShell(runId, existing, {
           contractVersion: "gcc-task-result-shell.v1",
           identity: {
@@ -4712,12 +4917,17 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
                   objective: "Lead with a direct brand answer, then required proof.",
                   evidenceIds: [],
                 }],
-                warnings: isPartial
-                  ? [
-                    "At least one brand page is partial; missing brand signals stay unknown.",
-                    "Does not copy competitor prose into draft body.",
-                  ]
-                  : ["Does not copy competitor prose into draft body."],
+                warnings: [
+                  ...(competitorPageCount > 1
+                    ? [`Response plan considers ${competitorPageCount} competitor pages.`]
+                    : []),
+                  ...(isPartial
+                    ? [
+                      "At least one brand page is partial; missing brand signals stay unknown.",
+                      "Does not copy competitor prose into draft body.",
+                    ]
+                    : ["Does not copy competitor prose into draft body."]),
+                ],
               }),
               evidenceJson: "[]",
               citationsJson: "[]",
