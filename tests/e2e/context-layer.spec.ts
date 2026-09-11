@@ -241,6 +241,25 @@ test("completed website research can be reused and promoted to the source librar
   await expect(page.getByRole("button", { name: "Added to Source Library · processing" })).toBeDisabled();
 });
 
+test("context selector can attach a public URL to the run", async ({ page, request }) => {
+  await reachContextReview(page);
+  await page.getByRole("button", { name: "Create content" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
+  await page.getByLabel("Attachment URL").fill("https://example.com/run-brief");
+  await page.getByRole("button", { name: "Add URL to this run" }).click();
+  await expect(page.getByRole("status")).toContainText("Fetched attachment page");
+  await expect(page.getByText("attachment-url-1")).toBeVisible();
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const fromUrl = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST"
+    && entry.path === "/api/geek-content-creator-v2/creates/create-1/attachments/from-url");
+  expect(fromUrl).toBeTruthy();
+  expect(JSON.parse(fromUrl.body)).toMatchObject({
+    url: "https://example.com/run-brief",
+  });
+});
+
 test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page, request }) => {
   await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "stale" } });
   await reachContextReview(page);

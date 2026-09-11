@@ -82,6 +82,7 @@ export function ContextSelector({
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
   const [preview, setPreview] = useState<ResolvedContextPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,6 +174,42 @@ export function ContextSelector({
       onPreviewChange(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Attachment upload failed.");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
+  async function addAttachmentFromUrl() {
+    if (!createId) return;
+    const url = attachmentUrl.trim();
+    if (!url) {
+      setError("Enter a public http(s) URL to attach to this run.");
+      return;
+    }
+    setUploadBusy(true);
+    setError(null);
+    setUploadMessage(null);
+    try {
+      const response = await fetch(`/api/gcc-v2/creates/${createId}/attachments/from-url`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `URL attachment failed (HTTP ${response.status}).`);
+      }
+      const attachmentId = typeof body?.attachmentId === "string" ? body.attachmentId : null;
+      if (!attachmentId) throw new Error("URL attach completed without an attachment ID.");
+      onChange({ ...value, runAttachmentIds: [...value.runAttachmentIds, attachmentId] });
+      setAttachmentUrl("");
+      setUploadMessage(
+        `${body?.title || body?.finalUrl || url} is ${body?.state ?? "queued"}. Run context must be checked again after ingestion.`,
+      );
+      setPreview(null);
+      onPreviewChange(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "URL attachment failed.");
     } finally {
       setUploadBusy(false);
     }
@@ -354,10 +391,34 @@ export function ContextSelector({
         {!allowAttachments ? (
           <p className="mt-2 text-xs text-[var(--cc-muted)]">Task-agent runs pin approved catalog context only. Use create-flow jobs for temporary attachments.</p>
         ) : createId ? (
-          <label className="mt-2 inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">
-            Choose attachment
-            <input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
-          </label>
+          <div className="mt-2 space-y-2">
+            <label className="inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">
+              Choose attachment
+              <input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
+            </label>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-[16rem] flex-1 text-xs font-semibold">
+                Attachment URL
+                <input
+                  type="url"
+                  aria-label="Attachment URL"
+                  value={attachmentUrl}
+                  disabled={uploadBusy}
+                  onChange={(event) => setAttachmentUrl(event.target.value)}
+                  placeholder="https://example.com/brief"
+                  className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={uploadBusy || !attachmentUrl.trim()}
+                onClick={() => void addAttachmentFromUrl()}
+                className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+              >
+                Add URL to this run
+              </button>
+            </div>
+          </div>
         ) : (
           <p className="mt-2 text-xs text-amber-800">Save the create from this review step before adding a run attachment.</p>
         )}

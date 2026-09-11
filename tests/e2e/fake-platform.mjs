@@ -1520,6 +1520,60 @@ const server = http.createServer(async (req, res) => {
       state: "queued",
     });
   }
+  const attachmentFromUrl = url.pathname.match(
+    /^\/api\/geek-content-creator-v2\/creates\/([^/]+)\/attachments\/from-url$/,
+  );
+  if (attachmentFromUrl && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const urlValue = typeof body.url === "string" ? body.url.trim() : "";
+    if (!urlValue) {
+      return send(res, 400, {
+        contractVersion: "gcc-attachment-from-url.v1",
+        error: "URL is required.",
+        errorCode: "ssrf",
+      });
+    }
+    if (/localhost|127\.0\.0\.1|169\.254\.|10\.|192\.168\.|metadata/i.test(urlValue)) {
+      return send(res, 400, {
+        contractVersion: "gcc-attachment-from-url.v1",
+        error: "Host is not allowed.",
+        errorCode: "ssrf",
+      });
+    }
+    const createId = attachmentFromUrl[1];
+    const attachmentId = `attachment-url-${contextUploads.size + 1}`;
+    const ingestionJobId = `ingestion-${ingestionEvents.length + 1}`;
+    contextUploads.set(attachmentId, {
+      scope: "attachment",
+      createId,
+      metadata: { fileName: "example-com.md", url: urlValue },
+      bytes: Buffer.from(`# Fetched attachment\n${urlValue}`),
+    });
+    ingestionEvents.push({
+      id: crypto.randomUUID(),
+      jobId: ingestionJobId,
+      seq: ingestionEvents.length + 1,
+      state: "queued",
+      message: `Attachment from URL queued`,
+      progressPercent: 0,
+      createdAtUtc: new Date().toISOString(),
+      attachmentId,
+    });
+    return send(res, 202, {
+      contractVersion: "gcc-attachment-from-url.v1",
+      attachmentId,
+      createId,
+      finalUrl: urlValue,
+      title: "Fetched attachment page",
+      safeFileName: "example-com.md",
+      contentCompleteness: "full",
+      statusCode: 200,
+      byteSize: 128,
+      contentSha256: "a".repeat(64),
+      ingestionJobId,
+      state: "queued",
+    });
+  }
   const attachmentIssue = url.pathname.match(/^\/api\/geek-content-creator-v2\/creates\/([^/]+)\/attachments\/uploads$/);
   if (attachmentIssue && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
