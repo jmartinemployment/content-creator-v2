@@ -67,6 +67,28 @@ At **preflight**, **generate**, and **tool spawn**, gcc-v2 **queries** Geek-Craw
 
 **Operator flow:** finish Geek-Crawler `partner`/`competitors` runs → wait for RAG index **`complete`** (SignalR `GeekCrawlerRagIndexEvent` in Geek-Crawler UI) → generate in content-creator-v2.
 
+### What `POST /v1/query` returns (2026-09-11)
+
+- **`topK` now yields `topK` distinct texts.** Short heading sections produce a
+  child chunk byte-identical to its parent, and identical vectors score
+  identically, so the pair used to occupy adjacent result slots. Repeated text is
+  now dropped before the `topK` cap and the candidate pool over-fetches to
+  compensate. Previously a `topK: 8` could return 8 rows with only 5 distinct
+  texts — ~37% of the requested context silently lost, rising to ~48% at
+  `topK: 40`.
+- **De-duplication is unconditional.** It no longer depends on `preferParent` /
+  `preferChild`. Those flags now only select which text a hit returns;
+  `preferParent: true` additionally collapses sibling children sharing one parent.
+  Callers that omit both flags are no longer penalised.
+- **Practical effect:** if a prompt was sized against the old behaviour, it will
+  now receive more distinct evidence for the same `topK`. Re-check token budgets
+  for injected context before assuming the old row count.
+
+Index-side notes that affect when results appear: re-running a failed index job
+resumes rather than restarting from zero, and embedding throughput is capped well
+below the OpenAI account ceiling — so a large run is slower but no longer dies
+part-way. See `Geek-Crawler-Rag/plans/embedding-cache-and-duplicate-results.md`.
+
 Phi keeps operator URLs on the brief only — **no** Geek-Crawler BFF, crawl UI, or RAG indexer in content-creator-v2 `src/`.
 
 ### External research policy (product)
