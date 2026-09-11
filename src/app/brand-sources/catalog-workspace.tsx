@@ -982,9 +982,13 @@ export function CatalogWorkspace() {
     mandatoryDisclaimers: [],
   });
   const [productSchemaCatalog, setProductSchemaCatalog] = useState<GovernedCatalogItem[]>([]);
+  const [knowledgeUrl, setKnowledgeUrl] = useState("");
   const ingestionLastSeq = useRef(0);
 
-  const loadCatalog = useCallback(async (definition: CatalogDefinition) => {
+  const loadCatalog = useCallback(async (
+    definition: CatalogDefinition,
+    select?: { assetId?: string; versionId?: string },
+  ) => {
     setLoading(true);
     setError(null);
     try {
@@ -993,8 +997,14 @@ export function CatalogWorkspace() {
       if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
       const next = normalizeCatalog(body);
       setItems(next);
-      setSelectedId(next[0]?.id ?? null);
-      setSelectedVersionId(next[0] ? currentVersion(next[0])?.id ?? null : null);
+      const preferred = select?.assetId
+        ? next.find((item) => item.id === select.assetId) ?? next[0]
+        : next[0];
+      setSelectedId(preferred?.id ?? null);
+      setSelectedVersionId(
+        select?.versionId
+          ?? (preferred ? currentVersion(preferred)?.id ?? null : null),
+      );
       if (definition.kind === "product") {
         const schemaResponse = await fetch("/api/gcc-v2/product-schemas", { cache: "no-store" });
         const schemaBody = await schemaResponse.json().catch(() => null);
@@ -1372,6 +1382,40 @@ export function CatalogWorkspace() {
     }
   }
 
+  async function addKnowledgeFromUrl() {
+    const url = knowledgeUrl.trim();
+    if (!url) {
+      setError("Enter a public http(s) URL to add to Knowledge.");
+      return;
+    }
+    setActionBusy("from-url");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/gcc-v2/knowledge/from-url", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `URL ingest failed (HTTP ${response.status}).`);
+      }
+      setKnowledgeUrl("");
+      setNotice(
+        `Fetched ${body?.finalUrl || url}. Ingestion job ${body?.ingestionJobId ?? "?"} is ${body?.state ?? "queued"}.`,
+      );
+      await loadCatalog(active, {
+        assetId: typeof body?.assetId === "string" ? body.assetId : undefined,
+        versionId: typeof body?.versionId === "string" ? body.versionId : undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "URL Knowledge ingest failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1418,7 +1462,51 @@ export function CatalogWorkspace() {
               <input aria-label={`Search ${active.label}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${active.label.toLowerCase()}`} className="min-w-0 flex-1 rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" />
               <select aria-label="Lifecycle filter" value={lifecycle} onChange={(event) => setLifecycle(event.target.value)} className="rounded-md border border-[var(--cc-line)] bg-white px-2 text-sm"><option value="all">All states</option><option value="draft">Draft</option><option value="in_review">In review</option><option value="approved">Approved</option><option value="deprecated">Deprecated</option><option value="revoked">Revoked</option></select>
             </div>
-            {active.kind === "knowledge" ? <label className="mt-3 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--cc-accent)] bg-teal-50 px-3 py-3 text-sm font-semibold text-[var(--cc-accent)]">Upload additional reference<input type="file" className="sr-only" disabled={actionBusy !== null} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadKnowledge(file); }} /></label> : null}
+            {active.kind === "knowledge" ? (
+              <div className="mt-3 space-y-2">
+                <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--cc-accent)] bg-teal-50 px-3 py-3 text-sm font-semibold text-[var(--cc-accent)]">
+                  Upload additional reference
+                  <input
+                    type="file"
+                    className="sr-only"
+                    disabled={actionBusy !== null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void uploadKnowledge(file);
+                    }}
+                  />
+                </label>
+                <div className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                  <label className="block text-xs font-semibold" htmlFor="knowledge-url">
+                    Add URL
+                  </label>
+                  <input
+                    id="knowledge-url"
+                    aria-label="Knowledge source URL"
+                    value={knowledgeUrl}
+                    disabled={actionBusy !== null}
+                    onChange={(event) => setKnowledgeUrl(event.target.value)}
+                    placeholder="https://example.com/docs/page"
+                    className="mt-1 w-full rounded-md border border-[var(--cc-line)] px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={actionBusy !== null}
+                    onClick={() => void addKnowledgeFromUrl()}
+                    className="mt-2 w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    <ButtonBusyLabel
+                      busy={actionBusy === "from-url"}
+                      busyLabel="Fetching URL…"
+                      idleLabel="Add URL to Knowledge"
+                    />
+                  </button>
+                  <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                    Fetches public HTML over HTTP (SSRF-gated). JavaScript-rendered pages may be incomplete.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading catalog…</p> : null}
             <ul className="mt-3 space-y-2">{filtered.map((item) => { const version = currentVersion(item); return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setSelectedVersionId(version?.id ?? null); }} className={`w-full rounded-lg border bg-white p-4 text-left ${selectedId === item.id ? "border-[var(--cc-accent)] ring-1 ring-[var(--cc-accent)]" : "border-[var(--cc-line)]"}`}><span className="font-semibold">{item.name}</span><span className="mt-1 block text-xs text-[var(--cc-muted)]">{item.description || "No description"}</span>{version ? <span className={`mt-2 inline-block rounded-full px-2 py-1 text-xs font-semibold ${statusClass(version.lifecycle)}`}>v{version.versionNumber} · {version.lifecycle}</span> : null}</button></li>; })}</ul>
           </section>

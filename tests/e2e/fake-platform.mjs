@@ -1399,6 +1399,93 @@ const server = http.createServer(async (req, res) => {
       maxBytes: 10_000_000,
     });
   }
+  if (url.pathname === "/api/geek-content-creator-v2/knowledge/from-url" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const urlValue = typeof body.url === "string" ? body.url.trim() : "";
+    if (!urlValue) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-url.v1",
+        error: "URL is required.",
+        errorCode: "ssrf",
+      });
+    }
+    if (/localhost|127\.0\.0\.1|169\.254\.|10\.|192\.168\.|metadata/i.test(urlValue)) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-url.v1",
+        error: "Host is not allowed.",
+        errorCode: "ssrf",
+      });
+    }
+    const title = "Fetched readiness page";
+    let asset = typeof body.assetId === "string"
+      ? contextCatalogs.knowledge.find((entry) => entry.id === body.assetId)
+      : null;
+    if (!asset) {
+      const assetId = `knowledge-${contextCatalogs.knowledge.length + 1}`;
+      const versionId = `${assetId}-version-1`;
+      asset = {
+        id: assetId,
+        kind: "knowledge",
+        name: title,
+        description: `Fetched from ${urlValue}`,
+        tags: ["url"],
+        currentVersionId: versionId,
+        versions: [],
+      };
+      contextCatalogs.knowledge.push(asset);
+    }
+    const versionNumber = asset.versions.length + 1;
+    const versionId = `${asset.id}-version-${versionNumber}`;
+    const ingestionJobId = `ingestion-${ingestionEvents.length + 1}`;
+    asset.versions.push({
+      id: versionId,
+      versionNumber,
+      lifecycle: "draft",
+      digest: `sha256:${"f".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      freshness: "fresh",
+      ingestionState: "queued",
+      extractionState: "pending",
+      indexState: "pending",
+      provenance: {
+        sourceLabel: title,
+        sourceUrl: urlValue,
+        sourceTimestampUtc: new Date().toISOString(),
+        parser: "GccV2TaskAgentPageHydrator",
+        parserVersion: "1",
+        contentDigest: `sha256:${"f".repeat(64)}`,
+      },
+      findings: [],
+      audit: [],
+    });
+    asset.currentVersionId = versionId;
+    asset.name = asset.name || title;
+    ingestionEvents.push({
+      id: crypto.randomUUID(),
+      jobId: ingestionJobId,
+      seq: ingestionEvents.length + 1,
+      state: "queued",
+      message: `${title} queued from URL`,
+      progressPercent: 0,
+      createdAtUtc: new Date().toISOString(),
+      assetId: asset.id,
+    });
+    return send(res, 202, {
+      contractVersion: "gcc-knowledge-from-url.v1",
+      connectorId: "url",
+      assetId: asset.id,
+      versionId,
+      resourceId: `${versionId}-resource`,
+      finalUrl: urlValue,
+      title,
+      contentCompleteness: "full",
+      statusCode: 200,
+      byteSize: 512,
+      contentSha256: "f".repeat(64),
+      ingestionJobId,
+      state: "queued",
+    });
+  }
   const attachmentIssue = url.pathname.match(/^\/api\/geek-content-creator-v2\/creates\/([^/]+)\/attachments\/uploads$/);
   if (attachmentIssue && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");

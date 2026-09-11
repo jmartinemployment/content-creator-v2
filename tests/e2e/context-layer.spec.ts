@@ -50,6 +50,28 @@ test("Geek IQ catalogs expose lifecycle, provenance, and ingestion activity", as
   await expect(page.getByText("Editorial handbook indexed")).toBeVisible();
 });
 
+test("Knowledge Add URL creates a version with source URL provenance", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByLabel("Knowledge source URL").fill("https://example.com/docs/readiness");
+  await page.getByRole("button", { name: "Add URL to Knowledge" }).click();
+  await expect(page.getByRole("status")).toContainText("Fetched https://example.com/docs/readiness");
+  await expect(page.getByRole("heading", { name: "Fetched readiness page" })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+  await expect(page.getByRole("link", { name: /Fetched readiness page|example\.com\/docs\/readiness/ })).toHaveAttribute(
+    "href",
+    "https://example.com/docs/readiness",
+  );
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const fromUrl = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-url");
+  expect(fromUrl).toBeTruthy();
+  expect(JSON.parse(fromUrl.body)).toMatchObject({
+    url: "https://example.com/docs/readiness",
+  });
+});
+
 test("Visual Guidelines policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Visual Guidelines" }).click();
