@@ -299,14 +299,21 @@ test("approved source upload sends bytes directly to issued storage URL and fina
   expect(JSON.parse(bffUploadCalls[1].body).sha256).toMatch(/^[a-f0-9]{64}$/);
 });
 
-test("completed website research can be reused and promoted to the source library", async ({ page }) => {
+test("completed website research is promoted to the source library without asking", async ({ page, request }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Using 1 page from")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add website to Source Library" }).click();
-  await expect(page.getByRole("button", { name: "Added to Source Library · processing" })).toBeDisabled();
+  await expect(page.getByText("Added to the Source Library · processing")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Source Library/ })).toHaveCount(0);
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const promotions = requests.filter((entry: { path: string }) =>
+    entry.path.endsWith("/promote-to-source"),
+  );
+  expect(promotions).toHaveLength(1);
+  expect(JSON.parse(promotions[0].body)).toMatchObject({ approve: true });
 });
 
 test("context selector can attach a public URL to the run", async ({ page, request }) => {

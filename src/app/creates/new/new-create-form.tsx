@@ -359,6 +359,7 @@ export function NewCreateForm({
 }: NewCreateFormProps) {
   const router = useRouter();
   const crawlAbortRef = useRef<AbortController | null>(null);
+  const promotedRunsRef = useRef<Set<string>>(new Set());
   const hubRef = useRef<ReturnType<typeof createProjectSiteHubConnection> | null>(null);
 
   const [step, setStep] = useState<Step>("source");
@@ -649,6 +650,33 @@ export function NewCreateForm({
     }
   }, []);
 
+  /** Every completed project-site crawl becomes a reusable source — no operator prompt. */
+  const promoteRunToSourceLibrary = useCallback(async (runId: string) => {
+    if (promotedRunsRef.current.has(runId)) return;
+    promotedRunsRef.current.add(runId);
+    setSourceLibraryStatus("saving");
+    setSourceLibraryError(null);
+    try {
+      const response = await fetch(
+        `/api/gcc-v2/project-site/runs/${runId}/promote-to-source`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ approve: true }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+      setSourceLibraryStatus("saved");
+    } catch (cause) {
+      promotedRunsRef.current.delete(runId);
+      setSourceLibraryStatus("idle");
+      setSourceLibraryError(
+        cause instanceof Error ? cause.message : "Could not add the website to the source library.",
+      );
+    }
+  }, []);
+
   const applyReadyCrawl = useCallback(async (runId: string, resolvedSiteUrl: string) => {
     setAnalyzingLabel("Loading pages from this site…");
     const loaded = await loadSectionFromCrawlRun(runId, resolvedSiteUrl);
@@ -659,7 +687,8 @@ export function NewCreateForm({
     setAnalyzingLabel("Loading mobile site hierarchy…");
     setBusy(false);
     void loadSiteHierarchyFromRun(runId).finally(() => setAnalyzingLabel(null));
-  }, [loadSiteHierarchyFromRun]);
+    void promoteRunToSourceLibrary(runId);
+  }, [loadSiteHierarchyFromRun, promoteRunToSourceLibrary]);
 
   const waitForCrawlComplete = useCallback(
     async (
@@ -1207,30 +1236,6 @@ export function NewCreateForm({
     }
   }
 
-  async function saveProjectSiteAsApprovedSource() {
-    if (!projectSiteCrawlRunId) return;
-    setSourceLibraryStatus("saving");
-    setSourceLibraryError(null);
-    try {
-      const response = await fetch(
-        `/api/gcc-v2/project-site/runs/${projectSiteCrawlRunId}/promote-to-source`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ approve: true }),
-        },
-      );
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
-      setSourceLibraryStatus("saved");
-    } catch (cause) {
-      setSourceLibraryStatus("idle");
-      setSourceLibraryError(
-        cause instanceof Error ? cause.message : "Could not add the website to the source library.",
-      );
-    }
-  }
-
   const currentStep = step === "analyzing" ? "source" : step;
   const currentIndex = WIZARD_STEPS.findIndex((item) => item.key === currentStep);
   const selectedContentTypes = [
@@ -1434,27 +1439,18 @@ export function NewCreateForm({
                 Change
               </button>
             </div>
-            <div className="mt-3 rounded-lg border border-[var(--cc-line)] bg-white px-4 py-3 text-sm">
-              <p className="font-medium text-[var(--cc-ink)]">Want to reuse this website as optional context?</p>
-              <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                This creation already uses the research. Add it to the Source Library only if you want to select it in future projects.
-              </p>
-              <button
-                type="button"
-                className="mt-3 rounded-md border border-[var(--cc-accent)] px-3 py-2 text-xs font-semibold text-[var(--cc-accent)] disabled:opacity-60"
-                disabled={sourceLibraryStatus !== "idle"}
-                onClick={() => void saveProjectSiteAsApprovedSource()}
+            {sourceLibraryStatus !== "idle" || sourceLibraryError ? (
+              <p
+                className={`mt-2 text-xs ${sourceLibraryError ? "text-red-700" : "text-[var(--cc-muted)]"}`}
+                {...(sourceLibraryError ? { role: "alert" as const } : {})}
               >
-                {sourceLibraryStatus === "saving"
-                  ? "Adding…"
-                  : sourceLibraryStatus === "saved"
-                    ? "Added to Source Library · processing"
-                    : "Add website to Source Library"}
-              </button>
-              {sourceLibraryError ? (
-                <p role="alert" className="mt-2 text-xs text-red-700">{sourceLibraryError}</p>
-              ) : null}
-            </div>
+                {sourceLibraryError
+                  ? `This website was not added to the Source Library: ${sourceLibraryError}`
+                  : sourceLibraryStatus === "saving"
+                    ? "Adding this website to the Source Library…"
+                    : "Added to the Source Library · processing"}
+              </p>
+            ) : null}
             <div className={`${fieldClass} mt-6`}>
               <label className={labelClass} htmlFor="title">Working title</label>
               <input
