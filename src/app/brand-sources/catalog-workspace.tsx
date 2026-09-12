@@ -1065,6 +1065,9 @@ export function CatalogWorkspace() {
   const [driveConnections, setDriveConnections] = useState<Array<{ id: string; accountLabel: string; status: string }>>([]);
   const [driveConnectionId, setDriveConnectionId] = useState("");
   const [driveFileIdOrUrl, setDriveFileIdOrUrl] = useState("");
+  const [sharePointConnections, setSharePointConnections] = useState<Array<{ id: string; accountLabel: string; status: string }>>([]);
+  const [sharePointConnectionId, setSharePointConnectionId] = useState("");
+  const [sharePointItemIdOrUrl, setSharePointItemIdOrUrl] = useState("");
   const ingestionLastSeq = useRef(0);
 
   const loadCatalog = useCallback(async (
@@ -1108,6 +1111,7 @@ export function CatalogWorkspace() {
     if (active.kind !== "knowledge") return;
     void loadGscConnections();
     void loadDriveConnections();
+    void loadSharePointConnections();
   }, [active.kind]);
 
   async function loadGscConnections() {
@@ -1155,6 +1159,30 @@ export function CatalogWorkspace() {
       });
     } catch {
       // Keep Knowledge usable when Drive listing is unavailable.
+    }
+  }
+
+  async function loadSharePointConnections() {
+    try {
+      const response = await fetch("/api/gcc-v2/sharepoint/connections", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) return;
+      const connections = Array.isArray(body?.connections)
+        ? body.connections
+          .map((entry: { id?: unknown; accountLabel?: unknown; status?: unknown }) => ({
+            id: typeof entry?.id === "string" ? entry.id : "",
+            accountLabel: typeof entry?.accountLabel === "string" ? entry.accountLabel : "",
+            status: typeof entry?.status === "string" ? entry.status : "unknown",
+          }))
+          .filter((entry: { id: string }) => entry.id)
+        : [];
+      setSharePointConnections(connections);
+      setSharePointConnectionId((current) => {
+        if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
+        return connections[0]?.id ?? "";
+      });
+    } catch {
+      // Keep Knowledge usable when SharePoint listing is unavailable.
     }
   }
 
@@ -1743,6 +1771,85 @@ export function CatalogWorkspace() {
     }
   }
 
+  async function connectSharePointForKnowledge() {
+    setActionBusy("sharepoint-connect");
+    setNotice(null);
+    setError(null);
+    try {
+      const oauthResponse = await fetch(
+        "/api/gcc-v2/sharepoint/oauth/connect-url?returnPath=%2Fbrand-sources",
+        { cache: "no-store" },
+      );
+      const oauthBody = await oauthResponse.json().catch(() => null);
+      if (oauthResponse.ok && typeof oauthBody?.url === "string" && oauthBody.url) {
+        window.location.assign(oauthBody.url);
+        return;
+      }
+      if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
+        throw new Error(oauthBody?.error || `SharePoint OAuth start failed (HTTP ${oauthResponse.status}).`);
+      }
+
+      const response = await fetch("/api/gcc-v2/sharepoint/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accountLabel: "sharepoint@example.test" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `SharePoint connect failed (HTTP ${response.status}).`);
+      }
+      const connectionId = body?.connection?.id;
+      if (typeof connectionId !== "string" || !connectionId) {
+        throw new Error("SharePoint connect did not return a connection id.");
+      }
+      await loadSharePointConnections();
+      setSharePointConnectionId(connectionId);
+      setNotice(`Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect SharePoint.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function addKnowledgeFromSharePoint() {
+    if (!sharePointConnectionId) {
+      setError("Connect SharePoint before importing a file.");
+      return;
+    }
+    const itemIdOrUrl = sharePointItemIdOrUrl.trim();
+    if (!itemIdOrUrl) {
+      setError("Enter a SharePoint/OneDrive item id or sharing URL.");
+      return;
+    }
+    setActionBusy("from-sharepoint");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/gcc-v2/knowledge/from-sharepoint", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sharePointConnectionId, itemIdOrUrl }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `SharePoint ingest failed (HTTP ${response.status}).`);
+      }
+      setSharePointItemIdOrUrl("");
+      setNotice(
+        `Imported SharePoint file ${body?.itemId || itemIdOrUrl}. Ingestion job ${body?.ingestionJobId ?? "?"} is ${body?.state ?? "queued"}.`,
+      );
+      await loadCatalog(active, {
+        assetId: typeof body?.assetId === "string" ? body.assetId : undefined,
+        versionId: typeof body?.versionId === "string" ? body.versionId : undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "SharePoint Knowledge ingest failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1954,6 +2061,74 @@ export function CatalogWorkspace() {
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
                     Imports Docs/text/PDF/Office via Drive read-only OAuth. Image, audio, and video stay fail-closed.
+                  </p>
+                </div>
+                <div className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                  <p className="text-xs font-semibold">Add SharePoint / OneDrive file</p>
+                  {sharePointConnections.length > 0 ? (
+                    <label className="mt-2 block text-xs font-semibold" htmlFor="knowledge-sharepoint-connection">
+                      SharePoint connection
+                      <select
+                        id="knowledge-sharepoint-connection"
+                        aria-label="SharePoint connection"
+                        value={sharePointConnectionId}
+                        disabled={actionBusy !== null}
+                        onChange={(event) => setSharePointConnectionId(event.target.value)}
+                        className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+                      >
+                        {sharePointConnections.map((connection) => (
+                          <option key={connection.id} value={connection.id}>
+                            {connection.accountLabel || connection.id}
+                            {connection.status === "stub" ? " (stub)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                      No SharePoint connection yet. Connect an owner-owned Microsoft account to import files.
+                    </p>
+                  )}
+                  <label className="mt-2 block text-xs font-semibold" htmlFor="knowledge-sharepoint-item">
+                    Item id or sharing URL
+                    <input
+                      id="knowledge-sharepoint-item"
+                      aria-label="SharePoint item id or URL"
+                      value={sharePointItemIdOrUrl}
+                      disabled={actionBusy !== null}
+                      onChange={(event) => setSharePointItemIdOrUrl(event.target.value)}
+                      placeholder="https://contoso.sharepoint.com/:w:/s/…"
+                      className="mt-1 w-full rounded-md border border-[var(--cc-line)] px-3 py-2 text-sm font-normal"
+                    />
+                  </label>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null}
+                      onClick={() => void connectSharePointForKnowledge()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "sharepoint-connect"}
+                        busyLabel="Connecting…"
+                        idleLabel={sharePointConnections.length > 0 ? "Reconnect SharePoint" : "Connect SharePoint"}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null || !sharePointConnectionId}
+                      onClick={() => void addKnowledgeFromSharePoint()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "from-sharepoint"}
+                        busyLabel="Importing SharePoint…"
+                        idleLabel="Add SharePoint file to Knowledge"
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                    Imports text/PDF/Office via Microsoft Graph. Image, audio, and video stay fail-closed.
                   </p>
                 </div>
               </div>

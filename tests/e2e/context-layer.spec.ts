@@ -116,6 +116,30 @@ test("Knowledge Add Drive file creates a version from an owner connection", asyn
   });
 });
 
+test("Knowledge Add SharePoint file creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect SharePoint" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Connected SharePoint account" })).toBeVisible();
+  await expect(page.getByLabel("SharePoint connection")).toContainText("sharepoint@example.test");
+  await page.getByLabel("SharePoint item id or URL").fill(
+    "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",
+  );
+  await page.getByRole("button", { name: "Add SharePoint file to Knowledge" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Imported SharePoint file" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /SharePoint stub ·/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const fromSharePoint = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-sharepoint");
+  expect(fromSharePoint).toBeTruthy();
+  expect(JSON.parse(fromSharePoint.body)).toMatchObject({
+    sharePointConnectionId: "33333333-3333-4333-8333-333333333333",
+    itemIdOrUrl: "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",
+  });
+});
+
 test("Brand Voice policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Brand Voice" }).click();

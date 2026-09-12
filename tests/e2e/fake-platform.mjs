@@ -48,6 +48,7 @@ let taskRuns;
 let libraryPrefs;
 let gscConnections;
 let driveConnections;
+let sharePointConnections;
 let customerOutcomes;
 
 function reset() {
@@ -64,6 +65,7 @@ function reset() {
   taskRuns = new Map();
   gscConnections = new Map();
   driveConnections = new Map();
+  sharePointConnections = new Map();
   customerOutcomes = new Map();
   libraryPrefs = {
     favorites: [],
@@ -1727,6 +1729,109 @@ const server = http.createServer(async (req, res) => {
       mediaType: "text/markdown",
       byteSize: 128,
       contentSha256: "d".repeat(64),
+      ingestionJobId,
+      state: "queued",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/knowledge/from-sharepoint" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const connectionId = typeof body.sharePointConnectionId === "string" ? body.sharePointConnectionId.trim() : "";
+    const itemIdOrUrl = typeof body.itemIdOrUrl === "string" ? body.itemIdOrUrl.trim() : "";
+    if (!connectionId) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-sharepoint.v1",
+        error: "sharePointConnectionId is required.",
+        errorCode: "validation",
+      });
+    }
+    if (!itemIdOrUrl) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-sharepoint.v1",
+        error: "itemId or SharePoint/OneDrive sharing URL is required.",
+        errorCode: "validation",
+      });
+    }
+    const connection = sharePointConnections.get(connectionId);
+    if (!connection) {
+      return send(res, 404, {
+        contractVersion: "gcc-knowledge-from-sharepoint.v1",
+        error: "SharePoint connection was not found.",
+        errorCode: "not_found",
+      });
+    }
+    const itemId = itemIdOrUrl.startsWith("http")
+      ? "share-url-item"
+      : itemIdOrUrl;
+    const title = `SharePoint stub · ${itemId}`;
+    let asset = typeof body.assetId === "string"
+      ? contextCatalogs.knowledge.find((entry) => entry.id === body.assetId)
+      : null;
+    if (!asset) {
+      const assetId = `knowledge-${contextCatalogs.knowledge.length + 1}`;
+      const versionId = `${assetId}-version-1`;
+      asset = {
+        id: assetId,
+        kind: "knowledge",
+        name: title,
+        description: `SharePoint file ${itemId} via ${connection.accountLabel}`,
+        tags: ["sharepoint", "microsoft-graph"],
+        currentVersionId: versionId,
+        versions: [],
+      };
+      contextCatalogs.knowledge.push(asset);
+    }
+    const versionNumber = asset.versions.length + 1;
+    const versionId = `${asset.id}-version-${versionNumber}`;
+    const ingestionJobId = `ingestion-${ingestionEvents.length + 1}`;
+    asset.versions.push({
+      id: versionId,
+      versionNumber,
+      lifecycle: "draft",
+      digest: `sha256:${"s".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      freshness: "fresh",
+      ingestionState: "queued",
+      extractionState: "pending",
+      indexState: "pending",
+      provenance: {
+        sourceLabel: title,
+        sourceUrl: itemIdOrUrl,
+        sourceTimestampUtc: new Date().toISOString(),
+        parser: "GccV2SharePointContextConnector",
+        parserVersion: "1",
+        contentDigest: `sha256:${"s".repeat(64)}`,
+        connectorId: "sharepoint",
+        sharePointConnectionId: connectionId,
+        itemId,
+      },
+      findings: [],
+      audit: [],
+    });
+    asset.currentVersionId = versionId;
+    asset.name = asset.name || title;
+    ingestionEvents.push({
+      id: crypto.randomUUID(),
+      jobId: ingestionJobId,
+      seq: ingestionEvents.length + 1,
+      state: "queued",
+      message: `${title} queued from SharePoint`,
+      progressPercent: 0,
+      createdAtUtc: new Date().toISOString(),
+      assetId: asset.id,
+    });
+    return send(res, 202, {
+      contractVersion: "gcc-knowledge-from-sharepoint.v1",
+      connectorId: "sharepoint",
+      assetId: asset.id,
+      versionId,
+      resourceId: `${versionId}-resource`,
+      sharePointConnectionId: connectionId,
+      accountLabel: connection.accountLabel,
+      itemId,
+      title,
+      mediaType: "text/markdown",
+      byteSize: 128,
+      contentSha256: "s".repeat(64),
       ingestionJobId,
       state: "queued",
     });
@@ -4193,6 +4298,32 @@ const server = http.createServer(async (req, res) => {
     };
     driveConnections.set(connection.id, connection);
     return send(res, 200, { contractVersion: "gcc-drive-connections.v1", connection });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/sharepoint/oauth/connect-url" && req.method === "GET") {
+    return send(res, 503, {
+      error: "SharePoint Microsoft OAuth is not configured in the fake platform.",
+      mode: "stub",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/sharepoint/connections" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-sharepoint-connections.v1",
+      connections: [...sharePointConnections.values()],
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/sharepoint/connections" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const accountLabel = typeof body.accountLabel === "string" && body.accountLabel.trim()
+      ? body.accountLabel.trim()
+      : "sharepoint@example.test";
+    const connection = {
+      id: "33333333-3333-4333-8333-333333333333",
+      accountLabel,
+      status: "stub",
+      connectedAtUtc: "2026-09-09T12:00:00.000Z",
+    };
+    sharePointConnections.set(connection.id, connection);
+    return send(res, 200, { contractVersion: "gcc-sharepoint-connections.v1", connection });
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/fetch-page" && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
