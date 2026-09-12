@@ -225,6 +225,19 @@ function writeNewCreateDraft(draft: NewCreateDraft): void {
   }
 }
 
+/**
+ * A draft is a reload/back-navigation safety net, not a queue of unfinished creates: opening
+ * /creates/new deliberately must start at step one rather than resume an abandoned wizard.
+ */
+function isResumeNavigation(): boolean {
+  try {
+    const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+    return entry?.type === "reload" || entry?.type === "back_forward";
+  } catch {
+    return false;
+  }
+}
+
 function clearNewCreateDraft(): void {
   try {
     sessionStorage.removeItem(NEW_CREATE_DRAFT_KEY);
@@ -861,8 +874,9 @@ export function NewCreateForm({
   }
 
   useEffect(() => {
-    const draft = readNewCreateDraft();
+    const draft = isResumeNavigation() ? readNewCreateDraft() : null;
     if (!draft) {
+      clearNewCreateDraft();
       void Promise.resolve().then(() => setDraftHydrated(true));
       return;
     }

@@ -407,3 +407,19 @@ test("BFF rejects object bytes on upload control routes before forwarding", asyn
     error: "File bytes must be uploaded directly to the issued storage URL.",
   });
 });
+
+test("a newly opened create starts at step one instead of resuming an abandoned wizard", async ({ page }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+
+  // A reload is a safety net: the wizard keeps its place.
+  await page.reload();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+
+  // Opening the wizard again is a new create: it starts from the website step.
+  await openAuthenticated(page, "/creates/new");
+  await expect(page.getByLabel("Previously analyzed sites")).toBeVisible();
+  await expect(page.getByText("Using 1 page from")).toHaveCount(0);
+});
