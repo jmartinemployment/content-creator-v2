@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioFormField } from "@/app/studio/studio-types";
 import {
   EMPTY_CONTEXT_SELECTION,
@@ -32,6 +32,12 @@ import {
   TaskAgentResultShell,
   type ResultShellModel,
 } from "@/app/task-agents/result-shell";
+import {
+  createTaskAgentRunHubConnection,
+  joinTaskAgentRun,
+  leaveTaskAgentRun,
+  onTaskAgentRunEvent,
+} from "@/app/task-agents/task-agent-run-hub";
 
 export type TaskAgentDetail = {
   contractVersion: string;
@@ -205,6 +211,8 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     && !isPillarOutline
     && !isPairCompare;
   const showPageHydrate = useSchemaDrivenForm ? schemaHasPageHydrate : legacyHasPageHydrate;
+  const resultLoadedRunIdRef = useRef<string | null>(null);
+  const highestRunSeqRef = useRef(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -337,41 +345,59 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       });
   }, [capabilityId]);
 
+  const runId = run?.id ?? null;
   useEffect(() => {
-    if (!run || ["succeeded", "failed", "cancelled"].includes(run.status)) return;
-    const controller = new AbortController();
-    const timer = window.setInterval(() => {
-      void fetch(`/api/gcc-v2/task-agents/runs/${run.id}`, {
-        cache: "no-store",
-        signal: controller.signal,
-      }).then(async (response) => {
-        if (!response.ok) throw new Error(`Run status failed (HTTP ${response.status}).`);
-        const next = await response.json() as TaskRun;
-        if (next.status === "succeeded") {
-          const resultResponse = await fetch(`/api/gcc-v2/task-agents/runs/${run.id}/result`, {
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          if (!resultResponse.ok) throw new Error(`Result failed (HTTP ${resultResponse.status}).`);
-          setResult(await resultResponse.json() as ResultShellModel);
-        } else if (next.status === "failed") {
-          setError(next.terminalError || "The task agent failed.");
-        }
-        setRun((previous) => ({
-          ...next,
-          sharedContext: next.sharedContext ?? previous?.sharedContext ?? null,
-        }));
-      }).catch((cause) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Could not refresh the task run.");
-        }
+    if (!runId) return;
+    const connection = createTaskAgentRunHubConnection();
+    let disposed = false;
+    highestRunSeqRef.current = 0;
+
+    const off = onTaskAgentRunEvent(connection, (event) => {
+      if (disposed || event.runId !== runId) return;
+      if (event.seq <= highestRunSeqRef.current) return;
+      highestRunSeqRef.current = event.seq;
+      setRun({
+        id: event.runId,
+        status: event.status,
+        phase: event.phase,
+        progressPercent: event.progressPercent,
+        terminalError: event.terminalError,
+        sharedContext: event.sharedContext,
       });
-    }, 1000);
+      if (event.status === "failed") {
+        setError(event.terminalError || "The task agent failed.");
+      }
+      if (event.status === "succeeded" && resultLoadedRunIdRef.current !== runId) {
+        resultLoadedRunIdRef.current = runId;
+        void fetch(`/api/gcc-v2/task-agents/runs/${encodeURIComponent(runId)}/result`, {
+          cache: "no-store",
+        })
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`Result failed (HTTP ${response.status}).`);
+            setResult(await response.json() as ResultShellModel);
+          })
+          .catch((cause) => {
+            if (!disposed) {
+              setError(cause instanceof Error ? cause.message : "Could not load the task result.");
+            }
+          });
+      }
+    }, (contractError) => {
+      if (!disposed) setError(contractError.message);
+    });
+
+    void joinTaskAgentRun(connection, runId).catch((cause) => {
+      if (!disposed) {
+        setError(cause instanceof Error ? cause.message : "Could not join task run updates.");
+      }
+    });
+
     return () => {
-      controller.abort();
-      window.clearInterval(timer);
+      disposed = true;
+      off();
+      void leaveTaskAgentRun(connection, runId).catch(() => undefined).finally(() => connection.stop());
     };
-  }, [run]);
+  }, [runId]);
 
   async function loadObservedQueries() {
     const gscConnectionId = (schemaValues.gscConnectionId ?? "").trim();
@@ -794,6 +820,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
     if ((contextPreview?.blockingFindings.length ?? 0) > 0) return;
     setError(null);
     setResult(null);
+    resultLoadedRunIdRef.current = null;
     setRun(null);
     try {
       const parents = options?.parentArtifactVersionIds?.length
@@ -885,7 +912,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       if (!response.ok || !body) {
         throw new Error(body?.error || `Cancel failed (HTTP ${response.status}).`);
       }
-      setRun(body);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not cancel the task run.");
     } finally {

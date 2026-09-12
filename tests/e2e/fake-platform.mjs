@@ -36,6 +36,10 @@ let adminAgent;
 let adminAgentHistory;
 let agentTestRuns;
 let agentTestTimers;
+let taskAgentRunSeq;
+let taskAgentRunSockets;
+let taskAgentRunProgressScheduled;
+let taskAgentRunTimers;
 let contextCatalogs;
 let ingestionEvents;
 let studioAgents = new Map();
@@ -59,6 +63,11 @@ function reset() {
   history = [];
   for (const timer of agentTestTimers || []) clearTimeout(timer);
   agentTestTimers = [];
+  for (const timer of taskAgentRunTimers || []) clearTimeout(timer);
+  taskAgentRunTimers = [];
+  taskAgentRunSeq = new Map();
+  taskAgentRunSockets = new Map();
+  taskAgentRunProgressScheduled = new Set();
   agentTestRuns = new Map();
   adminAgentHistory = [];
   contextUploads = new Map();
@@ -766,6 +775,73 @@ function sendAgentTest(socket, run, message) {
   if (socket.readyState === socket.OPEN) {
     socket.send(hubMessage({ type: 1, target: "AgentTestEvent", arguments: [agentTestEvent(run, message)] }));
   }
+}
+
+function taskAgentRunEventPayload(run, kind, seq, message) {
+  return {
+    contractVersion: "gcc-task-agent-run-event.v1",
+    kind,
+    runId: run.id,
+    seq,
+    status: run.status,
+    phase: run.phase,
+    progressPercent: run.progressPercent,
+    terminalError: run.terminalError ?? null,
+    sharedContext: run.sharedContext ?? null,
+    message,
+  };
+}
+
+function nextTaskAgentRunSeq(runId) {
+  const seq = (taskAgentRunSeq.get(runId) || 0) + 1;
+  taskAgentRunSeq.set(runId, seq);
+  return seq;
+}
+
+function emitTaskAgentRun(runId, run, kind, message) {
+  const seq = nextTaskAgentRunSeq(runId);
+  const payload = taskAgentRunEventPayload(run, kind, seq, message);
+  const group = taskAgentRunSockets.get(runId);
+  if (!group) return payload;
+  for (const socket of group) {
+    if (socket.readyState === socket.OPEN) {
+      socket.send(hubMessage({ type: 1, target: "TaskAgentRunEvent", arguments: [payload] }));
+    }
+  }
+  return payload;
+}
+
+function scheduleTaskAgentRunProgress(runId) {
+  if (scenario.taskRunHold === true) return;
+  if (taskAgentRunProgressScheduled.has(runId)) return;
+  taskAgentRunProgressScheduled.add(runId);
+  const runningTimer = setTimeout(() => {
+    const current = taskRuns.get(runId);
+    if (!current || current.status !== "queued") return;
+    const running = {
+      ...current,
+      status: "running",
+      phase: "executing",
+      progressPercent: 45,
+      updatedAtUtc: new Date().toISOString(),
+    };
+    taskRuns.set(runId, running);
+    emitTaskAgentRun(runId, running, "update", "Executing task agent.");
+  }, 40);
+  const doneTimer = setTimeout(() => {
+    const current = taskRuns.get(runId);
+    if (!current || current.status !== "running") return;
+    const succeeded = {
+      ...current,
+      status: "succeeded",
+      phase: "complete",
+      progressPercent: 100,
+      updatedAtUtc: new Date().toISOString(),
+    };
+    taskRuns.set(runId, succeeded);
+    emitTaskAgentRun(runId, succeeded, "update", "Task agent complete.");
+  }, 600);
+  taskAgentRunTimers.push(runningTimer, doneTimer);
 }
 
 function storeAgentTestRun(run) {
@@ -5134,6 +5210,7 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
         progressPercent: 100,
       };
       taskRuns.set(runId, cancelled);
+      emitTaskAgentRun(runId, cancelled, "update", "Task run cancelled.");
       return send(res, 200, cancelled);
     }
     if (action === "result" && req.method === "GET") {
@@ -6258,16 +6335,6 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
     }
     if (!action && req.method === "GET") {
       if (existing) {
-        if (existing.status === "queued" || (existing.status === "running" && !scenario.taskRunHold)) {
-          const succeeded = {
-            ...existing,
-            status: "succeeded",
-            phase: "complete",
-            progressPercent: 100,
-          };
-          taskRuns.set(runId, succeeded);
-          return send(res, 200, succeeded);
-        }
         return send(res, 200, existing);
       }
       if (runId === "task-run-1") {
@@ -6304,7 +6371,22 @@ if (url.pathname === "/api/geek-content-creator-v2/task-agents/competitive-respo
   if (url.pathname === "/api/geek-content-creator-v2/creates/create-1") {
     return send(res, 200, { id: "create-1", title: "Reliable Content Operations", contentType: "pillar", siteUrl: "https://example.test" });
   }
-  if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/jobs") return send(res, 200, [job]);
+  if (url.pathname === "/api/geek-content-creator-v2/creates/create-1/jobs") {
+    if (scenario.siblingDraftRunning === true) {
+      return send(res, 200, [
+        job,
+        {
+          id: "job-2",
+          status: "running",
+          stage: "WRITE",
+          contentType: "pillar",
+          tabLabel: "Draft 2",
+          resultJson: null,
+        },
+      ]);
+    }
+    return send(res, 200, [job]);
+  }
   if (url.pathname === `/api/geek-content-creator-v2/jobs/${job.id}` && req.method === "GET") return send(res, 200, job);
   const manifestMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/jobs\/([^/]+)\/context-manifest$/);
   if (manifestMatch && req.method === "GET") {
@@ -6596,6 +6678,33 @@ wss.on("connection", (socket) => {
         }, run.scenario === "rag-smoke" ? 1200 : 600);
         agentTestTimers.push(runningTimer, passedTimer);
       } else if (message.type === 1 && message.target === "LeaveAgentTest") {
+        socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
+      } else if (message.type === 1 && message.target === "JoinTaskAgentRun") {
+        const runId = message.arguments?.[0];
+        if (scenario.taskAgentRunJoinDenied === true) {
+          socket.send(hubMessage({ type: 3, invocationId: message.invocationId, error: "Unauthorized task agent run join." }));
+          continue;
+        }
+        const run = taskRuns.get(runId);
+        if (!run) {
+          socket.send(hubMessage({ type: 3, invocationId: message.invocationId, error: "Task run not found." }));
+          continue;
+        }
+        if (!taskAgentRunSockets.has(runId)) taskAgentRunSockets.set(runId, new Set());
+        taskAgentRunSockets.get(runId).add(socket);
+        if (!taskAgentRunSeq.has(runId)) taskAgentRunSeq.set(runId, 0);
+        emitTaskAgentRun(runId, run, "snapshot", "Snapshot");
+        socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
+        if (!["succeeded", "failed", "cancelled"].includes(run.status)) {
+          scheduleTaskAgentRunProgress(runId);
+        }
+      } else if (message.type === 1 && message.target === "LeaveTaskAgentRun") {
+        const runId = message.arguments?.[0];
+        const group = taskAgentRunSockets.get(runId);
+        if (group) {
+          group.delete(socket);
+          if (group.size === 0) taskAgentRunSockets.delete(runId);
+        }
         socket.send(hubMessage({ type: 3, invocationId: message.invocationId, result: null }));
       } else if (message.type === 6) {
         socket.send(hubMessage({ type: 6 }));

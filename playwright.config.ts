@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
+import { appPort, platformPort } from "./tests/e2e/ports";
 
-const appPort = 3004;
-const platformPort = 4310;
+// Overridable so a CLI run can stay clear of an IDE test-server already holding the defaults.
+// Duplicate `-p` on dev: npm run dev is `next dev -p 3004`; appending `-p ${appPort}` wins (commander last wins).
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -25,7 +26,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "npm run dev",
+      command: `npm run dev -- -p ${appPort}`,
       url: `http://127.0.0.1:${appPort}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
@@ -43,5 +44,5 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  outputDir: "test-results",
+  outputDir: process.env.E2E_OUTPUT_DIR ?? `test-results-${appPort}`,
 });

@@ -1,6 +1,7 @@
 # Geek Content Creator — Architecture
 
 **Correctness over expediency.**
+**No Polling.**
 
 Product plan: [`plan/v2-master.md`](./plan/v2-master.md) (v2). Legacy v1 notes below remain as platform context.
 
@@ -139,7 +140,7 @@ Generate (especially pillar / tools × N), revise, and packs can exceed normal H
 | Approach | When |
 |----------|------|
 | **Sync HTTP** | Short paths (single image prompt, small pack, light revise) if they finish reliably under gateway timeouts |
-| **Async job + poll/status** | Pillar, multi-tool, large revise — start job on GeekAPI, Next polls status / websocket later if needed |
+| **Async job + SignalR** | Pillar, multi-tool, large revise, task-agent runs — progress on `/hubs/gcc-v2-realtime`; REST only for one-shot load, `/result`, and explicit refresh |
 
 UI must show **running / failed / ready** and not double-submit. Prefer GeekAPI background work (same idea as Content Writer v2 long generates), not blocking the Node server on multi-minute LLM chains.
 

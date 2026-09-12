@@ -13,14 +13,15 @@ const spinnerSizeClass: Record<SpinnerSize, string> = {
 type LoadingSpinnerProps = {
   size?: SpinnerSize;
   className?: string;
+  /** Hide from assistive tech when surrounding text already announces the wait. */
+  decorative?: boolean;
 };
 
 /** Inline spinning ring — use inside buttons and status rows. */
-export function LoadingSpinner({ size = "sm", className = "" }: LoadingSpinnerProps) {
+export function LoadingSpinner({ size = "sm", className = "", decorative = false }: LoadingSpinnerProps) {
   return (
     <span
-      role="status"
-      aria-label="Loading"
+      {...(decorative ? { "aria-hidden": true } : { role: "status", "aria-label": "Loading" })}
       className={`inline-block shrink-0 animate-spin rounded-full border-[var(--cc-accent)] border-t-transparent ${spinnerSizeClass[size]} ${className}`}
     />
   );
@@ -35,8 +36,8 @@ type LoadingRowProps = {
 /** Spinner + label for in-panel waits (crawl, hierarchy, first section, etc.). */
 export function LoadingRow({ label, size = "sm", className = "" }: LoadingRowProps) {
   return (
-    <p className={`flex items-center gap-2 text-sm text-[var(--cc-muted)] ${className}`}>
-      <LoadingSpinner size={size} />
+    <p role="status" className={`flex items-center gap-2 text-sm text-[var(--cc-muted)] ${className}`}>
+      <LoadingSpinner size={size} decorative />
       <span>{label}</span>
     </p>
   );
@@ -51,9 +52,11 @@ type ButtonBusyLabelProps = {
 /** Button label that shows a spinner while an action is in flight. */
 export function ButtonBusyLabel({ busy, busyLabel, idleLabel }: ButtonBusyLabelProps) {
   if (!busy) return <>{idleLabel}</>;
+  // The busy label is already in the button's accessible name; a second live
+  // region here would double-announce the wait and compete with result banners.
   return (
     <span className="inline-flex items-center justify-center gap-2">
-      <LoadingSpinner size="xs" />
+      <LoadingSpinner size="xs" decorative />
       {busyLabel}
     </span>
   );
@@ -119,7 +122,7 @@ export function ProcessBanner({ status, stage }: ProcessBannerProps) {
       role="status"
       aria-live="polite"
     >
-      <LoadingSpinner size="md" />
+      <LoadingSpinner size="md" decorative />
       <div>
         <p className="font-medium">{label}</p>
         {stage ? <p className="text-xs text-[var(--cc-muted)]">Stage: {stage}</p> : null}

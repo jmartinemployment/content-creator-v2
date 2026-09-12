@@ -391,3 +391,15 @@ test("create continues when specialist catalog is unavailable", async ({ page, r
 
   await expect(page.getByRole("heading", { name: "Brand kit awaiting approval" })).toBeVisible();
 });
+
+test("running sibling draft announces progress without a Loading spinner name", async ({ page, request }) => {
+  await request.post(`${platformOrigin}/__scenario`, { data: { siblingDraftRunning: true } });
+  await openAuthenticated(page, "/creates/create-1?jobId=job-1");
+  await expect(
+    page.getByRole("status").filter({ hasText: /still generating/ }),
+  ).toContainText(/1 other draft still generating/);
+  await expect(
+    page.getByRole("navigation", { name: "Drafts for this create" })
+      .getByRole("link", { name: /Draft 2/ }),
+  ).not.toHaveAccessibleName(/Loading/);
+});

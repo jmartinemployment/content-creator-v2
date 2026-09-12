@@ -114,7 +114,7 @@ export function CreateDraftTabs({ createId, activeJobId }: CreateDraftTabsProps)
                       : "border border-[var(--cc-line)] text-[var(--cc-ink)] hover:bg-black/5"
               }`}
             >
-              {running ? <LoadingSpinner size="xs" /> : null}
+              {running ? <LoadingSpinner size="xs" decorative /> : null}
               {label}
               <span className="opacity-70">· {j.status}</span>
               {failed && j.error ? (

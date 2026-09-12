@@ -182,6 +182,10 @@ test("query planner loads observed GSC queries with provenance", async ({ page, 
   await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
   await page.getByRole("button", { name: "Connect GSC property" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Connected GSC property/ })).toBeVisible();
+  await page.waitForFunction(() => {
+    const params = new URL(location.href).searchParams;
+    return ["gsc", "connectionId", "siteUrl", "message"].every((k) => !params.has(k));
+  });
   await expect(page.getByLabel("GSC connection ID")).not.toHaveValue("");
   await page.getByRole("button", { name: "Load GSC observed queries" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Loaded 2 observed GSC/ })).toBeVisible();
@@ -623,10 +627,10 @@ test("competitive response considers multiple competitor pages", async ({ page, 
 
 test("task agent pins governed context digest on the result shell", async ({ page }) => {
   await openAuthenticated(page, "/task-agents/ai-readiness");
-  await expect(page.getByRole("region", { name: "Run context" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Geek IQ" })).toBeVisible();
   await expect(page.getByText("Task-agent runs pin approved catalog context only")).toBeVisible();
   await page.getByLabel("Editorial Handbook version 1").check();
-  await page.getByRole("button", { name: "Check governed context" }).click();
+  await page.getByRole("button", { name: "Check Geek IQ" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("eligible for manifest resolution");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
@@ -702,6 +706,26 @@ test("task agent result can attach artifact to a canvas project", async ({ page 
   await expect(page.getByText(/AI Readiness Score · readinessScore\.v1/).first()).toBeVisible();
   await page.getByRole("button", { name: /Select AI Readiness Score/ }).click();
   await expect(page.getByTestId("attached-artifact-ref")).toContainText("artifact-version-1");
+});
+
+test("held task agent run does not poll run status over HTTP", async ({ page, request }) => {
+  await request.post(`${platformOrigin}/__scenario`, { data: { taskRunHold: true } });
+  await openAuthenticated(page, "/task-agents/ai-readiness");
+  await page.getByLabel("Visible page content").fill(
+    "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
+  );
+  await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
+  await expect(page.getByText("running", { exact: true })).toBeVisible();
+  await page.waitForTimeout(2500);
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+    method?: string;
+    path?: string;
+  }>;
+  const statusGets = requests.filter((entry) =>
+    entry.method === "GET"
+    && typeof entry.path === "string"
+    && /\/task-agents\/runs\/[^/]+$/.test(entry.path));
+  expect(statusGets.length).toBe(0);
 });
 
 test("task agent cancel stops a held run", async ({ page, request }) => {

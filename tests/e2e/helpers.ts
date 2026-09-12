@@ -1,7 +1,8 @@
 import { expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { appPort, platformPort } from "./ports";
 
-export const appOrigin = "http://127.0.0.1:3004";
-export const platformOrigin = "http://127.0.0.1:4310";
+export const appOrigin = `http://127.0.0.1:${appPort}`;
+export const platformOrigin = `http://127.0.0.1:${platformPort}`;
 
 export async function resetPlatform(request: APIRequestContext) {
   const response = await request.post(`${platformOrigin}/__reset`);
