@@ -25,11 +25,10 @@ jobs:
         run: npm run lint
       - run: npm run build
       - run: npx playwright install --with-deps chromium
+      # Optional: add repo secret GCC_V2_ACCESS_TOKEN (= signed-in gcc_v2_access cookie) for full signed-in e2e.
       - run: npm run test:e2e
         env:
-          E2E_ACCESS_TOKEN: ${{ secrets.E2E_ACCESS_TOKEN }}
-          E2E_REFRESH_TOKEN: ${{ secrets.E2E_REFRESH_TOKEN }}
-          E2E_VIEWER_ACCESS_TOKEN: ${{ secrets.E2E_VIEWER_ACCESS_TOKEN }}
+          E2E_ACCESS_TOKEN: ${{ secrets.GCC_V2_ACCESS_TOKEN }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

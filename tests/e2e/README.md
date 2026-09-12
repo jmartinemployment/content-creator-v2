@@ -21,7 +21,14 @@ Register `http://127.0.0.1:<port>/auth/callback` (and your chosen port) on the O
 
 ## CI
 
-Add repository secret `E2E_ACCESS_TOKEN`. Optional: `E2E_REFRESH_TOKEN`, `E2E_VIEWER_ACCESS_TOKEN`.
+The GitHub **CI** workflow (`.github/workflows/ci.yml`) runs on every push with **no secrets required** — signed-in tests skip until you opt in.
+
+To run signed-in e2e in CI, add **one** repository secret:
+
+- **Name:** `GCC_V2_ACCESS_TOKEN`
+- **Value:** the `gcc_v2_access` cookie after signing in locally (same as below)
+
+Do not add a second secret unless you run optional refresh/viewer tests locally (`E2E_REFRESH_TOKEN`, `E2E_VIEWER_ACCESS_TOKEN` in your shell only — not wired in CI).
 
 Tests that depended on fake-platform fault injection (`__scenario`) are skipped until an equivalent exists on the real stack.
 
