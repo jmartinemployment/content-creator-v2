@@ -1,53 +1,50 @@
 import type { RagAdTemplate } from "./types";
 
-const STORAGE_KEY = "gcc-v2-rag-ad-templates";
-
-export const DEFAULT_AD_TEMPLATES: RagAdTemplate[] = [
-  {
-    id: "pas-linkedin",
-    name: "PAS LinkedIn",
-    channel: "linkedin",
-    framework: "PAS",
-    body: "Problem: RevOps teams drown in duplicate CRM contacts.\nAgitate: Bad data slows every campaign and burns SDR time.\nSolution: Sync once with clear ownership rules — launch cleaner sequences this week.",
-  },
-  {
-    id: "aida-paid",
-    name: "AIDA paid social",
-    channel: "paid-social",
-    framework: "AIDA",
-    body: "Attention: Duplicate contacts are killing your attribution.\nInterest: See how mid-market teams keep CRM + MAP in sync.\nDesire: Cleaner funnels, fewer wasted sends.\nAction: Book a 15-min partner walkthrough.",
-  },
-  {
-    id: "benefit-blurb",
-    name: "Benefit blurb",
-    channel: "web",
-    framework: "benefit",
-    body: "Ship partner onboarding in days, not quarters — prebuilt CRM sync patterns your customers already trust.",
-  },
-];
-
-export function loadAdTemplates(): RagAdTemplate[] {
-  if (typeof window === "undefined") return DEFAULT_AD_TEMPLATES;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_AD_TEMPLATES;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_AD_TEMPLATES;
-    return parsed
-      .filter((t): t is RagAdTemplate => !!t && typeof t === "object" && typeof (t as RagAdTemplate).body === "string")
-      .map((t) => ({
-        id: String(t.id || crypto.randomUUID().slice(0, 12)),
-        name: String(t.name || "Untitled"),
-        channel: t.channel ? String(t.channel) : undefined,
-        framework: t.framework ? String(t.framework) : undefined,
-        body: String(t.body),
-      }));
-  } catch {
-    return DEFAULT_AD_TEMPLATES;
-  }
+async function templatesFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`/api/gcc-v2/ad-templates${path}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      ...(init?.headers ?? {}),
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+    },
+  });
 }
 
-export function saveAdTemplates(templates: RagAdTemplate[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(templates.slice(0, 40)));
+type AdTemplateDto = {
+  id: string;
+  name: string;
+  channel?: string | null;
+  framework?: string | null;
+  body: string;
+};
+
+function toRagAdTemplate(dto: AdTemplateDto): RagAdTemplate {
+  return {
+    id: dto.id,
+    name: dto.name,
+    channel: dto.channel ?? undefined,
+    framework: dto.framework ?? undefined,
+    body: dto.body,
+  };
+}
+
+/** Shared across sessions via GeekRepository — see plans/make-content-creator-workable.md
+ * Milestone 1. Replaces the previous localStorage-only corpus. */
+export async function loadAdTemplates(): Promise<RagAdTemplate[]> {
+  const res = await templatesFetch("");
+  if (!res.ok) return [];
+  const dtos = (await res.json()) as AdTemplateDto[];
+  return dtos.map(toRagAdTemplate);
+}
+
+export async function createAdTemplate(input: {
+  name: string;
+  channel?: string;
+  framework?: string;
+  body: string;
+}): Promise<RagAdTemplate | null> {
+  const res = await templatesFetch("", { method: "POST", body: JSON.stringify(input) });
+  if (!res.ok) return null;
+  return toRagAdTemplate((await res.json()) as AdTemplateDto);
 }

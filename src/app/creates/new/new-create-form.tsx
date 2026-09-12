@@ -41,7 +41,7 @@ import {
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
 import { fetchRagStatus } from "@/app/rag/rag-generate-client";
-import { DEFAULT_AD_TEMPLATES, loadAdTemplates } from "@/app/rag/ad-templates";
+import { loadAdTemplates } from "@/app/rag/ad-templates";
 import type { RagAdTemplate } from "@/app/rag/types";
 import {
   ragCapabilitiesFor,
@@ -386,7 +386,7 @@ export function NewCreateForm({
   const [ragStatusLoading, setRagStatusLoading] = useState(true);
   const [targetEntities, setTargetEntities] = useState<string[]>([]);
   const [conceptInput, setConceptInput] = useState("");
-  const [templates, setTemplates] = useState<RagAdTemplate[]>(DEFAULT_AD_TEMPLATES);
+  const [templates, setTemplates] = useState<RagAdTemplate[]>([]);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [modelPolicy, setModelPolicy] = useState<ModelPolicySelection>({
     version: "content-model-policy.v1",
@@ -424,8 +424,8 @@ export function NewCreateForm({
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) setTemplates(loadAdTemplates());
+    void loadAdTemplates().then((loaded) => {
+      if (!cancelled) setTemplates(loaded);
     });
     void fetchRagStatus()
       .then((status) => {

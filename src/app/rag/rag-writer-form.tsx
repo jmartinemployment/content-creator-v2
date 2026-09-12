@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { loadAdTemplates, saveAdTemplates } from "./ad-templates";
+import { createAdTemplate, loadAdTemplates } from "./ad-templates";
 import { RAG_SAMPLE_TOPICS, RAG_WRITING_INTENTS } from "./intents";
 import { fetchRagStatus, generateRagDraft, indexRagAdTemplates } from "./rag-generate-client";
 import { GuidedRagWriter } from "./guided-rag-writer";
+import { createResearchEntity, listResearchEntities } from "@/app/research-entities/client";
+import type { ResearchEntity, ResearchEntityRole } from "@/app/research-entities/types";
 import type {
   RagAdTemplate,
   RagGenerateResponse,
@@ -30,10 +32,11 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
     initialIntent ?? "Technical Article",
   );
   const [topic, setTopic] = useState(initialTopic);
-  const [entitySeeds, setEntitySeeds] = useState<string[]>([]);
-  const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
+  const [knownEntities, setKnownEntities] = useState<ResearchEntity[]>([]);
+  const [selectedEntities, setSelectedEntities] = useState<ResearchEntity[]>([]);
   const [freeEntity, setFreeEntity] = useState("");
-  const [templates, setTemplates] = useState<RagAdTemplate[]>(loadAdTemplates);
+  const [freeEntityRole, setFreeEntityRole] = useState<ResearchEntityRole>("competitor");
+  const [templates, setTemplates] = useState<RagAdTemplate[]>([]);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [newTemplateBody, setNewTemplateBody] = useState("");
   const [newTemplateName, setNewTemplateName] = useState("");
@@ -53,10 +56,31 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
           return;
         }
         setStatus(s);
-        setEntitySeeds(s.entitySeeds ?? []);
       } catch {
         if (!cancelled) setStatusError("RAG status request failed.");
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entities = await listResearchEntities();
+      if (!cancelled) setKnownEntities(entities);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const loaded = await loadAdTemplates();
+      if (!cancelled) setTemplates(loaded);
     })();
     return () => {
       cancelled = true;
@@ -75,19 +99,31 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
   const isLong = intentMeta?.family === "long";
   const isSlides = intentMeta?.family === "slides";
 
-  function toggleEntity(name: string) {
+  function toggleEntity(entity: ResearchEntity) {
     setSelectedEntities((prev) =>
-      prev.includes(name) ? prev.filter((e) => e !== name) : [...prev, name].slice(0, 12),
+      prev.some((e) => e.id === entity.id)
+        ? prev.filter((e) => e.id !== entity.id)
+        : [...prev, entity].slice(0, 12),
     );
   }
 
   function addFreeEntity() {
-    const t = freeEntity.trim();
-    if (!t) return;
-    setSelectedEntities((prev) =>
-      prev.includes(t) ? prev : [...prev, t].slice(0, 12),
-    );
+    const name = freeEntity.trim();
+    if (!name) return;
     setFreeEntity("");
+    startTransition(async () => {
+      const created = await createResearchEntity({ name, role: freeEntityRole });
+      if (created) {
+        setKnownEntities((prev) => [...prev, created]);
+        setSelectedEntities((prev) => [...prev, created].slice(0, 12));
+      } else {
+        // Name conflict, offline, or unauthenticated — still let the draft proceed with an
+        // unpersisted reference rather than losing the entity the operator just typed.
+        setSelectedEntities((prev) =>
+          [...prev, { id: "", name, role: freeEntityRole, createdBy: "", createdAtUtc: "" }].slice(0, 12),
+        );
+      }
+    });
   }
 
   function toggleTemplate(id: string) {
@@ -100,20 +136,15 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
     const body = newTemplateBody.trim();
     const name = newTemplateName.trim() || "Custom template";
     if (body.length < 8) return;
-    const next: RagAdTemplate = {
-      id: crypto.randomUUID().slice(0, 12),
-      name,
-      channel: "custom",
-      framework: "custom",
-      body,
-    };
-    const merged = [...templates, next].slice(0, 40);
-    setTemplates(merged);
-    saveAdTemplates(merged);
-    void indexRagAdTemplates([next]);
-    setSelectedTemplateIds((prev) => [...prev, next.id].slice(0, 3));
     setNewTemplateBody("");
     setNewTemplateName("");
+    startTransition(async () => {
+      const created = await createAdTemplate({ name, channel: "custom", framework: "custom", body });
+      if (!created) return;
+      setTemplates((prev) => [...prev, created].slice(0, 40));
+      void indexRagAdTemplates([created]);
+      setSelectedTemplateIds((prev) => [...prev, created.id].slice(0, 3));
+    });
   }
 
   function applySample() {
@@ -133,7 +164,11 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
       const res = await generateRagDraft({
         writingIntent: intent,
         topic: topic.trim(),
-        targetEntities: selectedEntities.length > 0 ? selectedEntities : undefined,
+        targetEntities: selectedEntities.length > 0 ? selectedEntities.map((e) => e.name) : undefined,
+        researchEntities:
+          selectedEntities.length > 0
+            ? selectedEntities.map((e) => ({ id: e.id || undefined, name: e.name, role: e.role }))
+            : undefined,
         adTemplates: adTemplates && adTemplates.length > 0 ? adTemplates : undefined,
       });
       if (!res.ok) {
@@ -252,28 +287,48 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
       <div className={fieldClass}>
         <span className={labelClass}>Target entities (optional)</span>
         <p className="text-xs text-[var(--cc-muted)]">
-          Seed list until a shared entities API exists — free-text also allowed.
+          Partner and competitor entities, shared with every task agent — pick from the ones
+          already curated or add a new one below.
         </p>
         <div className="mt-1 flex flex-wrap gap-2">
-          {entitySeeds.slice(0, 16).map((name) => {
-            const on = selectedEntities.includes(name);
+          {knownEntities.slice(0, 24).map((e) => {
+            const on = selectedEntities.some((s) => s.id === e.id);
             return (
               <button
-                key={name}
+                key={e.id}
                 type="button"
-                onClick={() => toggleEntity(name)}
+                onClick={() => toggleEntity(e)}
+                title={e.role}
                 className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
                   on
-                    ? "border-[var(--cc-accent)] bg-[var(--cc-accent)] text-white"
+                    ? e.role === "partner"
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-[var(--cc-accent)] bg-[var(--cc-accent)] text-white"
                     : "border-[var(--cc-line)] text-[var(--cc-ink)]"
                 }`}
               >
-                {name}
+                {e.name}
+                <span className="ml-1 opacity-70">
+                  {e.role === "partner" ? "· partner" : "· competitor"}
+                </span>
               </button>
             );
           })}
+          {knownEntities.length === 0 ? (
+            <span className="text-xs text-[var(--cc-muted)]">
+              No curated entities yet — add the first one below.
+            </span>
+          ) : null}
         </div>
         <div className="mt-2 flex gap-2">
+          <select
+            className={selectClass}
+            value={freeEntityRole}
+            onChange={(e) => setFreeEntityRole(e.target.value as ResearchEntityRole)}
+          >
+            <option value="partner">Partner</option>
+            <option value="competitor">Competitor</option>
+          </select>
           <input
             className={`${inputClass} flex-1`}
             value={freeEntity}
@@ -378,7 +433,7 @@ export function RagWriterForm({ initialTopic = "", initialIntent }: Props) {
         <GuidedRagWriter
           intent={intent}
           topic={topic}
-          targetEntities={selectedEntities}
+          targetEntities={selectedEntities.map((e) => e.name)}
           disabled={!guidedAvailable}
         />
       ) : (
