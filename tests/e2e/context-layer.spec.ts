@@ -349,23 +349,6 @@ test("context selector restores stable IDs and shows warning versus blocking pre
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("Editorial Handbook is stale");
   await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeEnabled();
-  await expect.poll(() => page.evaluate(() => {
-    const raw = sessionStorage.getItem("gcc-v2-new-create-draft");
-    return raw ? JSON.parse(raw).contextSelection?.productSelections : null;
-  })).toEqual([{
-    productVersionId: "product-version-1",
-    selectedFieldIds: ["11111111-1111-4111-8111-111111111111"],
-  }]);
-  await expect.poll(() => page.evaluate(() => {
-    const raw = sessionStorage.getItem("gcc-v2-new-create-draft");
-    return raw ? JSON.parse(raw).contextSelection?.knowledgeAssetVersionIds : null;
-  })).toEqual(["knowledge-version-1"]);
-
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
-  await expect(page.getByLabel("Editorial Handbook version 1")).toBeChecked();
-  await expect(page.getByLabel("Audience")).toHaveValue("audience-version-1");
-
   await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "permission" } });
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("You no longer have access");
@@ -408,18 +391,20 @@ test("BFF rejects object bytes on upload control routes before forwarding", asyn
   });
 });
 
-test("a newly opened create starts at step one instead of resuming an abandoned wizard", async ({ page }) => {
+test("the create wizard always starts at step one, including after a refresh", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Using 1 page from")).toBeVisible();
 
-  // A reload is a safety net: the wizard keeps its place.
   await page.reload();
-  await expect(page.getByText("Using 1 page from")).toBeVisible();
+  await expect(page.getByLabel("Previously analyzed sites")).toBeVisible();
+  await expect(page.getByText("Using 1 page from")).toHaveCount(0);
 
-  // Opening the wizard again is a new create: it starts from the website step.
   await openAuthenticated(page, "/creates/new");
   await expect(page.getByLabel("Previously analyzed sites")).toBeVisible();
   await expect(page.getByText("Using 1 page from")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("gcc-v2-new-create-draft")),
+  ).toBeNull();
 });
