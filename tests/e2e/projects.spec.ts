@@ -5,10 +5,10 @@ import {
   getAssetLineage,
   latestVersion,
 } from "../../src/app/projects/project-model";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("appending an asset version preserves the project and prior versions", () => {

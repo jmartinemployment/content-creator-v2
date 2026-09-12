@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("workspace smoke: dashboard hub → Canvas publish → Grid due schedules → Studio successor → ROI", async ({

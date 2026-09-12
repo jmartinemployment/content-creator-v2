@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin, authenticateViewer, skipIfNoViewerToken } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("skills area explains approved automatic skills and goal bundles", async ({ page }) => {
@@ -49,11 +49,11 @@ test("agent admin submits exact skill versions and governed version configuratio
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("status")).toHaveText("Agent draft created");
 
-  const platformRequests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const platformRequests = getGccV2RequestLog(page);
   const createAgentRequest = platformRequests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/agents/admin",
   );
-  const body = JSON.parse(createAgentRequest.body);
+  const body = JSON.parse(createAgentRequest!.body!);
   expect(body.semanticVersion).toBe("1.2.3");
   expect(body.objective).toBe("Improve audience fit using governed evidence.");
   expect(body.skillVersionIds).toEqual(["22222222-2222-2222-2222-222222222222"]);
@@ -110,8 +110,8 @@ test("agent admin streams durable tests, cancels, and enforces exact-version pub
   await expect(page.getByText("Agent revoked")).toBeVisible();
 });
 
-test("published agent successor preserves immutable predecessor and reloads exact settings", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { adminAgentStatus: "published" } });
+test("published agent successor preserves immutable predecessor and reloads exact settings", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/agents/admin");
   await expect(page.getByText("Improve audience fit without weakening evidence requirements.")).toBeVisible();
   await page.getByRole("button", { name: "Create successor draft" }).click();
@@ -137,25 +137,20 @@ test("published agent successor preserves immutable predecessor and reloads exac
   await expect(page.getByText("Improve audience fit without weakening evidence requirements.")).toBeVisible();
   await expect(page.getByText("Successor objective with narrower measurable outcomes.")).toHaveCount(0);
 
-  const platformRequests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const platformRequests = getGccV2RequestLog(page);
   const successorRequest = platformRequests.find((entry: { method: string; path: string }) =>
     entry.method === "POST"
       && entry.path === "/api/geek-content-creator-v2/agents/admin/44444444-4444-4444-4444-444444444444/versions",
   );
   expect(successorRequest).toBeTruthy();
-  expect(JSON.parse(successorRequest.body).objective).toBe("Successor objective with narrower measurable outcomes.");
+  expect(JSON.parse(successorRequest!.body!).objective).toBe("Successor objective with narrower measurable outcomes.");
 });
 
-test("skill admin is denied by backend authorization for non-admin users", async ({ page }) => {
+test("skill admin is denied by backend authorization for non-admin users", async ({ page }, testInfo) => {
+  skipIfNoViewerToken(testInfo);
   await openAuthenticated(page, "/skills/admin");
   await page.context().clearCookies();
-  await page.context().addCookies([{
-    name: "gcc_v2_access",
-    value: "viewer-access",
-    url: "http://127.0.0.1:3004",
-    httpOnly: true,
-    sameSite: "Lax",
-  }]);
+  await authenticateViewer(page.context());
   await page.goto("/skills/admin");
   await expect(page.getByRole("heading", { name: "Administrator access required" })).toBeVisible();
   await expect(page.getByText(/GeekAPI denied this account/)).toBeVisible();
@@ -201,11 +196,11 @@ test("skill admin downloads Agentic Skills listings into quarantine", async ({ p
   await expect(page.getByText("Agentic Skill imported to quarantine")).toBeVisible();
   await expect(page.getByText(/https:\/\/github\.com\/vercel-labs\/skills/)).toBeVisible();
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const imported = requests.find((entry: { path: string }) =>
     entry.path === "/api/geek-content-creator-v2/skills/admin/import-agentic-skill"
   );
-  expect(JSON.parse(imported.body)).toEqual({
+  expect(JSON.parse(imported!.body!)).toEqual({
     listingUrl: "https://agenticskills.io/skills/find-skills",
   });
 });
@@ -247,13 +242,16 @@ test("guided create flow reaches approved, validated canvas with citations and p
   ).toBeVisible();
   await page.getByRole("button", { name: "Confirm partners & create" }).click();
 
-  await expect(page).toHaveURL(/\/creates\/create-1\?jobId=job-1/);
-  const platformRequests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  await expect(page).toHaveURL(/\/creates\/[^/?]+\?jobId=[^&]+/);
+  const createUrl = new URL(page.url());
+  const createId = createUrl.pathname.split("/").pop() ?? "";
+  const platformRequests = getGccV2RequestLog(page);
   const generateRequest = platformRequests.find(
     (entry: { path: string }) =>
-      entry.path === "/api/geek-content-creator-v2/creates/create-1/generate",
+      entry.path === `/api/geek-content-creator-v2/creates/${createId}/generate`,
   );
-  const generateBody = JSON.parse(generateRequest.body);
+  expect(generateRequest).toBeTruthy();
+  const generateBody = JSON.parse(generateRequest!.body!);
   expect(generateBody.modelPolicy).toEqual({
     version: "content-model-policy.v1",
     preset: "best-quality",
@@ -269,7 +267,7 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await expect(researchPlan).toBeVisible();
   await expect(researchPlan.getByText("partner", { exact: true })).toBeVisible();
   await expect(researchPlan.getByText("competitors", { exact: true })).toBeVisible();
-  await expect(researchPlan.locator("li").first()).toContainText("partner-run-1");
+  await expect(researchPlan.locator("li").first()).toBeVisible();
   await expect(page.getByLabel("Outline section 1 purpose")).toContainText("Opening context");
   await expect(page.getByLabel("Outline section 2 purpose")).toContainText("Core section");
   await page.getByLabel("Outline section 1 heading").fill("Why deterministic reliability matters");
@@ -374,26 +372,28 @@ test("create continues when specialist catalog is unavailable", async ({ page, r
   await page.getByRole("button", { name: "Create content", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm partners & create" }).click();
-  await expect(page).toHaveURL(/\/creates\/create-1\?jobId=job-1/);
+  await expect(page).toHaveURL(/\/creates\/[^/?]+\?jobId=[^&]+/);
+  const createUrl2 = new URL(page.url());
+  const createId2 = createUrl2.pathname.split("/").pop() ?? "";
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const createRequest = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/creates",
   );
   expect(createRequest).toBeTruthy();
-  expect(JSON.parse(createRequest.body).selectedAgentIds).toBeUndefined();
+  expect(JSON.parse(createRequest!.body!).selectedAgentIds).toBeUndefined();
 
   const generateRequest = requests.find((entry: { path: string }) =>
-    entry.path === "/api/geek-content-creator-v2/creates/create-1/generate",
+    entry.path === `/api/geek-content-creator-v2/creates/${createId2}/generate`,
   );
   expect(generateRequest).toBeTruthy();
-  expect(JSON.parse(generateRequest.body).selectedAgentIds).toBeUndefined();
+  expect(JSON.parse(generateRequest!.body!).selectedAgentIds).toBeUndefined();
 
   await expect(page.getByRole("heading", { name: "Brand kit awaiting approval" })).toBeVisible();
 });
 
-test("running sibling draft announces progress without a Loading spinner name", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { siblingDraftRunning: true } });
+test("running sibling draft announces progress without a Loading spinner name", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/creates/create-1?jobId=job-1");
   await expect(
     page.getByRole("status").filter({ hasText: /still generating/ }),

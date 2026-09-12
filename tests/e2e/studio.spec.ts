@@ -5,10 +5,10 @@ import {
   dryRunStudioDraft,
   upsertField,
 } from "../../src/app/studio/studio-model";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("studio dry-run validates required inputs and template tokens", () => {

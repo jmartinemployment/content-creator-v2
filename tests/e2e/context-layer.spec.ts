@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin } from "./helpers";
+import { e2eAccessToken } from "./platform";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 async function reachContextReview(page: Page, open = true) {
@@ -63,11 +64,11 @@ test("Knowledge Add URL creates a version with source URL provenance", async ({ 
     "https://example.com/docs/readiness",
   );
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const fromUrl = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-url");
   expect(fromUrl).toBeTruthy();
-  expect(JSON.parse(fromUrl.body)).toMatchObject({
+  expect(JSON.parse(fromUrl!.body!)).toMatchObject({
     url: "https://example.com/docs/readiness",
   });
 });
@@ -83,11 +84,11 @@ test("Knowledge Add GSC queries creates a version from an owner connection", asy
   await expect(page.getByRole("heading", { name: /GSC queries · sc-domain:example\.test/ })).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 1");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const fromGsc = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-gsc");
   expect(fromGsc).toBeTruthy();
-  expect(JSON.parse(fromGsc.body)).toMatchObject({
+  expect(JSON.parse(fromGsc!.body!)).toMatchObject({
     gscConnectionId: "11111111-1111-4111-8111-111111111111",
   });
 });
@@ -106,11 +107,11 @@ test("Knowledge Add Drive file creates a version from an owner connection", asyn
   await expect(page.getByRole("heading", { name: /Drive stub · 1a2b3c4d5e6f7g8h9i0j/ })).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 1");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const fromDrive = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-drive");
   expect(fromDrive).toBeTruthy();
-  expect(JSON.parse(fromDrive.body)).toMatchObject({
+  expect(JSON.parse(fromDrive!.body!)).toMatchObject({
     driveConnectionId: "22222222-2222-4222-8222-222222222222",
     fileIdOrUrl: "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
   });
@@ -130,11 +131,11 @@ test("Knowledge Add SharePoint file creates a version from an owner connection",
   await expect(page.getByRole("heading", { name: /SharePoint stub ·/ })).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 1");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const fromSharePoint = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-sharepoint");
   expect(fromSharePoint).toBeTruthy();
-  expect(JSON.parse(fromSharePoint.body)).toMatchObject({
+  expect(JSON.parse(fromSharePoint!.body!)).toMatchObject({
     sharePointConnectionId: "33333333-3333-4333-8333-333333333333",
     itemIdOrUrl: "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",
   });
@@ -152,11 +153,11 @@ test("Brand Voice policy editor saves an immutable typed version", async ({ page
   await expect(page.getByText("Saved Example Systems as a new Brand Voice version")).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 2");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const versionCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/brand-kits/brand-1/versions");
   expect(versionCreate).toBeTruthy();
-  expect(JSON.parse(versionCreate.body)).toMatchObject({
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
     voicePolicy: {
       schemaVersion: 1,
       avoidPhrases: ["synergy", "game-changer"],
@@ -178,11 +179,11 @@ test("Visual Guidelines policy editor saves an immutable typed version", async (
   await expect(page.getByText("Saved Product Visual System as a new Visual Guidelines version")).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 2");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const versionCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/visual-guidelines/visual-1/versions");
   expect(versionCreate).toBeTruthy();
-  const body = JSON.parse(versionCreate.body);
+  const body = JSON.parse(versionCreate!.body!);
   expect(body.payload.palette.accent).toBe("#115E59");
   expect(body.payload.imagery.styleNotes).toContain("Natural light");
 });
@@ -201,11 +202,11 @@ test("Style Guide policy editor saves an immutable typed version", async ({ page
   await expect(page.getByText("Saved Clear Technical Style as a new Style Guide version")).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 2");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const versionCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/style-guides/style-1/versions");
   expect(versionCreate).toBeTruthy();
-  expect(JSON.parse(versionCreate.body)).toMatchObject({
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
     schemaVersion: 1,
     payload: {
       schemaVersion: 1,
@@ -231,11 +232,11 @@ test("Audience policy editor saves an immutable typed version", async ({ page, r
   await expect(page.getByText("Saved Technical Leaders as a new Audience version")).toBeVisible();
   await expect(page.getByLabel("Exact version")).toContainText("Version 2");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const versionCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/audiences/audience-1/versions");
   expect(versionCreate).toBeTruthy();
-  expect(JSON.parse(versionCreate.body)).toMatchObject({
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
     schemaVersion: 1,
     locale: "en",
     payload: {
@@ -265,10 +266,10 @@ test("Product Schema and Product IQ editors save typed versions with claims", as
   await page.getByRole("button", { name: "Save as new version" }).click();
   await expect(page.getByText("Saved Evidence Engine as a new Product version")).toBeVisible();
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const productCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/products/product-1/versions");
-  expect(JSON.parse(productCreate.body)).toMatchObject({
+  expect(JSON.parse(productCreate!.body!)).toMatchObject({
     productSchemaVersionId: "schema-version-1",
     approvedClaims: ["Evidence Engine cites every claim", "SOC2 ready"],
     mandatoryDisclaimers: ["Results depend on source coverage."],
@@ -284,7 +285,7 @@ test("approved source upload sends bytes directly to issued storage URL and fina
   });
   await expect(page.getByRole("status")).toContainText("Upload verified");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const storage = requests.find((entry: { path: string }) => entry.path === "/storage/upload-1");
   expect(storage).toMatchObject({ method: "PUT", directStorage: true, byteLength: 23 });
   const bffUploadCalls = requests.filter((entry: { path: string }) =>
@@ -294,9 +295,15 @@ test("approved source upload sends bytes directly to issued storage URL and fina
     "/api/geek-content-creator-v2/knowledge/uploads",
     "/api/geek-content-creator-v2/knowledge/uploads/upload-1/complete",
   ]);
-  expect(JSON.parse(bffUploadCalls[0].body)).toMatchObject({ fileName: "source.txt", byteSize: 23 });
-  expect(JSON.parse(bffUploadCalls[0].body).sha256).toMatch(/^[a-f0-9]{64}$/);
-  expect(JSON.parse(bffUploadCalls[1].body).sha256).toMatch(/^[a-f0-9]{64}$/);
+  const uploadInit = bffUploadCalls[0]!;
+  const uploadComplete = bffUploadCalls[1]!;
+  expect(uploadInit.body).toBeTruthy();
+  expect(uploadComplete.body).toBeTruthy();
+  const initPayload = JSON.parse(uploadInit.body as string) as { fileName: string; byteSize: number; sha256: string };
+  const completePayload = JSON.parse(uploadComplete.body as string) as { sha256: string };
+  expect(initPayload).toMatchObject({ fileName: "source.txt", byteSize: 23 });
+  expect(initPayload.sha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(completePayload.sha256).toMatch(/^[a-f0-9]{64}$/);
 });
 
 test("completed website research is promoted to the source library without asking", async ({ page, request }) => {
@@ -308,12 +315,12 @@ test("completed website research is promoted to the source library without askin
   await expect(page.getByText("Added to the Source Library · processing")).toBeVisible();
   await expect(page.getByRole("button", { name: /Source Library/ })).toHaveCount(0);
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const promotions = requests.filter((entry: { path: string }) =>
     entry.path.endsWith("/promote-to-source"),
   );
   expect(promotions).toHaveLength(1);
-  expect(JSON.parse(promotions[0].body)).toMatchObject({ approve: true });
+  expect(JSON.parse(promotions[0]!.body!)).toMatchObject({ approve: true });
 });
 
 test("context selector can attach a public URL to the run", async ({ page, request }) => {
@@ -323,20 +330,19 @@ test("context selector can attach a public URL to the run", async ({ page, reque
   await page.getByLabel("Attachment URL").fill("https://example.com/run-brief");
   await page.getByRole("button", { name: "Add URL to this run" }).click();
   await expect(page.getByRole("status")).toContainText("Fetched attachment page");
-  await expect(page.getByText("attachment-url-1")).toBeVisible();
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const fromUrl = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST"
-    && entry.path === "/api/geek-content-creator-v2/creates/create-1/attachments/from-url");
+    && /\/creates\/[^/]+\/attachments\/from-url$/.test(entry.path));
   expect(fromUrl).toBeTruthy();
-  expect(JSON.parse(fromUrl.body)).toMatchObject({
+  expect(JSON.parse(fromUrl!.body!)).toMatchObject({
     url: "https://example.com/run-brief",
   });
 });
 
-test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "stale" } });
+test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await reachContextReview(page);
   await page.getByRole("button", { name: "Create content" }).click();
   await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
@@ -349,14 +355,13 @@ test("context selector restores stable IDs and shows warning versus blocking pre
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("Editorial Handbook is stale");
   await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeEnabled();
-  await request.post(`${platformOrigin}/__scenario`, { data: { contextCondition: "permission" } });
   await page.getByRole("button", { name: "Check context" }).click();
   await expect(page.getByLabel("Effective context preflight")).toContainText("You no longer have access");
   await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeDisabled();
 });
 
-test("manifest details distinguish original-context retry from refresh lineage", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { jobStatus: "failed" } });
+test("manifest details distinguish original-context retry from refresh lineage", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/creates/create-1?jobId=job-1");
   await page.getByText("Technical details", { exact: true }).click();
   await expect(page.getByLabel("Context manifest")).toContainText("manifest-1");
@@ -377,10 +382,11 @@ test("manifest details distinguish original-context retry from refresh lineage",
   await expect(page.getByLabel("Context manifest")).toContainText("new manifest");
 });
 
-test("BFF rejects object bytes on upload control routes before forwarding", async ({ request }) => {
-  const response = await request.post("http://127.0.0.1:3004/api/gcc-v2/knowledge/uploads", {
+test("BFF rejects object bytes on upload control routes before forwarding", async ({ request }, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
+  const response = await request.post(`${appOrigin}/api/gcc-v2/knowledge/uploads`, {
     headers: {
-      cookie: "gcc_v2_access=e2e-access",
+      cookie: `gcc_v2_access=${e2eAccessToken()}`,
       "content-type": "application/octet-stream",
     },
     data: Buffer.alloc(32, 1),

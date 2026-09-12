@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("task agent run hub completes without status GET polling", async ({ page, request }) => {
@@ -12,7 +12,7 @@ test("task agent run hub completes without status GET polling", async ({ page, r
   );
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     method?: string;
     path?: string;
   }>;
@@ -23,8 +23,8 @@ test("task agent run hub completes without status GET polling", async ({ page, r
   expect(statusGets.length).toBe(0);
 });
 
-test("unauthorized task agent run join surfaces an error", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { taskAgentRunJoinDenied: true } });
+test("unauthorized task agent run join surfaces an error", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
@@ -43,8 +43,8 @@ test("task agent run shows progress then result from hub events", async ({ page 
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
 });
 
-test("task agent cancel is confirmed by hub cancelled state", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { taskRunHold: true } });
+test("task agent cancel is confirmed by hub cancelled state", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
@@ -62,7 +62,7 @@ test("terminal success fetches result once", async ({ page, request }) => {
   );
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     method?: string;
     path?: string;
   }>;

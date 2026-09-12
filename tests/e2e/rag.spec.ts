@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, skipIfScenarioInjectionRequired } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("legacy RAG URL redirects to canonical Create and migrates topic and intent", async ({ page }) => {
@@ -47,8 +47,8 @@ test("o3-only policy requires explicit quality-tradeoff confirmation", async ({ 
   await expect(page.getByText("Advanced run settings · Quality: Custom")).toBeVisible();
 });
 
-test("RAG unavailable state is an inline canonical quality gate", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { ragAvailable: false } });
+test("RAG unavailable state is an inline canonical quality gate", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
   await page.getByRole("button", { name: "Continue" }).click();

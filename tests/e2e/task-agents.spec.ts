@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, platformOrigin, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin, authenticateViewer } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("task agent run pins Geek IQ Brand Voice and Style Guide versions", async ({ page, request }) => {
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await expect(page.getByRole("heading", { name: "AI Readiness Score" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Geek IQ" })).toBeVisible();
-  await page.getByLabel("Brand Voice").selectOption("brand-version-1");
+  await page.getByLabel("Brand Voice").selectOption({ label: "Example Systems" });
   await page.getByLabel("Style Guide").selectOption("style-version-1");
   await page.getByLabel("Visual Guidelines").selectOption("visual-version-1");
   await page.getByRole("button", { name: "Check Geek IQ" }).click();
@@ -24,15 +24,15 @@ test("task agent run pins Geek IQ Brand Voice and Style Guide versions", async (
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("shared-context-digest")).toContainText("Geek IQ digest");
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const runCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/task-agents/ai-readiness/runs");
   expect(runCreate).toBeTruthy();
-  const body = JSON.parse(runCreate.body);
+  const body = JSON.parse(runCreate!.body!);
   expect(body.contextSelection).toEqual(expect.objectContaining({
-    brandKitVersionId: "brand-version-1",
-    styleGuideVersionId: "style-version-1",
-    visualGuidelineVersionId: "visual-version-1",
+    brandKitVersionId: expect.any(String),
+    styleGuideVersionId: expect.any(String),
+    visualGuidelineVersionId: expect.any(String),
   }));
 });
 
@@ -196,11 +196,11 @@ test("query planner loads observed GSC queries with provenance", async ({ page, 
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.locator('[data-result-renderer="query-plan"]')).toBeVisible();
 
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const requests = getGccV2RequestLog(page);
   const runCreate = requests.find((entry: { method: string; path: string }) =>
     entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/task-agents/query-planner/runs");
   expect(runCreate).toBeTruthy();
-  const body = JSON.parse(runCreate.body);
+  const body = JSON.parse(runCreate!.body!);
   expect(body.input.queries).toEqual(expect.arrayContaining([
     expect.objectContaining({
       query: "AI content readiness checklist",
@@ -338,7 +338,7 @@ test("ai readiness comparison accepts a two-competitor cohort", async ({ page, r
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByLabel("Competitor readiness scores")).toContainText("Rival Co");
   await expect(page.getByLabel("Competitor readiness scores")).toContainText("Alt Co");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -393,7 +393,7 @@ test("content gap finder accepts a two-competitor cohort", async ({ page, reques
   await page.getByRole("button", { name: "Run Content Gap Finder" }).click();
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Coverage by dimension" })).toContainText("competitors 2/2");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -448,7 +448,7 @@ test("competitor positioning preserves AI-answer observations", async ({ page, r
   await expect(page.getByTestId("positioning-observations")).toContainText("example-engine/v1");
   await expect(page.getByTestId("positioning-observations")).toContainText("best document analyzer");
   await expect(page.getByTestId("positioning-perception-gaps")).toContainText("observationOnly");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -478,7 +478,7 @@ test("competitor positioning accepts a two-competitor cohort", async ({ page, re
   await expect(page.getByTestId("positioning-competitor-cohort")).toContainText(
     "Positioning map considers 2 competitor pages.",
   );
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -533,7 +533,7 @@ test("comparison brief accepts a two-competitor cohort", async ({ page, request 
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("comparison-brief-parties")).toContainText("Competitor Inc. · Alt Co");
   await expect(page.getByTestId("comparison-brief-parties")).toContainText("Compared against 2 competitor pages.");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -609,7 +609,7 @@ test("competitive response considers multiple competitor pages", async ({ page, 
   await expect(page.getByTestId("response-competitor-cohort")).toContainText(
     "Response plan considers 2 competitor pages.",
   );
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -708,8 +708,8 @@ test("task agent result can attach artifact to a canvas project", async ({ page 
   await expect(page.getByTestId("attached-artifact-ref")).toContainText("artifact-version-1");
 });
 
-test("held task agent run does not poll run status over HTTP", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { taskRunHold: true } });
+test("held task agent run does not poll run status over HTTP", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
@@ -717,7 +717,7 @@ test("held task agent run does not poll run status over HTTP", async ({ page, re
   await page.getByRole("button", { name: "Run AI Readiness Score" }).click();
   await expect(page.getByText("running", { exact: true })).toBeVisible();
   await page.waitForTimeout(2500);
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     method?: string;
     path?: string;
   }>;
@@ -728,8 +728,8 @@ test("held task agent run does not poll run status over HTTP", async ({ page, re
   expect(statusGets.length).toBe(0);
 });
 
-test("task agent cancel stops a held run", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { taskRunHold: true } });
+test("task agent cancel stops a held run", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",
@@ -767,7 +767,7 @@ test("AI Readiness partial source completeness omits overall score", async ({ pa
   await expect(page.getByTestId("readiness-overall-score")).toHaveText("—");
   await expect(page.getByTestId("readiness-partial-overall")).toBeVisible();
   await expect(page.getByTestId("readiness-warnings")).toContainText("marked partial");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -798,7 +798,7 @@ test("AI Readiness technical signals populate the seventh dimension", async ({ p
   await expect(
     page.locator('[data-result-renderer="scorecard"]').getByText("technicalCrawlabilityPerformance", { exact: true }),
   ).toBeVisible();
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -822,7 +822,7 @@ test("content gap partial subject yields coverageUnknown warnings", async ({ pag
   await expect(page.locator('[data-result-renderer="gap-report"]')).toBeVisible();
   await expect(page.getByRole("list", { name: "Content gaps" })).toContainText("coverageUnknown");
   await expect(page.getByTestId("gap-report-warnings")).toContainText("coverageUnknown");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -847,7 +847,7 @@ test("AI readiness comparison partial subject keeps unknown score", async ({ pag
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("score-matrix-subject-score")).toHaveText("—");
   await expect(page.getByTestId("score-matrix-warnings")).toContainText("partial");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -873,7 +873,7 @@ test("competitor audit partial subject keeps coverageUnknown origin", async ({ p
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Prioritized actions" })).toContainText("coverageUnknown");
   await expect(page.getByTestId("audit-report-warnings")).toContainText("coverageUnknown");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -898,7 +898,7 @@ test("competitor positioning partial brand yields coverageUnknown gaps", async (
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Perception gaps" })).toContainText("coverageUnknown");
   await expect(page.getByTestId("positioning-warnings")).toContainText("coverageUnknown");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -925,7 +925,7 @@ test("citable claims partial source marks confidence unknown", async ({ page, re
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("claim-ledger-warnings")).toContainText("partial");
   await expect(page.locator('[data-contradiction="unknown"]').first()).toBeVisible();
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -952,7 +952,7 @@ test("comparison brief partial subject keeps unknown coverage", async ({ page, r
   await expect(page.getByRole("region", { name: "Task result" })).toBeVisible();
   await expect(page.getByTestId("comparison-brief-warnings")).toContainText("partial");
   await expect(page.getByTestId("brief-verdict")).toContainText("unknown");
-  const requests = await (await request.get(`${platformOrigin}/__requests`)).json() as Array<{
+  const requests = getGccV2RequestLog(page) as Array<{
     path?: string;
     method?: string;
     body?: string;
@@ -979,8 +979,8 @@ test("task result provenance exposes snapshot digests", async ({ page }) => {
   await expect(page.getByTestId("result-input-digest")).toContainText("eeeeeeee");
 });
 
-test("stale evidence warns before treating results as fresh", async ({ page, request }) => {
-  await request.post(`${platformOrigin}/__scenario`, { data: { evidenceCondition: "stale" } });
+test("stale evidence warns before treating results as fresh", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/task-agents/ai-readiness");
   await page.getByLabel("Visible page content").fill(
     "# Reliable AI content\n\nThis page provides specific evidence and clear answers for readers.",

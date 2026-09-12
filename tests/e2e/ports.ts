@@ -13,10 +13,3 @@ function parsePortEnv(name: string, fallback: number): number {
 }
 
 export const appPort = parsePortEnv("E2E_APP_PORT", 3004);
-export const platformPort = parsePortEnv("E2E_PLATFORM_PORT", 4310);
-
-const appSet = process.env.E2E_APP_PORT !== undefined && process.env.E2E_APP_PORT !== "";
-const platformSet = process.env.E2E_PLATFORM_PORT !== undefined && process.env.E2E_PLATFORM_PORT !== "";
-if (appSet !== platformSet) {
-  throw new Error("Set both E2E_APP_PORT and E2E_PLATFORM_PORT together, or neither.");
-}

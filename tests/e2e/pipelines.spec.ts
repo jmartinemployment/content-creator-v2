@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("Geek Content Pipelines create AEO template, run stages, and isolate Create failure", async ({ page }) => {

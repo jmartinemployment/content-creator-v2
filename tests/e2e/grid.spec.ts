@@ -9,7 +9,7 @@ import {
   selectRowsForRun,
 } from "../../src/app/grid/grid-model";
 import type { Grid, GridConfig, GridRow } from "../../src/app/grid/grid-types";
-import { openAuthenticated, resetPlatform } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
 
 const config: GridConfig = {
   columns: [
@@ -66,8 +66,8 @@ test("grid CSV export round-trips topics including commas", () => {
 });
 
 
-test.beforeEach(async ({ request }) => {
-  await resetPlatform(request);
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
 });
 
 test("sample selection and budget preview stay transparent", () => {
