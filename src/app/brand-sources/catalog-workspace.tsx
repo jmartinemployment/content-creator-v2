@@ -1062,6 +1062,9 @@ export function CatalogWorkspace() {
   const [knowledgeUrl, setKnowledgeUrl] = useState("");
   const [gscConnections, setGscConnections] = useState<Array<{ id: string; siteUrl: string; status: string }>>([]);
   const [gscConnectionId, setGscConnectionId] = useState("");
+  const [driveConnections, setDriveConnections] = useState<Array<{ id: string; accountLabel: string; status: string }>>([]);
+  const [driveConnectionId, setDriveConnectionId] = useState("");
+  const [driveFileIdOrUrl, setDriveFileIdOrUrl] = useState("");
   const ingestionLastSeq = useRef(0);
 
   const loadCatalog = useCallback(async (
@@ -1104,6 +1107,7 @@ export function CatalogWorkspace() {
   useEffect(() => {
     if (active.kind !== "knowledge") return;
     void loadGscConnections();
+    void loadDriveConnections();
   }, [active.kind]);
 
   async function loadGscConnections() {
@@ -1127,6 +1131,30 @@ export function CatalogWorkspace() {
       });
     } catch {
       // Keep Knowledge usable when GSC listing is unavailable.
+    }
+  }
+
+  async function loadDriveConnections() {
+    try {
+      const response = await fetch("/api/gcc-v2/drive/connections", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) return;
+      const connections = Array.isArray(body?.connections)
+        ? body.connections
+          .map((entry: { id?: unknown; accountLabel?: unknown; status?: unknown }) => ({
+            id: typeof entry?.id === "string" ? entry.id : "",
+            accountLabel: typeof entry?.accountLabel === "string" ? entry.accountLabel : "",
+            status: typeof entry?.status === "string" ? entry.status : "unknown",
+          }))
+          .filter((entry: { id: string }) => entry.id)
+        : [];
+      setDriveConnections(connections);
+      setDriveConnectionId((current) => {
+        if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
+        return connections[0]?.id ?? "";
+      });
+    } catch {
+      // Keep Knowledge usable when Drive listing is unavailable.
     }
   }
 
@@ -1636,6 +1664,85 @@ export function CatalogWorkspace() {
     }
   }
 
+  async function connectDriveForKnowledge() {
+    setActionBusy("drive-connect");
+    setNotice(null);
+    setError(null);
+    try {
+      const oauthResponse = await fetch(
+        "/api/gcc-v2/drive/oauth/connect-url?returnPath=%2Fbrand-sources",
+        { cache: "no-store" },
+      );
+      const oauthBody = await oauthResponse.json().catch(() => null);
+      if (oauthResponse.ok && typeof oauthBody?.url === "string" && oauthBody.url) {
+        window.location.assign(oauthBody.url);
+        return;
+      }
+      if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
+        throw new Error(oauthBody?.error || `Drive OAuth start failed (HTTP ${oauthResponse.status}).`);
+      }
+
+      const response = await fetch("/api/gcc-v2/drive/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accountLabel: "drive@example.test" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `Drive connect failed (HTTP ${response.status}).`);
+      }
+      const connectionId = body?.connection?.id;
+      if (typeof connectionId !== "string" || !connectionId) {
+        throw new Error("Drive connect did not return a connection id.");
+      }
+      await loadDriveConnections();
+      setDriveConnectionId(connectionId);
+      setNotice(`Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect Drive.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function addKnowledgeFromDrive() {
+    if (!driveConnectionId) {
+      setError("Connect Google Drive before importing a file.");
+      return;
+    }
+    const fileIdOrUrl = driveFileIdOrUrl.trim();
+    if (!fileIdOrUrl) {
+      setError("Enter a Drive file id or Docs/Drive URL.");
+      return;
+    }
+    setActionBusy("from-drive");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/gcc-v2/knowledge/from-drive", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ driveConnectionId, fileIdOrUrl }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `Drive ingest failed (HTTP ${response.status}).`);
+      }
+      setDriveFileIdOrUrl("");
+      setNotice(
+        `Imported Drive file ${body?.fileId || fileIdOrUrl}. Ingestion job ${body?.ingestionJobId ?? "?"} is ${body?.state ?? "queued"}.`,
+      );
+      await loadCatalog(active, {
+        assetId: typeof body?.assetId === "string" ? body.assetId : undefined,
+        versionId: typeof body?.versionId === "string" ? body.versionId : undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Drive Knowledge ingest failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1779,6 +1886,74 @@ export function CatalogWorkspace() {
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
                     Imports observed queries as markdown Knowledge. Not traffic, volume, ranking, or demand scores.
+                  </p>
+                </div>
+                <div className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                  <p className="text-xs font-semibold">Add Google Drive file</p>
+                  {driveConnections.length > 0 ? (
+                    <label className="mt-2 block text-xs font-semibold" htmlFor="knowledge-drive-connection">
+                      Drive connection
+                      <select
+                        id="knowledge-drive-connection"
+                        aria-label="Drive connection"
+                        value={driveConnectionId}
+                        disabled={actionBusy !== null}
+                        onChange={(event) => setDriveConnectionId(event.target.value)}
+                        className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+                      >
+                        {driveConnections.map((connection) => (
+                          <option key={connection.id} value={connection.id}>
+                            {connection.accountLabel || connection.id}
+                            {connection.status === "stub" ? " (stub)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                      No Drive connection yet. Connect an owner-owned Google account to import files.
+                    </p>
+                  )}
+                  <label className="mt-2 block text-xs font-semibold" htmlFor="knowledge-drive-file">
+                    File id or URL
+                    <input
+                      id="knowledge-drive-file"
+                      aria-label="Drive file id or URL"
+                      value={driveFileIdOrUrl}
+                      disabled={actionBusy !== null}
+                      onChange={(event) => setDriveFileIdOrUrl(event.target.value)}
+                      placeholder="https://drive.google.com/file/d/…/view"
+                      className="mt-1 w-full rounded-md border border-[var(--cc-line)] px-3 py-2 text-sm font-normal"
+                    />
+                  </label>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null}
+                      onClick={() => void connectDriveForKnowledge()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "drive-connect"}
+                        busyLabel="Connecting…"
+                        idleLabel={driveConnections.length > 0 ? "Reconnect Drive" : "Connect Drive"}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null || !driveConnectionId}
+                      onClick={() => void addKnowledgeFromDrive()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "from-drive"}
+                        busyLabel="Importing Drive…"
+                        idleLabel="Add Drive file to Knowledge"
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                    Imports Docs/text/PDF/Office via Drive read-only OAuth. Image, audio, and video stay fail-closed.
                   </p>
                 </div>
               </div>

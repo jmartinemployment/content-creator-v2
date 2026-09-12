@@ -92,6 +92,30 @@ test("Knowledge Add GSC queries creates a version from an owner connection", asy
   });
 });
 
+test("Knowledge Add Drive file creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect Drive" }).click();
+  await expect(page.getByRole("status")).toContainText("Connected Drive account");
+  await expect(page.getByLabel("Drive connection")).toContainText("drive@example.test");
+  await page.getByLabel("Drive file id or URL").fill(
+    "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
+  );
+  await page.getByRole("button", { name: "Add Drive file to Knowledge" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Imported Drive file 1a2b3c4d5e6f7g8h9i0j" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Drive stub · 1a2b3c4d5e6f7g8h9i0j/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const fromDrive = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-drive");
+  expect(fromDrive).toBeTruthy();
+  expect(JSON.parse(fromDrive.body)).toMatchObject({
+    driveConnectionId: "22222222-2222-4222-8222-222222222222",
+    fileIdOrUrl: "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
+  });
+});
+
 test("Brand Voice policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Brand Voice" }).click();

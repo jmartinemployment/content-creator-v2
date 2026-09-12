@@ -47,6 +47,7 @@ let manifests;
 let taskRuns;
 let libraryPrefs;
 let gscConnections;
+let driveConnections;
 let customerOutcomes;
 
 function reset() {
@@ -62,6 +63,7 @@ function reset() {
   contextUploads = new Map();
   taskRuns = new Map();
   gscConnections = new Map();
+  driveConnections = new Map();
   customerOutcomes = new Map();
   libraryPrefs = {
     favorites: [],
@@ -1622,6 +1624,109 @@ const server = http.createServer(async (req, res) => {
       queryCount: 2,
       byteSize: 256,
       contentSha256: "g".repeat(64),
+      ingestionJobId,
+      state: "queued",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/knowledge/from-drive" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const connectionId = typeof body.driveConnectionId === "string" ? body.driveConnectionId.trim() : "";
+    const fileIdOrUrl = typeof body.fileIdOrUrl === "string" ? body.fileIdOrUrl.trim() : "";
+    if (!connectionId) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-drive.v1",
+        error: "driveConnectionId is required.",
+        errorCode: "validation",
+      });
+    }
+    if (!fileIdOrUrl) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-drive.v1",
+        error: "fileId or Drive/Docs URL is required.",
+        errorCode: "validation",
+      });
+    }
+    const connection = driveConnections.get(connectionId);
+    if (!connection) {
+      return send(res, 404, {
+        contractVersion: "gcc-knowledge-from-drive.v1",
+        error: "Drive connection was not found.",
+        errorCode: "not_found",
+      });
+    }
+    const fileIdMatch = fileIdOrUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
+      || fileIdOrUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    const fileId = fileIdMatch ? fileIdMatch[1] : fileIdOrUrl;
+    const title = `Drive stub · ${fileId}`;
+    let asset = typeof body.assetId === "string"
+      ? contextCatalogs.knowledge.find((entry) => entry.id === body.assetId)
+      : null;
+    if (!asset) {
+      const assetId = `knowledge-${contextCatalogs.knowledge.length + 1}`;
+      const versionId = `${assetId}-version-1`;
+      asset = {
+        id: assetId,
+        kind: "knowledge",
+        name: title,
+        description: `Google Drive file ${fileId} via ${connection.accountLabel}`,
+        tags: ["drive", "google-drive"],
+        currentVersionId: versionId,
+        versions: [],
+      };
+      contextCatalogs.knowledge.push(asset);
+    }
+    const versionNumber = asset.versions.length + 1;
+    const versionId = `${asset.id}-version-${versionNumber}`;
+    const ingestionJobId = `ingestion-${ingestionEvents.length + 1}`;
+    asset.versions.push({
+      id: versionId,
+      versionNumber,
+      lifecycle: "draft",
+      digest: `sha256:${"d".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      freshness: "fresh",
+      ingestionState: "queued",
+      extractionState: "pending",
+      indexState: "pending",
+      provenance: {
+        sourceLabel: title,
+        sourceUrl: `https://drive.google.com/file/d/${fileId}/view`,
+        sourceTimestampUtc: new Date().toISOString(),
+        parser: "GccV2DriveContextConnector",
+        parserVersion: "1",
+        contentDigest: `sha256:${"d".repeat(64)}`,
+        connectorId: "drive",
+        driveConnectionId: connectionId,
+        fileId,
+      },
+      findings: [],
+      audit: [],
+    });
+    asset.currentVersionId = versionId;
+    asset.name = asset.name || title;
+    ingestionEvents.push({
+      id: crypto.randomUUID(),
+      jobId: ingestionJobId,
+      seq: ingestionEvents.length + 1,
+      state: "queued",
+      message: `${title} queued from Drive`,
+      progressPercent: 0,
+      createdAtUtc: new Date().toISOString(),
+      assetId: asset.id,
+    });
+    return send(res, 202, {
+      contractVersion: "gcc-knowledge-from-drive.v1",
+      connectorId: "drive",
+      assetId: asset.id,
+      versionId,
+      resourceId: `${versionId}-resource`,
+      driveConnectionId: connectionId,
+      accountLabel: connection.accountLabel,
+      fileId,
+      title,
+      mediaType: "text/markdown",
+      byteSize: 128,
+      contentSha256: "d".repeat(64),
       ingestionJobId,
       state: "queued",
     });
@@ -4062,6 +4167,32 @@ const server = http.createServer(async (req, res) => {
     };
     gscConnections.set(connection.id, connection);
     return send(res, 200, { contractVersion: "gcc-gsc-connections.v1", connection });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/drive/oauth/connect-url" && req.method === "GET") {
+    return send(res, 503, {
+      error: "Drive Google OAuth is not configured in the fake platform.",
+      mode: "stub",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/drive/connections" && req.method === "GET") {
+    return send(res, 200, {
+      contractVersion: "gcc-drive-connections.v1",
+      connections: [...driveConnections.values()],
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/drive/connections" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const accountLabel = typeof body.accountLabel === "string" && body.accountLabel.trim()
+      ? body.accountLabel.trim()
+      : "drive@example.test";
+    const connection = {
+      id: "22222222-2222-4222-8222-222222222222",
+      accountLabel,
+      status: "stub",
+      connectedAtUtc: "2026-09-09T12:00:00.000Z",
+    };
+    driveConnections.set(connection.id, connection);
+    return send(res, 200, { contractVersion: "gcc-drive-connections.v1", connection });
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/fetch-page" && req.method === "POST") {
     const body = JSON.parse(rawBody || "{}");
