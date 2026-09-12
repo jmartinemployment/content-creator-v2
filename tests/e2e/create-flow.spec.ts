@@ -265,6 +265,11 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await page.getByRole("button", { name: "Accept brand kit" }).click();
 
   await expect(page.getByRole("heading", { name: "Outline awaiting approval" })).toBeVisible();
+  const researchPlan = page.getByRole("region", { name: "Research plan" });
+  await expect(researchPlan).toBeVisible();
+  await expect(researchPlan.getByText("partner", { exact: true })).toBeVisible();
+  await expect(researchPlan.getByText("competitors", { exact: true })).toBeVisible();
+  await expect(researchPlan.locator("li").first()).toContainText("partner-run-1");
   await expect(page.getByLabel("Outline section 1 purpose")).toContainText("Opening context");
   await expect(page.getByLabel("Outline section 2 purpose")).toContainText("Core section");
   await page.getByLabel("Outline section 1 heading").fill("Why deterministic reliability matters");

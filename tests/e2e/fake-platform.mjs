@@ -789,6 +789,18 @@ function outlinePayload() {
       { key: "advance", heading: "Build a deterministic workflow", job: "advance", hierarchyChildHeadings: [] },
     ],
     hierarchyChildHeadings: [],
+    researchPlan: [
+      {
+        runId: "partner-run-1",
+        crawlType: "partner",
+        need: "research for writing intent: pillar; topic: Reliable content operations",
+      },
+      {
+        runId: "competitor-run-1",
+        crawlType: "competitors",
+        need: "research for writing intent: pillar; topic: Reliable content operations; entities: reliability",
+      },
+    ],
     provenance: {
       stage: "PLAN",
       attemptId: "attempt-plan-1",

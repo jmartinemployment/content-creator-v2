@@ -771,7 +771,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     }
     const saved = (await res.json()) as OutlineView;
     outlineDirtyRef.current = false;
-    setOutline(saved);
+    setOutline({
+      ...saved,
+      researchPlan: saved.researchPlan ?? outline?.researchPlan ?? null,
+      provenance: saved.provenance ?? outline?.provenance ?? null,
+      evidenceManifest: saved.evidenceManifest ?? outline?.evidenceManifest ?? null,
+    });
     setEditableSections(
       (saved.sections ?? []).map((s) => ({
         ...s,
@@ -1437,6 +1442,28 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </>
               ) : null}
             </p>
+            {outline?.researchPlan && outline.researchPlan.length > 0 ? (
+              <section
+                aria-label="Research plan"
+                className="mt-3 rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3"
+              >
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cc-muted)]">
+                  Research plan
+                </h3>
+                <p className="mt-1 text-xs text-[var(--cc-muted)]">
+                  Retrieval queries planned before this outline. They ground citeable research for WRITE.
+                </p>
+                <ol className="mt-2 space-y-2">
+                  {outline.researchPlan.map((query, index) => (
+                    <li key={`${query.runId}-${query.crawlType}-${index}`} className="text-sm text-[var(--cc-ink)]">
+                      <span className="font-semibold capitalize">{query.crawlType || "source"}</span>
+                      <span className="text-[var(--cc-muted)]"> · {query.runId || "run"}</span>
+                      <p className="mt-0.5 text-xs text-[var(--cc-muted)]">{query.need}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
             {showAddAdvanceOutline ? (
               <div className="mt-2">
                 <button

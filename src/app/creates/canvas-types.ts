@@ -197,11 +197,19 @@ export type OutlineSectionView = {
   successCriteria?: string[];
 };
 
+/** Deterministic researchPlanning queries handed into outline retrieval. */
+export type ResearchPlanQueryView = {
+  runId: string;
+  crawlType: string;
+  need: string;
+};
+
 export type OutlineView = {
   sections: OutlineSectionView[];
   hierarchyChildHeadings: string[];
   provenance?: RagProvenance | null;
   evidenceManifest?: ResearchEvidenceManifest | null;
+  researchPlan?: ResearchPlanQueryView[] | null;
 };
 
 /** `BrandKitReady` job-event payload — provisional kit from the crawl for Accept/Reject. */
