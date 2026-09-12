@@ -72,6 +72,26 @@ test("Knowledge Add URL creates a version with source URL provenance", async ({ 
   });
 });
 
+test("Knowledge Add GSC queries creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect GSC" }).click();
+  await expect(page.getByRole("status")).toContainText("Connected GSC property");
+  await expect(page.getByLabel("GSC connection")).toContainText("sc-domain:example.test");
+  await page.getByRole("button", { name: "Add GSC queries to Knowledge" }).click();
+  await expect(page.getByRole("status")).toContainText("Imported GSC queries from sc-domain:example.test");
+  await expect(page.getByRole("heading", { name: /GSC queries · sc-domain:example\.test/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = await (await request.get(`${platformOrigin}/__requests`)).json();
+  const fromGsc = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-gsc");
+  expect(fromGsc).toBeTruthy();
+  expect(JSON.parse(fromGsc.body)).toMatchObject({
+    gscConnectionId: "11111111-1111-4111-8111-111111111111",
+  });
+});
+
 test("Brand Voice policy editor saves an immutable typed version", async ({ page, request }) => {
   await openAuthenticated(page, "/brand-sources");
   await page.getByRole("tab", { name: "Brand Voice" }).click();

@@ -1060,6 +1060,8 @@ export function CatalogWorkspace() {
   });
   const [productSchemaCatalog, setProductSchemaCatalog] = useState<GovernedCatalogItem[]>([]);
   const [knowledgeUrl, setKnowledgeUrl] = useState("");
+  const [gscConnections, setGscConnections] = useState<Array<{ id: string; siteUrl: string; status: string }>>([]);
+  const [gscConnectionId, setGscConnectionId] = useState("");
   const ingestionLastSeq = useRef(0);
 
   const loadCatalog = useCallback(async (
@@ -1098,6 +1100,35 @@ export function CatalogWorkspace() {
   useEffect(() => {
     void Promise.resolve().then(() => loadCatalog(active));
   }, [active, loadCatalog]);
+
+  useEffect(() => {
+    if (active.kind !== "knowledge") return;
+    void loadGscConnections();
+  }, [active.kind]);
+
+  async function loadGscConnections() {
+    try {
+      const response = await fetch("/api/gcc-v2/gsc/connections", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) return;
+      const connections = Array.isArray(body?.connections)
+        ? body.connections
+          .map((entry: { id?: unknown; siteUrl?: unknown; status?: unknown }) => ({
+            id: typeof entry?.id === "string" ? entry.id : "",
+            siteUrl: typeof entry?.siteUrl === "string" ? entry.siteUrl : "",
+            status: typeof entry?.status === "string" ? entry.status : "unknown",
+          }))
+          .filter((entry: { id: string }) => entry.id)
+        : [];
+      setGscConnections(connections);
+      setGscConnectionId((current) => {
+        if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
+        return connections[0]?.id ?? "";
+      });
+    } catch {
+      // Keep Knowledge usable when GSC listing is unavailable.
+    }
+  }
 
   useEffect(() => {
     if (!showActivity) return;
@@ -1532,6 +1563,79 @@ export function CatalogWorkspace() {
     }
   }
 
+  async function connectGscForKnowledge() {
+    setActionBusy("gsc-connect");
+    setNotice(null);
+    setError(null);
+    try {
+      const oauthResponse = await fetch(
+        "/api/gcc-v2/gsc/oauth/connect-url?returnPath=%2Fbrand-sources",
+        { cache: "no-store" },
+      );
+      const oauthBody = await oauthResponse.json().catch(() => null);
+      if (oauthResponse.ok && typeof oauthBody?.url === "string" && oauthBody.url) {
+        window.location.assign(oauthBody.url);
+        return;
+      }
+      if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
+        throw new Error(oauthBody?.error || `GSC OAuth start failed (HTTP ${oauthResponse.status}).`);
+      }
+
+      const response = await fetch("/api/gcc-v2/gsc/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ siteUrl: "sc-domain:example.test" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `GSC connect failed (HTTP ${response.status}).`);
+      }
+      const connectionId = body?.connection?.id;
+      if (typeof connectionId !== "string" || !connectionId) {
+        throw new Error("GSC connect did not return a connection id.");
+      }
+      await loadGscConnections();
+      setGscConnectionId(connectionId);
+      setNotice(`Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect GSC.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function addKnowledgeFromGsc() {
+    if (!gscConnectionId) {
+      setError("Connect a Search Console property before importing observed queries.");
+      return;
+    }
+    setActionBusy("from-gsc");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/gcc-v2/knowledge/from-gsc", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ gscConnectionId }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error || `GSC ingest failed (HTTP ${response.status}).`);
+      }
+      setNotice(
+        `Imported GSC queries from ${body?.siteUrl || "Search Console"}. Ingestion job ${body?.ingestionJobId ?? "?"} is ${body?.state ?? "queued"}.`,
+      );
+      await loadCatalog(active, {
+        assetId: typeof body?.assetId === "string" ? body.assetId : undefined,
+        versionId: typeof body?.versionId === "string" ? body.versionId : undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "GSC Knowledge ingest failed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1618,7 +1722,63 @@ export function CatalogWorkspace() {
                     />
                   </button>
                   <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
-                    Fetches public HTML over HTTP (SSRF-gated). JavaScript-rendered pages may be incomplete.
+                    Fetches public HTML over HTTP (SSRF-gated), with mobile Playwright fallback when extraction is thin.
+                  </p>
+                </div>
+                <div className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                  <p className="text-xs font-semibold">Add Search Console queries</p>
+                  {gscConnections.length > 0 ? (
+                    <label className="mt-2 block text-xs font-semibold" htmlFor="knowledge-gsc-connection">
+                      GSC connection
+                      <select
+                        id="knowledge-gsc-connection"
+                        aria-label="GSC connection"
+                        value={gscConnectionId}
+                        disabled={actionBusy !== null}
+                        onChange={(event) => setGscConnectionId(event.target.value)}
+                        className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+                      >
+                        {gscConnections.map((connection) => (
+                          <option key={connection.id} value={connection.id}>
+                            {connection.siteUrl || connection.id}
+                            {connection.status === "stub" ? " (stub)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                      No Search Console connection yet. Connect an owner-owned property to import observed queries.
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null}
+                      onClick={() => void connectGscForKnowledge()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "gsc-connect"}
+                        busyLabel="Connecting…"
+                        idleLabel={gscConnections.length > 0 ? "Reconnect GSC" : "Connect GSC"}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionBusy !== null || !gscConnectionId}
+                      onClick={() => void addKnowledgeFromGsc()}
+                      className="w-full rounded-md border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ButtonBusyLabel
+                        busy={actionBusy === "from-gsc"}
+                        busyLabel="Importing GSC…"
+                        idleLabel="Add GSC queries to Knowledge"
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
+                    Imports observed queries as markdown Knowledge. Not traffic, volume, ranking, or demand scores.
                   </p>
                 </div>
               </div>

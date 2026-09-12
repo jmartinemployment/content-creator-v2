@@ -179,6 +179,29 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
                         : ""}
                     </p>
                   ) : null}
+                  {(attempt.output as { projectId?: string; assetId?: string; mode?: string } | null)?.mode === "canvas-attach"
+                    && (attempt.output as { projectId?: string }).projectId ? (
+                    <p className="mt-1 text-xs text-[var(--cc-muted)]" data-testid={`pipeline-canvas-${attempt.stageKey}`}>
+                      Canvas{" "}
+                      <a
+                        href={`/projects/${(attempt.output as { projectId: string }).projectId}`}
+                        className="font-semibold text-[var(--cc-accent)] underline"
+                      >
+                        {(attempt.output as { title?: string }).title
+                          ?? (attempt.output as { assetId?: string }).assetId
+                          ?? "project"}
+                      </a>
+                    </p>
+                  ) : null}
+                  {(attempt.output as { mode?: string } | null)?.mode === "publish-ready" ? (
+                    <p className="mt-1 text-xs text-[var(--cc-muted)]" data-testid={`pipeline-publish-${attempt.stageKey}`}>
+                      Ready to publish
+                      {(attempt.output as { title?: string }).title
+                        ? ` · ${(attempt.output as { title?: string }).title}`
+                        : ""}
+                      {" "}(no external CMS)
+                    </p>
+                  ) : null}
                   {attempt.output && typeof attempt.output === "object" ? (
                     <p className="mt-1 text-xs text-[var(--cc-muted)]">
                       {String(

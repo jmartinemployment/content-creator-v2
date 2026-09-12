@@ -27,6 +27,8 @@ test("Geek Content Pipelines create AEO template, run stages, and isolate Create
   await expect(page.getByTestId("pipeline-task-run-plan-queries")).toContainText("TaskRun");
   await expect(page.getByTestId("pipeline-stage-create-faq")).toContainText("faqSet.v1");
   await expect(page.getByTestId("pipeline-task-run-create-faq")).toContainText("TaskRun");
+  await expect(page.getByTestId("pipeline-canvas-adapt-canvas")).toContainText("Canvas");
+  await expect(page.getByTestId("pipeline-publish-activate-publish")).toContainText("Ready to publish");
   await expect(page.getByTestId("pipeline-stage-optimize-readiness")).toContainText("succeeded");
   await expect(page.getByTestId("pipeline-stage-optimize-readiness")).toContainText("readinessScore.v1");
   await expect(page.getByTestId("pipeline-task-run-optimize-readiness")).toContainText("TaskRun");

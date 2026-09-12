@@ -1518,6 +1518,100 @@ const server = http.createServer(async (req, res) => {
       contentSha256: "f".repeat(64),
       ingestionJobId,
       state: "queued",
+      hydrateEngine: "http",
+    });
+  }
+  if (url.pathname === "/api/geek-content-creator-v2/knowledge/from-gsc" && req.method === "POST") {
+    const body = JSON.parse(rawBody || "{}");
+    const connectionId = typeof body.gscConnectionId === "string" ? body.gscConnectionId.trim() : "";
+    if (!connectionId) {
+      return send(res, 400, {
+        contractVersion: "gcc-knowledge-from-gsc.v1",
+        error: "gscConnectionId is required.",
+        errorCode: "validation",
+      });
+    }
+    const connection = gscConnections.get(connectionId);
+    if (!connection) {
+      return send(res, 404, {
+        contractVersion: "gcc-knowledge-from-gsc.v1",
+        error: "GSC connection was not found.",
+        errorCode: "not_found",
+      });
+    }
+    const title = `GSC queries · ${connection.siteUrl}`;
+    let asset = typeof body.assetId === "string"
+      ? contextCatalogs.knowledge.find((entry) => entry.id === body.assetId)
+      : null;
+    if (!asset) {
+      const assetId = `knowledge-${contextCatalogs.knowledge.length + 1}`;
+      const versionId = `${assetId}-version-1`;
+      asset = {
+        id: assetId,
+        kind: "knowledge",
+        name: title,
+        description: `Observed Search Console queries for ${connection.siteUrl}`,
+        tags: ["gsc", "search-console"],
+        currentVersionId: versionId,
+        versions: [],
+      };
+      contextCatalogs.knowledge.push(asset);
+    }
+    const versionNumber = asset.versions.length + 1;
+    const versionId = `${asset.id}-version-${versionNumber}`;
+    const ingestionJobId = `ingestion-${ingestionEvents.length + 1}`;
+    asset.versions.push({
+      id: versionId,
+      versionNumber,
+      lifecycle: "draft",
+      digest: `sha256:${"g".repeat(64)}`,
+      createdAtUtc: new Date().toISOString(),
+      freshness: "fresh",
+      ingestionState: "queued",
+      extractionState: "pending",
+      indexState: "pending",
+      provenance: {
+        sourceLabel: connection.siteUrl,
+        sourceUrl: connection.siteUrl,
+        sourceTimestampUtc: new Date().toISOString(),
+        parser: "GccV2GscContextConnector",
+        parserVersion: "1",
+        contentDigest: `sha256:${"g".repeat(64)}`,
+        connectorId: "gsc",
+        gscConnectionId: connectionId,
+        queryCount: 2,
+        demandDisclaimer:
+          "Observed GSC queries are first-party search analytics, not traffic, volume, ranking, or demand scores.",
+      },
+      findings: [],
+      audit: [],
+    });
+    asset.currentVersionId = versionId;
+    asset.name = asset.name || title;
+    ingestionEvents.push({
+      id: crypto.randomUUID(),
+      jobId: ingestionJobId,
+      seq: ingestionEvents.length + 1,
+      state: "queued",
+      message: `${title} queued from GSC`,
+      progressPercent: 0,
+      createdAtUtc: new Date().toISOString(),
+      assetId: asset.id,
+    });
+    return send(res, 202, {
+      contractVersion: "gcc-knowledge-from-gsc.v1",
+      connectorId: "gsc",
+      assetId: asset.id,
+      versionId,
+      resourceId: `${versionId}-resource`,
+      gscConnectionId: connectionId,
+      siteUrl: connection.siteUrl,
+      title,
+      queryCount: 2,
+      byteSize: 256,
+      contentSha256: "g".repeat(64),
+      ingestionJobId,
+      state: "queued",
     });
   }
   const attachmentFromUrl = url.pathname.match(
@@ -2537,6 +2631,62 @@ const server = http.createServer(async (req, res) => {
           mode: "task-run",
           taskRunId,
           artifactVersionId,
+        };
+      } else if (stage.handoff === "canvas") {
+        const prior = [...stageAttempts].reverse().find((entry) => entry.status === "succeeded" && entry.output?.taskRunId);
+        const projectId = crypto.randomUUID();
+        const assetId = crypto.randomUUID();
+        const assetVersionId = crypto.randomUUID();
+        const title = `Canvas adapt · ${prior?.output?.artifactType || "artifact"}`;
+        if (!canvasProjects.has(projectId)) {
+          canvasProjects.set(projectId, {
+            id: projectId,
+            name: `${pipeline.name} · pipeline handoffs`,
+            description: "Assets attached from pipeline run.",
+            status: "in-progress",
+            owner: "owner",
+            persistence: "server",
+            createdAt: now,
+            updatedAt: now,
+            activity: [],
+            assets: [{
+              id: assetId,
+              title,
+              kind: "report",
+              versions: [{ id: assetVersionId, version: 1, status: "draft", summary: title }],
+            }],
+          });
+        }
+        output = {
+          handoff: "canvas",
+          mode: "canvas-attach",
+          summary: `Attached ${title} to Canvas project.`,
+          lifecycle: stage.lifecycle,
+          workItemIndex: index,
+          displayName: stage.displayName,
+          projectId,
+          assetId,
+          assetVersionId,
+          taskRunId: prior?.output?.taskRunId || null,
+          artifactVersionId: prior?.output?.artifactVersionId || null,
+          artifactType: prior?.output?.artifactType || null,
+          title,
+        };
+      } else if (stage.handoff === "publish") {
+        const canvas = [...stageAttempts].reverse().find((entry) => entry.output?.mode === "canvas-attach");
+        output = {
+          handoff: "publish",
+          mode: "publish-ready",
+          summary: canvas?.output?.title
+            ? `Marked “${canvas.output.title}” ready to publish (no external CMS).`
+            : `Marked ${stage.displayName} ready without a Canvas asset.`,
+          lifecycle: stage.lifecycle,
+          workItemIndex: index,
+          displayName: stage.displayName,
+          projectId: canvas?.output?.projectId || null,
+          assetId: canvas?.output?.assetId || null,
+          title: canvas?.output?.title || null,
+          externalCms: false,
         };
       } else {
         output = {
@@ -3812,6 +3962,7 @@ const server = http.createServer(async (req, res) => {
       loadTimeMs: 42,
       contentCompleteness: "full",
       crawlable: "yes",
+      hydrateEngine: "http",
     });
   }
   if (url.pathname === "/api/geek-content-creator-v2/task-agents/query-planner/observed-queries" && req.method === "GET") {
