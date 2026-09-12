@@ -43,7 +43,7 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
     }
   }
 
-  async function transition(action: "pause" | "resume" | "cancel") {
+  async function transition(action: "pause" | "resume" | "cancel" | "approve" | "reject") {
     if (!latestRun) return;
     setBusy(action);
     setError(null);
@@ -140,6 +140,26 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
             Cancel latest run
           </button>
         ) : null}
+        {latestRun && latestRun.status === "awaiting-approval" ? (
+          <>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void transition("approve")}
+              className="rounded-lg bg-[var(--cc-accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {busy === "approve" ? "Approving…" : "Approve & continue"}
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void transition("reject")}
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 disabled:opacity-50"
+            >
+              {busy === "reject" ? "Rejecting…" : "Reject run"}
+            </button>
+          </>
+        ) : null}
       </div>
 
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
@@ -200,6 +220,17 @@ export function PipelineDetail({ pipelineId }: { pipelineId: string }) {
                         ? ` · ${(attempt.output as { title?: string }).title}`
                         : ""}
                       {" "}(no external CMS)
+                    </p>
+                  ) : null}
+                  {attempt.status === "awaiting-approval"
+                    || (attempt.output as { mode?: string } | null)?.mode === "approval-pending" ? (
+                    <p className="mt-1 text-xs text-[var(--cc-muted)]" data-testid={`pipeline-approval-${attempt.stageKey}`}>
+                      Awaiting operator approval
+                    </p>
+                  ) : null}
+                  {(attempt.output as { mode?: string } | null)?.mode === "approval-approved" ? (
+                    <p className="mt-1 text-xs text-[var(--cc-muted)]" data-testid={`pipeline-approved-${attempt.stageKey}`}>
+                      Approved
                     </p>
                   ) : null}
                   {attempt.output && typeof attempt.output === "object" ? (

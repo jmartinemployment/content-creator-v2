@@ -60,7 +60,7 @@ export async function startPipelineRun(
 
 export async function transitionPipelineRun(
   runId: string,
-  action: "pause" | "resume" | "cancel",
+  action: "pause" | "resume" | "cancel" | "approve" | "reject",
 ): Promise<PipelineDefinition> {
   const response = await fetch(
     `/api/gcc-v2/pipelines/runs/${encodeURIComponent(runId)}/${action}`,

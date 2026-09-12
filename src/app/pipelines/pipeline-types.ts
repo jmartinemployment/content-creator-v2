@@ -12,12 +12,14 @@ export type PipelineRunStatus =
   | "queued"
   | "running"
   | "paused"
+  | "awaiting-approval"
   | "succeeded"
   | "failed"
   | "cancelled";
 export type PipelineWorkItemStatus =
   | "pending"
   | "running"
+  | "awaiting-approval"
   | "succeeded"
   | "failed"
   | "cancelled"

@@ -2574,7 +2574,8 @@ const server = http.createServer(async (req, res) => {
     { key: "plan-queries", lifecycle: "plan", kind: "task-agent", capabilityId: "query-planner", displayName: "Query Planner", dependsOn: [] },
     { key: "create-faq", lifecycle: "create", kind: "task-agent", capabilityId: "faq-generator", displayName: "FAQ Generator", dependsOn: ["plan-queries"] },
     { key: "adapt-canvas", lifecycle: "adapt", kind: "handoff", handoff: "canvas", displayName: "Canvas adapt", dependsOn: ["create-faq"] },
-    { key: "activate-publish", lifecycle: "activate", kind: "handoff", handoff: "publish", displayName: "Publish handoff", dependsOn: ["adapt-canvas"] },
+    { key: "approve-publish", lifecycle: "activate", kind: "approval", displayName: "Approve for publish", dependsOn: ["adapt-canvas"] },
+    { key: "activate-publish", lifecycle: "activate", kind: "handoff", handoff: "publish", displayName: "Publish handoff", dependsOn: ["approve-publish"] },
     { key: "optimize-readiness", lifecycle: "optimize", kind: "task-agent", capabilityId: "ai-readiness", displayName: "AI Readiness Score", dependsOn: ["activate-publish"] },
     { key: "optimize-roi", lifecycle: "optimize", kind: "task-agent", capabilityId: "roi-business-calculator", displayName: "ROI Business Calculator", dependsOn: ["optimize-readiness"] },
   ];
@@ -2593,121 +2594,125 @@ const server = http.createServer(async (req, res) => {
       runs: pipeline.runs,
     };
   }
-  function executePipelineRun(pipeline, failStageKey = null, workItemInputs = null) {
-    const now = new Date().toISOString();
-    const inputs = Array.isArray(workItemInputs) && workItemInputs.length > 0
-      ? workItemInputs
-      : [{}];
-    const history = [];
-    const workItems = [];
-    let anyFailed = false;
-    for (let index = 0; index < inputs.length; index += 1) {
-      let failed = false;
-      const stageAttempts = [];
-      for (const stage of pipeline.stages) {
+  function buildStageOutput(pipeline, stage, index, stageAttempts, now) {
+    if (stage.capabilityId === "roi-business-calculator") {
+      return {
+        artifactType: "roiProjection.v1",
+        formulaVersion: "gcc-roi-formulas.v1",
+        contractVersion: "roiBusinessCalculatorInput.v1",
+        capabilityId: "roi-business-calculator",
+        lifecycle: stage.lifecycle,
+        workItemIndex: index,
+        summary: "Directional ROI projection from pipeline Optimize stage.",
+        scenarios: [
+          { scenario: "conservative", label: "Conservative", roiPercent: 30 },
+          { scenario: "expected", label: "Expected", roiPercent: 48 },
+          { scenario: "upside", label: "Upside", roiPercent: 70 },
+        ],
+        warnings: ["Directional model only — not a quote, guarantee, or audited finance result."],
+      };
+    }
+    if (stage.kind === "task-agent") {
+      const artifactType = stage.capabilityId === "query-planner"
+        ? "queryPlan.v1"
+        : stage.capabilityId === "faq-generator"
+          ? "faqSet.v1"
+          : stage.capabilityId === "ai-readiness"
+            ? "readinessScore.v1"
+            : `${stage.capabilityId}.v1`;
+      return {
+        artifactType,
+        capabilityId: stage.capabilityId,
+        summary: `TaskRun output from ${stage.displayName}.`,
+        lifecycle: stage.lifecycle,
+        workItemIndex: index,
+        mode: "task-run",
+        taskRunId: crypto.randomUUID(),
+        artifactVersionId: crypto.randomUUID(),
+      };
+    }
+    if (stage.kind === "approval") {
+      return {
+        mode: "approval-pending",
+        summary: `Waiting for operator approval: ${stage.displayName}.`,
+        lifecycle: stage.lifecycle,
+        workItemIndex: index,
+        displayName: stage.displayName,
+      };
+    }
+    if (stage.handoff === "canvas") {
+      const prior = [...stageAttempts].reverse().find((entry) => entry.status === "succeeded" && entry.output?.taskRunId);
+      const projectId = crypto.randomUUID();
+      const assetId = crypto.randomUUID();
+      const assetVersionId = crypto.randomUUID();
+      const title = `Canvas adapt · ${prior?.output?.artifactType || "artifact"}`;
+      if (!canvasProjects.has(projectId)) {
+        canvasProjects.set(projectId, {
+          id: projectId,
+          name: `${pipeline.name} · pipeline handoffs`,
+          description: "Assets attached from pipeline run.",
+          status: "in-progress",
+          owner: "owner",
+          persistence: "server",
+          createdAt: now,
+          updatedAt: now,
+          activity: [],
+          assets: [{
+            id: assetId,
+            title,
+            kind: "report",
+            versions: [{ id: assetVersionId, version: 1, status: "draft", summary: title }],
+          }],
+        });
+      }
+      return {
+        handoff: "canvas",
+        mode: "canvas-attach",
+        summary: `Attached ${title} to Canvas project.`,
+        lifecycle: stage.lifecycle,
+        workItemIndex: index,
+        displayName: stage.displayName,
+        projectId,
+        assetId,
+        assetVersionId,
+        taskRunId: prior?.output?.taskRunId || null,
+        artifactVersionId: prior?.output?.artifactVersionId || null,
+        artifactType: prior?.output?.artifactType || null,
+        title,
+      };
+    }
+    if (stage.handoff === "publish") {
+      const canvas = [...stageAttempts].reverse().find((entry) => entry.output?.mode === "canvas-attach");
+      return {
+        handoff: "publish",
+        mode: "publish-ready",
+        summary: canvas?.output?.title
+          ? `Marked “${canvas.output.title}” ready to publish (no external CMS).`
+          : `Marked ${stage.displayName} ready without a Canvas asset.`,
+        lifecycle: stage.lifecycle,
+        workItemIndex: index,
+        displayName: stage.displayName,
+        projectId: canvas?.output?.projectId || null,
+        assetId: canvas?.output?.assetId || null,
+        title: canvas?.output?.title || null,
+        externalCms: false,
+      };
+    }
+    return {
+      handoff: stage.handoff,
+      summary: `Completed ${stage.displayName} handoff.`,
+      lifecycle: stage.lifecycle,
+      workItemIndex: index,
+    };
+  }
+
+  function executePipelineStages(pipeline, stages, index, stageAttempts, history, failStageKey, now) {
+    let failed = false;
+    let awaitingApproval = false;
+    for (const stage of stages) {
       let status = "succeeded";
       let error = null;
-      let output;
-      if (stage.capabilityId === "roi-business-calculator") {
-        output = {
-          artifactType: "roiProjection.v1",
-          formulaVersion: "gcc-roi-formulas.v1",
-          contractVersion: "roiBusinessCalculatorInput.v1",
-          capabilityId: "roi-business-calculator",
-          lifecycle: stage.lifecycle,
-          workItemIndex: index,
-          summary: "Directional ROI projection from pipeline Optimize stage.",
-          scenarios: [
-            { scenario: "conservative", label: "Conservative", roiPercent: 30 },
-            { scenario: "expected", label: "Expected", roiPercent: 48 },
-            { scenario: "upside", label: "Upside", roiPercent: 70 },
-          ],
-          warnings: ["Directional model only — not a quote, guarantee, or audited finance result."],
-        };
-      } else if (stage.kind === "task-agent") {
-        const artifactType = stage.capabilityId === "query-planner"
-          ? "queryPlan.v1"
-          : stage.capabilityId === "faq-generator"
-            ? "faqSet.v1"
-            : stage.capabilityId === "ai-readiness"
-              ? "readinessScore.v1"
-              : `${stage.capabilityId}.v1`;
-        const taskRunId = crypto.randomUUID();
-        const artifactVersionId = crypto.randomUUID();
-        output = {
-          artifactType,
-          capabilityId: stage.capabilityId,
-          summary: `TaskRun output from ${stage.displayName}.`,
-          lifecycle: stage.lifecycle,
-          workItemIndex: index,
-          mode: "task-run",
-          taskRunId,
-          artifactVersionId,
-        };
-      } else if (stage.handoff === "canvas") {
-        const prior = [...stageAttempts].reverse().find((entry) => entry.status === "succeeded" && entry.output?.taskRunId);
-        const projectId = crypto.randomUUID();
-        const assetId = crypto.randomUUID();
-        const assetVersionId = crypto.randomUUID();
-        const title = `Canvas adapt · ${prior?.output?.artifactType || "artifact"}`;
-        if (!canvasProjects.has(projectId)) {
-          canvasProjects.set(projectId, {
-            id: projectId,
-            name: `${pipeline.name} · pipeline handoffs`,
-            description: "Assets attached from pipeline run.",
-            status: "in-progress",
-            owner: "owner",
-            persistence: "server",
-            createdAt: now,
-            updatedAt: now,
-            activity: [],
-            assets: [{
-              id: assetId,
-              title,
-              kind: "report",
-              versions: [{ id: assetVersionId, version: 1, status: "draft", summary: title }],
-            }],
-          });
-        }
-        output = {
-          handoff: "canvas",
-          mode: "canvas-attach",
-          summary: `Attached ${title} to Canvas project.`,
-          lifecycle: stage.lifecycle,
-          workItemIndex: index,
-          displayName: stage.displayName,
-          projectId,
-          assetId,
-          assetVersionId,
-          taskRunId: prior?.output?.taskRunId || null,
-          artifactVersionId: prior?.output?.artifactVersionId || null,
-          artifactType: prior?.output?.artifactType || null,
-          title,
-        };
-      } else if (stage.handoff === "publish") {
-        const canvas = [...stageAttempts].reverse().find((entry) => entry.output?.mode === "canvas-attach");
-        output = {
-          handoff: "publish",
-          mode: "publish-ready",
-          summary: canvas?.output?.title
-            ? `Marked “${canvas.output.title}” ready to publish (no external CMS).`
-            : `Marked ${stage.displayName} ready without a Canvas asset.`,
-          lifecycle: stage.lifecycle,
-          workItemIndex: index,
-          displayName: stage.displayName,
-          projectId: canvas?.output?.projectId || null,
-          assetId: canvas?.output?.assetId || null,
-          title: canvas?.output?.title || null,
-          externalCms: false,
-        };
-      } else {
-        output = {
-          handoff: stage.handoff,
-          summary: `Completed ${stage.displayName} handoff.`,
-          lifecycle: stage.lifecycle,
-          workItemIndex: index,
-        };
-      }
+      let output = buildStageOutput(pipeline, stage, index, stageAttempts, now);
       if (failed) {
         status = "skipped";
         error = "Skipped after earlier stage failure.";
@@ -2717,56 +2722,88 @@ const server = http.createServer(async (req, res) => {
         error = `Injected isolation failure at stage '${stage.key}'.`;
         output = null;
         failed = true;
+      } else if (stage.kind === "approval") {
+        status = "awaiting-approval";
+        awaitingApproval = true;
       }
-        const taskRunId = status === "succeeded" && output?.taskRunId ? output.taskRunId : null;
-        const artifactVersionId = status === "succeeded" && output?.artifactVersionId
-          ? output.artifactVersionId
-          : null;
-        stageAttempts.push({
-          id: crypto.randomUUID(),
-          stageKey: stage.key,
-          lifecycleStage: stage.lifecycle,
-          kind: stage.kind,
-          displayName: stage.displayName,
-          capabilityId: stage.capabilityId || null,
-          handoff: stage.handoff || null,
-          attemptNumber: 1,
-          status,
-          output,
-          error,
-          startedAtUtc: now,
-          completedAtUtc: now,
-          taskRunId,
-          artifactVersionId,
-        });
-        history.push({
-          atUtc: now,
-          workItemIndex: index,
-          stageKey: stage.key,
-          lifecycle: stage.lifecycle,
-          status,
-          taskRunId,
-        });
-      }
+      const taskRunId = status === "succeeded" && output?.taskRunId ? output.taskRunId : null;
+      const artifactVersionId = status === "succeeded" && output?.artifactVersionId
+        ? output.artifactVersionId
+        : null;
+      stageAttempts.push({
+        id: crypto.randomUUID(),
+        stageKey: stage.key,
+        lifecycleStage: stage.lifecycle,
+        kind: stage.kind,
+        displayName: stage.displayName,
+        capabilityId: stage.capabilityId || null,
+        handoff: stage.handoff || null,
+        attemptNumber: 1,
+        status,
+        output,
+        error,
+        startedAtUtc: now,
+        completedAtUtc: status === "awaiting-approval" ? null : now,
+        taskRunId,
+        artifactVersionId,
+      });
+      history.push({
+        atUtc: now,
+        workItemIndex: index,
+        stageKey: stage.key,
+        lifecycle: stage.lifecycle,
+        status,
+        taskRunId,
+      });
+      if (awaitingApproval) break;
+    }
+    return { failed, awaitingApproval };
+  }
+
+  function executePipelineRun(pipeline, failStageKey = null, workItemInputs = null) {
+    const now = new Date().toISOString();
+    const inputs = Array.isArray(workItemInputs) && workItemInputs.length > 0
+      ? workItemInputs
+      : [{}];
+    const history = [];
+    const workItems = [];
+    let anyFailed = false;
+    let anyAwaitingApproval = false;
+    for (let index = 0; index < inputs.length; index += 1) {
+      const stageAttempts = [];
+      const { failed, awaitingApproval } = executePipelineStages(
+        pipeline,
+        pipeline.stages,
+        index,
+        stageAttempts,
+        history,
+        failStageKey,
+        now,
+      );
       workItems.push({
         id: crypto.randomUUID(),
         workItemIndex: index,
         input: inputs[index],
-        status: failed ? "failed" : "succeeded",
+        status: failed ? "failed" : awaitingApproval ? "awaiting-approval" : "succeeded",
         error: failed ? `Work item failed at stage '${failStageKey}'.` : null,
         updatedAtUtc: now,
         stageAttempts,
       });
       anyFailed = anyFailed || failed;
+      anyAwaitingApproval = anyAwaitingApproval || awaitingApproval;
     }
     const run = {
       id: `pipeline-run-${pipeline.runs.length + 1}`,
       definitionVersionNumber: pipeline.versionNumber,
       definitionDigest: pipeline.digest,
-      status: anyFailed ? "failed" : "succeeded",
+      status: anyAwaitingApproval && !anyFailed
+        ? "awaiting-approval"
+        : anyFailed
+          ? "failed"
+          : "succeeded",
       actorUserId: "e2e-user",
       startedAtUtc: now,
-      completedAtUtc: now,
+      completedAtUtc: anyAwaitingApproval && !anyFailed ? null : now,
       pausedAtUtc: null,
       error: anyFailed ? "One or more work items failed; later stages on failed items were skipped." : null,
       history,
@@ -2775,6 +2812,79 @@ const server = http.createServer(async (req, res) => {
     pipeline.runs = [run, ...pipeline.runs];
     pipeline.updatedAtUtc = now;
     return run;
+  }
+
+  function continuePipelineAfterApproval(pipeline, run, approved) {
+    const now = new Date().toISOString();
+    let anyFailed = false;
+    let stillAwaiting = false;
+    for (const workItem of run.workItems) {
+      const pending = workItem.stageAttempts.find(
+        (attempt) => attempt.status === "awaiting-approval" && attempt.kind === "approval",
+      );
+      if (!pending) {
+        if (workItem.status === "failed") anyFailed = true;
+        continue;
+      }
+      if (!approved) {
+        pending.status = "failed";
+        pending.completedAtUtc = now;
+        pending.error = "Rejected by operator.";
+        pending.output = {
+          mode: "approval-rejected",
+          summary: `Rejected ${pending.displayName}.`,
+          lifecycle: pending.lifecycleStage,
+          workItemIndex: workItem.workItemIndex,
+          displayName: pending.displayName,
+          rejectedBy: "e2e-user",
+        };
+        workItem.status = "failed";
+        workItem.error = `Rejected at stage '${pending.stageKey}'.`;
+        workItem.updatedAtUtc = now;
+        anyFailed = true;
+        continue;
+      }
+      pending.status = "succeeded";
+      pending.completedAtUtc = now;
+      pending.output = {
+        mode: "approval-approved",
+        summary: `Approved ${pending.displayName}.`,
+        lifecycle: pending.lifecycleStage,
+        workItemIndex: workItem.workItemIndex,
+        displayName: pending.displayName,
+        approvedBy: "e2e-user",
+      };
+      const stageIndex = pipeline.stages.findIndex((stage) => stage.key === pending.stageKey);
+      const remaining = stageIndex >= 0 ? pipeline.stages.slice(stageIndex + 1) : [];
+      const history = Array.isArray(run.history) ? [...run.history] : [];
+      const { failed, awaitingApproval } = executePipelineStages(
+        pipeline,
+        remaining,
+        workItem.workItemIndex,
+        workItem.stageAttempts,
+        history,
+        null,
+        now,
+      );
+      run.history = history;
+      workItem.status = failed ? "failed" : awaitingApproval ? "awaiting-approval" : "succeeded";
+      workItem.error = failed ? "Work item failed after approval." : null;
+      workItem.updatedAtUtc = now;
+      anyFailed = anyFailed || failed;
+      stillAwaiting = stillAwaiting || awaitingApproval;
+    }
+    if (stillAwaiting && !anyFailed) {
+      run.status = "awaiting-approval";
+      run.completedAtUtc = null;
+      run.error = null;
+    } else {
+      run.status = anyFailed ? "failed" : "succeeded";
+      run.completedAtUtc = now;
+      run.error = anyFailed
+        ? (approved ? "One or more work items failed after approval." : "Pipeline run rejected by operator.")
+        : null;
+    }
+    pipeline.updatedAtUtc = now;
   }
   if (url.pathname === "/api/geek-content-creator-v2/pipelines" && req.method === "GET") {
     return send(res, 200, {
@@ -2843,7 +2953,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
     }
   }
-  const pipelineRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/pipelines\/runs\/([^/]+)\/(pause|resume|cancel)$/);
+  const pipelineRunMatch = url.pathname.match(/^\/api\/geek-content-creator-v2\/pipelines\/runs\/([^/]+)\/(pause|resume|cancel|approve|reject)$/);
   if (pipelineRunMatch && req.method === "POST") {
     const runId = pipelineRunMatch[1];
     const action = pipelineRunMatch[2];
@@ -2863,6 +2973,16 @@ const server = http.createServer(async (req, res) => {
       } else if (action === "resume") {
         run.status = "running";
         run.pausedAtUtc = null;
+      } else if (action === "approve") {
+        if (run.status !== "awaiting-approval") {
+          return send(res, 409, { error: "Only awaiting-approval runs can be approved." });
+        }
+        continuePipelineAfterApproval(pipeline, run, true);
+      } else if (action === "reject") {
+        if (run.status !== "awaiting-approval") {
+          return send(res, 409, { error: "Only awaiting-approval runs can be rejected." });
+        }
+        continuePipelineAfterApproval(pipeline, run, false);
       }
       pipeline.updatedAtUtc = new Date().toISOString();
       return send(res, 200, { contractVersion: "gcc-content-pipelines.v1", pipeline: pipelineDetail(pipeline) });
