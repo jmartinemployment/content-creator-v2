@@ -2060,7 +2060,7 @@ export function CatalogWorkspace() {
                     </button>
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
-                    Imports Docs/text/PDF/Office via Drive read-only OAuth. Image, audio, and video stay fail-closed.
+                    Imports Docs/text/PDF/Office via Drive read-only OAuth. Images OCR when local OCR is configured; audio and video stay fail-closed.
                   </p>
                 </div>
                 <div className="rounded-md border border-[var(--cc-line)] bg-white p-3">
@@ -2128,7 +2128,7 @@ export function CatalogWorkspace() {
                     </button>
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--cc-muted)]">
-                    Imports text/PDF/Office via Microsoft Graph. Image, audio, and video stay fail-closed.
+                    Imports text/PDF/Office via Microsoft Graph. Images OCR when local OCR is configured; audio and video stay fail-closed.
                   </p>
                 </div>
               </div>
