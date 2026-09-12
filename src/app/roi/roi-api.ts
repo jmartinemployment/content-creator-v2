@@ -59,7 +59,7 @@ export async function fetchCustomerOutcomes(): Promise<CustomerOutcomeRecord[]> 
         : null) || `Customer outcomes request failed (HTTP ${response.status}).`,
     );
   }
-  const rows = Array.isArray(body?.outcomes) ? body.outcomes : [];
+  const rows: unknown[] = Array.isArray(body?.outcomes) ? body.outcomes : [];
   return rows.map(parseOutcome).filter((row): row is CustomerOutcomeRecord => row !== null);
 }
 
