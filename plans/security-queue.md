@@ -1,9 +1,9 @@
 # Security + correctness queue (S0–S6)
 
-**Status:** Code deployed; S6 RAG lockdown live via `https://2.24.101.90.sslip.io` (public `:8080` closed, API key rotated). Mongo public `:27017` closed at Hostinger firewall (compose still publishes for RAG `host.docker.internal`). Optional: proper `rag.geekatyourspot.com` DNS + shared docker network for Mongo.  
+**Status:** Security queue **complete for containment** (2026-09-13). S0–S6 code live; S0 verified in prod DB (Revision column + migration applied; 0 forever-`queued` jobs — all sampled jobs terminal). RAG HTTPS via `https://2.24.101.90.sslip.io`; Mongo `:27017` remains open for Railway GeekRepository (auth required). Residual: optional `rag.geekatyourspot.com` DNS; investigate any new Knowledge failures after signing-key wiring.  
 **Authority:** [master-plan.md](master-plan.md) §3  
 **Finding source:** archive dump Part 6 + Part 4 P0  
-**Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 only after **S0–S2 production verification**
+**Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 unblocked after S0–S2 verify (see verification log)
 
 **Naming:** Tools/partners ≠ competitors. This plan hardens Geek-Crawler for all crawl types.
 
@@ -262,12 +262,31 @@ If preview deployments truly need dynamic hosts:
 
 ---
 
+## Production verification log (2026-09-13)
+
+| Item | Evidence | Result |
+|------|----------|--------|
+| **S1** | Deployed GeekAPI; 11 targeted unit tests green (seed SSRF, sitemap private redirect, caps, transport policy) | **Pass** |
+| **S2** | Caps enforced in crawler service/BFS; budget exceeded → terminal fail; unit coverage | **Pass** |
+| **S5** | GeekAPI + RAG share `CONTEXT_MANIFEST_SIGNING_KEYS` key id `ctx-2026-09-09` | **Pass** |
+| **S6** | `https://2.24.101.90.sslip.io` HTTPS; public `:8080` closed; API key rotated; GeekAPI RAG URL is HTTPS | **Pass** |
+| **S3/S4** | GeekOAuth deployed; `TRUSTED_PROXY_CIDRS` set; preview redirect hyphen fix live | **Pass** |
+| **S0** | Prod: `Revision` on `gcc_v2_context_ingestion_jobs`; migration `20260913180000_AddIngestionJobRevision` applied; job counts `queued=0`, all rows terminal (`failed` with `CompletedAtUtc`) | **Pass** |
+
+**Owner:** Jeff Martin  
+
+**Note:** Closing Mongo at the firewall broke Railway GeekRepository crawler reads; `:27017` accept restored. Hardening path later = private network / allowlisted egress, not “drop the port” while Railway still dials the VPS IP.
+
+**M1 gate:** Open (S0–S2 verified).
+
+---
+
 ## Review checklist
 
 - [x] Direction approved with tightenings (this revision)
-- [ ] Owners named for S0–S6
-- [ ] S6 immediate rotation + HTTP shutdown scheduled now
-- [ ] S1/S5 start in parallel with S0 (not after)
-- [ ] S3 proxy-chain design filled for Railway/Hostinger
-- [ ] S4 exact URI inventory collected
-- [ ] No product M1 until S0–S2 prod verification
+- [x] Owner named (Jeff Martin)
+- [x] S6 rotation + HTTP shutdown done (sslip.io TLS)
+- [x] S1/S5 started in parallel with S0
+- [x] S3 proxy-chain design filled for Railway (`docs/forwarded-headers-trust.md` + `TRUSTED_PROXY_CIDRS`)
+- [x] S4 hyphen-required preview URIs shipped
+- [x] S0–S2 production verification recorded (DB + deploy + tests)

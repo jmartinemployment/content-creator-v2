@@ -2,7 +2,7 @@
 
 **Status:** Proposed — for review before implementation  
 **Authority:** [master-plan.md](master-plan.md) §4  
-**Depends on:** [security-queue.md](security-queue.md) — **S0–S2 production verification** complete. Security incidents **S1 / S5 / S6** begin immediately (in parallel with S0); they do not block starting S0, but product M1 waits on S0–S2 verify. S6 key rotation must not wait on crawl work.  
+**Depends on:** [security-queue.md](security-queue.md) — **S0–S2 production verification** recorded 2026-09-13 (gate open). Security incidents S1/S5/S6 are live.  
 **Absorbs:** archive dump Part 16 (Creates-canonical), not Part 4 `/rag`-first  
 
 ---
