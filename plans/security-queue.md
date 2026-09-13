@@ -1,6 +1,6 @@
 # Security + correctness queue (S0–S6)
 
-**Status:** Implementation in progress (2026-09-13) — S0/S1/S2/S3/S4/S5 code landed; S6 prod ops (TLS hostname → then loopback bind → key rotate) still open.  
+**Status:** Code deployed to Railway (2026-09-13). S6 TLS cutover blocked on VPS SSH + authoritative DNS for `rag.geekatyourspot.com`.  
 **Authority:** [master-plan.md](master-plan.md) §3  
 **Finding source:** archive dump Part 6 + Part 4 P0  
 **Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 only after **S0–S2 production verification**
