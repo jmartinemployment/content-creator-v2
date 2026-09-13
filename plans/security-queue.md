@@ -1,6 +1,6 @@
 # Security + correctness queue (S0–S6)
 
-**Status:** Code deployed; S6 RAG lockdown live via `https://2.24.101.90.sslip.io` (public `:8080` closed, API key rotated). Optional follow-up: point `rag.geekatyourspot.com` at the VPS and switch Caddy/Railway off sslip.io.  
+**Status:** Code deployed; S6 RAG lockdown live via `https://2.24.101.90.sslip.io` (public `:8080` closed, API key rotated). Mongo public `:27017` closed at Hostinger firewall (compose still publishes for RAG `host.docker.internal`). Optional: proper `rag.geekatyourspot.com` DNS + shared docker network for Mongo.  
 **Authority:** [master-plan.md](master-plan.md) §3  
 **Finding source:** archive dump Part 6 + Part 4 P0  
 **Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 only after **S0–S2 production verification**
