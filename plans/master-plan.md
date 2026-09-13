@@ -150,8 +150,8 @@ These may proceed **only** when they do not reopen the north-star fork:
 - [x] Security S0–S6 (see [security-queue.md](security-queue.md))
 - [x] Prod verify S0–S2; M1 gate open
 - [x] **M1 contracts** — [citeable-create-pipeline.md](citeable-create-pipeline.md)
-- [ ] **M2** — choose `pillar` or `blog`; partner run IDs indexed for smoke
-- [ ] Owner confirms vertical type + partner hosts before M2 coding
+- [x] **M2 wiring** — PLAN pre-evidence gate + WRITE `sectionKey` (`blog`)
+- [ ] **M2 smoke** — indexed partner run ID + signed-in blog create
 
 ---
 

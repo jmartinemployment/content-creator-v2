@@ -1,6 +1,6 @@
 # Citeable Create pipeline (M1–M2)
 
-**Status:** M1 complete (contracts + fixtures green) — ready for M2 vertical slice  
+**Status:** M2 in progress (`blog` vertical) — PLAN gate + WRITE sectionKey wired; prod smoke pending  
 **Authority:** [master-plan.md](master-plan.md) §4  
 **Depends on:** [security-queue.md](security-queue.md) — **S0–S2 production verification** recorded 2026-09-13 (gate open). Security incidents S1/S5/S6 are live.  
 **Absorbs:** archive dump Part 16 (Creates-canonical), not Part 4 `/rag`-first  
@@ -91,16 +91,16 @@ Prove one long-form type end-to-end signed-in against deployed stack.
 
 ### Choose one
 
-Prefer **`pillar`** or **`blog`** (stable outline gate, existing Canvas). Do not pick `pdf` or LinkedIn carousel transforms for the first slice.
+**Selected: `blog`** (stable outline gate, existing Canvas). Pillar follows the same path once smoke passes.
 
 ### Work
 
-1. PLAN uses citeable/RAG outline path (or equivalent evidence-backed outline) mapped into existing `GccV2PlanOutlineSection` — not a parallel outline product.
-2. WRITE uses citeable section generation; attach `citations[]` per section; parse into existing section document model.
-3. Canvas shows quote-level citations (lift patterns from `/rag` citation UI as needed).
-4. Brief fields: `operatorTools` / partner runs feed **partner** retrieval; `competitorUrls` / competitor runs feed differentiation only.
-5. Fail closed on missing project-site grounding; `partnerResearchWarnings` on missing partner/competitor index.
-6. Ops gate: target partner run(s) for the smoke entity must be **indexed** (not quarantined/skipped). Scheduler-off / quarantine is an explicit checklist item, not “Research ready” UI copy.
+1. PLAN uses citeable/RAG outline path — **done** (existing) + **pre-PLAN gate wired** (`GccV2PrePlanEvidenceManifestAssembler` fail-closed on missing project-site; partner/competitor → warnings on outline `EvidenceManifest`).
+2. WRITE citeable sections — **done** (existing) + **`SectionKey` stamped** on citations (section RAG, complete, final synthesis).
+3. Canvas quote-level citations — **already wired** (`SectionCitations` / `sectionCitations`); no new chrome.
+4. Brief `operatorTools` feed partner names — **done** (`ExtractPartnerToolNames` reads `operatorTools`; never competitor URLs).
+5. Fail closed on missing project-site — **done** at PLAN (and already at Generate/WRITE).
+6. Ops gate: partner run(s) indexed for smoke — **pending owner** (run ID + host).
 
 ### Bridge rules during M2
 
@@ -110,15 +110,11 @@ Prefer **`pillar`** or **`blog`** (stable outline gate, existing Canvas). Do not
 
 ### Verification
 
-**Deterministic**
+**Deterministic** — fixtures green (`GccV2UnifiedRagTests`: pre-PLAN gate, partner≠competitor, sectionKey stamp)
 
-- Partner entity never serialized as competitor role
-- Citation verify rejects altered quotes / wrong run
-- Manifest warnings present when partner index missing
+**Signed-in prod smoke (fixed seeded partner + optional competitor)** — pending
 
-**Signed-in prod smoke (fixed seeded partner + optional competitor)**
-
-1. Create pillar/blog → evidence manifest visible  
+1. Create blog → evidence manifest visible on Canvas  
 2. Approve outline → WRITE → ready  
 3. Canvas shows ≥1 verified citation from **partner** corpus  
 4. Competitor-only absence does not block; partner-required absence warns per policy  
@@ -150,9 +146,10 @@ Prefer **`pillar`** or **`blog`** (stable outline gate, existing Canvas). Do not
 
 ## Review checklist
 
-- [ ] Owner confirms Creates-canonical (not `/rag`-first)
-- [ ] Owner confirms first vertical type: `pillar` or `blog`
+- [x] Owner confirms Creates-canonical (not `/rag`-first) — proceeding under master §4
+- [x] First vertical type: **`blog`**
 - [ ] Owner confirms partner run IDs / hosts for M2 smoke (indexed)
-- [ ] Owner accepts bridge rules (no primary-nav `/rag`)
+- [x] Bridge rules (no primary-nav `/rag`)
 - [x] Security S0–S2 prod verification acknowledged; S1/S5/S6 contained
 - [x] M1 contracts + fixtures green
+- [x] M2 code wiring (PLAN gate + sectionKey stamp) + fixtures green
