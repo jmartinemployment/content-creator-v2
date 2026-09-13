@@ -100,7 +100,10 @@ Prove one long-form type end-to-end signed-in against deployed stack.
 3. Canvas quote-level citations — **already wired** (`SectionCitations` / `sectionCitations`); no new chrome.
 4. Brief `operatorTools` feed partner names — **done** (`ExtractPartnerToolNames` reads `operatorTools`; never competitor URLs).
 5. Fail closed on missing project-site — **done** at PLAN (and already at Generate/WRITE).
-6. Ops gate: partner run(s) indexed for smoke — **pending owner** (run ID + host).
+6. Ops gate: partner run(s) indexed for smoke — **candidates verified 2026-09-13** (index `complete`):
+   - Preferred smoke: `04fbbd9c-6b11-478d-98bf-13f2377a0d7a` — ApprovalMax (`approvalmax.com`), 29 pages / 248 chunks
+   - Stronger corpus: `cd2c4bac-268b-41fe-85ea-9930bceb40da` — Plooto (`plooto.com`), 271 pages / 7781 chunks
+   - Avoid for smoke: `25e09e3b-…` Rytr — index complete but only 32 chunks (thin)
 
 ### Bridge rules during M2
 
@@ -112,7 +115,9 @@ Prove one long-form type end-to-end signed-in against deployed stack.
 
 **Deterministic** — fixtures green (`GccV2UnifiedRagTests`: pre-PLAN gate, partner≠competitor, sectionKey stamp)
 
-**Signed-in prod smoke (fixed seeded partner + optional competitor)** — pending
+**Signed-in prod smoke (fixed seeded partner + optional competitor)** — ready to run
+
+**Seed:** blog create; `partnerSourceRunId` = `04fbbd9c-6b11-478d-98bf-13f2377a0d7a` (ApprovalMax); `operatorTools` include “ApprovalMax”. Optional competitor omit OK.
 
 1. Create blog → evidence manifest visible on Canvas  
 2. Approve outline → WRITE → ready  
@@ -148,7 +153,7 @@ Prove one long-form type end-to-end signed-in against deployed stack.
 
 - [x] Owner confirms Creates-canonical (not `/rag`-first) — proceeding under master §4
 - [x] First vertical type: **`blog`**
-- [ ] Owner confirms partner run IDs / hosts for M2 smoke (indexed)
+- [x] Owner confirms partner run IDs / hosts for M2 smoke (indexed) — ApprovalMax `04fbbd9c-…` / Plooto `cd2c4bac-…`
 - [x] Bridge rules (no primary-nav `/rag`)
 - [x] Security S0–S2 prod verification acknowledged; S1/S5/S6 contained
 - [x] M1 contracts + fixtures green
