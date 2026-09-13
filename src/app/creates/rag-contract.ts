@@ -153,6 +153,7 @@ export type RagProvenance = {
 
 export type RagCitation = {
   pageId?: string | null;
+  runId?: string | null;
   assetId?: string | null;
   assetVersionId?: string | null;
   resourceId?: string | null;
@@ -160,6 +161,8 @@ export type RagCitation = {
   url: string;
   title?: string | null;
   sectionTitle?: string | null;
+  /** Create WRITE section key this citation supports (Canvas-ready). */
+  sectionKey?: string | null;
   quote: string;
   crawlType?: string | null;
   verified?: boolean;
@@ -174,7 +177,25 @@ export type RagCitation = {
   } | null;
 };
 
+export type EvidenceIndexReadiness = {
+  role: string;
+  runId?: string | null;
+  label?: string | null;
+  indexed: boolean;
+  detail?: string | null;
+};
+
+export type ResearchEntityRef = {
+  entityId?: string | null;
+  displayName: string;
+  /** Role for this create request only (`partner` | `competitor`). */
+  role: "partner" | "competitor" | string;
+  primaryUrl?: string | null;
+  stableKey?: string | null;
+};
+
 export type ResearchEvidenceManifest = {
+  version?: string;
   ready?: boolean;
   sources?: Array<{
     pageId?: string | null;
@@ -184,9 +205,14 @@ export type ResearchEvidenceManifest = {
     authority?: string | null;
     freshness?: string | null;
   }>;
+  verifiedCitations?: RagCitation[];
+  candidateQuotes?: RagCitation[];
   evidenceGaps?: string[];
   conflicts?: string[];
   warnings?: string[];
+  indexReadiness?: EvidenceIndexReadiness[];
+  internalLinkOpportunities?: string[];
+  assembledAtUtc?: string;
 };
 
 export type RagCapability =

@@ -1,6 +1,6 @@
 # Citeable Create pipeline (M1–M2)
 
-**Status:** Proposed — for review before implementation  
+**Status:** M1 complete (contracts + fixtures green) — ready for M2 vertical slice  
 **Authority:** [master-plan.md](master-plan.md) §4  
 **Depends on:** [security-queue.md](security-queue.md) — **S0–S2 production verification** recorded 2026-09-13 (gate open). Security incidents S1/S5/S6 are live.  
 **Absorbs:** archive dump Part 16 (Creates-canonical), not Part 4 `/rag`-first  
@@ -54,32 +54,32 @@ Ship typed contracts and fixtures before changing PLAN/WRITE behavior.
 
 ### Deliverables
 
-1. **`GccV2GenerationBrief`** (versioned)  
-   Assembled once from persisted create/brief + brand kit + hierarchy + project-site run IDs + **partner** run IDs / tool URLs + competitor run IDs / URLs (role-separated).
+1. **`GccV2GenerationBrief`** (versioned) — **done**  
+   Assembled once from persisted create/brief + brand kit + hierarchy + project-site run IDs + **partner** run IDs / tool URLs + competitor run IDs / URLs (role-separated).  
+   `GccV2GenerationBrief.CurrentVersion` = `gcc-v2-generation-brief.v1`.
 
-2. **Research / evidence manifest** (inspectable before PLAN)  
-   Resolved sources, index readiness, candidate quotes, gaps/conflicts, internal-link opportunities. Missing required **project-site** evidence is a visible gate. Missing partner/competitor index → warnings, not hard block (per master policy).
+2. **Research / evidence manifest** (inspectable before PLAN) — **done (assembler)**  
+   `GccV2ResearchEvidenceManifest` + `GccV2PrePlanEvidenceManifestAssembler`: index readiness, candidate quotes slot, gaps/conflicts, internal-link opportunities. Missing required **project-site** evidence is a visible gate (`Ready == false`). Missing partner/competitor index → warnings, not hard block.
 
-3. **`GccV2ContentTypeRagMapper`**  
+3. **`GccV2ContentTypeRagMapper`** — **done**  
    Maps gcc-v2 content types → RAG family (LongForm / ShortForm / Battlecard / slides). Intents are internal strategies, not a second UI taxonomy.
 
-4. **Citation DTO**  
-   Quote-level citations on WRITE stage `OutputJson` and job `ResultJson` (pageId, runId, URL, quote, section key). Canvas-ready shape even if UI lands in M2.
+4. **Citation DTO** — **done**  
+   `RagCitationDto` / RAG `GenerateCitation` include `runId` + `sectionKey` (Canvas-ready). Wired through GeekAPI RAG client mapping. No production WRITE attach change yet.
 
-5. **`ResearchEntity`**  
-   Shared partner/competitor identity: stable key (URL and/or corpus page/entity id), display name, **role per request** (`partner` | `competitor`). One company with many pages → one entity. No crawl yet → optional paste fallback, never primary path for partners.
+5. **`ResearchEntity`** — **done (request ref)**  
+   Durable `GccV2ResearchEntity` store already exists. `GccV2ResearchEntityRef` adds **role per request** (`partner` | `competitor`) without mutating the row. Stable key from URL authority or entity id.
 
-### Files (expected)
+### Files
 
-- GeekBackend: `ContentCreatorV2` DTOs/services near plan/write/research resolver; `RagGenerateModels` / writing intents
-- Geek-Crawler-Rag: only if request contract gaps block citeable outline/section (prefer consume existing `/v1/generate` stages)
-- Phi: types only if needed for Canvas later — no `/rag` nav promotion
+- GeekBackend: `GccV2GenerationContracts.cs`, `RagGenerateModels.cs`, `HttpGeekCrawlerRagClient.cs`, `RagGenerateService.cs`
+- Geek-Crawler-Rag: `models.GenerateCitation` (`runId`, `sectionKey`); pages context includes `runId`
+- Phi: `src/app/creates/rag-contract.ts` (+ `rag/types.ts`) — types only
 
 ### Verification
 
-- Golden fixtures: brief assembly; entity role separation (partner tool ≠ competitor)
-- Mapper table covered for primary long-form types
-- Citation JSON round-trip tests (cross-language if already patterned)
+- Golden fixtures in `GccV2UnifiedRagTests`: brief assembly; pre-PLAN gate/warnings; entity role separation; citation JSON round-trip; mapper table
+- No production PLAN/WRITE behavior change in this milestone (PLAN still builds post-retrieval manifest as before)
 
 **Done when:** Contracts compile, fixtures green, no production PLAN/WRITE behavior change required yet (or feature-flagged).
 
@@ -154,5 +154,5 @@ Prefer **`pillar`** or **`blog`** (stable outline gate, existing Canvas). Do not
 - [ ] Owner confirms first vertical type: `pillar` or `blog`
 - [ ] Owner confirms partner run IDs / hosts for M2 smoke (indexed)
 - [ ] Owner accepts bridge rules (no primary-nav `/rag`)
-- [ ] Security S0–S2 prod verification acknowledged; S1/S5/S6 already in flight as incidents
-- [ ] Owners named on security-queue ops contracts before M1 starts
+- [x] Security S0–S2 prod verification acknowledged; S1/S5/S6 contained
+- [x] M1 contracts + fixtures green

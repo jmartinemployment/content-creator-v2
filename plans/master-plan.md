@@ -86,13 +86,13 @@ RAG is the **research and evidence engine**, not a second UI taxonomy. The seven
 
 ### Near-term milestones
 
-**M1 — Contracts (no UI chrome)**
+**M1 — Contracts (no UI chrome)** — **done** (see [citeable-create-pipeline.md](citeable-create-pipeline.md))
 
 - Versioned `GccV2GenerationBrief` from persisted create/brief + brand + hierarchy + run IDs.
 - Inspectable **research/evidence manifest** before PLAN (sources, readiness, gaps, conflicts).
 - `GccV2ContentTypeRagMapper` — content type → RAG family (LongForm / ShortForm / Battlecard / slides).
-- Citation DTO on WRITE stage output + job `ResultJson` (quote-level, not only source links).
-- **`ResearchEntity`** for partner vs competitor identity (page/URL/entity key, role **per request**, never conflating tools with competitors).
+- Citation DTO on WRITE stage output + job `ResultJson` (quote-level, not only source links) — `runId` + `sectionKey` on contract.
+- **`ResearchEntity`** / `GccV2ResearchEntityRef` for partner vs competitor identity (page/URL/entity key, role **per request**, never conflating tools with competitors).
 
 **M2 — Vertical slice on Create**
 
@@ -147,11 +147,11 @@ These may proceed **only** when they do not reopen the north-star fork:
 
 ## 7. Next slice (≤5 checkboxes)
 
-- [ ] **Immediate parallel:** S1 SSRF containment + S5 RAG auth containment + S6 key rotation / HTTP shutdown
-- [ ] **Parallel:** S0 atomic claim/lease + independent terminal failure (409 = containment only)
-- [ ] **Then:** S2 crawl budgets; S3 proxy-trust design; S4 exact redirect URIs
-- [ ] **Prod verify S0–S2** (signals in [security-queue.md](security-queue.md))
-- [ ] **Only then M1** — [citeable-create-pipeline.md](citeable-create-pipeline.md)
+- [x] Security S0–S6 (see [security-queue.md](security-queue.md))
+- [x] Prod verify S0–S2; M1 gate open
+- [x] **M1 contracts** — [citeable-create-pipeline.md](citeable-create-pipeline.md)
+- [ ] **M2** — choose `pillar` or `blog`; partner run IDs indexed for smoke
+- [ ] Owner confirms vertical type + partner hosts before M2 coding
 
 ---
 

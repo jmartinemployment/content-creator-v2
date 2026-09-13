@@ -56,9 +56,11 @@ export type RagGenerateSource = {
 
 export type RagCitation = {
   pageId?: string | null;
+  runId?: string | null;
   url: string;
   title?: string | null;
   sectionTitle?: string | null;
+  sectionKey?: string | null;
   quote: string;
   crawlType?: string | null;
 };
