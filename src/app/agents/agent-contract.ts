@@ -361,8 +361,13 @@ export function normalizeAgentAdminWorkspace(value: unknown): AgentAdminWorkspac
   };
 }
 
+/**
+ * A specialist is compatible only if it applies to every selected content type, not merely one of
+ * them: the backend resolves and pins one team across all of a create's formats (primary plus every
+ * "Also draft"), and rejects a team member that does not apply to all of them.
+ */
 export function isCompatibleAgent(agent: AgentSummary, contentTypes: string[]): boolean {
   return agent.status.toLowerCase() === "published"
     && (agent.supportedContentTypes.length === 0
-      || contentTypes.some((type) => agent.supportedContentTypes.includes(type)));
+      || contentTypes.every((type) => agent.supportedContentTypes.includes(type)));
 }

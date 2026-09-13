@@ -952,7 +952,12 @@ export function NewCreateForm({
   const usingBackendDefaultTeam = Boolean(agentCatalogError) && !agentCatalog;
   const producerSelectionReady = selectedProducerCount === 1 || usingBackendDefaultTeam;
   const teamReady = Boolean(resolvedTeam) || usingBackendDefaultTeam;
-  const effectiveSelectedAgentIds = usingBackendDefaultTeam ? [] : selectedAgentIds;
+  // A specialist checked under one format combination can stop applying once a format is added
+  // that it does not cover (e.g. SEO/AEO do not cover Ads or PDF); exclude it here so no stale,
+  // now-incompatible id reaches a resolve or generate request under a mismatched combination.
+  const effectiveSelectedAgentIds = usingBackendDefaultTeam
+    ? []
+    : selectedAgentIds.filter((id) => compatibleAgents.some((agent) => agent.id === id));
   const creationBlockers = [
     contextUploadProcessing ? "An attachment is still being processed." : null,
     ...(contextPreview?.blockingFindings.map((finding) => finding.message) ?? []),
@@ -1332,6 +1337,8 @@ export function NewCreateForm({
               <legend className={labelClass}>Specialist agent team</legend>
               <p className="mt-1 text-xs text-[var(--cc-muted)]">
                 Choose exactly one producer. Add any compatible Marketing, SEO, and AEO contributors or reviewers.
+                A specialist must apply to every format below (main format plus every Also draft) — SEO and AEO
+                do not cover every format, so adding one can remove them from this list.
               </p>
               {agentCatalogError ? (
                 <p role="status" className="mt-2 text-xs text-amber-800">
