@@ -12,7 +12,7 @@ todos:
     status: completed
 isProject: false
 ---
-# Per-format specialist applicability
+# Per-format specialist applicability — Complete
 
 ## Verdict
 
