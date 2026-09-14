@@ -20,8 +20,8 @@ Operators move from research and planning through outline approval, writing, val
 - Project-site crawling, hierarchy, BrandKit, and related-page context
 - Persisted briefs (topic, keyword, intent, stage, voice, PAA, **partner tool URLs**, **competitor page URLs**)
 - Partner/competitor crawl runs **always required** — **fail closed** if either is missing (tools = partners; competitors never as partner)
-- Competitor Analysis plan: [`plans/competitor-analysis.md`](plans/competitor-analysis.md) (extract + competitor SoftwareApplication JSON-LD)
-- Partner extraction plan: [`plans/partner-extraction.md`](plans/partner-extraction.md) (citable, ads, comparison, alternatives, partner SoftwareApplication JSON-LD)
+- Competitor extraction plan (complete): [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) (extract + competitor SoftwareApplication JSON-LD)
+- Partner extraction plan (complete): [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md) (citable, ads, comparison, alternatives, partner SoftwareApplication JSON-LD)
 - Approval-driven `PLAN → WRITE → VALIDATE → REPAIR` Create jobs
 - Citeable blog/pillar path with verified quotations, partner-mention gate, and `sourceRights`
 - Articles, guides, comparisons, tool/service/local pages, ads, social, and related formats

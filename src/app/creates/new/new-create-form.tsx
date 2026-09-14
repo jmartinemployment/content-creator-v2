@@ -66,6 +66,7 @@ import {
   type ContextSelectionRequest,
   type ResolvedContextPreview,
 } from "@/app/brand-sources/context-contract";
+import { humanizeContextBlocks } from "./humanize-context-blocks";
 import { ContextSelector } from "./context-selector";
 
 /** Empty optional GUID fields must be omitted so Generate can auto-create brand kit / skip gates. */
@@ -235,9 +236,9 @@ function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
     case "linkedin-document":
       return "A slide-oriented PDF with connected strategy themes. No long-form citation-coverage gate.";
     case "image-prompt":
-      return "A specialized visual brief grounded in brand and topic evidence. No long-form citation-coverage gate.";
+      return "A specialized visual brief grounded in brand and topic evidence. No long-form citation-coverage gate. Ready parent Creates (all types including Tool — tools = partners) auto-spawn H1/hero + per-H2 image-prompt siblings.";
     default:
-      return "Long-form WRITE path (default Pillar). Check other long-form types under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab into channel packs — not image prompts.";
+      return "Long-form WRITE path (default Pillar). Check other long-form types under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab into channel packs — not image prompts. Image prompts auto-spawn (H1 + H2) for every parent type including Tool.";
   }
 }
 
@@ -321,6 +322,7 @@ export function NewCreateForm({
   const [error, setError] = useState<string | null>(null);
   const [pendingCreateId, setPendingCreateId] = useState<string | null>(null);
   const [toolsPreflight, setToolsPreflight] = useState<PartnerToolsPreflight | null>(null);
+  const ensureCreateIdInflight = useRef<Promise<string> | null>(null);
   const [siteHierarchy, setSiteHierarchy] = useState<SiteHierarchy | null>(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
@@ -528,6 +530,20 @@ export function NewCreateForm({
     return () => controller.abort();
   }, [agentCatalog, agentCatalogError, alsoDrafts, primaryDraft, selectedAgentIds, step]);
 
+
+  useEffect(() => {
+    if (step !== "review") return;
+    if (pendingCreateId ?? toolsPreflight?.createId) return;
+    let cancelled = false;
+    void ensureCreateId().catch((cause) => {
+      if (!cancelled) {
+        setError(cause instanceof Error ? cause.message : "Could not prepare this create for attachments.");
+      }
+    });
+    return () => { cancelled = true; };
+    // ensureCreateId closes over latest wizard fields; re-run when entering Review without an id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional Review entry ensure
+  }, [step, pendingCreateId, toolsPreflight?.createId]);
 
   const loadSiteHierarchyFromRun = useCallback(async (runId: string) => {
     setHierarchyLoading(true);
@@ -813,6 +829,49 @@ export function NewCreateForm({
     };
   }
 
+  async function ensureCreateId(): Promise<string> {
+    const existing = pendingCreateId ?? toolsPreflight?.createId ?? null;
+    if (existing) {
+      if (!pendingCreateId) setPendingCreateId(existing);
+      return existing;
+    }
+    if (ensureCreateIdInflight.current) return ensureCreateIdInflight.current;
+    if (!projectSiteCrawlRunId || !section || !section.relatedPages.length) {
+      throw new Error("Resolve a project site URL with crawled pages first.");
+    }
+    if (!title.trim()) throw new Error("Title is required");
+    const work = (async () => {
+      const createRes = await fetch("/api/gcc-v2/creates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          contentType: primaryDraft,
+          siteUrl,
+          siteSection: siteSectionForApi(section),
+          ...(effectiveSelectedAgentIds.length > 0
+            ? { selectedAgentIds: effectiveSelectedAgentIds }
+            : {}),
+          contextSelection: sanitizeContextSelection(contextSelection),
+        }),
+      });
+      if (!createRes.ok) {
+        const body = (await createRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `create failed: HTTP ${createRes.status}`);
+      }
+      const create = (await createRes.json()) as { id: string };
+      setPendingCreateId(create.id);
+      setToolsPreflight((current) => (current ? { ...current, createId: create.id } : current));
+      return create.id;
+    })();
+    ensureCreateIdInflight.current = work;
+    try {
+      return await work;
+    } finally {
+      if (ensureCreateIdInflight.current === work) ensureCreateIdInflight.current = null;
+    }
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -850,28 +909,10 @@ export function NewCreateForm({
 
     setBusy(true);
     try {
-      const createRes = await fetch("/api/gcc-v2/creates", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          contentType: primaryDraft,
-          siteUrl,
-          siteSection: siteSectionForApi(section),
-          ...(effectiveSelectedAgentIds.length > 0
-            ? { selectedAgentIds: effectiveSelectedAgentIds }
-            : {}),
-          contextSelection: sanitizeContextSelection(contextSelection),
-        }),
-      });
-      if (!createRes.ok) {
-        const body = (await createRes.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || `create failed: HTTP ${createRes.status}`);
-      }
-      const create = (await createRes.json()) as { id: string };
+      const createId = await ensureCreateId();
       const { brief } = buildBriefPayload();
 
-      const preRes = await fetch(`/api/gcc-v2/creates/${create.id}/partner-tools/preflight`, {
+      const preRes = await fetch(`/api/gcc-v2/creates/${createId}/partner-tools/preflight`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -888,19 +929,19 @@ export function NewCreateForm({
         throw new Error(body?.error || `tool preflight failed: HTTP ${preRes.status}`);
       }
       const preflight = (await preRes.json()) as PartnerToolsPreflight;
-      setPendingCreateId(create.id);
+      setPendingCreateId(createId);
       const hierarchyFromPre =
         normalizeSiteHierarchy(preflight.siteHierarchy) ?? siteHierarchy;
       if (hierarchyFromPre) setSiteHierarchy(hierarchyFromPre);
       setToolsPreflight({
         ...preflight,
-        createId: create.id,
+        createId,
         siteHierarchy: hierarchyFromPre,
       });
       if (preflight.toolsFound && preflight.tools.length > 0) {
         setStep("review");
       } else {
-        await confirmAndGenerate(create.id);
+        await confirmAndGenerate(createId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not resolve partner tools");
@@ -963,7 +1004,9 @@ export function NewCreateForm({
       setContextPreview(livePreview);
       if (livePreview.blockingFindings.length > 0) {
         throw new Error(
-          `Context resolution blocked generation. Blockers: ${livePreview.blockingFindings.map((f) => f.message).join("; ")}`,
+          `Context resolution blocked generation. Blockers: ${humanizeContextBlocks(
+            livePreview.blockingFindings.map((f) => f.message),
+          ).join("; ")}`,
         );
       }
       const genRes = await fetch(`/api/gcc-v2/creates/${createId}/generate`, {
@@ -1104,16 +1147,23 @@ export function NewCreateForm({
     ? []
     : selectedAgentIds.filter((id) => compatibleAgents.some((agent) => agent.id === id));
   const attachmentsAwaitingCheck =
-    contextSelection.runAttachmentIds.length > 0 && contextPreview == null;
+    contextSelection.runAttachmentIds.length > 0 && (
+      contextPreview == null
+      || contextPreview.blockingFindings.some((finding) =>
+        /run_attachment:.*:(processing|not_ready|not_finalized|failed)$/.test(finding.message))
+    );
   const contextBlocked = (contextPreview?.blockingFindings.length ?? 0) > 0;
   const confirmContextBlocked =
     contextUploadProcessing || attachmentsAwaitingCheck || contextBlocked;
   const creationBlockers = [
     contextUploadProcessing ? "An attachment is still being processed." : null,
-    attachmentsAwaitingCheck
-      ? "Attachments are on this run. Check context (or remove them) before Confirm — skipping Check does not ignore attachments."
+    attachmentsAwaitingCheck && contextPreview == null
+      ? "Attachments are on this run. Wait until they are ready (or remove them) before Confirm — clearing Check does not ignore them."
       : null,
-    ...(contextPreview?.blockingFindings.map((finding) => finding.message) ?? []),
+    ...humanizeContextBlocks(
+      (contextPreview?.blockingFindings.map((finding) => finding.message) ?? [])
+        .filter((message): message is string => Boolean(message)),
+    ),
     resolvedSkillsLoading
       ? "The approved instruction bundle is still loading."
       : !resolvedSkills
@@ -1663,7 +1713,8 @@ export function NewCreateForm({
             )}
 
             <ContextSelector
-              createId={pendingCreateId}
+              createId={pendingCreateId ?? toolsPreflight?.createId ?? null}
+              ensureCreateId={ensureCreateId}
               rawBriefJson={JSON.stringify(buildBriefPayload().brief)}
               value={contextSelection}
               selectedAgentIds={selectedAgentIds}
@@ -1801,7 +1852,7 @@ export function NewCreateForm({
             </section>
 
             <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
-              <button type="button" onClick={() => { setToolsPreflight(null); setPendingCreateId(null); setStep("outputs"); }} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
+              <button type="button" onClick={() => { setToolsPreflight(null); setStep("outputs"); }} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"

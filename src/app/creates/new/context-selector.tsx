@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   geekIqEmptyFieldCopy,
   geekIqKnowledgeEmptyCopy,
@@ -23,6 +23,8 @@ import {
 
 type ContextSelectorProps = {
   createId?: string | null;
+  /** Creates a create id when attachments need one and Review opened without a save step. */
+  ensureCreateId?: () => Promise<string>;
   /** Draft brief JSON persisted on first resolve when no brief exists yet. */
   rawBriefJson?: string | null;
   value: ContextSelectionRequest;
@@ -34,6 +36,12 @@ type ContextSelectorProps = {
   resolvePath?: string;
   allowAttachments?: boolean;
   checkLabel?: string;
+};
+
+type AttachmentStatusRow = {
+  id: string;
+  name: string;
+  state: string;
 };
 
 type Catalogs = {
@@ -77,6 +85,7 @@ function schemaFieldsForProduct(
 
 export function ContextSelector({
   createId,
+  ensureCreateId,
   rawBriefJson,
   value,
   selectedAgentIds,
@@ -91,10 +100,19 @@ export function ContextSelector({
   const [loading, setLoading] = useState(true);
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [ensuringCreate, setEnsuringCreate] = useState(false);
+  const [activeCreateId, setActiveCreateId] = useState<string | null>(createId ?? null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, AttachmentStatusRow>>({});
+  const attachmentStatusesRef = useRef(attachmentStatuses);
+  attachmentStatusesRef.current = attachmentStatuses;
   const [preview, setPreview] = useState<ResolvedContextPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveCreateId(createId ?? null);
+  }, [createId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,7 +140,13 @@ export function ContextSelector({
     return () => controller.abort();
   }, []);
 
-  useEffect(() => onProcessingChange(uploadBusy), [onProcessingChange, uploadBusy]);
+  useEffect(() => {
+    const pending = value.runAttachmentIds.some((id) => {
+      const state = (attachmentStatuses[id]?.state ?? "queued").toLowerCase();
+      return state !== "ready" && state !== "failed";
+    });
+    onProcessingChange(uploadBusy || ensuringCreate || pending);
+  }, [attachmentStatuses, ensuringCreate, onProcessingChange, uploadBusy, value.runAttachmentIds]);
 
   const knowledgeOptions = useMemo(() => approvedOptions(catalogs.knowledge), [catalogs.knowledge]);
   const brandKitOptions = useMemo(() => approvedOptions(catalogs.brandKits), [catalogs.brandKits]);
@@ -148,11 +172,27 @@ export function ContextSelector({
   ]);
   const fullEmptyState = !loading && shouldShowGeekIqFullEmptyState(catalogCounts);
 
-  const canCheckContext = Boolean(resolvePath || createId);
+  const canCheckContext = Boolean(resolvePath || activeCreateId || ensureCreateId);
+
+  const resolveCreateId = useCallback(async (): Promise<string> => {
+    if (activeCreateId) return activeCreateId;
+    if (!ensureCreateId) {
+      throw new Error("Save or continue until this create exists before attaching files.");
+    }
+    setEnsuringCreate(true);
+    setUploadMessage("Preparing this create…");
+    try {
+      const id = await ensureCreateId();
+      setActiveCreateId(id);
+      return id;
+    } finally {
+      setEnsuringCreate(false);
+    }
+  }, [activeCreateId, ensureCreateId]);
 
   const resolveContext = useCallback(async () => {
     const endpoint = resolvePath
-      ?? (createId ? "/api/gcc-v2/context/resolve" : null);
+      ?? (activeCreateId || ensureCreateId ? "/api/gcc-v2/context/resolve" : null);
     if (!endpoint) {
       setError("Context is checked automatically when the create is saved.");
       return;
@@ -161,6 +201,7 @@ export function ContextSelector({
     setError(null);
     try {
       const taskAgent = endpoint.includes("resolve-task-agent");
+      const ensuredId = taskAgent ? null : await resolveCreateId();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -168,7 +209,7 @@ export function ContextSelector({
           taskAgent
             ? { selection: value, selectedAgentIds }
             : {
-              createId: createId || undefined,
+              createId: ensuredId || undefined,
               selection: value,
               selectedAgentIds,
               ...(rawBriefJson ? { rawBriefJson } : {}),
@@ -187,17 +228,69 @@ export function ContextSelector({
     } finally {
       setPreflightBusy(false);
     }
-  }, [createId, onPreviewChange, rawBriefJson, resolvePath, selectedAgentIds, value]);
+  }, [activeCreateId, ensureCreateId, onPreviewChange, rawBriefJson, resolveCreateId, resolvePath, selectedAgentIds, value]);
+
+  useEffect(() => {
+    const ids = value.runAttachmentIds;
+    if (!activeCreateId || ids.length === 0) return;
+    let cancelled = false;
+    const poll = async () => {
+      const nextRows: Record<string, AttachmentStatusRow> = {};
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const response = await fetch(
+            `/api/gcc-v2/creates/${encodeURIComponent(activeCreateId)}/attachments/${encodeURIComponent(id)}`,
+            { cache: "no-store" },
+          );
+          const body = await response.json().catch(() => null) as {
+            safeFileName?: string;
+            ingestionState?: string;
+          } | null;
+          if (!response.ok || !body || cancelled) return;
+          nextRows[id] = {
+            id,
+            name: body.safeFileName || id,
+            state: body.ingestionState ?? "queued",
+          };
+        } catch {
+          /* keep polling */
+        }
+      }));
+      if (cancelled || Object.keys(nextRows).length === 0) return;
+      let becameReady = false;
+      for (const [id, row] of Object.entries(nextRows)) {
+        const previous = (attachmentStatusesRef.current[id]?.state ?? "").toLowerCase();
+        if (previous !== "ready" && row.state.toLowerCase() === "ready") becameReady = true;
+      }
+      setAttachmentStatuses((current) => ({ ...current, ...nextRows }));
+      if (becameReady) void resolveContext();
+    };
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeCreateId, resolveContext, value.runAttachmentIds]);
 
   async function uploadAttachment(file: File) {
-    if (!createId) return;
     setUploadBusy(true);
     setError(null);
     try {
-      const completion = await uploadContextFile(file, { kind: "attachment", createId }, setUploadMessage);
+      const id = await resolveCreateId();
+      const completion = await uploadContextFile(file, { kind: "attachment", createId: id }, setUploadMessage);
       if (!completion.attachmentId) throw new Error("Upload completed without an attachment ID.");
+      setAttachmentStatuses((current) => ({
+        ...current,
+        [completion.attachmentId!]: {
+          id: completion.attachmentId!,
+          name: file.name,
+          state: completion.state || "queued",
+        },
+      }));
       onChange({ ...value, runAttachmentIds: [...value.runAttachmentIds, completion.attachmentId] });
-      setUploadMessage(`${file.name} is ${completion.state}. Run context must be checked again after ingestion.`);
+      setUploadMessage(`${file.name} is ${completion.state}. Waiting until ingestion is ready…`);
+      // Keep Confirm blocked: pending gate treats missing ready preflight as blocked.
       setPreview(null);
       onPreviewChange(null);
     } catch (cause) {
@@ -208,7 +301,6 @@ export function ContextSelector({
   }
 
   async function addAttachmentFromUrl() {
-    if (!createId) return;
     const url = attachmentUrl.trim();
     if (!url) {
       setError("Enter a public http(s) URL to attach to this run.");
@@ -218,7 +310,8 @@ export function ContextSelector({
     setError(null);
     setUploadMessage(null);
     try {
-      const response = await fetch(`/api/gcc-v2/creates/${createId}/attachments/from-url`, {
+      const id = await resolveCreateId();
+      const response = await fetch(`/api/gcc-v2/creates/${id}/attachments/from-url`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url }),
@@ -229,15 +322,54 @@ export function ContextSelector({
       }
       const attachmentId = typeof body?.attachmentId === "string" ? body.attachmentId : null;
       if (!attachmentId) throw new Error("URL attach completed without an attachment ID.");
+      setAttachmentStatuses((current) => ({
+        ...current,
+        [attachmentId]: {
+          id: attachmentId,
+          name: body?.title || body?.safeFileName || body?.finalUrl || url,
+          state: body?.state ?? "queued",
+        },
+      }));
       onChange({ ...value, runAttachmentIds: [...value.runAttachmentIds, attachmentId] });
       setAttachmentUrl("");
       setUploadMessage(
-        `${body?.title || body?.finalUrl || url} is ${body?.state ?? "queued"}. Run context must be checked again after ingestion.`,
+        `${body?.title || body?.finalUrl || url} is ${body?.state ?? "queued"}. Waiting until ingestion is ready…`,
       );
       setPreview(null);
       onPreviewChange(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "URL attachment failed.");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
+  async function removeAttachment(attachmentId: string) {
+    setUploadBusy(true);
+    setError(null);
+    try {
+      const id = await resolveCreateId();
+      const response = await fetch(
+        `/api/gcc-v2/creates/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok && response.status !== 404) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || `Remove failed (HTTP ${response.status}).`);
+      }
+      onChange({
+        ...value,
+        runAttachmentIds: value.runAttachmentIds.filter((entry) => entry !== attachmentId),
+      });
+      setAttachmentStatuses((current) => {
+        const next = { ...current };
+        delete next[attachmentId];
+        return next;
+      });
+      setUploadMessage("Attachment removed from this run.");
+      await resolveContext();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not remove attachment.");
     } finally {
       setUploadBusy(false);
     }
@@ -464,11 +596,22 @@ export function ContextSelector({
         <p className="mt-1 text-xs text-[var(--cc-muted)]">Attachments never become persistent Knowledge automatically.</p>
         {!allowAttachments ? (
           <p className="mt-2 text-xs text-[var(--cc-muted)]">Task-agent runs pin approved catalog context only. Use create-flow jobs for temporary attachments.</p>
-        ) : createId ? (
+        ) : (
           <div className="mt-2 space-y-2">
+            {ensuringCreate ? (
+              <p role="status" className="text-xs text-[var(--cc-muted)]">Preparing this create…</p>
+            ) : null}
             <label className="inline-flex cursor-pointer rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold">
               Choose attachment
-              <input type="file" className="sr-only" disabled={uploadBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
+              <input
+                type="file"
+                className="sr-only"
+                disabled={uploadBusy || ensuringCreate}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadAttachment(file);
+                }}
+              />
             </label>
             <div className="flex flex-wrap items-end gap-2">
               <label className="min-w-[16rem] flex-1 text-xs font-semibold">
@@ -477,7 +620,7 @@ export function ContextSelector({
                   type="url"
                   aria-label="Attachment URL"
                   value={attachmentUrl}
-                  disabled={uploadBusy}
+                  disabled={uploadBusy || ensuringCreate}
                   onChange={(event) => setAttachmentUrl(event.target.value)}
                   placeholder="https://example.com/brief"
                   className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
@@ -485,7 +628,7 @@ export function ContextSelector({
               </label>
               <button
                 type="button"
-                disabled={uploadBusy || !attachmentUrl.trim()}
+                disabled={uploadBusy || ensuringCreate || !attachmentUrl.trim()}
                 onClick={() => void addAttachmentFromUrl()}
                 className="rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
               >
@@ -493,32 +636,40 @@ export function ContextSelector({
               </button>
             </div>
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-amber-800">Save the create from this review step before adding a run attachment.</p>
         )}
         {uploadMessage ? <p role="status" className="mt-2 text-xs">{uploadMessage}</p> : null}
         {value.runAttachmentIds.length ? (
           <ul className="mt-2 space-y-1 text-xs">
-            {value.runAttachmentIds.map((id) => (
-              <li key={id} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono">{id}</span>
-                <button
-                  type="button"
-                  className="rounded border border-[var(--cc-line)] px-2 py-0.5 text-[11px] font-semibold"
-                  onClick={() => {
-                    onChange({
-                      ...value,
-                      runAttachmentIds: value.runAttachmentIds.filter((entry) => entry !== id),
-                    });
-                    setPreview(null);
-                    onPreviewChange(null);
-                    setUploadMessage("Attachment removed from this run. Check context again if other attachments remain.");
-                  }}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
+            {value.runAttachmentIds.map((id) => {
+              const row = attachmentStatuses[id];
+              const state = (row?.state ?? "queued").toLowerCase();
+              const label = row?.name || id;
+              return (
+                <li key={id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{label}</span>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                      state === "ready"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : state === "failed"
+                          ? "bg-red-100 text-red-900"
+                          : "bg-amber-100 text-amber-950"
+                    }`}
+                  >
+                    {state}
+                  </span>
+                  <span className="font-mono text-[11px] text-[var(--cc-muted)]">{id.slice(0, 8)}…</span>
+                  <button
+                    type="button"
+                    className="rounded border border-[var(--cc-line)] px-2 py-0.5 text-[11px] font-semibold"
+                    disabled={uploadBusy || ensuringCreate}
+                    onClick={() => void removeAttachment(id)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
       </div>
@@ -538,7 +689,7 @@ export function ContextSelector({
       )}
       <button
         type="button"
-        disabled={!canCheckContext || preflightBusy || uploadBusy || loading}
+        disabled={!canCheckContext || preflightBusy || uploadBusy || ensuringCreate || loading}
         onClick={() => void resolveContext()}
         className="mt-4 rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >

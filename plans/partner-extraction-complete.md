@@ -1,16 +1,18 @@
-# Partner extraction plan
+# Partner extraction plan (complete)
 
 **Updated:** 2026-09-14  
 **Accountable owner:** Jeff Martin  
 **Release authority:** [master-plan.md](master-plan.md) (sole release-plan & decision record)  
 **Platform contracts:** [architecture.md](../architecture.md)  
-**Sibling plan:** [competitor-analysis.md](competitor-analysis.md)
+**Sibling plan:** [competitor-extraction-complete.md](competitor-extraction-complete.md)
+
+**Status: Complete** — GeekAPI eng implementation `gcc-partner-extraction.v2` (2026-09-14). §12 checklist all Done. Jeff signed-in smoke / release-ready remains master-plan §7 (not an extraction code gap).
 
 This file is the **authoritative Partner extraction plan**: the data payloads to isolate from the partner library (`crawlType:"partner"`) so Create and affiliates can build sellable / distributable content — **citable blocks**, **advertisements**, **comparisons**, **alternatives**, **pricing**, and related affiliate surfaces — plus partner **SoftwareApplication** JSON-LD.
 
 Evidence binding (fail closed) remains locked in master-plan **Create evidence policy** + Appendix A. Partner-mention VALIDATE gate remains master-plan **§P1**.
 
-**Implementation note:** Today Create research merge only materializes quoteable page excerpts (`GccQuoteablePage` paragraphs from library chunks). This plan defines the **structured payloads to extract next**; do not treat excerpt-only resolve as fulfillment of these assets.
+**Implementation note:** Create research merge materializes quoteable page excerpts (`GccQuoteablePage`) **and** structured `partnerExtraction` payloads via GeekAPI `GccV2PartnerExtractionService` (`gcc-partner-extraction.v2`). Citables are Markdown-verified against `GET /v1/pages` with Appendix C offsets/digest/rights; VALIDATE attaches verified citables for §P1. Excerpt-only resolve without `partnerExtraction` is incomplete for §2–§8 consumers.
 
 ---
 
@@ -18,12 +20,35 @@ Evidence binding (fail closed) remains locked in master-plan **Create evidence p
 
 | | |
 |--|--|
+| **Status** | **Complete** (2026-09-14) |
 | **Policy** | Locked 2026-09-14 — partner crawl required on every Create; tools = partners |
 | **Surfaces** | Create → Research **Partner tool URLs (required)** · Geek-Crawler partner runs · Geek-Crawler-Rag library query |
 | **Library** | Existing master partner RAG / vector corpus — **extract** structured product payloads; do not invent soft success without cites |
 | **Writer** | GeekAPI `gcc-create-library.v1` retrieves partner chunks via `/v1/query` + Markdown verify — **not** RAG `/v1/generate` |
 | **Hard rules** | Always required · fail closed · tools = partners · competitors never labeled `partner` |
 | **Expansion** | §6–§7 minimum expand + §8 extended catalog locked as product direction 2026-09-14 |
+| **Implementation** | **Complete** — GeekAPI `gcc-partner-extraction.v2`; see §12 Done checklist. Jeff signed-in smoke remains release gate (master-plan §7), not an extraction code gap. |
+
+---
+
+## 12. Done checklist (implementation complete)
+
+| Plan item | Status | Where |
+|-----------|--------|--------|
+| Core assets §2–§5 | Done | `GccV2PartnerExtractionService` |
+| Min expand §6 + Proof pack | Done | same |
+| Extended catalog §7 | Done | same (heuristic, on-page only) |
+| Brief persist `partnerExtraction` | Done | `MergePartnerResearchAsync` + `MergePartnerExtractionIntoBriefJson` |
+| Markdown verify + offsets + digest | Done | `GccV2PartnerExtractionVerify` via `GET /v1/pages` (+ optional `runId`) |
+| Appendix C provenance | Done | `GccPartnerExtractionProvenance` (`Quote`, `StartChar`/`EndChar`, `SectionKey`, `SourceRights`, `MarkdownVerified`) |
+| §P1 preferred evidence | Done | `GccV2PartnerCitableBridge` → VALIDATE before citation audit |
+| SoftwareApplication JSON-LD §9 | Done | `GccV2PartnerSoftwareApplicationJsonLd` (price fail-closed) |
+| Ads / comparison / alternatives consumers | Done | Ads WRITE seed + full PARTNER EXTRACTION writing notes for long-form |
+| Competitor deficit → partner swap | Done | `GccV2PartnerAlternativesJoin` (`crawlType:competitors` on deficit) |
+| Library indexing contract | Done | Crawl chunks remain RAG-indexed; structured payloads are brief-assembled (not a second Qdrant product schema — Library half stays query/verify) |
+| Unit tests | Done | `GccV2PartnerExtractionServiceTests` + `GccV2PartnerExtractionCompletionTests` |
+
+**Not in this plan’s eng scope:** Jeff §7 smoke / release-ready stamp (master-plan).
 
 ---
 
@@ -66,7 +91,7 @@ The partner library is already packed with tool / AI product pages. This plan de
 
 **Contract:** Extraction + indexing + `/v1/query` + Markdown verify = **library**. Assembly into Create drafts = GeekAPI Create library writer. Do **not** use RAG `/v1/generate` or `rag-generate.*` for Create.
 
-**Not partner extraction:** Rival deficits, rival pricing posture, “why leave X,” rankings, or sentiment from thin fluff without a verifiable quote — those belong on [competitor-analysis.md](competitor-analysis.md) (join at assembly time).
+**Not partner extraction:** Rival deficits, rival pricing posture, “why leave X,” rankings, or sentiment from thin fluff without a verifiable quote — those belong on [competitor-extraction-complete.md](competitor-extraction-complete.md) (join at assembly time).
 
 ---
 
@@ -112,7 +137,7 @@ For “Versus” posts or side-by-side markdown tables, map features to **standa
 
 **Use:** Comparison / alternatives content types (Appendix A). Partner rows use `crawlType:"partner"`; rival rows use competitor corpus — never swap labels.
 
-**Note:** Competitor-side comparison extraction (feature / pricing / comparison chunks) is defined in [competitor-analysis.md](competitor-analysis.md). This plan owns the **partner** matrix vectors used when the tool is what we sell. Prefer **Pricing catalog** (§6.1) when building full pricing pages — `normalized_cost` alone is too thin.
+**Note:** Competitor-side comparison extraction (feature / pricing / comparison chunks) is defined in [competitor-extraction-complete.md](competitor-extraction-complete.md). This plan owns the **partner** matrix vectors used when the tool is what we sell. Prefer **Pricing catalog** (§6.1) when building full pricing pages — `normalized_cost` alone is too thin.
 
 ---
 
@@ -126,7 +151,7 @@ For “Top Alternatives to [X]” or “Why you should switch” content, pull t
 | **`recommended_swap`** | List of alternative tools in the database that solve that deficit | Partner tools that close the gap |
 | **`pivot_copy`** | Pre-structured transitional sentence | “If you need team collaboration but find Tool X’s pricing tier too restrictive, Tool Y offers flat-rate seats…” |
 
-**Honesty:** When the deficit source is a **competitor**, extract deficits from competitor corpus ([competitor-analysis.md](competitor-analysis.md)) and route `recommended_swap` to **partners** (tools we sell). Never cite a competitor as `crawlType:"partner"`. Never invent a swap without library-backed capability. Use **Disqualifiers** (§6.6) and **ICP** (§6.2) so swaps stay fit-honest.
+**Honesty:** When the deficit source is a **competitor**, extract deficits from competitor corpus ([competitor-extraction-complete.md](competitor-extraction-complete.md)) and route `recommended_swap` to **partners** (tools we sell). Never cite a competitor as `crawlType:"partner"`. Never invent a swap without library-backed capability. Use **Disqualifiers** (§6.6) and **ICP** (§6.2) so swaps stay fit-honest.
 
 ---
 
@@ -233,7 +258,7 @@ Ship after §6. Same provenance rules as core assets.
 | **`landmine`** | Known gap / objection (from partner docs — not rival invent) |
 | **`coaching_line`** | Short enablement sentence |
 
-Rival “why they lose” material stays on [competitor-analysis.md](competitor-analysis.md).
+Rival “why they lose” material stays on [competitor-extraction-complete.md](competitor-extraction-complete.md).
 
 ### 7.5 Demo / product tour beats
 
@@ -355,7 +380,7 @@ Parsed from partner RAG / library data payloads, official format renders cleanly
 }
 ```
 
-**Competitors:** Rival structured payloads also use `SoftwareApplication` — see [competitor-analysis.md](competitor-analysis.md) §6 (`url`, critical `reviewBody`, `itemReviewed`, ratings). Do **not** emit a rival node as a partner product or with `crawlType:"partner"`. Join partner + competitor graphs in Versus / Alternatives; keep crawl types honest.
+**Competitors:** Rival structured payloads also use `SoftwareApplication` — see [competitor-extraction-complete.md](competitor-extraction-complete.md) §6 (`url`, critical `reviewBody`, `itemReviewed`, ratings). Do **not** emit a rival node as a partner product or with `crawlType:"partner"`. Join partner + competitor graphs in Versus / Alternatives; keep crawl types honest.
 
 ---
 
@@ -371,7 +396,7 @@ Inherited from [master-plan.md](master-plan.md) — do not weaken here.
 | **Project-site** | Never substitutes for partner evidence |
 | **Caps** | Product direction: Partner and Competitor **caps are removed** (no soft-limit as a success path) |
 | **SoftDisabled / empty library** | Not a citeable Create success path |
-| **No seed-HTML fallback** | External partner resolve is library-only — see [remove-partner-seed-html-fallback.md](remove-partner-seed-html-fallback.md) |
+| **No seed-HTML fallback** | External partner resolve is library-only — see [remove-partner-seed-html-fallback-complete.md](remove-partner-seed-html-fallback-complete.md) |
 | **Excerpt-only ≠ extraction done** | Quoteable paragraphs do not satisfy §2–§8 payloads |
 | **SoftwareApplication JSON-LD** | Partners only as **sellable** product schema (§9); rival nodes use competitor-analysis §6 |
 
@@ -381,7 +406,7 @@ Inherited from [master-plan.md](master-plan.md) — do not weaken here.
 
 | Concern | Plan |
 |---------|------|
-| What to obtain / extract from rivals + competitor JSON-LD | [competitor-analysis.md](competitor-analysis.md) |
+| What to obtain / extract from rivals + competitor JSON-LD | [competitor-extraction-complete.md](competitor-extraction-complete.md) |
 | What to **extract** from partners (tools we sell) + partner JSON-LD | **This file** |
 | Both runs always bound on Create | master-plan Create evidence policy |
 

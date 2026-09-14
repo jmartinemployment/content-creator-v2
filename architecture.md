@@ -93,8 +93,8 @@ Secrets and LLM keys stay on **GeekAPI** — never in the browser bundle.
 | **Client / account** | Brand the content is for |
 | **Project site** | URL/property bound to a create; grounds BrandKit + related pages |
 | **Create / job** | One writing effort: brief → evidence → PLAN → WRITE → VALIDATE → Canvas |
-| **Partner (tools)** | What we sell / distribute; `crawlType:"partner"`; indexed partner crawl on **every Create** — **fail closed**. Product payloads + **SoftwareApplication** JSON-LD — [`plans/partner-extraction.md`](plans/partner-extraction.md) |
-| **Competitor** | Direct or content rivals to **analyze and (when honest) name**; competitor crawl on **every Create** — **fail closed**; never cited as partner. Extract + **competitor SoftwareApplication JSON-LD** — [`plans/competitor-analysis.md`](plans/competitor-analysis.md) |
+| **Partner (tools)** | What we sell / distribute; `crawlType:"partner"`; indexed partner crawl on **every Create** — **fail closed**. Product payloads + **SoftwareApplication** JSON-LD — [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md) |
+| **Competitor** | Direct or content rivals to **analyze and (when honest) name**; competitor crawl on **every Create** — **fail closed**; never cited as partner. Extract + **competitor SoftwareApplication JSON-LD** — [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) |
 | **Citation** | URL · `pageId` · quote · `sourceDigest` · authorized `runId` · `sectionKey` · `crawlType` · `sourceRights` · provenance |
 | **shipReady** | Appendix B predicate only — `jobStatus: Ready` ≠ ship-ready |
 
@@ -102,11 +102,15 @@ Generate / VALIDATE require real project-site (where typed) **and always** partn
 
 ### Competitor intelligence (contract pointer)
 
-Create uses competitor pages for **both** analysis and explicit mention when strategy warrants it—not as optional color. Authoritative plan: [`plans/competitor-analysis.md`](plans/competitor-analysis.md) — **minimum expand** (pricing, ICP, integrations, FAQ, proof, CTA destinations, disqualifiers), **competitor-specific** payloads (gap map, framing bank, demand signals, type label, deficit→partner swap, comparison axes, claim-risk), extended ad/SEO catalog, and competitor `SoftwareApplication` JSON-LD. Evidence binding remains fail-closed (`competitorSourceRunIds` / legacy singular every Create) per master-plan. Library extraction feeds `/v1/query` — Create drafting stays GeekAPI, not RAG generate. Excerpt-only resolve does not fulfill those payloads.
+Create uses competitor pages for **both** analysis and explicit mention when strategy warrants it—not as optional color. Authoritative plan: [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) — **minimum expand** (pricing, ICP, integrations, FAQ, proof, CTA destinations, disqualifiers), **competitor-specific** payloads (gap map, framing bank, demand signals, type label, deficit→partner swap, comparison axes, claim-risk), extended ad/SEO catalog, and competitor `SoftwareApplication` JSON-LD. Evidence binding remains fail-closed (`competitorSourceRunIds` / legacy singular every Create) per master-plan. Library extraction feeds `/v1/query` — Create drafting stays GeekAPI, not RAG generate.
+
+**Live path (GeekAPI + library):** After competitor quoteables resolve, `GccV2CompetitorExtractionService` (`gcc-competitor-extraction.v1`) writes brief `competitorExtraction` (always `crawlType:competitors`); Markdown verify via `GccV2CompetitorExtractionVerify`; deficit→partner swaps join partner Alternatives; WRITE notes include COMPETITOR EXTRACTION + claim-risk guidance; JSON-LD via `GccV2CompetitorSoftwareApplicationJsonLd`. Indexer stamps competitor chunk metadata (`competitorName`, `competitorChunkKind`, `featureTag`). PLAN applies `GccV2CompetitorTypePlanRouting` (content rivals ≠ product substitutes). VALIDATE fail-closes rival claim-risk echoes via `GccV2CompetitorClaimRiskGate`.
 
 ### Partner extraction payloads (contract pointer)
 
-Partner library extraction isolates core assets (**Citable**, **Advertisement**, **Comparison**, **Alternatives**), a **minimum expand** set (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers), an **extended catalog**, plus **SoftwareApplication** JSON-LD — defined in [`plans/partner-extraction.md`](plans/partner-extraction.md). Binding remains fail-closed (`partnerSourceRunIds` / legacy singular every Create). Tools = partners; competitors never as `crawlType:"partner"`. Excerpt-only `GccQuoteablePage` resolve does not fulfill those payloads.
+Partner library extraction isolates core assets (**Citable**, **Advertisement**, **Comparison**, **Alternatives**), a **minimum expand** set (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers), an **extended catalog**, plus **SoftwareApplication** JSON-LD — defined in [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md). Binding remains fail-closed (`partnerSourceRunIds` / legacy singular every Create). Tools = partners; competitors never as `crawlType:"partner"`.
+
+**Live path (GeekAPI):** After partner quoteables resolve, `GccV2PartnerExtractionService` (`gcc-partner-extraction.v2`) writes brief `partnerExtraction`; `GccV2PartnerExtractionVerify` Markdown-verifies claim assets via `GET /v1/pages`; competitor deficits join via `GccV2PartnerAlternativesJoin` (never `crawlType:"partner"` on rivals); VALIDATE uses `GccV2PartnerCitableBridge` for §P1. Publish uses `GccV2PartnerSoftwareApplicationJsonLd` (no price without Pricing catalog evidence).
 
 ---
 
@@ -159,6 +163,7 @@ Honesty (master-plan P0):
 - Empty RAG pages / Failed query ≠ empty success
 - SoftDisabled / one-shot / `rag-generate.*` ≠ citeable Create success
 - No silent required-evidence fallbacks
+- External Create research (partner / competitor / local) is **library-only** — no Mongo `seed_html` substitute; see [`plans/remove-remaining-fallbacks-complete.md`](plans/remove-remaining-fallbacks-complete.md) + [`plans/remove-partner-seed-html-fallback-complete.md`](plans/remove-partner-seed-html-fallback-complete.md)
 
 ---
 

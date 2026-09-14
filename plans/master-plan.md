@@ -44,15 +44,21 @@
 
 **Code follow-up:** GeekAPI pre-PLAN + Create library `researchPlanning` must require **both** run IDs on every Create (legacy optional / “in scope only” gates are **superseded**).
 
+**Remaining fallback closure:** **Complete** — [remove-remaining-fallbacks-complete.md](remove-remaining-fallbacks-complete.md). Partner/competitor Mongo seed-HTML: [remove-partner-seed-html-fallback-complete.md](remove-partner-seed-html-fallback-complete.md).
+
 ### Competitor intelligence — what Create obtains (locked 2026-09-14)
 
-**Authoritative plan:** [competitor-analysis.md](competitor-analysis.md) — strategy goals, direct vs content rivals, obtain brief, **named extraction payloads** (pricing/ICP/integrations/FAQ/proof/CTA/disqualifiers min-expand; gap map, framing, demand signals, type label, deficit router, comparison axes, claim-risk; extended ad/SEO catalog), semantic chunking, **competitor SoftwareApplication JSON-LD**, and fail-closed binding.
+**Status: Complete** — GeekAPI eng `gcc-competitor-extraction.v1` (2026-09-14). Authoritative plan: [competitor-extraction-complete.md](competitor-extraction-complete.md) (§12 Done checklist).
+
+**Authoritative plan:** [competitor-extraction-complete.md](competitor-extraction-complete.md) — strategy goals, direct vs content rivals, obtain brief, **named extraction payloads** (pricing/ICP/integrations/FAQ/proof/CTA/disqualifiers min-expand; gap map, framing, demand signals, type label, deficit router, comparison axes, claim-risk; extended ad/SEO catalog), semantic chunking, **competitor SoftwareApplication JSON-LD**, and fail-closed binding.
 
 Summary: competitor analysis + honest mention is required Create strategy (gaps, BOFU comparison, trust, SEO de-risk). Library extracts structured rival payloads for `/v1/query`; structured rival schema = `SoftwareApplication` (competitor-analysis §10). Create drafting remains GeekAPI `gcc-create-library.v1` (not RAG generate). Hard rules: always required · fail closed · never `crawlType:"partner"`. Excerpt-only resolve does not fulfill extraction payloads.
 
 ### Partner extraction — product payloads (locked 2026-09-14)
 
-**Authoritative plan:** [partner-extraction.md](partner-extraction.md) — extract **Citable**, **Advertisement**, **Comparison**, **Alternatives**, plus **minimum expand** (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers) and an **extended catalog** from the partner library for sellable / distributable content; emit **partner** `SoftwareApplication` JSON-LD mapped from those payloads. Rival `SoftwareApplication` nodes: [competitor-analysis.md](competitor-analysis.md) §10.
+**Status: Complete** — GeekAPI eng `gcc-partner-extraction.v2` (2026-09-14). Authoritative plan: [partner-extraction-complete.md](partner-extraction-complete.md).
+
+**Authoritative plan:** [partner-extraction-complete.md](partner-extraction-complete.md) — extract **Citable**, **Advertisement**, **Comparison**, **Alternatives**, plus **minimum expand** (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers) and an **extended catalog** from the partner library for sellable / distributable content; emit **partner** `SoftwareApplication` JSON-LD mapped from those payloads. Rival `SoftwareApplication` nodes: [competitor-extraction-complete.md](competitor-extraction-complete.md) §10.
 
 | Asset | Fields |
 |-------|--------|
@@ -64,7 +70,9 @@ Summary: competitor analysis + honest mention is required Create strategy (gaps,
 
 Hard rules: partner crawl always required · fail closed · tools = partners · never label competitors as partner. Library query only — not RAG generate.
 
-**Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, [competitor-analysis.md](competitor-analysis.md), [partner-extraction.md](partner-extraction.md), deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
+**Image prompts:** Every parent Create type (including Tool — tools = partners) auto-spawns H1/hero + non-FAQ H2 `image-prompt` siblings when ready — [image-prompt-h1-h2-complete.md](image-prompt-h1-h2-complete.md). Never spawn from `image-prompt`.
+
+**Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, [competitor-extraction-complete.md](competitor-extraction-complete.md), [partner-extraction-complete.md](partner-extraction-complete.md), [remove-remaining-fallbacks-complete.md](remove-remaining-fallbacks-complete.md), deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 
 ### Roles
 

@@ -1,14 +1,16 @@
-# Competitor Analysis plan
+# Competitor extraction plan (complete)
 
 **Updated:** 2026-09-14  
 **Accountable owner:** Jeff Martin  
 **Release authority:** [master-plan.md](master-plan.md) (sole release-plan & decision record)  
 **Platform contracts:** [architecture.md](../architecture.md)  
-**Sibling plan:** [partner-extraction.md](partner-extraction.md)
+**Sibling plan:** [partner-extraction-complete.md](partner-extraction-complete.md)
 
-This file is the **authoritative Competitor Analysis plan**: why competitors matter, what Create must obtain, **structured extraction payloads**, library chunking, and competitor **SoftwareApplication** JSON-LD. Evidence binding (fail closed) remains locked in master-plan **Create evidence policy** + Appendix A.
+**Status: Complete** — GeekAPI eng implementation `gcc-competitor-extraction.v1` (2026-09-14). §12 checklist all Done. Jeff signed-in smoke / release-ready remains master-plan §7 (not an extraction code gap).
 
-**Implementation note:** Today Create research merge often materializes quoteable page excerpts only. This plan defines the **structured payloads to extract** from `crawlType:"competitor"` — excerpt-only resolve does **not** fulfill them.
+This file is the **authoritative Competitor extraction plan**: why competitors matter, what Create must obtain, **structured extraction payloads**, library chunking, and competitor **SoftwareApplication** JSON-LD. Evidence binding (fail closed) remains locked in master-plan **Create evidence policy** + Appendix A.
+
+**Implementation note:** Create research merge materializes quoteable page excerpts (`GccQuoteablePage`) **and** structured `competitorExtraction` via GeekAPI `GccV2CompetitorExtractionService` (`gcc-competitor-extraction.v1`). Claim assets Markdown-verify via `GET /v1/pages`; deficit→partner swaps join partner Alternatives; WRITE notes include COMPETITOR EXTRACTION. Excerpt-only resolve without `competitorExtraction` is incomplete for §5–§7 consumers.
 
 ---
 
@@ -16,11 +18,30 @@ This file is the **authoritative Competitor Analysis plan**: why competitors mat
 
 | | |
 |--|--|
+| **Status** | **Complete** (2026-09-14) |
 | **Policy** | Locked 2026-09-14 — competitor crawl required on every Create |
 | **Surfaces** | Create → Research **Competitor page URLs (required)** · Geek-Crawler competitor runs · Geek-Crawler-Rag library query |
 | **Writer** | GeekAPI `gcc-create-library.v1` retrieves competitor chunks via `/v1/query` + Markdown verify — **not** RAG `/v1/generate` |
 | **Hard rules** | Always required · fail closed · never `crawlType:"partner"` · tools = partners only |
 | **Expansion** | §5–§7 named payloads (min expand + competitor-specific + extended) locked as product direction 2026-09-14 |
+| **Implementation** | **Complete** — GeekAPI `gcc-competitor-extraction.v1` + §9 chunk metadata + claim-risk VALIDATE + PLAN type routing; see §12 Done checklist. Jeff §7 smoke is release gate, not an extraction code gap. |
+
+---
+
+## 12. Done checklist (implementation complete)
+
+| Plan item | Status | Where |
+|-----------|--------|--------|
+| Min expand + competitor-specific + extended §5–§7 | Done | `GccV2CompetitorExtractionService` |
+| Brief persist `competitorExtraction` | Done | research merge + brief JSON |
+| Markdown verify | Done | `GccV2CompetitorExtractionVerify` via `GET /v1/pages` |
+| Deficit → partner swap join | Done | partner Alternatives join (`crawlType:competitors` on deficit) |
+| WRITE notes + claim-risk guidance | Done | COMPETITOR EXTRACTION writing notes |
+| SoftwareApplication JSON-LD §10 | Done | `GccV2CompetitorSoftwareApplicationJsonLd` |
+| Chunk metadata §9 (`competitorChunkKind` / `featureTag` / `competitorName`) | Done | Geek-Crawler-Rag `metadata.py` + `llama_nodes.py` |
+| Claim-risk VALIDATE fail-closed §6.7 | Done | `GccV2CompetitorClaimRiskGate` in VALIDATE |
+| PLAN type routing §2 (content ≠ product substitute) | Done | `GccV2CompetitorTypePlanRouting` + PLAN outline filter |
+| Unit tests | Done | `GccV2CompetitorExtractionServiceTests` + `GccV2CompetitorExtractionCompletionGatesTests` + Geek-Crawler-Rag chunk-kind tests |
 
 ---
 
@@ -73,7 +94,7 @@ From bound competitor URLs / `competitorSourceRunIds` (legacy singular `competit
 
 **Contract:** Extraction + indexing + `/v1/query` + Markdown verify = **library**. Create drafting = GeekAPI `CreateLibraryDraft` / `gcc-create-library.v1`. Do **not** use RAG `/v1/generate` or `rag-generate.*` for Create.
 
-**Forbidden:** labeling competitor payloads or chunks as `crawlType:"partner"`. Partner sell CTAs / affiliate destinations for tools we sell live only in [partner-extraction.md](partner-extraction.md).
+**Forbidden:** labeling competitor payloads or chunks as `crawlType:"partner"`. Partner sell CTAs / affiliate destinations for tools we sell live only in [partner-extraction-complete.md](partner-extraction-complete.md).
 
 All claim-bearing payloads carry master-plan **Appendix C** citation fields: URL · `pageId` · quote/offsets · `sourceDigest` · authorized `runId` · `sectionKey` · `crawlType:"competitor"` · `sourceRights` · provenance.
 
@@ -211,7 +232,7 @@ These assets are unique to rival analysis and must stay on this plan.
 | **`recommended_swap`** | **Partner** tool id(s) only — join to partner library | Partner Y |
 | **`pivot_copy`** | Optional transitional sentence | “If you need a C# SDK…” |
 
-**Honesty:** `recommended_swap` must resolve to [partner-extraction.md](partner-extraction.md) tools (`crawlType:"partner"`). Never label the deficit source as partner.
+**Honesty:** `recommended_swap` must resolve to [partner-extraction-complete.md](partner-extraction-complete.md) tools (`crawlType:"partner"`). Never label the deficit source as partner.
 
 ### 6.6 Comparison axis pack (as the rival presents them)
 
@@ -412,7 +433,7 @@ A structured **Competitor** payload extracted from the master library / RAG data
 }
 ```
 
-**Vs partner JSON-LD:** Partner extraction shape and mapping live in [partner-extraction.md](partner-extraction.md) §9. Competitor nodes add `url`, `itemReviewed`, and often critical `reviewBody` / ratings for Alternatives and Versus content. Join graphs in Create—do not merge crawl types.
+**Vs partner JSON-LD:** Partner extraction shape and mapping live in [partner-extraction-complete.md](partner-extraction-complete.md) §9. Competitor nodes add `url`, `itemReviewed`, and often critical `reviewBody` / ratings for Alternatives and Versus content. Join graphs in Create—do not merge crawl types.
 
 ---
 
@@ -427,7 +448,7 @@ Inherited from [master-plan.md](master-plan.md) — do not weaken here.
 | **Partner vs competitor** | Tools = partners only; competitors never as partner |
 | **Project-site** | Never substitutes for competitor (or partner) evidence |
 | **Caps** | Product direction: Partner and Competitor **caps are removed** (no soft-limit as a success path) |
-| **No seed-HTML fallback** | External competitor resolve is library-only — see [remove-partner-seed-html-fallback.md](remove-partner-seed-html-fallback.md) |
+| **No seed-HTML fallback** | External competitor resolve is library-only — see [remove-partner-seed-html-fallback-complete.md](remove-partner-seed-html-fallback-complete.md) |
 | **Excerpt-only ≠ extraction done** | Quoteable paragraphs do not satisfy §5–§7 payloads |
 | **Content rivals ≠ product substitutes** | Type label required; PLAN must not swap |
 | **Deficit → swap join** | Competitor deficit + **partner** recommended_swap only |
@@ -435,7 +456,7 @@ Inherited from [master-plan.md](master-plan.md) — do not weaken here.
 
 ---
 
-## 12. Downstream uses
+## 12b. Downstream uses
 
 Structured competitor library data supports:
 
@@ -457,7 +478,7 @@ Ship-ready still requires master-plan **Appendix B** (including `sourceRights` a
 | Concern | Plan |
 |---------|------|
 | What to obtain from rivals; competitor extract + chunk types + competitor JSON-LD | **This file** |
-| What to **extract** from partners (tools we sell) + partner JSON-LD | [partner-extraction.md](partner-extraction.md) |
+| What to **extract** from partners (tools we sell) + partner JSON-LD | [partner-extraction-complete.md](partner-extraction-complete.md) |
 | Both runs always bound on Create | master-plan Create evidence policy |
 
 Comparison and Alternatives products often **join** both corpora: competitor deficits + partner swaps; partner capability vectors + competitor counterpart vectors. Labels and `crawlType` must stay honest.

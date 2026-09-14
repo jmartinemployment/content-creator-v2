@@ -2122,7 +2122,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             Remix the active <span className="font-medium text-[var(--cc-ink)]">{repurposeSourceLabel}</span>{" "}
             tab into LinkedIn, X, email, blog pack, and Meta/Google ads — same channel pack for every
-            generate type. Image prompts are separate jobs (§3.1 auto-spawn) — not part of Re-Purpose.
+            generate type. Image prompts auto-spawn for every parent type (including Tool —
+            tools = partners): H1/hero + one per non-FAQ H2. They are separate jobs — not part of Re-Purpose.
           </p>
           {!canRepurposeContentType(contentType) ? (
             <p className="mt-2 text-xs text-amber-800">

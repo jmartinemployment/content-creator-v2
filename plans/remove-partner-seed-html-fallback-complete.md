@@ -1,4 +1,4 @@
-# Remove partner/competitor Mongo seed-HTML fallback
+# Remove partner/competitor Mongo seed-HTML fallback (complete)
 
 **Updated:** 2026-09-14  
 **Accountable owner:** Jeff Martin  
@@ -6,7 +6,9 @@
 **Honesty rule:** [`.cursor/rules/no-fallbacks.mdc`](../.cursor/rules/no-fallbacks.mdc)  
 **Primary code:** `GeekBackend` → `GccV2GeekCrawlerResearchResolver.TryResolveExternalSeedAsync`
 
-Status: **Implemented in GeekBackend** (2026-09-14) — partner/competitor external resolve is library-only; Mongo seed-HTML path retained only for external **local** seeds. Deploy + Jeff smoke still required.
+Status: **Complete** — GeekBackend (2026-09-14) — partner/competitor external resolve is library-only. Local external seeds closed in [remove-remaining-fallbacks-complete.md](remove-remaining-fallbacks-complete.md). Jeff smoke remains master-plan §7.
+
+**Follow-on (complete):** [remove-remaining-fallbacks-complete.md](remove-remaining-fallbacks-complete.md) — local seed-HTML + remaining Create soft-success paths.
 
 ---
 
@@ -109,7 +111,7 @@ Hard failures must surface as:
 ### Docs
 
 5. Link this plan from [plans/README.md](README.md).
-6. One-line cross-ref in [partner-extraction.md](partner-extraction.md) and [competitor-analysis.md](competitor-analysis.md): library-only; no seed-HTML fallback.
+6. One-line cross-ref in [partner-extraction-complete.md](partner-extraction-complete.md) and [competitor-extraction-complete.md](competitor-extraction-complete.md): library-only; no seed-HTML fallback.
 7. Optional master-plan honesty bullet if Jeff wants it in §7 tracker.
 
 ### Out of scope (call out, do not sneak in)

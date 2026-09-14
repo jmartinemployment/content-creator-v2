@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { getAccessTokenWithRefresh } from "@/app/auth/session";
 import { apiConfig } from "@/app/auth/config";
 
+export const runtime = "nodejs";
+/** Generate / partner research can exceed short platform defaults; keep the BFF alive for upstream. */
+export const maxDuration = 300;
+
 /** BFF → GeekAPI `api/geek-content-creator-v2/*` with GeekOAuth bearer. */
 async function proxy(
   request: NextRequest,
@@ -11,6 +15,8 @@ async function proxy(
     `${apiConfig.baseUrl}/api/geek-content-creator-v2/${path.join("/")}`,
   );
   targetUrl.search = request.nextUrl.search;
+  const pathKey = path.join("/");
+  const started = Date.now();
 
   const token = await getAccessTokenWithRefresh();
   if (!token) {
@@ -42,23 +48,38 @@ async function proxy(
   if (contentType) headers.set("content-type", contentType);
   headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: bufferedBody,
-    redirect: "manual",
-    cache: "no-store",
-  });
+  try {
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: bufferedBody,
+      redirect: "manual",
+      cache: "no-store",
+    });
 
-  const responseHeaders = new Headers(response.headers);
-  responseHeaders.delete("content-encoding");
-  responseHeaders.delete("content-length");
+    // Buffer the body so status/body survive platform streaming disconnects on long upstream calls.
+    const responseBody = await response.arrayBuffer();
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: responseHeaders,
-  });
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+
+    return new Response(responseBody, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+    });
+  } catch (cause) {
+    const durationMs = Date.now() - started;
+    const message = cause instanceof Error ? cause.message : "Upstream request failed";
+    return Response.json(
+      {
+        error: `GeekAPI proxy failed after ${durationMs}ms: ${message}`,
+        path: pathKey,
+      },
+      { status: 502 },
+    );
+  }
 }
 
 async function handler(
