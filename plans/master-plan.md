@@ -149,7 +149,7 @@ Full policy, coverage, snapshot, and negative smokes: [citeable-create-pipeline.
 
 **M1 — Contracts** — **done** (contracts exist; see citeable plan). Does **not** prove citeable writing alone.
 
-**M2 — `blog` vertical** — **in progress** (code gate wired; smokes not recorded)
+**M2 — `blog` vertical** — **in progress** (code gate deployed; **smokes deferred**)
 
 - Verified citation + section coverage in VALIDATE (`GccV2CitationEvidenceGuard`); evidence snapshot fields on ResultJson.
 - Runtime vs release partner policy (§2).
@@ -204,7 +204,7 @@ Proceed **only** when they do not reopen the north-star fork:
 - [x] Delete `/rag` product UI (404, no redirect); relocate Create RAG clients; strip bridge narrative
 - [x] M2: citation provenance + section coverage gate in VALIDATE ([citeable-create-pipeline.md](citeable-create-pipeline.md))
 - [x] Kill switch `GccV2CiteableCreateV1` (`GCC_V2_CITEABLE_CREATE_V1`, default ON)
-- [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log
+- [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log (**deferred** — return before M3)
 - [ ] Security: maintain **per-item** evidenced states in §3 / security-queue
 
 ---

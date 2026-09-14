@@ -1,6 +1,6 @@
 # Citeable Create pipeline (M1–M2)
 
-**Status:** M2 **not done** — citeable VALIDATE gate + kill switch wired (`GccV2UnifiedRagTests` green); signed-in smokes still open. **Do not start M3** until §M2 done when passes.  
+**Status:** M2 **not done** — citeable VALIDATE gate + kill switch **deployed** (`66a0b51`); signed-in smokes **deferred** (operator skip 2026-09-14 — return here before M3).  
 **Authority:** [master-plan.md](master-plan.md) §4  
 **Depends on:** [security-queue.md](security-queue.md) — per-item evidenced states (S0–S2 production-verified). S1/S5/S6 constraints apply (see §Security).  
 **Absorbs:** archive dump Part 16 (Creates-canonical), not Part 4 `/rag`-first  
@@ -276,7 +276,7 @@ Signed-in smoke creates a **blog** from a persisted **versioned** brief; **block
 
 | Date (UTC) | Job id | Happy | Negatives | Result | Notes |
 |------------|--------|-------|-----------|--------|-------|
-| 2026-09-14 | — | — | — | **blocked on operator** | Pre-smoke prod check: GeekAPI `66a0b51` SUCCESS; phi `c6d1f86` Vercel success; `/rag` → 404; ApprovalMax run `04fbbd9c-…` index `complete` / 248 chunks; `GEEK_RAG_CITEABLE_GENERATE_ENABLED=true`. Awaiting signed-in blog create job id. |
+| 2026-09-14 | — | — | — | **deferred** | Operator skip — return to happy + negative smokes before declaring M2 done / starting M3. Pre-smoke still green: GeekAPI `66a0b51`, phi `/rag` 404, ApprovalMax index complete (248 chunks). |
 
 ---
 
