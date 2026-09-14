@@ -16,6 +16,8 @@ import {
 
 type ContextSelectorProps = {
   createId?: string | null;
+  /** Draft brief JSON persisted on first resolve when no brief exists yet. */
+  rawBriefJson?: string | null;
   value: ContextSelectionRequest;
   selectedAgentIds: string[];
   onChange: (selection: ContextSelectionRequest) => void;
@@ -68,6 +70,7 @@ function schemaFieldsForProduct(
 
 export function ContextSelector({
   createId,
+  rawBriefJson,
   value,
   selectedAgentIds,
   onChange,
@@ -144,6 +147,7 @@ export function ContextSelector({
               createId: createId || undefined,
               selection: value,
               selectedAgentIds,
+              ...(rawBriefJson ? { rawBriefJson } : {}),
             },
         ),
       });
@@ -159,7 +163,7 @@ export function ContextSelector({
     } finally {
       setPreflightBusy(false);
     }
-  }, [createId, onPreviewChange, resolvePath, selectedAgentIds, value]);
+  }, [createId, onPreviewChange, rawBriefJson, resolvePath, selectedAgentIds, value]);
 
   async function uploadAttachment(file: File) {
     if (!createId) return;

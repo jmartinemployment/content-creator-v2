@@ -1531,6 +1531,7 @@ export function NewCreateForm({
 
             <ContextSelector
               createId={pendingCreateId}
+              rawBriefJson={JSON.stringify(buildBriefPayload().brief)}
               value={contextSelection}
               selectedAgentIds={selectedAgentIds}
               onChange={setContextSelection}
