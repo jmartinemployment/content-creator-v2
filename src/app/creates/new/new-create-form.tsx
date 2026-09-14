@@ -14,6 +14,7 @@ import {
 } from "../brief-catalog";
 import {
   alsoDraftOptionsFor,
+  requiresCitationEvidenceGate,
   type ContentType,
   type PrimaryDraftType,
   PRIMARY_DRAFT_TYPES,
@@ -183,11 +184,11 @@ function parseOperatorTools(text: string): Array<{ name?: string; url: string }>
 function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
   switch (primary) {
     case "tool":
-      return "Long-form tool pages: one keyword overview plus a full page per partner tool from supplied URLs. Optionally add pillar/blog under Also draft for a use-case article to ground the overview.";
+      return "Long-form tool pages require an indexed partner crawl run. One keyword overview plus a full page per partner tool from supplied URLs. Optionally add pillar/blog under Also draft.";
     case "comparison":
-      return "Side-by-side evaluation — outline gets one section per option (from partner tools and competitor URLs). Missing external crawls warn and skip; generate continues.";
+      return "Side-by-side evaluation — outline gets one section per option. Named partners/competitors require indexed crawl runs (fail closed) before PLAN.";
     case "alternatives":
-      return "Narrative alternatives page (one section per partner tool). Does not auto-spawn partner tool jobs — use Tool page under Also draft for full partner pages.";
+      return "Narrative alternatives page (one section per partner tool). Named partners require an indexed partner crawl run before PLAN. Use Tool page under Also draft for full partner pages.";
     case "case-study":
       return "Proof-led story: context, challenge, approach, implementation, results, and lessons. Optional FAQ when PAA questions are available.";
     case "guide":
@@ -203,15 +204,15 @@ function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
     case "service":
       return "Commercial service page: shorter target length, CTA clarity emphasized at VALIDATE.";
     case "blog":
-      return "Blog-style long-form. Check another long-form under Also draft to write both. Re-Purpose remixes ready drafts into channel packs.";
+      return "Blog-style long-form with citeable section coverage at VALIDATE. Check another long-form under Also draft to write both.";
     case "ads":
     case "social":
     case "email":
-      return "Short-form drafting with verified evidence, optional approved templates, and variations available in your workspace.";
+      return "Short-form drafting — no section citation-coverage gate. Partner-driven ads still require an indexed partner run when partner URLs are listed.";
     case "linkedin-document":
-      return "A slide-oriented PDF with connected strategy themes, editable pages, and downloadable export.";
+      return "A slide-oriented PDF with connected strategy themes. No long-form citation-coverage gate.";
     case "image-prompt":
-      return "A specialized visual brief grounded in the same brand, topic, and source evidence as prose jobs.";
+      return "A specialized visual brief grounded in brand and topic evidence. No long-form citation-coverage gate.";
     default:
       return "Long-form WRITE path (default Pillar). Check other long-form types under Also draft to write both. Re-Purpose on Canvas remixes any ready draft tab into channel packs — not image prompts.";
   }
@@ -229,6 +230,9 @@ const RAG_CAPABILITY_LABELS = {
 type NewCreateFormProps = {
   initialTopic?: string;
   initialContentType?: ContentType;
+  initialTools?: string;
+  initialCompetitors?: string;
+  initialNotes?: string;
 };
 
 type SavedProjectSite = {
@@ -241,6 +245,9 @@ type SavedProjectSite = {
 export function NewCreateForm({
   initialTopic = "",
   initialContentType = "pillar",
+  initialTools = "",
+  initialCompetitors = "",
+  initialNotes = "",
 }: NewCreateFormProps) {
   const router = useRouter();
   const crawlAbortRef = useRef<AbortController | null>(null);
@@ -262,9 +269,10 @@ export function NewCreateForm({
   const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraftType>(initialContentType);
   const [alsoDrafts, setAlsoDrafts] = useState<Set<ContentType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
-  const [operatorToolsText, setOperatorToolsText] = useState("");
+  const [operatorToolsText, setOperatorToolsText] = useState(initialTools);
   const [paaQuestionsText, setPaaQuestionsText] = useState("");
-  const [competitorUrlsText, setCompetitorUrlsText] = useState("");
+  const [competitorUrlsText, setCompetitorUrlsText] = useState(initialCompetitors);
+  const [writingNotes, setWritingNotes] = useState(initialNotes);
   const [primaryIntent, setPrimaryIntent] = useState<PrimaryIntent | "">("");
   const [buyingStage, setBuyingStage] = useState<BuyingStage | "">("");
   const [toneOfVoice, setToneOfVoice] = useState<ToneOfVoice | "">("");
@@ -772,6 +780,7 @@ export function NewCreateForm({
         operatorTools,
         paaQuestions: paaQuestionsText,
         competitorUrls: competitorUrlsText,
+        ...(writingNotes.trim() ? { writingNotes: writingNotes.trim() } : {}),
         selectedAgentIds,
         // Prefer early mobile crawl so preflight does not re-fetch (avoids cold-start fail + twin noise).
         ...(siteHierarchy ? { siteHierarchy } : {}),
@@ -1229,6 +1238,11 @@ export function NewCreateForm({
                 ))}
               </select>
               <p className="text-xs text-[var(--cc-muted)]">{primaryDraftHelperCopy(primaryDraft)}</p>
+              <p className="text-xs text-[var(--cc-muted)]">
+                {requiresCitationEvidenceGate(primaryDraft)
+                  ? "Citeable VALIDATE: body sections need quote-verified citations (or ship-ready stays false)."
+                  : "No long-form section citation-coverage gate for this format."}
+              </p>
             </div>
             <div className="mt-7 flex justify-between">
               <button type="button" onClick={() => setStep("source")} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
@@ -1335,6 +1349,16 @@ export function NewCreateForm({
               <div className={`${fieldClass} mt-4`}>
                 <label className={labelClass} htmlFor="operatorTools">Partner destination URLs</label>
                 <textarea id="operatorTools" className={`${inputClass} min-h-20`} value={operatorToolsText} onChange={(event) => setOperatorToolsText(event.target.value)} placeholder="Name | https://example.com" />
+              </div>
+              <div className={`${fieldClass} mt-4`}>
+                <label className={labelClass} htmlFor="writingNotes">Writing notes</label>
+                <textarea
+                  id="writingNotes"
+                  className={`${inputClass} min-h-20`}
+                  value={writingNotes}
+                  onChange={(event) => setWritingNotes(event.target.value)}
+                  placeholder="Claims, angle, or notes carried from a task-agent result"
+                />
               </div>
             </details>
             <details className="mt-3 rounded-lg border border-[var(--cc-line)] bg-slate-50 p-4">

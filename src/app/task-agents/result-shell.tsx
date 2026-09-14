@@ -9,6 +9,11 @@ import {
   listProjects,
   type ProjectSummary,
 } from "@/app/projects/projects-api";
+import {
+  createPrefillFromArtifactPayload,
+  createPrefillSearchParams,
+} from "@/app/creates/create-prefill";
+import type { ContentType } from "@/app/creates/content-types";
 import { TaskAgentResultRenderer } from "@/app/task-agents/result-renderers";
 
 export type ResultLineageNode = {
@@ -155,24 +160,16 @@ function shortId(value: string | undefined | null) {
   return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
 }
 
-function topicFromPayload(payload: Record<string, unknown> | null): string {
-  if (!payload) return "";
-  for (const key of ["topic", "title", "primaryKeyword", "keyword", "query"]) {
-    const value = payload[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
 function hrefForNextAction(
   action: ResultNextAction,
-  opts: { fromArtifactId?: string; fromRunId: string; topic: string },
+  opts: { fromArtifactId?: string; fromRunId: string; payload: Record<string, unknown> | null },
 ): string | null {
   if (action.create) {
-    const params = new URLSearchParams();
-    params.set("contentType", action.create.contentType);
-    if (opts.topic) params.set("topic", opts.topic);
-    return `/creates/new?${params.toString()}`;
+    const prefill = {
+      ...createPrefillFromArtifactPayload(opts.payload),
+      contentType: action.create.contentType as ContentType,
+    };
+    return `/creates/new?${createPrefillSearchParams(prefill).toString()}`;
   }
   if (!action.capabilityId) return null;
   if (opts.fromArtifactId) {
@@ -522,7 +519,7 @@ export function TaskAgentResultShell({
               const href = hrefForNextAction(action, {
                 fromArtifactId,
                 fromRunId: result.rerun.retryOfRunId,
-                topic: topicFromPayload(payload),
+                payload,
               });
               if (!href) return null;
               const key = action.create

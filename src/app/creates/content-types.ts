@@ -109,3 +109,24 @@ export function isExportOnlyType(value: string): boolean {
   const t = value.trim().toLowerCase();
   return t === "email" || t === "social" || t === "ads" || t === "image-prompt" || t === "whitepaper" || t === "linkedin-document";
 }
+
+/** Types that run the citeable VALIDATE quote/coverage gate (GeekAPI M2/M3). */
+const CITATION_EVIDENCE_GATE_TYPES = new Set<string>([
+  "blog",
+  "pillar",
+  "guide",
+  "tech-article",
+  "whitepaper",
+  "listicle",
+  "case-study",
+  "comparison",
+  "alternatives",
+  "tool",
+  "service",
+  "local",
+]);
+
+export function requiresCitationEvidenceGate(value: string): boolean {
+  return CITATION_EVIDENCE_GATE_TYPES.has(value.trim().toLowerCase());
+}
+

@@ -30,13 +30,13 @@ M2 signed-in smokes remain **deferred**. M3 proceeds by operator override. Retur
 
 **Inventory follow-up (2026-09-14):** Server `nextActions` no longer wipe Create handoffs; `GccV2TaskAgentNextActions.ForCompletedRun` prepends Create; Canvas blockers include `citationEvidenceGaps`.
 
-## Wave 2 (next)
+## Wave 2 (this slice)
 
 | Item | Deliverable |
 |------|-------------|
-| W2a | Prefill Create from artifact payload (tools/competitors/claims) |
-| W2b | Outline tab: evidence strip parity with brief tab |
-| W2c | Short-form types: explicit “no section coverage gate” contract in UI |
+| W2a | Prefill Create from artifact payload (tools/competitors/claims) via `/creates/new` query |
+| W2b | Outline tab: first-class evidence strip before approve |
+| W2c | Short-form types: explicit “no section coverage gate” copy in Create + Canvas |
 
 ## Done when (M3)
 
@@ -44,12 +44,14 @@ M2 signed-in smokes remain **deferred**. M3 proceeds by operator override. Retur
 - Comparison/alternatives with named partners fail closed without partner run  
 - Content-writing task agents expose ≥1 **Write in Create** next action  
 - Canvas never labels unverified quotes as “verified”  
+- Task-agent Create handoff prefills topic/tools/competitors/notes when present  
+- Outline evidence strip visible before approve  
 - M2 smoke log still open until operator returns  
 
 ---
 
 ## Review checklist
 
-- [x] W1a–W1d shipped (await deploy)
-- [ ] Wave 2  
+- [x] W1a–W1d shipped  
+- [x] Wave 2  
 - [ ] M2 smokes completed (deferred)  

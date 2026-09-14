@@ -34,7 +34,7 @@ import {
   canRepurposeContentType,
   REPURPOSE_CHANNELS,
 } from "@/app/creates/repurpose-channels";
-import { isCmsPublishType, isLongFormContentType, labelForContentType } from "@/app/creates/content-types";
+import { isCmsPublishType, isLongFormContentType, labelForContentType, requiresCitationEvidenceGate } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
 import { SectionCitations, countVerifiedCitations } from "@/app/creates/rag-citations";
 import { WorkspaceSection, canvasSectionsToPlain, type CanvasAction } from "@/app/creates/workspace-section";
@@ -1456,6 +1456,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             <p className="mt-2 text-xs text-[var(--cc-muted)]">
               Shape the order and purpose of the draft before writing. Required points apply only to
               that section. Save keeps the outline editable; Save &amp; approve continues generation.
+              Soft partner/competitor warnings are OK to approve; hard evidence gaps must be fixed first.
               {showAddAdvanceOutline ? (
                 <>
                   {" "}
@@ -1464,6 +1465,46 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </>
               ) : null}
             </p>
+            {evidenceManifest || citationEvidenceGaps.length > 0 ? (
+              <section
+                aria-label="Evidence before approve"
+                className={`mt-3 rounded-md border p-3 ${
+                  evidenceManifest?.ready === false || citationEvidenceGaps.length > 0
+                    ? "border-amber-300 bg-amber-50 text-amber-950"
+                    : "border-[var(--cc-line)] bg-[var(--cc-paper)]"
+                }`}
+              >
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cc-muted)]">
+                  Evidence
+                </h3>
+                <p className="mt-1 text-sm text-[var(--cc-ink)]">
+                  {evidenceManifest
+                    ? `${evidenceManifest.sources?.length ?? 0} source(s) · ${
+                      evidenceManifest.ready === false || citationEvidenceGaps.length > 0
+                        ? "gaps require review"
+                        : "ready for outline approve"
+                    }`
+                    : "Citation evidence gaps require review"}
+                </p>
+                {[
+                  ...(evidenceManifest?.evidenceGaps ?? []),
+                  ...citationEvidenceGaps,
+                  ...(evidenceManifest?.conflicts ?? []),
+                  ...(evidenceManifest?.warnings ?? []),
+                ].length > 0 ? (
+                  <ul className="mt-2 list-disc pl-4 text-xs">
+                    {[
+                      ...(evidenceManifest?.evidenceGaps ?? []),
+                      ...citationEvidenceGaps,
+                      ...(evidenceManifest?.conflicts ?? []),
+                      ...(evidenceManifest?.warnings ?? []),
+                    ].map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
             {outline?.researchPlan && outline.researchPlan.length > 0 ? (
               <section
                 aria-label="Research plan"
@@ -1729,6 +1770,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           <details className="mt-3 border-t border-[var(--cc-line)] pt-3 text-xs" aria-label="Technical details">
             <summary className="cursor-pointer font-semibold text-[var(--cc-ink)]">Technical details</summary>
           <div className="mt-2 flex flex-col gap-1 text-[var(--cc-muted)]">
+            <p>
+              Format: {labelForContentType(contentType)} ·{" "}
+              {requiresCitationEvidenceGate(contentType)
+                ? "citeable section coverage gate on"
+                : "no long-form citation-coverage gate"}
+            </p>
             <p className="font-mono">Job {jobId}</p>
             <p>Status: {status}{stage ? ` · Stage: ${stage}` : ""}</p>
             <p>Policy: {modelPolicyLabel(modelPolicy)}</p>
