@@ -17,9 +17,15 @@ describe("proxy session policy (source contract)", () => {
     assert.match(source, /cookieOpts\.clear/);
   });
 
-  it("preserves cookies on network / 5xx", () => {
-    assert.match(source, /5xx \/ other: preserve cookies/);
-    assert.match(source, /catch \{[\s\S]*return NextResponse\.next\(\);/);
+  it("preserves refresh on network / 5xx but drops stale access", () => {
+    assert.match(source, /5xx \/ other: preserve refresh/);
+    assert.match(source, /Drop stale access/);
+    assert.match(source, /isAccessTokenFresh/);
+  });
+
+  it("refreshes when access is missing or stale", () => {
+    assert.match(source, /accessFresh/);
+    assert.match(source, /if \(accessFresh\) return NextResponse\.next\(\)/);
   });
 
   it("retries token fetch at most once", () => {

@@ -366,8 +366,9 @@ export function NewCreateForm({
     void fetch("/api/gcc-v2/project-site/runs", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         if (response.status === 401) {
-          setSavedProjectSitesError("Sign in to load saved project sites.");
-          setSavedProjectSites([]);
+          // Session cookie present but API rejected — bounce through OAuth rather than
+          // leaving a half-signed-in Create form.
+          window.location.assign("/api/auth/start");
           return;
         }
         if (!response.ok) {

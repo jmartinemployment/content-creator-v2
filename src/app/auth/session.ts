@@ -7,6 +7,7 @@ import {
   cookieOpts,
 } from "@/app/auth/cookies";
 import {
+  isAccessTokenFresh,
   isSessionDeadError,
   refreshAccessToken,
 } from "@/app/auth/tokens";
@@ -14,20 +15,28 @@ import {
 /**
  * Read-only session lookup, safe in Server Components.
  * Cookie refresh belongs in proxy.ts (cannot write cookies during RSC render).
+ * Stale JWT access cookies are treated as missing so pages fail closed to sign-in.
  */
 export const getAccessToken = cache(async (): Promise<string | null> => {
   const jar = await cookies();
-  return jar.get(ACCESS_COOKIE)?.value ?? null;
+  const token = jar.get(ACCESS_COOKIE)?.value ?? null;
+  if (!token || !isAccessTokenFresh(token)) return null;
+  return token;
 });
 
-/** Route Handlers only — may write cookies. */
+/** Route Handlers only — may write cookies. Refreshes when access is missing or stale. */
 export async function getAccessTokenWithRefresh(): Promise<string | null> {
   const jar = await cookies();
   const existing = jar.get(ACCESS_COOKIE)?.value;
-  if (existing) return existing;
+  if (existing && isAccessTokenFresh(existing)) return existing;
 
   const refresh = jar.get(REFRESH_COOKIE)?.value;
-  if (!refresh) return null;
+  if (!refresh) {
+    if (existing) {
+      jar.set(ACCESS_COOKIE, "", cookieOpts.clear);
+    }
+    return null;
+  }
 
   try {
     const tokens = await refreshAccessToken(refresh);
@@ -43,6 +52,9 @@ export async function getAccessTokenWithRefresh(): Promise<string | null> {
   } catch (error) {
     if (isSessionDeadError(error)) {
       jar.set(REFRESH_COOKIE, "", cookieOpts.clear);
+      jar.set(ACCESS_COOKIE, "", cookieOpts.clear);
+    } else if (existing && !isAccessTokenFresh(existing)) {
+      // Stale access with a transient refresh failure — do not keep serving the dead bearer.
       jar.set(ACCESS_COOKIE, "", cookieOpts.clear);
     }
     return null;

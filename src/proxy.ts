@@ -2,21 +2,33 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOpts } from "@/app/auth/cookies";
 import { authConfig } from "@/app/auth/config";
+import { isAccessTokenFresh } from "@/app/auth/tokens";
 
 /**
  * Refreshes the access token before the request reaches any Server Component.
  * Proxy runs before rendering and can set response cookies.
  *
  * Session policy:
+ * - Refresh when access cookie is missing OR JWT is expired / within skew
  * - 2xx: rotate access (+ refresh if rotated)
  * - 400/401/403: clear cookies (invalid/denied refresh)
- * - network / 5xx: preserve cookies (IdP outage ≠ proof of invalid session)
+ * - network / 5xx: preserve refresh; clear stale access so we do not send a dead bearer
  */
 export async function proxy(request: NextRequest) {
-  const hasAccess = Boolean(request.cookies.get(ACCESS_COOKIE)?.value);
+  const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
+  const accessFresh = Boolean(access && isAccessTokenFresh(access));
 
-  if (hasAccess || !refresh) return NextResponse.next();
+  if (accessFresh) return NextResponse.next();
+
+  if (!refresh) {
+    if (access && !accessFresh) {
+      const dead = NextResponse.next();
+      dead.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
+      return dead;
+    }
+    return NextResponse.next();
+  }
 
   let tokens: {
     access_token: string;
@@ -32,11 +44,22 @@ export async function proxy(request: NextRequest) {
         dead.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
         return dead;
       }
-      // 5xx / other: preserve cookies — do not treat as invalid grant.
+      // 5xx / other: preserve refresh — do not treat as invalid grant.
+      // Drop stale access so RSC/BFF do not present an expired bearer as signed-in.
+      if (access && !accessFresh) {
+        const degraded = NextResponse.next();
+        degraded.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
+        return degraded;
+      }
       return NextResponse.next();
     }
     tokens = await res.json();
   } catch {
+    if (access && !accessFresh) {
+      const degraded = NextResponse.next();
+      degraded.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
+      return degraded;
+    }
     return NextResponse.next();
   }
 
