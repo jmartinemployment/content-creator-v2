@@ -1,4 +1,4 @@
-/** Types for GeekAPI POST /api/rag/generate (content-creator-v2 client). */
+/** Types for GeekAPI POST /api/rag/generate (Create client). */
 
 import type { ResearchEntityRef } from "@/app/research-entities/types";
 
@@ -25,8 +25,7 @@ export type RagGenerateRequest = {
   targetEntities?: string[];
   /**
    * Role-tagged entities backing `targetEntities` — GeekAPI does not yet weight retrieval
-   * by role (that's a following step per plans/make-content-creator-workable.md Milestone 1);
-   * this carries the role forward so it's not lost once that lands.
+   * by role; this carries the role forward so it's not lost once that lands.
    */
   researchEntities?: ResearchEntityRef[];
   adTemplates?: RagAdTemplate[];

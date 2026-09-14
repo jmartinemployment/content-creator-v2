@@ -157,7 +157,6 @@ export type RagCitation = {
   assetId?: string | null;
   assetVersionId?: string | null;
   resourceId?: string | null;
-  sourceDigest?: string | null;
   url: string;
   title?: string | null;
   sectionTitle?: string | null;
@@ -165,6 +164,9 @@ export type RagCitation = {
   sectionKey?: string | null;
   quote: string;
   crawlType?: string | null;
+  /** SHA-256 of source text when provided. */
+  sourceDigest?: string | null;
+  /** True only after quote↔source verify succeeds. */
   verified?: boolean;
   coordinates?: {
     page?: number | null;

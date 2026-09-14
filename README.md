@@ -58,12 +58,13 @@ npm run build
 
 Configure GeekOAuth and GeekAPI using the variables documented in [`.env.example`](.env.example). Authentication tokens remain in secure HTTP-only cookies; infrastructure and LLM secrets are never exposed to the browser.
 
-### Unified RAG frontend contract
+### Unified Create + evidence engine
 
-`/creates/new → persisted job → Canvas` is the only creation path; `/rag` preserves `topic`,
-`intent`, and `contentType` while redirecting there. The frontend sends additive
-`brief.modelPolicy`, root `modelPolicy`, `brief.targetEntities`, `brief.ragCapabilities`, and
-optional `brief.ragAdTemplates` fields. Older GeekAPI deployments may ignore them.
+`/creates/new → persisted job → Canvas` is the only authoring path. There is no product `/rag`
+page (404). The frontend still calls the internal BFF `/api/rag/*` for research status and
+related Create helpers. Briefs may include additive `brief.modelPolicy`, root `modelPolicy`,
+`brief.targetEntities`, `brief.ragCapabilities`, and optional `brief.ragAdTemplates` fields.
+Older GeekAPI deployments may ignore them.
 
 Canvas remains backward-compatible with old jobs. New job results may add `citations`,
 `sectionCitations`, `provenance`, `evidenceManifest`, `modelPolicy`, and

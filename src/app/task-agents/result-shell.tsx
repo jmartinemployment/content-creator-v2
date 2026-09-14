@@ -212,8 +212,11 @@ export function TaskAgentResultShell({
         setProjects(items);
         setSelectedProjectId((currentId) => currentId || items[0]?.id || "");
       })
-      .catch(() => {
-        if (!cancelled) setProjects([]);
+      .catch((cause) => {
+        if (!cancelled) {
+          setProjects([]);
+          setAttachError(cause instanceof Error ? cause.message : "Could not load projects.");
+        }
       })
       .finally(() => {
         if (!cancelled) setProjectsLoading(false);
@@ -233,8 +236,11 @@ export function TaskAgentResultShell({
         setGrids(items);
         setSelectedGridId((currentId) => currentId || items[0]?.id || "");
       })
-      .catch(() => {
-        if (!cancelled) setGrids([]);
+      .catch((cause) => {
+        if (!cancelled) {
+          setGrids([]);
+          setGridAttachError(cause instanceof Error ? cause.message : "Could not load grids.");
+        }
       })
       .finally(() => {
         if (!cancelled) setGridsLoading(false);

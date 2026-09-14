@@ -5,18 +5,9 @@ test.beforeEach(({}, testInfo) => {
   skipIfNoE2eAuth(testInfo);
 });
 
-test("legacy RAG URL redirects to canonical Create and migrates topic and intent", async ({ page }) => {
-  await openAuthenticated(
-    page,
-    "/rag?topic=Reliable%20content%20operations&intent=Technical%20Article",
-  );
-  await expect(page).toHaveURL(
-    /\/creates\/new\?topic=Reliable\+content\+operations&intent=Technical\+Article/,
-  );
-  await page.getByLabel("Project site URL").fill("example.test");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("Working title")).toHaveValue("Reliable content operations");
-  await expect(page.getByLabel("Main format")).toHaveValue("tech-article");
+test("product /rag route is gone", async ({ page }) => {
+  await openAuthenticated(page, "/rag");
+  await expect(page.getByText(/404|This page could not be found/i)).toBeVisible();
 });
 
 test("canonical Create offers all 17 content types and relevant RAG capabilities", async ({ page }) => {

@@ -44,7 +44,7 @@ export type ObservedTelemetry = Readonly<{
   rejectedCount: number;
   reviewMinutes: number;
   periodLabel: string;
-  source: "demo" | "telemetry" | "empty";
+  source: "demo" | "telemetry" | "empty" | "unknown";
   notes?: readonly string[];
   cancelledCount?: number;
   /** Lookback window used by the observed feed (days). */

@@ -72,7 +72,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         setGrids(items);
         setTargetGridId((current) => current || items[0]?.id || "");
       })
-      .catch(() => setGrids([]))
+      .catch((cause) => {
+        setGrids([]);
+        setError(cause instanceof Error ? cause.message : "Could not load grids.");
+      })
       .finally(() => setGridsLoading(false));
   }, [projectId]);
 

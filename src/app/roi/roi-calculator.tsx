@@ -256,7 +256,9 @@ export function RoiCalculator() {
       ? { label: "Live TaskRuns", className: "border-emerald-200 bg-emerald-50 text-emerald-800" }
       : observed.source === "empty"
         ? { label: "No runs yet", className: "border-slate-200 bg-slate-50 text-slate-700" }
-        : { label: "Demo feed", className: "border-amber-200 bg-amber-50 text-amber-800" };
+        : observed.source === "unknown"
+          ? { label: "Unknown source", className: "border-amber-200 bg-amber-50 text-amber-900" }
+          : { label: "Demo feed", className: "border-amber-200 bg-amber-50 text-amber-800" };
 
   return (
     <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">

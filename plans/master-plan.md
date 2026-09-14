@@ -1,11 +1,13 @@
 # Content Creator v2 — Master Plan (program of record)
 
-**Updated:** 2026-09-13  
+**Updated:** 2026-09-14  
 **Role:** Short living authority for what to build next.  
-**Not this file:** Historical dump and research — see [archive/master-plan-consolidated-dump-2026-09-13.md](archive/master-plan-consolidated-dump-2026-09-13.md) (parts 0–19 as consolidated 2026-09-13).  
+**Not this file:** Historical dump and research — see [archive/master-plan-consolidated-dump-2026-09-13.md](archive/master-plan-consolidated-dump-2026-09-13.md).  
 **Platform map:** [architecture.md](../architecture.md) at repo root.
 
 When this file conflicts with the archive dump or any older plan snippet, **this file wins** unless the owner overrides in chat.
+
+**Enforceable non-negotiables live only in §2** (and linked focused plans for citeable/security detail). Archive Part 0 is **historical wording**, not a second rules source — do not implement from the dump when §2 differs.
 
 ---
 
@@ -13,11 +15,11 @@ When this file conflicts with the archive dump or any older plan snippet, **this
 
 | Decision | Authority | Losers (demoted) |
 |----------|-----------|------------------|
-| **Product surface** | **Creates-canonical:** `/creates/new` → durable gcc-v2 job → Canvas. One way to author publishable content. | Promoting `/rag` as primary “Write” nav; treating Agent Library as a second writer |
+| **Product surface** | **Creates-canonical:** `/creates/new` → durable gcc-v2 job → Canvas. One way to **author** publishable content. | Promoting `/rag` as primary “Write” nav; treating Agent Library as a second writer |
 | **Evidence engine** | Geek-Crawler-Rag (hybrid/graph query + citeable generate) **inside** PLAN / WRITE / VALIDATE — not a parallel product | Standalone `/rag` as long-term home; paste-in competitor text as primary research |
 | **Execution engine (near term)** | GeekAPI `GccV2JobWorker` + `RagGenerateService` / citeable stages | LlamaIndex stage agents (parked until citeable path + goldens exist) |
 | **Task agents** | Consumers of the same evidence plane; diagnostics → handoff into Create — not a second draft pipeline | Migrating all content agents onto `/rag` as the writer of record |
-| **Pipelines / Grid** | Real product surface once stage advancement is durable; do **not** disable as “dead” without verifying current code | Part-4 “hide Pipelines forever” as north star |
+| **Pipelines / Grid** | **Orchestration only** around Create jobs (schedule, DAG, stage visibility). Must **not** become a second place to initiate/edit authoring copy. Do not disable without verifying current code. | Part-4 “hide Pipelines forever”; Pipelines as parallel writer |
 | **PDF long-form type** | Backlog after citeable Create path is stable | Parallel green “start now” |
 
 ### Naming — Tools are partners, not competitors
@@ -29,108 +31,159 @@ When this file conflicts with the archive dump or any older plan snippet, **this
 | **Local** | Regional / local businesses (future) | Geek-Crawler `local` |
 | **Project site** | URL bound to a create (often a client property; do not hard-code “client”) | gcc-v2 owned project-site crawl — **not** a Geek-Crawler type |
 
-**Never** call tools “competitors.” Tool ads retrieve **partner** corpus (+ optional competitor excerpts for differentiation). UI, APIs, briefs, and plans must say **partner** / **partner crawl** / `crawlType: "partner"` — not vendor crawl, `ai-tools`, or competitor-as-tool.
+**Never** call tools “competitors.” UI, APIs, briefs, and plans must say **partner** / `crawlType: "partner"`.
 
 ---
 
 ## 2. Standing policy (fail the change if broken)
 
-Full historical wording lives in the archive Part 0. Non-negotiables:
-
-1. **Correctness over expediency** — no silent fallbacks for required project-site grounding; external partner/competitor research is **notify-and-skip** (`partnerResearchWarnings`), never a generate blocker that exposes Geek-Crawler caps.
-2. **Realtime = SignalR** — no `usePollJob` / status `setInterval` in phi `src/`.
-3. **Isolation** — zero diffs to v1 Content Creator / Geek-SEO hubs; GeekAPI edits only under `ContentCreatorV2/*` (+ additive Program/CORS/migrations for `content_creator_v2`).
-4. **Phi workspace** — `/Users/jeffmartin/development/content-creator-v2` only. No Geek-Crawler BFF/hub/start-crawl UI in phi. No Qdrant/embed/indexer under phi `src/`.
-5. **Repos** — Geek-Crawler-Rag owns index/query/generate; GeekAPI + phi are thin authenticated consumers.
-6. **Repos transport security** — no long-term plaintext `http://` bare-IP RAG URL with shared key in the clear (see Security queue).
-7. **Language** — partner crawl not vendor crawl; project site not “always client site.”
+1. **Correctness over expediency** — no silent fallbacks for **required** project-site grounding.
+2. **Partner/competitor — two layers (do not conflate):**
+   - **Runtime (user generate):** Missing or unindexed partner/competitor research is **notify-and-skip** with warnings and **restricted claims** (no uncited partner-specific claims). Do **not** hard-block `blog`/`pillar` generate solely because a partner index is empty. Content-type exceptions (e.g. `tool` / partner ads fail-closed) are defined in [citeable-create-pipeline.md](citeable-create-pipeline.md) §1 — not a blanket “always skip.”
+   - **Release-readiness (declare M2/M3 done):** A **representative partner corpus must be indexed and usable** before M2 is marked complete. Quarantined/skipped large partner runs **block declaring release-ready** (ops gate / reindex), not the runtime skip policy. Someone must not “fix” runtime by making partner indexing fail-closed for all types.
+3. **Realtime = SignalR** — no `usePollJob` / status `setInterval` in phi `src/`.
+4. **Isolation** — zero diffs to v1 Content Creator / Geek-SEO hubs; GeekAPI edits only under `ContentCreatorV2/*` (+ additive Program/CORS/migrations for `content_creator_v2`).
+5. **Phi workspace** — `/Users/jeffmartin/development/content-creator-v2` only. No Geek-Crawler BFF/hub/start-crawl UI in phi. No Qdrant/embed/indexer under phi `src/`.
+6. **RAG** — Geek-Crawler-Rag owns index/query/generate; GeekAPI + phi are thin authenticated consumers.
+7. **RAG transport security** — no long-term plaintext `http://` bare-IP RAG URL with shared key in the clear (see Security queue).
+8. **Language** — partner crawl not vendor crawl; project site not “always client site.”
+9. **runId authorization** — every retrieval, citation verify, and Canvas render path must authorize `runId` for the current owner/workspace/project. Unauthorized / foreign run → safe failure. Belongs in citeable M1/M2 acceptance, not only the security queue.
+10. **Source rights / freshness** — “Partner” is a **business role**, not automatic license to quote or advertise. Prefer consented partner crawl corpus; respect freshness expectations; if source markdown no longer contains the quote (reprocess/delete), citation verification **fails** and ship-ready must not claim verified.
 
 ---
 
-## 3. Security queue (ahead of product features)
+## 3. Security queue (evidenced states — not one checkbox)
 
-Details: [security-queue.md](security-queue.md) (tightened 2026-09-13).
+Details and ops contracts: [security-queue.md](security-queue.md).
 
-**Labels:** S0 = availability blocker. **S1 / S5 / S6 = security incidents — start immediately in parallel with S0.** Do not read the list as permission to defer SSRF or credential containment.
+**Do not** collapse S0–S6 into a single “done.” Use these states: `implemented` · `deployed` · `production-verified` · `monitoring` · `accepted-risk`.
 
-| # | Item | Class | Fix (summary) |
-|---|------|-------|----------------|
-| S0 | Knowledge ingestion stuck | Availability | Atomic claim/lease, idempotent transitions, terminal failure path independent of failed transition; 409 handler is containment only |
-| S1 | Crawl SSRF | Security incident | DNS + redirects every hop + rebinding + schemes/ports + metadata/outbound policy — not IP-literal-only |
-| S5 | Trusted RAG index/delete | Security incident | Manifest-bound owner, caller identity, rotation/replay, tests; reduce shared-key-only trust |
-| S6 | RAG key + HTTP | Security incident | **Rotate key + shut down plaintext HTTP now**; TLS/hostname alongside |
-| S2 | Crawl budgets | Hardening | Seeds + URLs + concurrency + duration + bytes + redirects + rate; define cancel / partial-run usability |
-| S3 | OAuth forwarded headers | Hardening | Deployment-specific proxy-chain design + direct vs proxied tests |
-| S4 | OIDC redirect URIs | Hardening | Prefer exact registered URIs; narrow namespace + separator if dynamic |
+| # | Item | State (2026-09-13) | Evidence |
+|---|------|--------------------|----------|
+| S0 | Knowledge ingestion claim/lease | **production-verified** | Prod `Revision` column + migration; `queued=0`; terminal jobs — [security-queue.md](security-queue.md) verification log |
+| S1 | Crawl SSRF | **production-verified** | Deployed + unit tests (DNS/redirects/caps) |
+| S2 | Crawl budgets | **production-verified** | Caps + budget-fail terminal; unit coverage |
+| S3 | OAuth forwarded headers | **deployed** + **monitoring** | `TRUSTED_PROXY_CIDRS`; GeekOAuth docs |
+| S4 | OIDC redirect URIs | **deployed** + **monitoring** | Preview hyphen-required patterns |
+| S5 | Trusted RAG index/delete | **deployed** + **monitoring** | Shared `CONTEXT_MANIFEST_SIGNING_KEYS`; residual: prove key inventory outside GeekAPI |
+| S6 | RAG key + HTTP | **production-verified** | HTTPS `sslip.io`; public HTTP closed; key rotated |
+| — | Mongo `:27017` public | **accepted-risk** | Needed for Railway GeekRepository until private network; auth required |
 
-**Product M1** only after **S0–S2 production verification**.
+**Product M1** required **S0–S2 production-verified** (met). Residual accepted-risk items do not reopen the M1 gate but must stay visible.
 
 ---
 
 ## 4. Product track — Creates-canonical (citeable)
 
-### Goal
+**Detail plan:** [citeable-create-pipeline.md](citeable-create-pipeline.md) (M1–M2 policies win over short bullets here).
 
-Highest-quality, evidence-grounded content through one path:
+### Goal (measurable)
+
+Evidence-grounded content through one authoring path:
 
 `/creates/new` → brief → research/evidence manifest → PLAN → outline approval → WRITE (citeable) → VALIDATE → Canvas → export/publish.
 
-RAG is the **research and evidence engine**, not a second UI taxonomy. The seven `/rag` writing intents become internal retrieval/generation strategies mapped from gcc-v2 content types.
+RAG is the **research and evidence engine**, not a second UI taxonomy.
 
-### Bridge (allowed while migrating)
+### Launch metrics (M2 / M3)
 
-- Keep `/rag` reachable for operators who already use it.
-- Do **not** make `/rag` the primary nav CTA.
-- Prefer “Continue in Create” / evidence handoff **into** `/creates` over growing `/rag` as product home.
-- Task-agent “Write from this finding” should eventually land on Create with a typed brief — interim deep-link to `/rag` is acceptable only if labeled transitional.
+Track weekly (phi + GeekAPI). “Parity” is measured — not vibes.
+
+| Metric | M2 target (blog) | M3 target (generalized) |
+|--------|------------------|-------------------------|
+| Job completion rate (start → ready, non-cancel) | ≥ 80% on smoke corpus | ≥ 85% across mapped types |
+| Median time to usable outline (OutlineReady) | Record baseline; regress &lt; 2× | Improve or hold baseline |
+| Citation resolution rate (verified citations / citations shown) | ≥ 95% on ship-ready jobs | ≥ 95% |
+| Section citation coverage (body sections with facts that have ≥1 verified citation or explicit gap) | 100% on ship-ready | 100% |
+| Unsupported-claim rate (VALIDATE flags / ship attempts) | Declining; ship-ready requires 0 blocking flags | Same |
+| Operator approve → export rate | Record baseline | Hold or improve |
+
+### Verified / quote-level citation (contract)
+
+`runId` + `sectionKey` alone are **not** a quote. A citeable citation requires:
+
+| Field | Role |
+|-------|------|
+| Canonical source URL (or asset locator) | Identity |
+| `pageId` / chunk or document id | Source unit |
+| Exact `quote` and/or character offsets | Span |
+| `sourceDigest` or content revision | Reproducibility |
+| `runId` (authorized) | Corpus binding |
+| `sectionKey` (+ optional claim/paragraph anchor later) | Generated-content anchor |
+| `crawlType` / role | Partner ≠ competitor |
+| Retrieval/generation timestamp + model + prompt/policy version | Provenance |
+
+Full policy, coverage, snapshot, and negative smokes: [citeable-create-pipeline.md](citeable-create-pipeline.md).
+
+### Durable job contract (compact)
+
+`GccV2JobWorker` stages: plan → (gates) → write → validate → ready | failed | canceled.
+
+| Concern | Rule |
+|---------|------|
+| Idempotency | Claim/lease per job; stage transitions claim-bound; duplicate wake must not double-write sections |
+| Retry ownership | Worker retries transient RAG/provider errors within stage; terminal fail after budget; operator may regenerate section / re-PLAN |
+| Cancellation | User cancel → terminal `canceled`; no further stage work |
+| Partial results | Stage results + SignalR events remain readable; Canvas shows last good section set |
+| Recovery | Failed job shows actionable error; project-site gaps point to crawl; index gaps point to wait/reindex |
+
+### Authorization / tenancy
+
+- Create/job `OwnerUserId` scopes all Geek-Crawler / RAG `runId` use.
+- Citation verify and Canvas must re-check authz (not trust client-supplied run ids blindly).
+- Cross-tenant or stale run → safe failure / warning — acceptance criterion for M2.
+
+### Source rights / freshness
+
+- Partner crawl implies operator-intended advertising corpus, not unlimited claim license.
+- Prefer fresh indexed Markdown; verification fails if quote absent from current stored page.
+- Stale citations on old drafts: show as unverified / gap on re-validate; do not silently keep “verified.”
+
+### Product surface — `/rag` UI removed
+
+- **Authoring URL:** `/creates/new` only. Product route `/rag` is **deleted** (404; no redirect).
+- **Evidence engine:** GeekAPI `/api/rag/*` + Geek-Crawler-Rag remain internal (Create BFF + jobs). Naming “rag” on the API is not a product surface.
+- Do not reintroduce a second writer UI or “bridge” retirement story.
 
 ### Near-term milestones
 
-**M1 — Contracts (no UI chrome)** — **done** (see [citeable-create-pipeline.md](citeable-create-pipeline.md))
+**M1 — Contracts** — **done** (contracts exist; see citeable plan). Does **not** prove citeable writing alone.
 
-- Versioned `GccV2GenerationBrief` from persisted create/brief + brand + hierarchy + run IDs.
-- Inspectable **research/evidence manifest** before PLAN (sources, readiness, gaps, conflicts).
-- `GccV2ContentTypeRagMapper` — content type → RAG family (LongForm / ShortForm / Battlecard / slides).
-- Citation DTO on WRITE stage output + job `ResultJson` (quote-level, not only source links) — `runId` + `sectionKey` on contract.
-- **`ResearchEntity`** / `GccV2ResearchEntityRef` for partner vs competitor identity (page/URL/entity key, role **per request**, never conflating tools with competitors).
+**M2 — `blog` vertical** — **in progress** (code gate wired; smokes not recorded)
 
-**M2 — Vertical slice on Create**
+- Verified citation + section coverage in VALIDATE (`GccV2CitationEvidenceGuard`); evidence snapshot fields on ResultJson.
+- Runtime vs release partner policy (§2).
+- Happy **and** negative smokes recorded (project-site missing, unindexed partner, invalid/unauthorized runId, mixed partner/competitor, WRITE retry fail, section regen).
+- Kill switch: `GccV2CiteableCreateV1` via `GCC_V2_CITEABLE_CREATE_V1` (default ON).
 
-- One long-form type (prefer `pillar` or `blog`) end-to-end: PLAN outline from citeable research → WRITE sections with verified citations → Canvas shows citations.
-- Partner tools from brief `operatorTools` / partner run IDs; competitor URLs only as differentiation research.
-- Fail closed on missing **project-site** grounding; notify-and-skip on missing partner/competitor index.
+**M3 — Generalize content types + Canvas citeable UX** — **blocked until M2 done when**
 
-**M3 — Generalize types + retire standalone writer**
-
-- Map remaining content types; lift guided outline/citation UX into Canvas.
-- Redirect `/rag` after parity; keep API generate only as internal engine.
-- Wire task-agent next actions → Create (not a permanent `/rag` home).
+- Map remaining content types; lift outline/citation UX into Canvas.
+- Task-agent next actions → Create.
 
 **M4 — Model policy**
 
-- Stage-aware policy (quality-first). No silent downgrade; operator-controlled downgrade only.
-- Park LlamaIndex agentization (former Part 18) until M2 goldens exist.
+- Stage-aware quality-first; no silent downgrade.
+- Park LlamaIndex agentization until M2 goldens exist.
 
 ### Corpus / indexing gate
 
-Citeable Create assumes indexed **partner** (and when needed **competitor**) Markdown in Qdrant.
-
-- Scheduler may be off; quarantined runs need explicit `POST /v1/index` — do not assume “Research ready” means your sources are indexed.
-- Large partner runs that are skipped/quarantined block tool-ad quality — treat reindex/backfill as an ops gate for M2, not a soft warning.
+- **Runtime:** notify-and-skip when partner/competitor index missing (per content-type table in citeable plan).
+- **Release-readiness:** M2 cannot be declared complete without a representative **indexed + usable** partner corpus (ApprovalMax/Plooto smoke hosts documented in citeable plan). Quarantined large runs → reindex ops, not “Research ready” UI lies.
 
 ---
 
 ## 5. Parallel tracks (bounded)
 
-These may proceed **only** when they do not reopen the north-star fork:
+Proceed **only** when they do not reopen the north-star fork:
 
 | Track | Do | Don’t |
 |-------|----|-------|
-| **Task agents DoD** | Honest diagnostics, provenance (`observed` \| `imported` \| `generatedHypothesis`), purpose renderers, GSC observed-only for Query Planner | Become a second content writer; paste competitor HTML as primary corpus |
-| **Geek IQ** | Version pin on runs, freshness, project-site → Knowledge promotion | New Railway sidecars / hosted multimodal parsers |
-| **Pipelines / Grid** | Verify current stage advancement; then durable async DAG + schedule→pipeline | Hide forever based on a possibly stale “no worker” claim without re-audit |
-| **PDF `pdf` type** | After M2 citations stable; resolve `linkedin-carousel` vs `linkedin-document` naming first | Land as competing green “start now” |
-| **Fallback/correctness audit** | Execute archive Part 6 priority list after S0–S6 | Re-plan the audit; treat dump as the finding index |
+| **Task agents DoD** | Honest diagnostics, provenance, purpose renderers | Second content writer; paste competitor HTML as primary corpus |
+| **Geek IQ** | Version pin, freshness, project-site → Knowledge | New Railway sidecars / hosted multimodal parsers |
+| **Pipelines / Grid** | Durable async DAG + schedule **orchestrating Create jobs**; verify stage advancement | Second authoring surface; hide forever without re-audit |
+| **PDF `pdf` type** | After M2 citations stable; fix linkedin naming drift first | Competing green “start now” |
+| **Fallback/correctness audit** | **Done** 2026-09-14 — [fallback-correctness.md](fallback-correctness.md) F1–F11 + K2 | Re-plan the audit; treat dump as living rules |
 
 ---
 
@@ -141,17 +194,18 @@ These may proceed **only** when they do not reopen the north-star fork:
 - LlamaParse / LlamaCloud parsing (prohibited).
 - Geek-Crawler start UI or RAG indexer inside phi.
 - Calling tools “competitors” or storing tool pages under competitor crawl types.
-- Re-expanding this file into a 6k-line dump — add links to archive or new focused plan files instead.
+- Re-expanding this file into a 6k-line dump — add links to archive or focused plans instead.
+- Treating archive Part 0 as enforceable rules when §2 differs.
 
 ---
 
 ## 7. Next slice (≤5 checkboxes)
 
-- [x] Security S0–S6 (see [security-queue.md](security-queue.md))
-- [x] Prod verify S0–S2; M1 gate open
-- [x] **M1 contracts** — [citeable-create-pipeline.md](citeable-create-pipeline.md)
-- [x] **M2 wiring** — PLAN pre-evidence gate + WRITE `sectionKey` (`blog`)
-- [ ] **M2 smoke** — indexed partner run ID + signed-in blog create
+- [x] Delete `/rag` product UI (404, no redirect); relocate Create RAG clients; strip bridge narrative
+- [x] M2: citation provenance + section coverage gate in VALIDATE ([citeable-create-pipeline.md](citeable-create-pipeline.md))
+- [x] Kill switch `GccV2CiteableCreateV1` (`GCC_V2_CITEABLE_CREATE_V1`, default ON)
+- [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log
+- [ ] Security: maintain **per-item** evidenced states in §3 / security-queue
 
 ---
 
@@ -159,18 +213,18 @@ These may proceed **only** when they do not reopen the north-star fork:
 
 | Archive location | Former parts | Why demoted |
 |------------------|--------------|-------------|
-| [archive/master-plan-consolidated-dump-2026-09-13.md](archive/master-plan-consolidated-dump-2026-09-13.md) | 0–19 dump | Conflicting north stars; historical incident notes; Jasper research; superseded v2-master |
-| Dump Part 0 | Rules | Superseded by §2 here; keep dump for full checklists |
-| Dump Part 1 | Jasper remaining | Agents/pipelines backlog — §5 parallel only |
-| Dump Part 4 | “Make workable” /rag-first | Bridge tactics only; contradicts Creates-canonical |
-| Dump Part 6 | Fallback audit | Finding index + priority list — execute, don’t re-author |
-| Dump Part 16 | Unify RAG into Create | **Absorbed** as §4 north star (edited for partners≠competitors) |
+| [archive/master-plan-consolidated-dump-2026-09-13.md](archive/master-plan-consolidated-dump-2026-09-13.md) | 0–19 dump | Conflicting north stars; historical only |
+| Dump Part 0 | Rules | **Superseded by §2** — not a second non-negotiables source |
+| Dump Part 1 | Jasper remaining | §5 parallel only |
+| Dump Part 4 | `/rag`-first | Bridge tactics only |
+| Dump Part 6 | Fallback audit | Finding index — execute, don’t re-author |
+| Dump Part 16 | Fold RAG into Create | Absorbed as §4 |
 | Dump Part 18 | LlamaIndex agents | Parked until M2 goldens |
 | Dump Parts 2,3,8,11,19 | Shipped / superseded | History only |
 
-Focused plans for review (do not paste back into this master):
+Focused plans:
 
-- [README.md](README.md) — index
-- [critique-master-plan-consolidation.md](critique-master-plan-consolidation.md)
-- [security-queue.md](security-queue.md) — S0–S6
-- [citeable-create-pipeline.md](citeable-create-pipeline.md) — M1–M2
+- [README.md](README.md) — index  
+- [critique-master-plan-consolidation.md](critique-master-plan-consolidation.md)  
+- [security-queue.md](security-queue.md) — per-item S0–S6 evidence  
+- [citeable-create-pipeline.md](citeable-create-pipeline.md) — M1–M2 citeable acceptance  

@@ -1,7 +1,7 @@
 import { requireAccessToken } from "@/app/auth/session";
 import { NewCreateForm } from "./new-create-form";
 import { CONTENT_TYPES, type ContentType } from "../content-types";
-import type { RagWritingIntent } from "@/app/rag/types";
+import type { RagWritingIntent } from "@/app/creates/rag-client/types";
 
 const INTENT_CONTENT_TYPE: Partial<Record<RagWritingIntent, ContentType>> = {
   "Technical Article": "tech-article",

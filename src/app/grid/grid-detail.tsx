@@ -81,7 +81,10 @@ export function GridDetail({ gridId }: { gridId: string }) {
         setProjects(items);
         setSelectedProjectId((current) => current || items[0]?.id || "");
       })
-      .catch(() => setProjects([]));
+      .catch((cause) => {
+        setProjects([]);
+        setError(cause instanceof Error ? cause.message : "Could not load projects.");
+      });
   }, []);
 
   useEffect(() => {
@@ -91,7 +94,10 @@ export function GridDetail({ gridId }: { gridId: string }) {
         setPipelines(published);
         setSelectedPipelineId((current) => current || published[0]?.id || "");
       })
-      .catch(() => setPipelines([]));
+      .catch((cause) => {
+        setPipelines([]);
+        setError(cause instanceof Error ? cause.message : "Could not load pipelines.");
+      });
   }, []);
 
   const samplePreview = useMemo(() => {

@@ -17,18 +17,24 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
   const { id } = await params;
   const { jobId: jobIdFromQuery } = await searchParams;
 
-  let title = id;
+  let title: string | null = null;
+  let metadataError: string | null = null;
   const createRes = await fetchGccV2(`creates/${id}`);
   if (createRes.ok) {
     const create = (await createRes.json()) as CreateDto;
     title = create.title;
+  } else {
+    metadataError = `Could not load create metadata (HTTP ${createRes.status}).`;
   }
 
   let jobs: JobSnapshot[] = [];
+  let jobsError: string | null = null;
   const jobsRes = await fetchGccV2(`creates/${id}/jobs`);
   if (jobsRes.ok) {
     const body = (await jobsRes.json()) as JobSnapshot[];
     if (Array.isArray(body)) jobs = body;
+  } else {
+    jobsError = `Could not load jobs (HTTP ${jobsRes.status}).`;
   }
 
   if (jobIdFromQuery && !jobs.some((j) => j.id === jobIdFromQuery)) {
@@ -58,6 +64,16 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
         <Link href="/creates" className="text-sm text-[var(--cc-accent)]">
           ← Content library
         </Link>
+        {metadataError ? (
+          <p role="alert" className="text-sm text-red-600">
+            {metadataError}
+          </p>
+        ) : null}
+        {jobsError ? (
+          <p role="alert" className="text-sm text-red-600">
+            {jobsError}
+          </p>
+        ) : null}
         <p className="text-sm text-red-600">
           No draft was found for this item —{" "}
           <Link href="/creates/new" className="underline">
@@ -70,6 +86,19 @@ export default async function CreateDetailPage({ params, searchParams }: PagePro
   }
 
   return (
-    <CreateDetailShell createId={id} jobId={jobId} title={title} initialJobs={jobs} />
+    <main className="contents">
+      {metadataError || jobsError ? (
+        <div className="mx-auto max-w-6xl px-6 pt-6" role="alert" aria-live="polite">
+          {metadataError ? <p className="text-sm text-red-600">{metadataError}</p> : null}
+          {jobsError ? <p className="text-sm text-red-600">{jobsError}</p> : null}
+        </div>
+      ) : null}
+      <CreateDetailShell
+        createId={id}
+        jobId={jobId}
+        title={title ?? "Untitled create"}
+        initialJobs={jobs}
+      />
+    </main>
   );
 }

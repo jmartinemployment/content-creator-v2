@@ -1,11 +1,32 @@
 # Security + correctness queue (S0–S6)
 
-**Status:** Security queue **complete for containment** (2026-09-13). S0–S6 code live; S0 verified in prod DB (Revision column + migration applied; 0 forever-`queued` jobs — all sampled jobs terminal). RAG HTTPS via `https://2.24.101.90.sslip.io`; Mongo `:27017` remains open for Railway GeekRepository (auth required). Residual: optional `rag.geekatyourspot.com` DNS; investigate any new Knowledge failures after signing-key wiring.  
+**Status:** Security queue **containment complete** with **per-item evidenced states** (not a single “all done” checkbox). See status matrix below.  
 **Authority:** [master-plan.md](master-plan.md) §3  
 **Finding source:** archive dump Part 6 + Part 4 P0  
-**Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 unblocked after S0–S2 verify (see verification log)
+**Product gate:** [citeable-create-pipeline.md](citeable-create-pipeline.md) M1 unblocked after S0–S2 **production-verified**
 
 **Naming:** Tools/partners ≠ competitors. This plan hardens Geek-Crawler for all crawl types.
+
+---
+
+## Status matrix (authoritative)
+
+States: `implemented` · `deployed` · `production-verified` · `monitoring` · `accepted-risk`
+
+| # | Item | State | Verified | Evidence (summary) |
+|---|------|-------|----------|-------------------|
+| S0 | Knowledge ingestion claim/lease | **production-verified** | 2026-09-13 | Prod `Revision` + migration; `queued=0`; terminal jobs |
+| S1 | Crawl SSRF | **production-verified** | 2026-09-13 | Deployed GeekAPI; SSRF/redirect/caps tests green |
+| S2 | Crawl budgets | **production-verified** | 2026-09-13 | Caps + budget terminal fail; unit coverage |
+| S3 | OAuth forwarded headers | **deployed** / **monitoring** | 2026-09-13 | `TRUSTED_PROXY_CIDRS`; GeekOAuth design doc |
+| S4 | OIDC redirect URIs | **deployed** / **monitoring** | 2026-09-13 | Preview hyphen-required patterns live |
+| S5 | Trusted RAG index/delete | **deployed** / **monitoring** | 2026-09-13 | Manifest signing keys aligned; residual key-inventory proof |
+| S6 | RAG key + HTTP shutdown | **production-verified** | 2026-09-13 | HTTPS sslip.io; public HTTP closed; key rotated |
+| — | Mongo `:27017` exposure | **accepted-risk** | 2026-09-13 | Railway GeekRepository needs reachability; auth required; private net later |
+
+**Owner:** Jeff Martin  
+
+**Do not** mark the whole queue “remediated” in master §7. Update **this matrix** when state changes.
 
 ---
 

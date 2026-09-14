@@ -201,18 +201,24 @@ export function CreateJobHubProvider({
       connection,
       () => activeJobIdRef.current,
       () => activeLastSeqRef.current,
+      () => {
+        if (!cancelled) {
+          setHubConnected(false);
+          setHubError("Live updates disconnected — refresh.");
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setHubConnected(true);
+          setHubError(null);
+        }
+      },
     );
 
     connection.onclose((err) => {
       if (cancelled) return;
       setHubConnected(false);
       if (err) setHubError("Lost connection to job stream — refresh the page.");
-    });
-
-    connection.onreconnected(() => {
-      if (cancelled) return;
-      setHubConnected(true);
-      setHubError(null);
     });
 
     void (async () => {

@@ -40,9 +40,9 @@ import {
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
-import { fetchRagStatus } from "@/app/rag/rag-generate-client";
-import { loadAdTemplates } from "@/app/rag/ad-templates";
-import type { RagAdTemplate } from "@/app/rag/types";
+import { fetchRagStatus } from "@/app/creates/rag-client/rag-generate-client";
+import { loadAdTemplates } from "@/app/creates/rag-client/ad-templates";
+import type { RagAdTemplate } from "@/app/creates/rag-client/types";
 import {
   ragCapabilitiesFor,
   type ModelPolicySelection,
@@ -80,11 +80,7 @@ type Step =
   | "audience"
   | "research"
   | "outputs"
-  | "review"
-  // Kept only while the previous renderer remains as an unreachable migration fallback.
-  | "url"
-  | "brief"
-  | "tools";
+  | "review";
 
 const WIZARD_STEPS = [
   { key: "source", label: "Source" },
@@ -274,9 +270,13 @@ export function NewCreateForm({
   const [toneOfVoice, setToneOfVoice] = useState<ToneOfVoice | "">("");
   const [ragStatus, setRagStatus] = useState<RagReadiness | null>(null);
   const [ragStatusLoading, setRagStatusLoading] = useState(true);
+  const [ragStatusError, setRagStatusError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<RagAdTemplate[]>([]);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [savedProjectSitesError, setSavedProjectSitesError] = useState<string | null>(null);
   const [targetEntities, setTargetEntities] = useState<string[]>([]);
   const [conceptInput, setConceptInput] = useState("");
-  const [templates, setTemplates] = useState<RagAdTemplate[]>([]);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [modelPolicy, setModelPolicy] = useState<ModelPolicySelection>({
     version: "content-model-policy.v1",
@@ -314,11 +314,36 @@ export function NewCreateForm({
   useEffect(() => {
     let cancelled = false;
     void loadAdTemplates().then((loaded) => {
-      if (!cancelled) setTemplates(loaded);
+      if (cancelled) return;
+      setTemplatesLoading(false);
+      if (loaded.status === "ok") {
+        setTemplates(loaded.data);
+        setTemplatesError(null);
+        return;
+      }
+      if (loaded.status === "unauthorized") {
+        setTemplates([]);
+        setTemplatesError("Sign in to load ad templates.");
+        return;
+      }
+      setTemplates([]);
+      setTemplatesError(loaded.error);
     });
     void fetchRagStatus()
       .then((status) => {
-        if (!cancelled) setRagStatus(status);
+        if (cancelled) return;
+        if (status.status === "ok") {
+          setRagStatus(status.data);
+          setRagStatusError(null);
+          return;
+        }
+        if (status.status === "unauthorized") {
+          setRagStatus(null);
+          setRagStatusError("Sign in to check research readiness.");
+          return;
+        }
+        setRagStatus(null);
+        setRagStatusError(status.error);
       })
       .finally(() => {
         if (!cancelled) setRagStatusLoading(false);
@@ -332,13 +357,26 @@ export function NewCreateForm({
     const controller = new AbortController();
     void fetch("/api/gcc-v2/project-site/runs", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) return [];
-        const body = await response.json().catch(() => []);
-        return Array.isArray(body) ? body as SavedProjectSite[] : [];
+        if (response.status === 401) {
+          setSavedProjectSitesError("Sign in to load saved project sites.");
+          setSavedProjectSites([]);
+          return;
+        }
+        if (!response.ok) {
+          setSavedProjectSitesError(`Could not load saved project sites (HTTP ${response.status}).`);
+          setSavedProjectSites([]);
+          return;
+        }
+        const body = await response.json().catch(() => null);
+        setSavedProjectSitesError(null);
+        setSavedProjectSites(Array.isArray(body) ? (body as SavedProjectSite[]) : []);
       })
-      .then(setSavedProjectSites)
-      .catch(() => {
-        // Direct URL entry remains available when saved-site discovery is unavailable.
+      .catch((cause) => {
+        if (controller.signal.aborted) return;
+        setSavedProjectSites([]);
+        setSavedProjectSitesError(
+          cause instanceof Error ? cause.message : "Could not load saved project sites.",
+        );
       });
     return () => controller.abort();
   }, []);
@@ -575,7 +613,9 @@ export function NewCreateForm({
         };
 
         const offEvent = onProjectSiteCrawlEvent(connection, handleEvent);
-        const offReconnect = onProjectSiteHubReconnected(connection, () => runId);
+        const offReconnect = onProjectSiteHubReconnected(connection, () => runId, () => {
+          setError("Live updates disconnected — refresh.");
+        });
 
         signal.addEventListener(
           "abort",
@@ -1040,6 +1080,11 @@ export function NewCreateForm({
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
               We use your website to understand your offering, voice, and internal links.
             </p>
+            {savedProjectSitesError ? (
+              <p role="status" aria-live="polite" className="mt-2 text-xs text-amber-800">
+                {savedProjectSitesError} Enter a URL below to continue.
+              </p>
+            ) : null}
             {savedProjectSites.length ? (
               <div className={`${fieldClass} mt-6`}>
                 <label className={labelClass} htmlFor="savedSite">Previously analyzed sites</label>
@@ -1269,8 +1314,8 @@ export function NewCreateForm({
               <span className="font-semibold">
                 {ragStatusLoading ? "Checking research availability…" : ragStatus?.available && ragStatus.citeableGenerateAvailable !== false ? "Research is ready" : "Research is temporarily unavailable"}
               </span>
-              {!ragStatusLoading && (!ragStatus?.available || ragStatus.citeableGenerateAvailable === false) ? (
-                <p className="mt-1 text-xs">{ragStatus?.reason || "Try again in a moment."}</p>
+              {!ragStatusLoading && (ragStatusError || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false) ? (
+                <p className="mt-1 text-xs" aria-live="polite">{ragStatusError || ragStatus?.reason || "Try again in a moment."}</p>
               ) : null}
             </div>
             <div className={`${fieldClass} mt-6`}>
@@ -1382,6 +1427,17 @@ export function NewCreateForm({
             {ragCapabilitiesFor(primaryDraft).includes("ad-templates") ? (
               <fieldset className="mt-6">
                 <legend className={labelClass}>Optional campaign structures</legend>
+                {templatesLoading ? (
+                  <p className="mt-2 text-xs text-[var(--cc-muted)]">Loading templates…</p>
+                ) : null}
+                {templatesError ? (
+                  <p role="status" aria-live="polite" className="mt-2 text-xs text-amber-800">
+                    {templatesError}
+                  </p>
+                ) : null}
+                {!templatesLoading && !templatesError && templates.length === 0 ? (
+                  <p className="mt-2 text-xs text-[var(--cc-muted)]">None yet.</p>
+                ) : null}
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {templates.map((template) => (
                     <label key={template.id} className="flex cursor-pointer gap-3 rounded-lg border border-[var(--cc-line)] p-3 text-sm">
@@ -1609,739 +1665,5 @@ export function NewCreateForm({
     </div>
   );
 
-  // Keep the prior renderer available as a short-lived deployment rollback path.
-  const guidedWorkflowEnabled =
-    process.env.NEXT_PUBLIC_GUIDED_CREATE_WORKFLOW !== "false";
-  if (guidedWorkflowEnabled) {
-    return guidedWorkflow;
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <ol className="flex flex-wrap gap-2 text-xs text-[var(--cc-muted)]">
-        {(
-          [
-            ["url", "1. Site URL"],
-            ["brief", "2. Brief"],
-            ["tools", "3. Confirm tools"],
-          ] as const
-        ).map(([key, label]) => (
-          <li
-            key={key}
-            className={`rounded-full px-2.5 py-1 ${
-              step === key || (step === "analyzing" && key === "url")
-                ? "bg-[var(--cc-accent)]/15 font-semibold text-[var(--cc-accent)]"
-                : "bg-black/5"
-            }`}
-          >
-            {label}
-          </li>
-        ))}
-      </ol>
-
-      {(step === "url" || step === "analyzing") && (
-        <div className="flex flex-col gap-4">
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="siteUrl">
-              Project site URL
-            </label>
-            <input
-              id="siteUrl"
-              className={inputClass}
-              value={siteUrlInput}
-              onChange={(e) => setSiteUrlInput(e.target.value)}
-              placeholder="https://example.com or example.com"
-              disabled={busy || step === "analyzing"}
-              required
-            />
-            <p className="text-xs text-[var(--cc-muted)]">
-              Required. We crawl this domain and use its pages for BrandKit and internal links —
-              then you fill the brief.
-            </p>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm text-[var(--cc-ink)]">
-            <input
-              type="checkbox"
-              checked={forceRecrawl}
-              onChange={(e) => setForceRecrawl(e.target.checked)}
-              disabled={busy || step === "analyzing"}
-            />
-            Force new crawl (ignore existing complete run)
-          </label>
-
-          {step === "analyzing" && analyzingLabel ? (
-            <LoadingRow label={analyzingLabel} />
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || !siteUrlInput.trim()}
-              onClick={() => void resolveSite(forceRecrawl)}
-              className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              <ButtonBusyLabel
-                busy={step === "analyzing" || busy}
-                busyLabel="Working…"
-                idleLabel="Continue"
-              />
-            </button>
-            {step === "analyzing" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  crawlAbortRef.current?.abort();
-                  setStep("source");
-                  setAnalyzingLabel(null);
-                  setBusy(false);
-                }}
-                className="rounded-md border border-[var(--cc-line)] px-4 py-2 text-sm font-semibold text-[var(--cc-ink)]"
-              >
-                Cancel
-              </button>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {step === "brief" && section && (
-        <form onSubmit={onSubmit} className="flex flex-col gap-5">
-          <div className="rounded-md border border-[var(--cc-line)] bg-black/[0.02] px-3 py-2 text-sm">
-            <p className="text-[var(--cc-ink)]">
-              Writing for: <span className="font-medium">{siteUrl}</span>
-            </p>
-            <p className="mt-1 text-xs text-[var(--cc-muted)]">
-              {section.relatedPages.length} page
-              {section.relatedPages.length === 1 ? "" : "s"} from this crawl for links and grounding
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("source");
-                setSection(null);
-                setProjectSiteCrawlRunId(null);
-                setSiteHierarchy(null);
-                setHierarchyError(null);
-                setToolsPreflight(null);
-              }}
-              className="mt-2 text-xs font-semibold text-[var(--cc-accent)] underline"
-            >
-              Change URL
-            </button>
-          </div>
-
-          {hierarchyLoading ? (
-            <LoadingRow label="Loading mobile site hierarchy…" />
-          ) : (
-            <SiteHierarchyPanel hierarchy={siteHierarchy} />
-          )}
-          {hierarchyError && !siteHierarchy ? (
-            <p className="text-xs text-amber-800">{hierarchyError}</p>
-          ) : null}
-
-          <section
-            className={`rounded-lg border p-4 ${
-              ragStatus?.available && ragStatus.citeableGenerateAvailable !== false
-                ? "border-green-200 bg-green-50/60"
-                : "border-amber-200 bg-amber-50"
-            }`}
-            aria-label="Research and evidence readiness"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-[var(--cc-ink)]">
-                Research &amp; evidence
-              </h2>
-              <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs">
-                {ragStatusLoading
-                  ? "Checking…"
-                  : ragStatus?.available && ragStatus.citeableGenerateAvailable !== false
-                    ? "Ready"
-                    : "Blocked"}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-[var(--cc-muted)]">
-              The persisted job uses hybrid RAG evidence through PLAN, WRITE, and validation. Citation
-              verification and quality gates remain enabled for every model policy.
-            </p>
-            {!ragStatusLoading &&
-            (!ragStatus?.available || ragStatus.citeableGenerateAvailable === false) ? (
-              <p className="mt-2 text-xs font-medium text-amber-900">
-                {ragStatus?.reason || "Citeable RAG is not ready. Generation may be rejected by the backend."}
-              </p>
-            ) : null}
-            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-              {ragCapabilitiesFor(primaryDraft).map((capability) => (
-                <span key={capability} className="rounded-full bg-white px-2 py-1 text-[var(--cc-ink)]">
-                  {RAG_CAPABILITY_LABELS[capability]}
-                </span>
-              ))}
-              <span className="rounded-full bg-white px-2 py-1 text-[var(--cc-ink)]">
-                {ragStatus?.graphRetrievalAvailable ? "GraphRAG ready" : "Hybrid retrieval"}
-              </span>
-            </div>
-          </section>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="title">
-              Title
-            </label>
-            <input
-              id="title"
-              className={inputClass}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Best CRMs for small teams"
-              required
-            />
-          </div>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="primaryDraft">
-              Primary draft
-            </label>
-            <select
-              id="primaryDraft"
-              className={selectClass}
-              value={primaryDraft}
-              onChange={(e) => {
-                const next = e.target.value as PrimaryDraftType;
-                setPrimaryDraft(next);
-                setAlsoDrafts(new Set());
-              }}
-            >
-              {PRIMARY_DRAFT_TYPES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-[var(--cc-muted)]">
-              {primaryDraftHelperCopy(primaryDraft)}
-            </p>
-          </div>
-
-          {(ragStatus?.entitySeeds?.length ?? 0) > 0 ? (
-            <fieldset className={fieldClass}>
-              <legend className={labelClass}>Target entities</legend>
-              <div className="flex flex-wrap gap-2">
-                {ragStatus!.entitySeeds!.map((entity) => (
-                  <label
-                    key={entity}
-                    className="flex cursor-pointer items-center gap-2 rounded-full border border-[var(--cc-line)] bg-white px-3 py-1.5 text-xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={targetEntities.includes(entity)}
-                      onChange={() =>
-                        setTargetEntities((current) =>
-                          current.includes(entity)
-                            ? current.filter((value) => value !== entity)
-                            : [...current, entity],
-                        )
-                      }
-                    />
-                    {entity}
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-[var(--cc-muted)]">
-                Entity seeds focus retrieval; they do not replace the full brief or source evidence.
-              </p>
-            </fieldset>
-          ) : null}
-
-          {ragCapabilitiesFor(primaryDraft).includes("ad-templates") ? (
-            <fieldset className={fieldClass}>
-              <legend className={labelClass}>Short-form evidence templates</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {templates.map((template) => (
-                  <label
-                    key={template.id}
-                    className="flex cursor-pointer gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTemplateIds.includes(template.id)}
-                      onChange={() =>
-                        setSelectedTemplateIds((current) =>
-                          current.includes(template.id)
-                            ? current.filter((value) => value !== template.id)
-                            : [...current, template.id],
-                        )
-                      }
-                    />
-                    <span>
-                      <span className="block font-semibold text-[var(--cc-ink)]">{template.name}</span>
-                      <span className="text-[var(--cc-muted)]">
-                        {[template.channel, template.framework].filter(Boolean).join(" · ")}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
-
-          <details className="rounded-lg border border-[var(--cc-line)] bg-black/[0.02] p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
-              Advanced model policy — {modelPolicy.preset === "best-quality"
-                ? "Best quality"
-                : modelPolicy.preset === "o3-only"
-                  ? "o3 only"
-                  : "Custom"}
-            </summary>
-            <fieldset className="mt-3 flex flex-col gap-3">
-              <legend className="sr-only">Model policy</legend>
-              <label className="flex gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="model-policy"
-                  value="best-quality"
-                  checked={modelPolicy.preset === "best-quality"}
-                  onChange={() =>
-                    setModelPolicy({ version: "content-model-policy.v1", preset: "best-quality" })
-                  }
-                />
-                <span>
-                  <strong>Best quality (recommended)</strong>
-                  <span className="block text-xs text-[var(--cc-muted)]">
-                    o1-pro for deep strategy and synthesis; o3 for evidence work and drafting.
-                  </span>
-                </span>
-              </label>
-              <label className="flex gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="model-policy"
-                  value="o3-only"
-                  checked={modelPolicy.preset === "o3-only"}
-                  onChange={() =>
-                    setModelPolicy({ version: "content-model-policy.v1", preset: "o3-only" })
-                  }
-                />
-                <span>
-                  <strong>o3 only</strong>
-                  <span className="block text-xs text-[var(--cc-muted)]">
-                    Lower latency/cost, but may reduce strategic depth and whole-document synthesis.
-                  </span>
-                </span>
-              </label>
-              {ragStatus?.approvedStageModels &&
-              Object.keys(ragStatus.approvedStageModels).length > 0 ? (
-                <label className="flex gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="model-policy"
-                    value="custom"
-                    checked={modelPolicy.preset === "custom"}
-                    onChange={() =>
-                      setModelPolicy({
-                        version: "content-model-policy.v1",
-                        preset: "custom",
-                        stageModels: Object.fromEntries(
-                          Object.entries(ragStatus.approvedStageModels ?? {}).map(
-                            ([policyStage, models]) => [policyStage, models[0] ?? ""],
-                          ),
-                        ),
-                      })
-                    }
-                  />
-                  <span>
-                    <strong>Custom approved models</strong>
-                    <span className="block text-xs text-[var(--cc-muted)]">
-                      Choose only models the backend policy approves for each stage.
-                    </span>
-                  </span>
-                </label>
-              ) : null}
-
-              {modelPolicy.preset === "custom" && ragStatus?.approvedStageModels ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {Object.entries(ragStatus.approvedStageModels).map(([policyStage, models]) => (
-                    <label key={policyStage} className="flex flex-col gap-1 text-xs">
-                      <span className="font-medium uppercase text-[var(--cc-muted)]">{policyStage}</span>
-                      <select
-                        aria-label={`${policyStage} model`}
-                        className={selectClass}
-                        value={modelPolicy.stageModels?.[policyStage] ?? models[0] ?? ""}
-                        onChange={(event) =>
-                          setModelPolicy((current) => ({
-                            ...current,
-                            stageModels: {
-                              ...current.stageModels,
-                              [policyStage]: event.target.value,
-                            },
-                          }))
-                        }
-                      >
-                        {models.map((model) => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-
-              {modelPolicy.preset !== "best-quality" ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">Confirm model downgrade</p>
-                  <p className="mt-1">
-                    Evidence, citation verification, and validation standards stay unchanged. Only the
-                    requested model policy changes.
-                  </p>
-                  <label className="mt-2 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={modelPolicy.downgradeConfirmed === true}
-                      onChange={(event) =>
-                        setModelPolicy((current) => ({
-                          ...current,
-                          downgradeConfirmed: event.target.checked,
-                          downgradeReason: current.downgradeReason ?? "operator",
-                        }))
-                      }
-                    />
-                    I understand and accept the quality tradeoff.
-                  </label>
-                  <select
-                    aria-label="Model downgrade reason"
-                    className={`${selectClass} mt-2`}
-                    value={modelPolicy.downgradeReason ?? "operator"}
-                    onChange={(event) =>
-                      setModelPolicy((current) => ({
-                        ...current,
-                        downgradeReason: event.target.value as ModelPolicySelection["downgradeReason"],
-                      }))
-                    }
-                  >
-                    <option value="operator">Operator choice</option>
-                    <option value="availability">Availability</option>
-                    <option value="quota">Quota</option>
-                    <option value="latency">Latency</option>
-                    <option value="cost">Cost</option>
-                  </select>
-                </div>
-              ) : null}
-            </fieldset>
-          </details>
-
-          <fieldset className={fieldClass}>
-            <legend className={labelClass}>Also draft</legend>
-            <div className="flex flex-wrap gap-3 pt-1">
-              {alsoDraftOptionsFor(primaryDraft).map((o) => {
-                const checked = alsoDrafts.has(o.value);
-                return (
-                  <label
-                    key={o.value}
-                    className="flex cursor-pointer items-center gap-2 text-sm text-[var(--cc-ink)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {
-                        setAlsoDrafts((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(o.value)) next.delete(o.value);
-                          else next.add(o.value);
-                          return next;
-                        });
-                      }}
-                    />
-                    {o.label}
-                  </label>
-                );
-              })}
-            </div>
-            <p className="text-xs text-[var(--cc-muted)]">
-              Each checked type gets its own WRITE job. Image prompts auto-queue when that job
-              finishes (§3.1 — pillar/blog get hero + per H2; tool/email/social/ads get one each) —
-              not listed here.
-            </p>
-          </fieldset>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="targetKeyword">
-              Target keyword
-            </label>
-            <input
-              id="targetKeyword"
-              className={inputClass}
-              value={targetKeyword}
-              onChange={(e) => setTargetKeyword(e.target.value)}
-              placeholder="e.g. best crm for small teams"
-            />
-          </div>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="operatorTools">
-              Partner tool URLs
-            </label>
-            <textarea
-              id="operatorTools"
-              className={`${inputClass} min-h-[88px] font-mono text-xs`}
-              value={operatorToolsText}
-              onChange={(e) => setOperatorToolsText(e.target.value)}
-              placeholder={
-                "Optional — Name | URL (excerpt destinations only)\nBotPenguin | https://botpenguin.com/\nManyChat | https://manychat.com/"
-              }
-            />
-            <p className="text-xs text-[var(--cc-muted)]">
-              Optional. Destination pages for weave excerpts — not the tool list. Tools come from
-              the site hierarchy for this use case. Prefer Name | URL.
-            </p>
-          </div>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="paaQuestions">
-              People Also Ask
-            </label>
-            <textarea
-              id="paaQuestions"
-              className={`${inputClass} min-h-[88px] font-mono text-xs`}
-              value={paaQuestionsText}
-              onChange={(e) => setPaaQuestionsText(e.target.value)}
-              placeholder={"Optional — one question per line\nWhat is the best CRM for small teams?\nHow much does CRM software cost?"}
-            />
-            <p className="text-xs text-[var(--cc-muted)]">
-              Operator-curated PAA questions become the FAQ section (People Also Ask) in pillar/blog
-              outlines. Never auto-filled from SERP uploads.
-            </p>
-          </div>
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="competitorUrls">
-              Competitor page URLs
-            </label>
-            <textarea
-              id="competitorUrls"
-              className={`${inputClass} min-h-[72px] font-mono text-xs`}
-              value={competitorUrlsText}
-              onChange={(e) => setCompetitorUrlsText(e.target.value)}
-              placeholder={"Optional — one absolute URL per line\nhttps://competitor.com/alternative-guide"}
-            />
-            <p className="text-xs text-[var(--cc-muted)]">
-              Optional rival pages for polite crawl — differentiation notes only. Never used as inline
-              CTAs or outline must-mentions.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div className={fieldClass}>
-              <label className={labelClass} htmlFor="primaryIntent">
-                Intent
-              </label>
-              <select
-                id="primaryIntent"
-                className={selectClass}
-                value={primaryIntent}
-                onChange={(e) => setPrimaryIntent(e.target.value as PrimaryIntent | "")}
-              >
-                <option value="">Select…</option>
-                {PRIMARY_INTENTS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={fieldClass}>
-              <label className={labelClass} htmlFor="buyingStage">
-                Buying stage
-              </label>
-              <select
-                id="buyingStage"
-                className={selectClass}
-                value={buyingStage}
-                onChange={(e) => setBuyingStage(e.target.value as BuyingStage | "")}
-              >
-                <option value="">Select…</option>
-                {BUYING_STAGES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={fieldClass}>
-              <label className={labelClass} htmlFor="toneOfVoice">
-                Tone of voice
-              </label>
-              <select
-                id="toneOfVoice"
-                className={selectClass}
-                value={toneOfVoice}
-                onChange={(e) => setToneOfVoice(e.target.value as ToneOfVoice | "")}
-              >
-                <option value="">Select…</option>
-                {TONES_OF_VOICE.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-fit rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            <ButtonBusyLabel busy={busy} busyLabel="Finding tools…" idleLabel="Find partner tools" />
-          </button>
-        </form>
-      )}
-
-      {step === "tools" && toolsPreflight && (
-        <div className="flex flex-col gap-4">
-          <SiteHierarchyPanel hierarchy={toolsPreflight.siteHierarchy ?? siteHierarchy} />
-
-          <div className={fieldClass}>
-            <h2 className="text-base font-semibold text-[var(--cc-ink)]">Confirm partner tools</h2>
-            <p className="text-sm text-[var(--cc-muted)]">
-              {toolsPreflight.message ??
-                (toolsPreflight.toolsFound
-                  ? `Found ${toolsPreflight.toolCount} partner tool(s). Each gets a full tool page from its supplied URL, plus a keyword overview page linking to them on-site.`
-                  : "No partner tools found.")}
-            </p>
-            {toolsPreflight.externalResearchNote ? (
-              <p className="rounded-md border border-[var(--cc-line)] bg-[var(--cc-surface)] px-3 py-2 text-xs text-[var(--cc-muted)]">
-                <span className="font-medium text-[var(--cc-ink)]">External research — </span>
-                {toolsPreflight.externalResearchNote}
-              </p>
-            ) : null}
-            {toolsPreflight.partnerResearchWarnings && toolsPreflight.partnerResearchWarnings.length > 0 ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <p className="font-medium">Some partner research was skipped</p>
-                <ul className="mt-1 list-disc pl-4">
-                  {toolsPreflight.partnerResearchWarnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            <p className="text-xs text-[var(--cc-muted)]">
-              Destination URLs (Name | URL) are fetched for excerpts when weaving tool text into a
-              paragraph.
-            </p>
-            {toolsPreflight.matchedHeading ? (
-              <p className="text-xs text-[var(--cc-muted)]">
-                Matched site heading:{" "}
-                <span className="font-medium text-[var(--cc-ink)]">{toolsPreflight.matchedHeading}</span>
-                {toolsPreflight.matchTopic ? ` (via “${toolsPreflight.matchTopic}”)` : null}
-                {toolsPreflight.path && toolsPreflight.path.length > 0 ? (
-                  <>
-                    <br />
-                    Path:{" "}
-                    <span className="font-medium text-[var(--cc-ink)]">
-                      {toolsPreflight.path.join(" › ")}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-          </div>
-
-          {toolsPreflight.tools.length > 0 ? (
-            <ul className="flex flex-col gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-sm">
-              {toolsPreflight.tools.map((t) => (
-                <li key={`${t.source}-${t.name}-${t.url ?? ""}`} className="flex flex-col gap-0.5">
-                  <span className="font-medium text-[var(--cc-ink)]">{t.name}</span>
-                  <span className="text-xs text-[var(--cc-muted)]">
-                    {t.source === "crawl" ? "From site crawl" : "Pasted"}
-                    {t.url ? (
-                      <>
-                        {" · "}
-                        <a
-                          href={t.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[var(--cc-accent)] underline-offset-2 hover:underline"
-                        >
-                          {t.url}
-                        </a>
-                      </>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              No crawl or pasted partner tools resolved. You can add URLs on the brief step and re-check,
-              or continue without partner tools (drafts may invent fewer product links).
-            </p>
-          )}
-
-          <div className={fieldClass}>
-            <label className={labelClass} htmlFor="operatorToolsRecheck">
-              Partner tool URLs (edit &amp; re-check)
-            </label>
-            <textarea
-              id="operatorToolsRecheck"
-              className={`${inputClass} min-h-[88px] font-mono text-xs`}
-              value={operatorToolsText}
-              onChange={(e) => setOperatorToolsText(e.target.value)}
-              placeholder={
-                "Optional — Name | URL for excerpts\nBotPenguin | https://botpenguin.com/"
-              }
-              disabled={busy}
-            />
-            <p className="text-xs text-[var(--cc-muted)]">
-              Attaches excerpt destinations to crawl tools. Does not add new tools.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void recheckTools()}
-              className="rounded-md border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--cc-ink)] disabled:opacity-60"
-            >
-              <ButtonBusyLabel busy={busy} busyLabel="Checking…" idleLabel="Re-check tools" />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setStep("goal");
-                setError(null);
-              }}
-              className="rounded-md border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--cc-ink)] disabled:opacity-60"
-            >
-              Back to brief
-            </button>
-            <button
-              type="button"
-              disabled={
-                busy ||
-                ragStatusLoading ||
-                !ragStatus?.available ||
-                ragStatus.citeableGenerateAvailable === false
-              }
-              onClick={() => void confirmAndGenerate()}
-              className="rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              <ButtonBusyLabel
-                busy={busy}
-                busyLabel="Starting…"
-                idleLabel={
-                  toolsPreflight.toolsFound
-                    ? "Confirm tools & generate"
-                    : "Continue without partner tools"
-                }
-              />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-    </div>
-  );
+  return guidedWorkflow;
 }

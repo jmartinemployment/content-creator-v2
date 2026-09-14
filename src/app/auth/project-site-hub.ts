@@ -58,14 +58,15 @@ export function onProjectSiteCrawlEvent(
 export function onProjectSiteHubReconnected(
   connection: HubConnection,
   getRunId: () => string,
+  onRejoinFailed?: (error: unknown) => void,
 ): () => void {
   const handler = async () => {
     try {
       const runId = getRunId();
       if (!runId) return;
       await connection.invoke("JoinProjectSiteCrawl", runId);
-    } catch {
-      /* caller may surface connection errors separately */
+    } catch (error) {
+      onRejoinFailed?.(error);
     }
   };
   connection.onreconnected(handler);

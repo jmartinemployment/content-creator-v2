@@ -1118,7 +1118,10 @@ export function CatalogWorkspace() {
     try {
       const response = await fetch("/api/gcc-v2/gsc/connections", { cache: "no-store" });
       const body = await response.json().catch(() => null);
-      if (!response.ok) return;
+      if (!response.ok) {
+        setError(body?.error || `GSC connections failed (HTTP ${response.status}).`);
+        return;
+      }
       const connections = Array.isArray(body?.connections)
         ? body.connections
           .map((entry: { id?: unknown; siteUrl?: unknown; status?: unknown }) => ({
@@ -1133,8 +1136,8 @@ export function CatalogWorkspace() {
         if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
         return connections[0]?.id ?? "";
       });
-    } catch {
-      // Keep Knowledge usable when GSC listing is unavailable.
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load GSC connections.");
     }
   }
 
@@ -1142,7 +1145,10 @@ export function CatalogWorkspace() {
     try {
       const response = await fetch("/api/gcc-v2/drive/connections", { cache: "no-store" });
       const body = await response.json().catch(() => null);
-      if (!response.ok) return;
+      if (!response.ok) {
+        setError(body?.error || `Drive connections failed (HTTP ${response.status}).`);
+        return;
+      }
       const connections = Array.isArray(body?.connections)
         ? body.connections
           .map((entry: { id?: unknown; accountLabel?: unknown; status?: unknown }) => ({
@@ -1157,8 +1163,8 @@ export function CatalogWorkspace() {
         if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
         return connections[0]?.id ?? "";
       });
-    } catch {
-      // Keep Knowledge usable when Drive listing is unavailable.
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load Drive connections.");
     }
   }
 
@@ -1166,7 +1172,10 @@ export function CatalogWorkspace() {
     try {
       const response = await fetch("/api/gcc-v2/sharepoint/connections", { cache: "no-store" });
       const body = await response.json().catch(() => null);
-      if (!response.ok) return;
+      if (!response.ok) {
+        setError(body?.error || `SharePoint connections failed (HTTP ${response.status}).`);
+        return;
+      }
       const connections = Array.isArray(body?.connections)
         ? body.connections
           .map((entry: { id?: unknown; accountLabel?: unknown; status?: unknown }) => ({
@@ -1181,8 +1190,8 @@ export function CatalogWorkspace() {
         if (current && connections.some((entry: { id: string }) => entry.id === current)) return current;
         return connections[0]?.id ?? "";
       });
-    } catch {
-      // Keep Knowledge usable when SharePoint listing is unavailable.
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load SharePoint connections.");
     }
   }
 
@@ -1652,7 +1661,12 @@ export function CatalogWorkspace() {
       }
       await loadGscConnections();
       setGscConnectionId(connectionId);
-      setNotice(`Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`);
+      const stub = body?.connection?.status === "stub";
+      setNotice(
+        stub
+          ? `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"} (stub).`
+          : `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect GSC.");
     } finally {
@@ -1725,7 +1739,11 @@ export function CatalogWorkspace() {
       }
       await loadDriveConnections();
       setDriveConnectionId(connectionId);
-      setNotice(`Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"}.`);
+      setNotice(
+        body?.connection?.status === "stub"
+          ? `Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"} (stub).`
+          : `Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"}.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect Drive.");
     } finally {
@@ -1804,7 +1822,11 @@ export function CatalogWorkspace() {
       }
       await loadSharePointConnections();
       setSharePointConnectionId(connectionId);
-      setNotice(`Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"}.`);
+      setNotice(
+        body?.connection?.status === "stub"
+          ? `Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"} (stub).`
+          : `Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"}.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect SharePoint.");
     } finally {

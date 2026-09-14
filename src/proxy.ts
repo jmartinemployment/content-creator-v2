@@ -6,6 +6,11 @@ import { authConfig } from "@/app/auth/config";
 /**
  * Refreshes the access token before the request reaches any Server Component.
  * Proxy runs before rendering and can set response cookies.
+ *
+ * Session policy:
+ * - 2xx: rotate access (+ refresh if rotated)
+ * - 400/401/403: clear cookies (invalid/denied refresh)
+ * - network / 5xx: preserve cookies (IdP outage ≠ proof of invalid session)
  */
 export async function proxy(request: NextRequest) {
   const hasAccess = Boolean(request.cookies.get(ACCESS_COOKIE)?.value);
@@ -19,21 +24,16 @@ export async function proxy(request: NextRequest) {
     expires_in: number;
   };
   try {
-    const res = await fetch(authConfig.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        client_id: authConfig.clientId,
-        refresh_token: refresh,
-      }).toString(),
-      cache: "no-store",
-    });
+    const res = await fetchTokenOnce(refresh);
     if (!res.ok) {
-      const dead = NextResponse.next();
-      dead.cookies.set(REFRESH_COOKIE, "", cookieOpts.clear);
-      dead.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
-      return dead;
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const dead = NextResponse.next();
+        dead.cookies.set(REFRESH_COOKIE, "", cookieOpts.clear);
+        dead.cookies.set(ACCESS_COOKIE, "", cookieOpts.clear);
+        return dead;
+      }
+      // 5xx / other: preserve cookies — do not treat as invalid grant.
+      return NextResponse.next();
     }
     tokens = await res.json();
   } catch {
@@ -58,6 +58,30 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+async function fetchTokenOnce(refresh: string): Promise<Response> {
+  const init: RequestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: authConfig.clientId,
+      refresh_token: refresh,
+    }).toString(),
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  };
+  try {
+    return await fetch(authConfig.tokenUrl, init);
+  } catch (first) {
+    // One bounded retry for transient network blips.
+    try {
+      return await fetch(authConfig.tokenUrl, init);
+    } catch {
+      throw first;
+    }
+  }
+}
+
 export const config = {
   matcher: [
     "/",
@@ -66,8 +90,6 @@ export const config = {
     "/skills/:path*",
     "/brand-sources/:path*",
     "/legacy/:path*",
-    "/rag",
-    "/rag/:path*",
     "/api/gcc-v2/:path*",
     "/api/rag/:path*",
   ],

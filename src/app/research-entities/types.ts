@@ -1,8 +1,6 @@
 /**
- * Canonical partner/competitor entity, shared by the RAG writer (`/rag`) and every task
- * agent — see plans/make-content-creator-workable.md Milestone 1. One company may have
- * several indexed crawl pages; they all resolve to one entity record here. Replaces
- * free-text entity names and the hardcoded GeekAPI RagEntitySeedList.
+ * Canonical partner/competitor entity shared by Create and task agents.
+ * One company may have several indexed crawl pages; they all resolve to one entity.
  */
 export type ResearchEntityRole = "partner" | "competitor";
 

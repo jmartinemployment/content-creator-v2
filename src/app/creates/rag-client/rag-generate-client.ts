@@ -1,4 +1,5 @@
 import type { RagAdTemplate, RagGenerateRequest, RagGenerateResponse, RagGenerateStatus } from "./types";
+import { type LoadResult, loadError, loadOk, loadUnauthorized, readLoadResult } from "@/app/lib/load-result";
 
 async function ragFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`/api/rag/${path.replace(/^\//, "")}`, {
@@ -11,11 +12,9 @@ async function ragFetch(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-export async function fetchRagStatus(): Promise<RagGenerateStatus | null> {
+export async function fetchRagStatus(): Promise<LoadResult<RagGenerateStatus>> {
   const res = await ragFetch("status");
-  if (res.status === 401) return null;
-  if (!res.ok) return null;
-  return (await res.json()) as RagGenerateStatus;
+  return readLoadResult(res, (body) => body as RagGenerateStatus);
 }
 
 export async function generateRagDraft(
@@ -40,11 +39,12 @@ export async function generateRagDraft(
 
 export async function indexRagAdTemplates(
   templates: RagAdTemplate[],
-): Promise<{ upserted: number; warning?: string | null } | null> {
+): Promise<LoadResult<{ upserted: number; warning?: string | null }>> {
   const res = await ragFetch("templates", {
     method: "POST",
     body: JSON.stringify(templates),
   });
-  if (!res.ok) return null;
-  return (await res.json()) as { upserted: number; warning?: string | null };
+  if (res.status === 401) return loadUnauthorized();
+  if (!res.ok) return loadError(`Template index failed (HTTP ${res.status})`, res.status);
+  return loadOk((await res.json()) as { upserted: number; warning?: string | null });
 }

@@ -60,14 +60,17 @@ export function onHubReconnected(
   connection: HubConnection,
   getJobId: () => string,
   getLastSeq: () => number,
+  onRejoinFailed?: (error: unknown) => void,
+  onRejoinSucceeded?: () => void,
 ): () => void {
   const handler = async () => {
     try {
       const jobId = getJobId();
       if (!jobId) return;
       await connection.invoke("JoinJob", jobId, getLastSeq());
-    } catch {
-      /* caller may surface connection errors separately */
+      onRejoinSucceeded?.();
+    } catch (error) {
+      onRejoinFailed?.(error);
     }
   };
   connection.onreconnected(handler);

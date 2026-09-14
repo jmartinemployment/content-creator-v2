@@ -517,7 +517,11 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           ? body.connection.siteUrl
           : current.gscSiteUrl,
       }));
-      setGscNotice(`Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`);
+      setGscNotice(
+        body?.connection?.status === "stub"
+          ? `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"} (stub).`
+          : `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect GSC.");
     } finally {

@@ -1,4 +1,5 @@
 import type { RagAdTemplate } from "./types";
+import { type LoadResult, readLoadResult } from "@/app/lib/load-result";
 
 async function templatesFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`/api/gcc-v2/ad-templates${path}`, {
@@ -29,13 +30,13 @@ function toRagAdTemplate(dto: AdTemplateDto): RagAdTemplate {
   };
 }
 
-/** Shared across sessions via GeekRepository — see plans/make-content-creator-workable.md
- * Milestone 1. Replaces the previous localStorage-only corpus. */
-export async function loadAdTemplates(): Promise<RagAdTemplate[]> {
+/** Shared across sessions via GeekRepository. */
+export async function loadAdTemplates(): Promise<LoadResult<RagAdTemplate[]>> {
   const res = await templatesFetch("");
-  if (!res.ok) return [];
-  const dtos = (await res.json()) as AdTemplateDto[];
-  return dtos.map(toRagAdTemplate);
+  return readLoadResult(res, (body) => {
+    const dtos = body as AdTemplateDto[];
+    return Array.isArray(dtos) ? dtos.map(toRagAdTemplate) : [];
+  });
 }
 
 export async function createAdTemplate(input: {
@@ -43,8 +44,7 @@ export async function createAdTemplate(input: {
   channel?: string;
   framework?: string;
   body: string;
-}): Promise<RagAdTemplate | null> {
+}): Promise<LoadResult<RagAdTemplate>> {
   const res = await templatesFetch("", { method: "POST", body: JSON.stringify(input) });
-  if (!res.ok) return null;
-  return toRagAdTemplate((await res.json()) as AdTemplateDto);
+  return readLoadResult(res, (body) => toRagAdTemplate(body as AdTemplateDto));
 }

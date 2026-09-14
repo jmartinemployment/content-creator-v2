@@ -16,13 +16,29 @@ export function WorkspaceOpsCard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([
-      listGrids().catch(() => [] as GridSummary[]),
-      fetchObservedTelemetry(90).catch(() => null),
-    ])
-      .then(([nextGrids, nextObserved]) => {
-        setGrids(nextGrids);
-        setObserved(nextObserved);
+    void Promise.allSettled([listGrids(), fetchObservedTelemetry(90)])
+      .then(([gridsResult, observedResult]) => {
+        const errors: string[] = [];
+        if (gridsResult.status === "fulfilled") {
+          setGrids(gridsResult.value);
+        } else {
+          setGrids([]);
+          errors.push(
+            gridsResult.reason instanceof Error
+              ? gridsResult.reason.message
+              : "Could not load grids.",
+          );
+        }
+        if (observedResult.status === "fulfilled") {
+          setObserved(observedResult.value);
+        } else {
+          errors.push(
+            observedResult.reason instanceof Error
+              ? observedResult.reason.message
+              : "Could not load ROI observed telemetry.",
+          );
+        }
+        if (errors.length > 0) setError(errors.join(" "));
       })
       .finally(() => setReady(true));
   }, []);

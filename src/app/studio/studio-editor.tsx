@@ -77,7 +77,10 @@ export function StudioEditor({ draftId }: { draftId: string }) {
         return response.json();
       })
       .then((body) => setKnowledgeItems(normalizeCatalog(body)))
-      .catch(() => setKnowledgeItems([]));
+      .catch((cause) => {
+        setKnowledgeItems([]);
+        setError(cause instanceof Error ? cause.message : "Could not load knowledge catalog.");
+      });
   }, []);
 
   const approvedKnowledge = useMemo(

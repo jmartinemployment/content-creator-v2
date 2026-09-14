@@ -26,8 +26,8 @@ test("BFF rejects object bytes on gcc-v2 upload control routes", async ({ reques
   });
 });
 
-test("signed-out SSR redirects to OAuth start", async ({ page }) => {
-  const signedOut = await page.request.get(`${appOrigin}/rag`, { maxRedirects: 0 });
+test("signed-out /creates/new redirects to OAuth start", async ({ page }) => {
+  const signedOut = await page.request.get(`${appOrigin}/creates/new`, { maxRedirects: 0 });
   expect(signedOut.status()).toBe(307);
   expect(signedOut.headers().location).toBe("/api/auth/start");
 });
