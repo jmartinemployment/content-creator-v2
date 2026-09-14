@@ -36,7 +36,7 @@ import {
 } from "@/app/creates/repurpose-channels";
 import { isCmsPublishType, isLongFormContentType, labelForContentType } from "@/app/creates/content-types";
 import { useCreateJobHub } from "@/app/creates/create-job-hub-provider";
-import { SectionCitations } from "@/app/creates/rag-citations";
+import { SectionCitations, countVerifiedCitations } from "@/app/creates/rag-citations";
 import { WorkspaceSection, canvasSectionsToPlain, type CanvasAction } from "@/app/creates/workspace-section";
 import { WorkspaceTabs, type WorkspaceTab } from "@/app/creates/workspace-tabs";
 import { ContextManifestDetails } from "@/app/creates/context-manifest-details";
@@ -185,6 +185,7 @@ type ParsedJobResult = {
   sectionCitations: Record<string, RagCitation[]>;
   provenance: RagProvenance | null;
   evidenceManifest: ResearchEvidenceManifest | null;
+  citationEvidenceGaps: string[];
   modelPolicy: ModelPolicySelection | null;
   approvedStageModels: ApprovedStageModels;
   linkedInCarousel: LinkedInCarouselArtifact | null;
@@ -200,6 +201,7 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
     sectionCitations: {},
     provenance: null,
     evidenceManifest: null,
+    citationEvidenceGaps: [],
     modelPolicy: null,
     approvedStageModels: {},
     linkedInCarousel: null,
@@ -216,6 +218,7 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       sectionCitations?: Record<string, RagCitation[]> | null;
       provenance?: RagProvenance | null;
       evidenceManifest?: ResearchEvidenceManifest | null;
+      citationEvidenceGaps?: string[] | null;
       modelPolicy?: ModelPolicySelection | null;
       approvedStageModels?: ApprovedStageModels | null;
       linkedInCarousel?: LinkedInCarouselArtifact | null;
@@ -231,6 +234,9 @@ function parseJobResult(resultJson: string | null | undefined): ParsedJobResult 
       sectionCitations: parsed.sectionCitations ?? {},
       provenance: parsed.provenance ?? null,
       evidenceManifest: parsed.evidenceManifest ?? null,
+      citationEvidenceGaps: Array.isArray(parsed.citationEvidenceGaps)
+        ? parsed.citationEvidenceGaps.filter((g): g is string => typeof g === "string")
+        : [],
       modelPolicy: parsed.modelPolicy ?? null,
       approvedStageModels: parsed.approvedStageModels ?? {},
       linkedInCarousel: parsed.linkedInCarousel ?? null,
@@ -387,6 +393,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   const [contentType, setContentType] = useState<string>("blog");
   const [sourceAttributionHtml, setSourceAttributionHtml] = useState<string | null>(null);
   const [jobCitations, setJobCitations] = useState<RagCitation[]>([]);
+  const [citationEvidenceGaps, setCitationEvidenceGaps] = useState<string[]>([]);
   const [provenance, setProvenance] = useState<RagProvenance | null>(null);
   const [evidenceManifest, setEvidenceManifest] = useState<ResearchEvidenceManifest | null>(null);
   const [modelPolicy, setModelPolicy] = useState<ModelPolicySelection | null>(null);
@@ -413,6 +420,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     const parsed = parseJobResult(resultJson);
     setSourceAttributionHtml(parsed.sourceAttributionHtml);
     setJobCitations(parsed.citations);
+    setCitationEvidenceGaps(parsed.citationEvidenceGaps);
     setProvenance(parsed.provenance);
     setEvidenceManifest(parsed.evidenceManifest);
     setModelPolicy(parsed.modelPolicy);
@@ -664,6 +672,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     void Promise.resolve().then(() => {
       setSourceAttributionHtml(null);
       setJobCitations([]);
+      setCitationEvidenceGaps([]);
       setProvenance(null);
       setEvidenceManifest(null);
       setModelPolicy(null);
@@ -1695,7 +1704,7 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           </h2>
           <p className="mt-1 text-xs text-[var(--cc-muted)]">
             {activeTab === "canvas"
-              ? `${orderedSections.length} section${orderedSections.length === 1 ? "" : "s"} · ${jobCitations.length} verified citation${jobCitations.length === 1 ? "" : "s"}`
+              ? `${orderedSections.length} section${orderedSections.length === 1 ? "" : "s"} · ${countVerifiedCitations(jobCitations)} verified citation${countVerifiedCitations(jobCitations) === 1 ? "" : "s"}`
               : activeTab === "outline"
                 ? `${editableSections.length} planned section${editableSections.length === 1 ? "" : "s"}`
                 : activeTab === "assets"
@@ -1786,15 +1795,31 @@ export function Canvas({ createId, jobId }: CanvasProps) {
                 </ol>
               </details>
             ) : null}
-            {evidenceManifest ? (
+            {evidenceManifest || citationEvidenceGaps.length > 0 ? (
               <>
-                <p>
-                  Evidence: {evidenceManifest.sources?.length ?? 0} source(s) ·{" "}
-                  {evidenceManifest.ready === false ? "gaps require review" : "ready"}
-                </p>
-                {[...(evidenceManifest.evidenceGaps ?? []), ...(evidenceManifest.conflicts ?? []), ...(evidenceManifest.warnings ?? [])].length > 0 ? (
+                {evidenceManifest ? (
+                  <p>
+                    Evidence: {evidenceManifest.sources?.length ?? 0} source(s) ·{" "}
+                    {evidenceManifest.ready === false || citationEvidenceGaps.length > 0
+                      ? "gaps require review"
+                      : "ready"}
+                  </p>
+                ) : citationEvidenceGaps.length > 0 ? (
+                  <p>Citation evidence gaps require review</p>
+                ) : null}
+                {[
+                  ...(evidenceManifest?.evidenceGaps ?? []),
+                  ...citationEvidenceGaps,
+                  ...(evidenceManifest?.conflicts ?? []),
+                  ...(evidenceManifest?.warnings ?? []),
+                ].length > 0 ? (
                   <ul className="mt-1 list-disc pl-4 text-amber-800">
-                    {[...(evidenceManifest.evidenceGaps ?? []), ...(evidenceManifest.conflicts ?? []), ...(evidenceManifest.warnings ?? [])].map((warning) => (
+                    {[
+                      ...(evidenceManifest?.evidenceGaps ?? []),
+                      ...citationEvidenceGaps,
+                      ...(evidenceManifest?.conflicts ?? []),
+                      ...(evidenceManifest?.warnings ?? []),
+                    ].map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>

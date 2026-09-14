@@ -156,10 +156,13 @@ Full policy, coverage, snapshot, and negative smokes: [citeable-create-pipeline.
 - Happy **and** negative smokes recorded (project-site missing, unindexed partner, invalid/unauthorized runId, mixed partner/competitor, WRITE retry fail, section regen).
 - Kill switch: `GccV2CiteableCreateV1` via `GCC_V2_CITEABLE_CREATE_V1` (default ON).
 
-**M3 — Generalize content types + Canvas citeable UX** — **blocked until M2 done when**
+**M3 — Generalize content types + Canvas citeable UX** — **in progress** (operator overrode M2 smoke gate 2026-09-14)
 
-- Map remaining content types; lift outline/citation UX into Canvas.
-- Task-agent next actions → Create.
+- Detail: [citeable-create-m3.md](citeable-create-m3.md)
+- Partner fail-closed for `tool` / partner-driven `ads` / named comparison partners
+- Task-agent next actions → `/creates/new`
+- Canvas honest verified-citation labeling
+- M2 smokes remain deferred (not waived for release-ready)
 
 **M4 — Model policy**
 
@@ -204,8 +207,8 @@ Proceed **only** when they do not reopen the north-star fork:
 - [x] Delete `/rag` product UI (404, no redirect); relocate Create RAG clients; strip bridge narrative
 - [x] M2: citation provenance + section coverage gate in VALIDATE ([citeable-create-pipeline.md](citeable-create-pipeline.md))
 - [x] Kill switch `GccV2CiteableCreateV1` (`GCC_V2_CITEABLE_CREATE_V1`, default ON)
-- [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log (**deferred** — return before M3)
-- [ ] Security: maintain **per-item** evidenced states in §3 / security-queue
+- [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log (**deferred**)
+- [x] M3 wave 1: partner fail-closed + Create next-actions + Canvas verified labeling ([citeable-create-m3.md](citeable-create-m3.md))
 
 ---
 

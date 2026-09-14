@@ -28,10 +28,15 @@ export type ResultLineageNode = {
 };
 
 export type ResultNextAction = {
-  capabilityId: string;
+  /** Task-agent follow-on. Omit when only `create` is set. */
+  capabilityId?: string;
   label: string;
   artifactType?: string;
   relationship?: string;
+  /** M3: deep-link into Create with a content type (+ topic from artifact when known). */
+  create?: {
+    contentType: string;
+  };
 };
 
 export type ResultChangeOverTime = {
@@ -100,43 +105,80 @@ export type ResultShellModel = {
 
 const FALLBACK_NEXT: Record<string, ResultNextAction[]> = {
   "ai-readiness": [
+    { label: "Write blog in Create", create: { contentType: "blog" } },
     { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
   ],
   "faq-generator": [
+    { label: "Write FAQ blog in Create", create: { contentType: "blog" } },
     { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
   ],
   "citable-claims": [
+    { label: "Write citeable blog in Create", create: { contentType: "blog" } },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
   ],
   "query-planner": [
+    { label: "Write blog in Create", create: { contentType: "blog" } },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "pillar-outline", label: "Pillar Article Outline", artifactType: "pillarOutline.v1" },
   ],
   "comparison-brief": [
+    { label: "Write comparison in Create", create: { contentType: "comparison" } },
     { capabilityId: "competitive-response", label: "Competitive Response", artifactType: "competitiveResponse.v1" },
     { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
   ],
   "pillar-outline": [
+    { label: "Write pillar in Create", create: { contentType: "pillar" } },
     { capabilityId: "pillar-article", label: "Pillar Article", artifactType: "pillarArticle.v1" },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
   ],
   "pillar-article": [
+    { label: "Continue pillar in Create", create: { contentType: "pillar" } },
     { capabilityId: "faq-generator", label: "FAQ Generator", artifactType: "faqSet.v1" },
     { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
     { capabilityId: "schema-markup", label: "Schema Markup", artifactType: "schemaMarkup.v1" },
   ],
   "competitive-response": [
+    { label: "Write alternatives in Create", create: { contentType: "alternatives" } },
     { capabilityId: "citable-claims", label: "Citable Claims", artifactType: "claimLedger.v1" },
     { capabilityId: "comparison-brief", label: "Comparison Brief", artifactType: "comparisonBrief.v1" },
+  ],
+  "content-gap": [
+    { label: "Write blog in Create", create: { contentType: "blog" } },
   ],
 };
 
 function shortId(value: string | undefined | null) {
   if (!value) return "—";
   return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+}
+
+function topicFromPayload(payload: Record<string, unknown> | null): string {
+  if (!payload) return "";
+  for (const key of ["topic", "title", "primaryKeyword", "keyword", "query"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function hrefForNextAction(
+  action: ResultNextAction,
+  opts: { fromArtifactId?: string; fromRunId: string; topic: string },
+): string | null {
+  if (action.create) {
+    const params = new URLSearchParams();
+    params.set("contentType", action.create.contentType);
+    if (opts.topic) params.set("topic", opts.topic);
+    return `/creates/new?${params.toString()}`;
+  }
+  if (!action.capabilityId) return null;
+  if (opts.fromArtifactId) {
+    return `/task-agents/${encodeURIComponent(action.capabilityId)}?fromArtifactVersionId=${encodeURIComponent(opts.fromArtifactId)}&fromRunId=${encodeURIComponent(opts.fromRunId)}&lineageRelationship=derived-from`;
+  }
+  return `/task-agents/${encodeURIComponent(action.capabilityId)}`;
 }
 
 function resolveNextActions(result: ResultShellModel): ResultNextAction[] {
@@ -460,18 +502,24 @@ export function TaskAgentResultShell({
           <div>
             <h3 className="text-sm font-semibold text-[var(--cc-ink)]">Continue with</h3>
             <p className="mt-1 max-w-xl text-xs text-[var(--cc-muted)]">
-              Open a compatible agent that can accept this artifact type. The new run keeps a derived-from link.
+              Open Create for a citeable draft, or a compatible task agent that accepts this artifact.
             </p>
           </div>
         </div>
         {nextActions.length ? (
           <ul className="mt-4 flex flex-wrap gap-2" data-testid="next-actions">
             {nextActions.map((action) => {
-              const href = fromArtifactId
-                ? `/task-agents/${encodeURIComponent(action.capabilityId)}?fromArtifactVersionId=${encodeURIComponent(fromArtifactId)}&fromRunId=${encodeURIComponent(result.rerun.retryOfRunId)}&lineageRelationship=derived-from`
-                : `/task-agents/${encodeURIComponent(action.capabilityId)}`;
+              const href = hrefForNextAction(action, {
+                fromArtifactId,
+                fromRunId: result.rerun.retryOfRunId,
+                topic: topicFromPayload(payload),
+              });
+              if (!href) return null;
+              const key = action.create
+                ? `create:${action.create.contentType}:${action.label}`
+                : action.capabilityId ?? action.label;
               return (
-                <li key={action.capabilityId}>
+                <li key={key}>
                   <Link
                     href={href}
                     className="inline-flex min-h-11 items-center rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] px-3.5 py-2 text-sm font-semibold text-[var(--cc-ink)] transition hover:border-[var(--cc-accent)] hover:bg-white hover:text-[var(--cc-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-accent)]"
