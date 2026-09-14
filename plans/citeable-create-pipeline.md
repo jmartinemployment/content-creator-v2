@@ -276,7 +276,7 @@ Signed-in smoke creates a **blog** from a persisted **versioned** brief; **block
 
 | Date (UTC) | Job id | Happy | Negatives | Result | Notes |
 |------------|--------|-------|-----------|--------|-------|
-| — | — | — | — | — | None yet |
+| 2026-09-14 | — | — | — | **blocked on operator** | Pre-smoke prod check: GeekAPI `66a0b51` SUCCESS; phi `c6d1f86` Vercel success; `/rag` → 404; ApprovalMax run `04fbbd9c-…` index `complete` / 248 chunks; `GEEK_RAG_CITEABLE_GENERATE_ENABLED=true`. Awaiting signed-in blog create job id. |
 
 ---
 
