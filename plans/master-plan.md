@@ -28,19 +28,21 @@
 
 ### Create evidence policy (locked 2026-09-14)
 
-**Products we sell are partner tools.** Competitor analysis / explicit competitor mention is a first-class growth strategy — not optional enrichment.
+**Neither partner nor competitor evidence is optional.** Products we sell are partner tools; competitor analysis is required strategy — not enrichment.
 
-| Evidence | When required | Behavior |
-|----------|---------------|----------|
-| **Partner crawl run** (`partnerSourceRunId`) | **`tool`** always; any Create that lists partner tool URLs / named partners; `ads` when partner URLs drive creative; `comparison` / `alternatives` when partners are named | **Fail closed** — no empty research plan, no project-site substitute for partner corpus |
-| **Competitor crawl run** (`competitorSourceRunId`) | Any Create that **lists competitor URLs** or is typed to analyze/mention competitors (`comparison` / `alternatives`; pillar/blog/battlecard when competitor URLs are supplied) | **Fail closed** — competitor strategy is first-class; never treat as soft-skip |
-| **Project-site crawl** | Owned-site grounding (structure, BrandKit, on-site quotes) where Appendix A requires it | Required for those types; **does not replace** partner or competitor when those are in scope |
+**Fail closed** = missing or unusable required evidence → the job **stops with an error**; it does not continue as success.
 
-**UI (Create → Research):** Partners = **Partner tool URLs**; Competitors = **Competitor page URLs**. Do not bury competitors as vague “reference pages.”
+| Evidence | Required | Behavior |
+|----------|----------|----------|
+| **Partner crawl run** (`partnerSourceRunId`) | **Every Create** | **Fail closed** — bind partner tool URLs + indexed partner run; no empty research plan; no project-site substitute |
+| **Competitor crawl run** (`competitorSourceRunId`) | **Every Create** | **Fail closed** — bind competitor page URLs + indexed competitor run; no soft-skip |
+| **Project-site crawl** | Every Create that Appendix A marks site-required | Required **alongside** partner + competitor; **never replaces** either |
 
-**Forbidden:** empty research plan / brief-only drafting as success when partner or competitor runs are in scope but unbound; silent substitute of another owner’s run; competitor cited as `crawlType:"partner"`.
+**UI (Create → Research):** **Partner tool URLs (required)** and **Competitor page URLs (required)**. Do not bury either.
 
-**Code follow-up:** Align GeekAPI pre-PLAN + Create library `researchPlanning` with this table (legacy “pillar/blog = partner optional enrichment” is **superseded** when partner/competitor URLs are present or type is `tool`).
+**Forbidden:** empty research plan / brief-only / site-only drafting as success without both runs; silent substitute of another owner’s run; competitor cited as `crawlType:"partner"`.
+
+**Code follow-up:** GeekAPI pre-PLAN + Create library `researchPlanning` must require **both** run IDs on every Create (legacy optional / “in scope only” gates are **superseded**).
 
 **Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 
@@ -319,8 +321,8 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 1. Creates-canonical only.  
 2. Tools = partners.  
-3. Competitors never as partner; competitor URLs in scope → competitor crawl **fail closed**.  
-4. Partner tools in scope / `tool` type → partner crawl **fail closed**. Project-site does not substitute.  
+3. Competitor crawl run **always required** (fail closed) — never optional.  
+4. Partner crawl run **always required** (fail closed) — tools = partners; project-site does not substitute.  
 5. No success-shaped stubs / silent required-evidence fallbacks.  
 6. Runtime ≠ release-readiness (Appendix A).  
 7. SignalR only for job status.  
@@ -337,13 +339,12 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 | Type | Project-site | Partner | Competitor |
 |------|--------------|---------|------------|
-| `tool` | Required | **Required fail-closed** (product) | If competitor URLs listed → **fail closed**; else N/A |
-| `comparison` / `alternatives` | Required | Per named partner → **fail closed** | Per named competitor → **fail closed** |
-| `ads` + partner URLs | Required | **Required fail-closed** | If competitor URLs listed → **fail closed** |
-| `ads` no partner URLs | Required | N/A | If competitor URLs listed → **fail closed** |
-| `blog` / `pillar` / `battlecard` / long-form | Required | If partner URLs / named partners listed → **fail closed**; else site-only OK | If competitor URLs listed → **fail closed**; else N/A |
+| `tool` | Required | **Required fail-closed** | **Required fail-closed** |
+| `comparison` / `alternatives` | Required | **Required fail-closed** | **Required fail-closed** |
+| `ads` | Required | **Required fail-closed** | **Required fail-closed** |
+| `blog` / `pillar` / `battlecard` / other long-form | Required | **Required fail-closed** | **Required fail-closed** |
 
-**Rules:** Tools = partners. Competitors never as `crawlType:"partner"`. Listing competitor URLs puts competitor corpus **in scope** — fail closed if unbound. Project-site never substitutes for required partner/competitor runs.
+**Rules:** Tools = partners. Competitors never as `crawlType:"partner"`. **Every Create** requires bound, indexed **partner** and **competitor** crawl runs before PLAN. Project-site never substitutes for either. Empty / missing URLs or unbound runs → fail closed (not site-only success).
 
 ---
 

@@ -1322,7 +1322,7 @@ export function NewCreateForm({
             <p className="text-sm font-semibold text-[var(--cc-accent)]">Research</p>
             <h2 className="mt-1 text-2xl font-semibold text-[var(--cc-ink)]">Shape the research</h2>
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
-              Add partner tool URLs (what you sell) and competitor page URLs when you want comparison or gap analysis. Indexed crawl runs are required for each — we fail closed if they are missing.
+              Add **Partner tool URLs** (what you sell) and **Competitor page URLs** (alternatives to analyze). Both are required — indexed crawl runs must exist for each, or Create fails closed before PLAN.
             </p>
             <div className={`mt-5 rounded-lg border px-4 py-3 text-sm ${ragStatus?.available ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`} aria-label="Research readiness">
               <span className="font-semibold">
@@ -1341,9 +1341,9 @@ export function NewCreateForm({
               <textarea id="paaQuestions" className={`${inputClass} min-h-24`} value={paaQuestionsText} onChange={(event) => setPaaQuestionsText(event.target.value)} placeholder={"One question per line\nHow does the workflow improve quality?"} />
             </div>
             <div className={`${fieldClass} mt-5`}>
-              <label className={labelClass} htmlFor="operatorTools">Partner tool URLs</label>
+              <label className={labelClass} htmlFor="operatorTools">Partner tool URLs (required)</label>
               <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
-                Partners you sell or name in the draft. Format: <span className="font-medium">Name | https://…</span> (one per line). Requires an indexed partner crawl run.
+                Partners you sell or name. Format: <span className="font-medium">Name | https://…</span> (one per line). An indexed partner crawl run is always required.
               </p>
               <textarea
                 id="operatorTools"
@@ -1354,9 +1354,9 @@ export function NewCreateForm({
               />
             </div>
             <div className={`${fieldClass} mt-5`}>
-              <label className={labelClass} htmlFor="competitorUrls">Competitor page URLs</label>
+              <label className={labelClass} htmlFor="competitorUrls">Competitor page URLs (required)</label>
               <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
-                Competitors to analyze or mention (comparison, gaps, high-intent buyers). One URL per line. Requires an indexed competitor crawl run when listed.
+                Competitors to analyze or mention. One URL per line. An indexed competitor crawl run is always required.
               </p>
               <textarea
                 id="competitorUrls"

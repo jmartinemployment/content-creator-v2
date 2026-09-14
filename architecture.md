@@ -93,12 +93,12 @@ Secrets and LLM keys stay on **GeekAPI** — never in the browser bundle.
 | **Client / account** | Brand the content is for |
 | **Project site** | URL/property bound to a create; grounds BrandKit + related pages |
 | **Create / job** | One writing effort: brief → evidence → PLAN → WRITE → VALIDATE → Canvas |
-| **Partner (tools)** | What we sell / name in content; `crawlType:"partner"`; indexed partner crawl run when in scope — **fail closed** |
-| **Competitor** | Analyzed or explicitly mentioned alternatives; `crawlTypes` competitor; indexed competitor crawl when URLs listed — **fail closed**; never cited as partner |
+| **Partner (tools)** | What we sell; `crawlType:"partner"`; indexed partner crawl run on **every Create** — **fail closed** |
+| **Competitor** | Alternatives to analyze/mention; competitor crawl on **every Create** — **fail closed**; never cited as partner |
 | **Citation** | URL · `pageId` · quote · `sourceDigest` · authorized `runId` · `sectionKey` · `crawlType` · `sourceRights` · provenance |
 | **shipReady** | Appendix B predicate only — `jobStatus: Ready` ≠ ship-ready |
 
-Generate / VALIDATE require real project-site or corpus evidence where the content type demands it (master-plan **Appendix A** + **Create evidence policy**). Partner tool runs and competitor runs are **fail closed when in scope** — not optional enrichment. Project-site does not replace them.
+Generate / VALIDATE require real project-site (where typed) **and always** partner + competitor crawl runs (master-plan **Create evidence policy** + Appendix A). **Fail closed** if either corpus run is missing — not optional enrichment. Project-site does not replace them.
 
 ---
 
