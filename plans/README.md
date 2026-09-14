@@ -11,7 +11,7 @@
 | **Remove remaining Create fallbacks** (local seed-HTML, brief-only draft, keyword-only overview, soft gaps, quote soften, RAG soft-disable) | [remove-remaining-fallbacks.md](remove-remaining-fallbacks.md) |
 | **Fix run_attachment not_ready** (reclaim/wake/pending gate/status UI) | [fix-attachment-not-ready.md](fix-attachment-not-ready.md) |
 | **Fix attach before save** (no dead-end Save copy; ensure create id on Review) | [fix-attach-before-save.md](fix-attach-before-save.md) |
-| **Geek IQ empty-state UX** (no gray wall of disabled selects) | [geek-iq-empty-state.md](geek-iq-empty-state.md) |
+| **Geek IQ empty-state UX** — **Complete** (no gray wall of disabled selects) | [geek-iq-empty-state-complete.md](geek-iq-empty-state-complete.md) |
 | **H1/H2 image prompts for all types** (tools first-class; tools = partners) | [image-prompt-h1-h2.md](image-prompt-h1-h2.md) |
 | **Per-format specialist teams** — **Complete** (keep SEO/AEO for covered formats; subset resolve per job) | [per-format-specialist-teams-complete.md](per-format-specialist-teams-complete.md) |
 | Platform / API / isolation contracts | [`../architecture.md`](../architecture.md) |

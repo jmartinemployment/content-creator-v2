@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  geekIqEmptyFieldCopy,
+  geekIqKnowledgeEmptyCopy,
+  geekIqProductsEmptyCopy,
+  shouldShowGeekIqFullEmptyState,
+  type GeekIqSingleSelectField,
+} from "./geek-iq-catalog-ui";
+import {
   normalizeCatalog,
   normalizeContextPreview,
   type ContextSelectionRequest,
@@ -123,6 +130,23 @@ export function ContextSelector({
   const styleOptions = useMemo(() => approvedOptions(catalogs.styleGuides), [catalogs.styleGuides]);
   const visualOptions = useMemo(() => approvedOptions(catalogs.visualGuidelines), [catalogs.visualGuidelines]);
   const productOptions = useMemo(() => approvedOptions(catalogs.products), [catalogs.products]);
+
+  const catalogCounts = useMemo(() => ({
+    brandKits: brandKitOptions.length,
+    audiences: audienceOptions.length,
+    styleGuides: styleOptions.length,
+    visualGuidelines: visualOptions.length,
+    knowledge: knowledgeOptions.length,
+    products: productOptions.length,
+  }), [
+    audienceOptions.length,
+    brandKitOptions.length,
+    knowledgeOptions.length,
+    productOptions.length,
+    styleOptions.length,
+    visualOptions.length,
+  ]);
+  const fullEmptyState = !loading && shouldShowGeekIqFullEmptyState(catalogCounts);
 
   const canCheckContext = Boolean(resolvePath || createId);
 
@@ -268,110 +292,156 @@ export function ContextSelector({
             Knowledge, and Products. Independent of the task inputs above.
           </p>
         </div>
-        <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">Manage Geek IQ</a>
+        <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">
+          {fullEmptyState ? "Set up Geek IQ" : "Manage Geek IQ"}
+        </a>
       </div>
       {loading ? <p className="mt-4 text-sm text-[var(--cc-muted)]">Loading Geek IQ catalogs…</p> : null}
       {error ? <p role="alert" className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-800">{error}</p> : null}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {([
-          ["Brand Voice", "brandKitVersionId", brandKitOptions],
-          ["Audience", "audienceVersionId", audienceOptions],
-          ["Style Guide", "styleGuideVersionId", styleOptions],
-          ["Visual Guidelines", "visualGuidelineVersionId", visualOptions],
-        ] as const).map(([label, field, options]) => (
-          <label key={field} className="text-xs font-semibold">{label}
-            <select aria-label={label} disabled={options.length === 0} value={value[field] ?? ""} onChange={(event) => setSingle(field, event.target.value)} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal disabled:bg-slate-100 disabled:text-[var(--cc-muted)]">
-              <option value="">{options.length ? "Use saved default" : `No approved ${label.toLowerCase()} available`}</option>
-              {options.map(({ item, version }) => <option key={version.id} value={version.id}>{item.name} · v{version.versionNumber}{version.lifecycle === "deprecated" ? " (deprecated)" : ""}</option>)}
-            </select>
-          </label>
-        ))}
-        <label className="text-xs font-semibold">Locale
-          <input aria-label="Context locale" value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal" />
-        </label>
-      </div>
+      {!loading && fullEmptyState ? (
+        <div
+          className="mt-4 rounded-lg border border-teal-200 bg-white p-4"
+          aria-label="Geek IQ empty state"
+          data-testid="geek-iq-empty-state"
+        >
+          <p className="text-sm text-[var(--cc-ink)]">
+            No approved Geek IQ items yet. Catalogs are optional for this run — Locale, search, notes, and Check
+            still work. Selectors unlock after you approve Brand Voice, Audience, Style, Visual, Knowledge, or
+            Products.
+          </p>
+          <a
+            href="/brand-sources"
+            className="mt-3 inline-flex rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            Set up Geek IQ
+          </a>
+        </div>
+      ) : null}
 
-      <fieldset className="mt-4">
-        <legend className="text-xs font-semibold">Additional approved sources</legend>
-        {knowledgeOptions.length ? (
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {knowledgeOptions.map(({ item, version }) => (
-              <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs">
-                <input
-                  type="checkbox"
-                  aria-label={`${item.name} version ${version.versionNumber}`}
-                  checked={value.knowledgeAssetVersionIds.includes(version.id)}
-                  onChange={() => onChange({
-                    ...value,
-                    knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id)
-                      ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id)
-                      : [...value.knowledgeAssetVersionIds, version.id],
-                  })}
-                />
-                <span>
-                  <strong>{item.name}</strong>
-                  <span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span>
-                </span>
-              </label>
+      {!loading && !fullEmptyState ? (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2" data-testid="geek-iq-catalog-fields">
+            {([
+              ["Brand Voice", "brandKitVersionId", brandKitOptions],
+              ["Audience", "audienceVersionId", audienceOptions],
+              ["Style Guide", "styleGuideVersionId", styleOptions],
+              ["Visual Guidelines", "visualGuidelineVersionId", visualOptions],
+            ] as const).map(([label, field, options]) => (
+              options.length > 0 ? (
+                <label key={field} className="text-xs font-semibold">{label}
+                  <select
+                    aria-label={label}
+                    value={value[field] ?? ""}
+                    onChange={(event) => setSingle(field, event.target.value)}
+                    className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal"
+                  >
+                    <option value="">Use saved default</option>
+                    {options.map(({ item, version }) => (
+                      <option key={version.id} value={version.id}>
+                        {item.name} · v{version.versionNumber}
+                        {version.lifecycle === "deprecated" ? " (deprecated)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <GeekIqEmptyFieldNote key={field} field={field} />
+              )
             ))}
+            <label className="text-xs font-semibold">Locale
+              <input aria-label="Context locale" value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal" />
+            </label>
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-[var(--cc-muted)]">No additional references have been approved. Your selected project website is already included.</p>
-        )}
-      </fieldset>
 
-      <fieldset className="mt-4">
-        <legend className="text-xs font-semibold">Products</legend>
-        {productOptions.length ? (
-          <div className="mt-2 space-y-3">
-            {productOptions.map(({ item, version }) => {
-              const fields = schemaFieldsForProduct(version, catalogs.productSchemas);
-              const selection = value.productSelections.find((entry) => entry.productVersionId === version.id);
-              const selectedFieldIds = selection
-                ? (selection.selectedFieldIds.length ? selection.selectedFieldIds : fields.map((field) => field.id))
-                : [];
-              return (
-                <div key={version.id} className="rounded-md border border-[var(--cc-line)] bg-white p-3">
-                  <label className="flex gap-2 text-xs">
+          <fieldset className="mt-4">
+            <legend className="text-xs font-semibold">Additional approved sources</legend>
+            {knowledgeOptions.length ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {knowledgeOptions.map(({ item, version }) => (
+                  <label key={version.id} className="flex gap-2 rounded-md border border-[var(--cc-line)] bg-white p-3 text-xs">
                     <input
                       type="checkbox"
-                      aria-label={`${item.name} product version ${version.versionNumber}`}
-                      checked={Boolean(selection)}
-                      onChange={() => toggleProduct(version.id, fields)}
+                      aria-label={`${item.name} version ${version.versionNumber}`}
+                      checked={value.knowledgeAssetVersionIds.includes(version.id)}
+                      onChange={() => onChange({
+                        ...value,
+                        knowledgeAssetVersionIds: value.knowledgeAssetVersionIds.includes(version.id)
+                          ? value.knowledgeAssetVersionIds.filter((id) => id !== version.id)
+                          : [...value.knowledgeAssetVersionIds, version.id],
+                      })}
                     />
                     <span>
                       <strong>{item.name}</strong>
-                      <span className="block text-[var(--cc-muted)]">Version {version.versionNumber}</span>
+                      <span className="block text-[var(--cc-muted)]">Version {version.versionNumber} · {version.freshness ?? version.lifecycle}</span>
                     </span>
                   </label>
-                  {selection && fields.length ? (
-                    <div className="mt-2 grid gap-1 sm:grid-cols-2" aria-label={`${item.name} product fields`}>
-                      {fields.map((field) => (
-                        <label key={field.id} className="flex gap-2 text-xs text-[var(--cc-muted)]">
-                          <input
-                            type="checkbox"
-                            aria-label={`${item.name} field ${field.label}`}
-                            checked={selectedFieldIds.includes(field.id)}
-                            onChange={() => toggleProductField(
-                              version.id,
-                              field.id,
-                              fields.map((entry) => entry.id),
-                            )}
-                          />
-                          {field.label}
-                        </label>
-                      ))}
+                ))}
+              </div>
+            ) : (
+              <GeekIqCatalogNote copy={geekIqKnowledgeEmptyCopy()} />
+            )}
+          </fieldset>
+
+          <fieldset className="mt-4">
+            <legend className="text-xs font-semibold">Products</legend>
+            {productOptions.length ? (
+              <div className="mt-2 space-y-3">
+                {productOptions.map(({ item, version }) => {
+                  const fields = schemaFieldsForProduct(version, catalogs.productSchemas);
+                  const selection = value.productSelections.find((entry) => entry.productVersionId === version.id);
+                  const selectedFieldIds = selection
+                    ? (selection.selectedFieldIds.length ? selection.selectedFieldIds : fields.map((field) => field.id))
+                    : [];
+                  return (
+                    <div key={version.id} className="rounded-md border border-[var(--cc-line)] bg-white p-3">
+                      <label className="flex gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          aria-label={`${item.name} product version ${version.versionNumber}`}
+                          checked={Boolean(selection)}
+                          onChange={() => toggleProduct(version.id, fields)}
+                        />
+                        <span>
+                          <strong>{item.name}</strong>
+                          <span className="block text-[var(--cc-muted)]">Version {version.versionNumber}</span>
+                        </span>
+                      </label>
+                      {selection && fields.length ? (
+                        <div className="mt-2 grid gap-1 sm:grid-cols-2" aria-label={`${item.name} product fields`}>
+                          {fields.map((field) => (
+                            <label key={field.id} className="flex gap-2 text-xs text-[var(--cc-muted)]">
+                              <input
+                                type="checkbox"
+                                aria-label={`${item.name} field ${field.label}`}
+                                checked={selectedFieldIds.includes(field.id)}
+                                onChange={() => toggleProductField(
+                                  version.id,
+                                  field.id,
+                                  fields.map((entry) => entry.id),
+                                )}
+                              />
+                              {field.label}
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="mt-2 text-xs text-[var(--cc-muted)]">No approved Products available.</p>
-        )}
-      </fieldset>
+                  );
+                })}
+              </div>
+            ) : (
+              <GeekIqCatalogNote copy={geekIqProductsEmptyCopy()} />
+            )}
+          </fieldset>
+        </>
+      ) : null}
+
+      {!loading && fullEmptyState ? (
+        <label className="mt-4 block text-xs font-semibold">Locale
+          <input aria-label="Context locale" value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} className="mt-1 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal" />
+        </label>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="flex gap-2 rounded-md bg-white p-3 text-xs">
@@ -380,7 +450,7 @@ export function ContextSelector({
         </label>
         <label className="flex gap-2 rounded-md bg-white p-3 text-xs">
           <input type="checkbox" checked={value.knowledgeSearchEnabled} onChange={(event) => onChange({ ...value, knowledgeSearchEnabled: event.target.checked })} />
-          <span><strong>Search additional sources</strong><span className="block text-[var(--cc-muted)]">Search only the approved references selected above.</span></span>
+          <span><strong>Search additional sources</strong><span className="block text-[var(--cc-muted)]">{fullEmptyState ? "Uses approved Knowledge once you add items in Geek IQ." : "Search only the approved references selected above."}</span></span>
         </label>
       </div>
 
@@ -427,14 +497,45 @@ export function ContextSelector({
           <p className="mt-2 text-xs text-amber-800">Save the create from this review step before adding a run attachment.</p>
         )}
         {uploadMessage ? <p role="status" className="mt-2 text-xs">{uploadMessage}</p> : null}
-        {value.runAttachmentIds.length ? <ul className="mt-2 list-disc pl-4 text-xs">{value.runAttachmentIds.map((id) => <li key={id} className="font-mono">{id}</li>)}</ul> : null}
+        {value.runAttachmentIds.length ? (
+          <ul className="mt-2 space-y-1 text-xs">
+            {value.runAttachmentIds.map((id) => (
+              <li key={id} className="flex flex-wrap items-center gap-2">
+                <span className="font-mono">{id}</span>
+                <button
+                  type="button"
+                  className="rounded border border-[var(--cc-line)] px-2 py-0.5 text-[11px] font-semibold"
+                  onClick={() => {
+                    onChange({
+                      ...value,
+                      runAttachmentIds: value.runAttachmentIds.filter((entry) => entry !== id),
+                    });
+                    setPreview(null);
+                    onPreviewChange(null);
+                    setUploadMessage("Attachment removed from this run. Check context again if other attachments remain.");
+                  }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       {!canCheckContext ? (
         <p className="mt-4 text-xs text-[var(--cc-muted)]">
           Context will be checked automatically when you create the content. Manual recheck is available after the create is saved.
         </p>
-      ) : null}
+      ) : value.runAttachmentIds.length > 0 ? (
+        <p className="mt-4 text-xs text-amber-900">
+          Attachments stay on this run until you remove them. Skipping Check does not ignore them — Check context (or remove) before Confirm.
+        </p>
+      ) : (
+        <p className="mt-4 text-xs text-[var(--cc-muted)]">
+          Check is optional when nothing is attached. Confirm still verifies context before generation starts.
+        </p>
+      )}
       <button
         type="button"
         disabled={!canCheckContext || preflightBusy || uploadBusy || loading}
@@ -483,5 +584,31 @@ export function ContextSelector({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function GeekIqCatalogNote({
+  copy,
+}: {
+  copy: { label: string; note: string; href: string; linkLabel: string };
+}) {
+  return (
+    <p className="mt-2 text-xs text-[var(--cc-muted)]" data-testid={`geek-iq-empty-note-${copy.label}`}>
+      {copy.note}{" "}
+      <a href={copy.href} className="font-semibold text-[var(--cc-accent)] underline">{copy.linkLabel}</a>
+    </p>
+  );
+}
+
+function GeekIqEmptyFieldNote({ field }: { field: GeekIqSingleSelectField }) {
+  const copy = geekIqEmptyFieldCopy(field);
+  return (
+    <div className="text-xs" data-testid={`geek-iq-empty-field-${field}`}>
+      <p className="font-semibold text-[var(--cc-ink)]">{copy.label}</p>
+      <p className="mt-1 text-[var(--cc-muted)]">
+        {copy.note}{" "}
+        <a href={copy.href} className="font-semibold text-[var(--cc-accent)] underline">{copy.linkLabel}</a>
+      </p>
+    </div>
   );
 }
