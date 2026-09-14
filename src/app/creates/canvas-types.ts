@@ -122,6 +122,8 @@ export type ValidationReportView = {
       repairInstruction?: string;
     }>;
   } | null;
+  /** Citeable M2/M3 — quote/coverage gaps from VALIDATE. */
+  citationEvidenceGaps?: string[] | null;
 };
 
 /** Published CMS location captured on an AI-visibility snapshot — mirrors

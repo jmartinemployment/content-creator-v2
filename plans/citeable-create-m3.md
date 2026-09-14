@@ -28,6 +28,8 @@ M2 signed-in smokes remain **deferred**. M3 proceeds by operator override. Retur
 | W1c | Canvas/SectionCitations: count and label only `verified === true` as verified; show gaps |
 | W1d | Plans + fixture tests |
 
+**Inventory follow-up (2026-09-14):** Server `nextActions` no longer wipe Create handoffs; `GccV2TaskAgentNextActions.ForCompletedRun` prepends Create; Canvas blockers include `citationEvidenceGaps`.
+
 ## Wave 2 (next)
 
 | Item | Deliverable |

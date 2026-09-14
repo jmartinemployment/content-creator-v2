@@ -182,11 +182,21 @@ function hrefForNextAction(
 }
 
 function resolveNextActions(result: ResultShellModel): ResultNextAction[] {
-  if (Array.isArray(result.nextActions) && result.nextActions.length > 0) {
-    return result.nextActions;
-  }
   const capabilityId = result.rerun.capabilityId || result.identity.capabilityId || "";
-  return FALLBACK_NEXT[capabilityId] ?? [];
+  const fallback = FALLBACK_NEXT[capabilityId] ?? [];
+  const server = Array.isArray(result.nextActions) ? result.nextActions : [];
+  if (server.length === 0) return fallback;
+
+  // Server actions used to wipe Create handoffs — merge Create entries from fallback/API.
+  const createTypes = new Set(
+    server
+      .map((action) => action.create?.contentType)
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+  const missingCreate = fallback.filter(
+    (action) => action.create && !createTypes.has(action.create.contentType),
+  );
+  return [...missingCreate, ...server];
 }
 
 type TaskAgentResultShellProps = {

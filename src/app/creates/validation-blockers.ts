@@ -37,6 +37,18 @@ export function listOutstandingBlockers(report: ValidationReportView): string[] 
     items.push(`${ragIssues.length - 8} more RAG / reviewer issue${ragIssues.length - 8 === 1 ? "" : "s"}`);
   }
 
+  const citationGaps = (report.citationEvidenceGaps ?? [])
+    .map((gap) => gap.trim())
+    .filter(Boolean);
+  for (const gap of citationGaps.slice(0, 8)) {
+    items.push(`Citation evidence · ${gap}`);
+  }
+  if (citationGaps.length > 8) {
+    items.push(
+      `${citationGaps.length - 8} more citation evidence gap${citationGaps.length - 8 === 1 ? "" : "s"}`,
+    );
+  }
+
   if (
     items.length === 0
     && report.reviewNotes?.trim()

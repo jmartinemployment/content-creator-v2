@@ -607,6 +607,12 @@ export function Canvas({ createId, jobId }: CanvasProps) {
           break;
         case "ValidationReport":
           setReport(payload as ValidationReportView);
+          {
+            const gaps = (payload as ValidationReportView).citationEvidenceGaps;
+            if (Array.isArray(gaps)) {
+              setCitationEvidenceGaps(gaps.filter((g): g is string => typeof g === "string"));
+            }
+          }
           break;
         case "ValidationInvalidated":
           setReport(null);
@@ -1111,10 +1117,17 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     (report?.seoChecks?.some((c) => !c.passed) ?? false)
     || (report?.geoChecks?.some((c) => !c.passed) ?? false);
 
-  const outstandingBlockers = useMemo(
-    () => (report ? listOutstandingBlockers(report) : []),
-    [report],
-  );
+  const outstandingBlockers = useMemo(() => {
+    const fromReport = report
+      ? listOutstandingBlockers({
+        ...report,
+        citationEvidenceGaps: report.citationEvidenceGaps?.length
+          ? report.citationEvidenceGaps
+          : citationEvidenceGaps,
+      })
+      : citationEvidenceGaps.map((gap) => `Citation evidence · ${gap}`);
+    return fromReport;
+  }, [report, citationEvidenceGaps]);
 
   async function runCanvasAction(
     sectionKey: string,
