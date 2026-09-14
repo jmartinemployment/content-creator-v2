@@ -208,7 +208,7 @@ Proceed **only** when they do not reopen the north-star fork:
 - [x] M2: citation provenance + section coverage gate in VALIDATE ([citeable-create-pipeline.md](citeable-create-pipeline.md))
 - [x] Kill switch `GccV2CiteableCreateV1` (`GCC_V2_CITEABLE_CREATE_V1`, default ON)
 - [ ] M2: signed-in happy **and** negative-path smokes recorded in citeable §Smoke log (**deferred**)
-- [x] M3 wave 1: partner fail-closed + Create next-actions + Canvas verified labeling ([citeable-create-m3.md](citeable-create-m3.md))
+- [x] M3 waves 1–2: fail-closed types, Create handoffs/prefill, Canvas evidence UX ([citeable-create-m3.md](citeable-create-m3.md))
 
 ---
 
