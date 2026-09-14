@@ -144,7 +144,7 @@ Foreign `runId` → **safe-fail only** (no cross-tenant corpus adoption).
 | **Library (RAG)** | Geek-Crawler-Rag | Index crawls; `/v1/query` / pages; verify quotes against Markdown. Fail closed on empty/Failed query. |
 | **Writer (Create)** | GeekAPI | `gcc-create-library.v1` — drafts PLAN/WRITE/VALIDATE from library excerpts. Provenance must say Create library, not RAG generate. |
 
-**Naming debt (do not treat as product definition):** wire strings `rag-generate.v2` / `rag-generate.v3` and Geek-Crawler-Rag `POST /v1/generate` name a **separate** producer executor on the RAG service. They are **not** “what RAG is,” and Create must **not** use them as the citeable writer (`toolsAllowed` / agent-team v3 is especially not Create’s path). Prefer saying **library query** vs **Create library writer**.
+**Naming debt (do not treat as product definition):** historical strings `rag-generate.v2` / `rag-generate.v3` and former Geek-Crawler-Rag `POST /v1/generate` are **removed** from the live Create/GeekAPI/Rag product path. Prefer **library query** vs **Create library writer**. Do not revive generate.
 
 Honesty (master-plan P0):
 

@@ -24,7 +24,7 @@
 | **RAG** | **Library only** (definition): `/v1/query` + page Markdown verify. RAG does not draft Create. |
 | **GeekAPI** | Canonical Create writer: `CreateLibraryDraft=true`, provenance `gcc-create-library.v1`. Fail closed on empty/failed retrieval. |
 | **Forbidden** | SoftDisabled / one-shot / capabilities negotiation as a citeable Create success path. |
-| **Naming** | `rag-generate.v2` / `rag-generate.v3` are legacy **producer executor IDs** on Geek-Crawler-Rag `/v1/generate` — **not** the product definition of RAG. Do not use them for Create drafting; do not describe Create writing as “RAG generate.” |
+| **Naming** | `rag-generate.v2` / `rag-generate.v3` / `POST /v1/generate` are **deleted** from the Create + GeekAPI + Geek-Crawler-Rag product path. Historical wire/fixture names may remain in Phase U contracts — do not revive generate. |
 
 **Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 

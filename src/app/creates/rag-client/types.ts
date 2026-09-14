@@ -1,6 +1,4 @@
-/** Types for GeekAPI POST /api/rag/generate (Create client). */
-
-import type { ResearchEntityRef } from "@/app/research-entities/types";
+/** Types for GeekAPI RAG library status / templates (Create client). RAG does not generate. */
 
 export type RagWritingIntent =
   | "Technical Article"
@@ -19,84 +17,16 @@ export type RagAdTemplate = {
   body: string;
 };
 
-export type RagGenerateRequest = {
-  writingIntent: RagWritingIntent;
-  topic: string;
-  targetEntities?: string[];
-  /**
-   * Role-tagged entities backing `targetEntities` — GeekAPI does not yet weight retrieval
-   * by role; this carries the role forward so it's not lost once that lands.
-   */
-  researchEntities?: ResearchEntityRef[];
-  adTemplates?: RagAdTemplate[];
-  templateIds?: string[];
-  generationStage?: "complete" | "outline" | "section";
-  outline?: RagOutlineSection[];
-  sectionKey?: string;
-  sectionHeading?: string;
-  sectionBrief?: string;
-  completedSectionSummaries?: string[];
-};
-
 export type RagOutlineSection = {
   key: string;
   heading: string;
   brief: string;
 };
 
-export type RagGenerateSource = {
-  url: string;
-  title?: string | null;
-  entity?: string | null;
-  crawlType?: string | null;
-  kind?: string | null;
-  pageId?: string | null;
-};
-
-export type RagCitation = {
-  pageId?: string | null;
-  runId?: string | null;
-  url: string;
-  title?: string | null;
-  sectionTitle?: string | null;
-  sectionKey?: string | null;
-  quote: string;
-  crawlType?: string | null;
-};
-
-export type RagThemeSource = {
-  label: string;
-  relationship?: string | null;
-  entity?: string | null;
-  url?: string | null;
-};
-
-export type RagBattlecard = {
-  partnerSummary: string;
-  competitorSummary: string;
-  differentiators: string[];
-  risks: string[];
-};
-
-export type RagGenerateResponse = {
-  intent: string;
-  content?: string | null;
-  variations?: string[] | null;
-  battlecard?: RagBattlecard | null;
-  sources: RagGenerateSource[];
-  citations?: RagCitation[] | null;
-  themeSources?: RagThemeSource[] | null;
-  outline?: RagOutlineSection[] | null;
-  appliedTemplates?: RagAdTemplate[] | null;
-  warnings?: string[];
-  softDisabled?: boolean;
-  modelUsed?: string | null;
-  retrievalMode?: string | null;
-};
-
-export type RagGenerateStatus = {
+export type RagLibraryStatus = {
   available: boolean;
   ragClientEnabled: boolean;
+  /** Always false — RAG generate is removed. */
   generateEnabled: boolean;
   reason?: string | null;
   writingIntents: string[];
@@ -105,8 +35,14 @@ export type RagGenerateStatus = {
   shortFormModel?: string;
   graphRetrievalAvailable?: boolean;
   adTemplateIndexAvailable?: boolean;
+  /**
+   * Library ready for Create (query + GeekAPI draft). Not "/v1/generate available".
+   * Absent on older GeekAPI — treat missing as ok when `available` is true.
+   */
   citeableGenerateAvailable?: boolean;
-  /** Additive unified-pipeline contract; absent on older GeekAPI deployments. */
   modelPolicyVersion?: string | null;
   approvedStageModels?: Record<string, string[]>;
 };
+
+/** @deprecated Use {@link RagLibraryStatus}. */
+export type RagGenerateStatus = RagLibraryStatus;

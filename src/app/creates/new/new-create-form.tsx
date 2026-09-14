@@ -41,7 +41,7 @@ import {
   type SiteHierarchy,
 } from "./site-hierarchy-panel";
 import { ButtonBusyLabel, LoadingRow } from "@/app/components/loading-indicator";
-import { fetchRagStatus } from "@/app/creates/rag-client/rag-generate-client";
+import { fetchRagStatus } from "@/app/creates/rag-client/rag-library-client";
 import { loadAdTemplates } from "@/app/creates/rag-client/ad-templates";
 import type { RagAdTemplate } from "@/app/creates/rag-client/types";
 import {
@@ -881,7 +881,7 @@ export function NewCreateForm({
       setError("Something went wrong while preparing your content. Return to Review and try again.");
       return;
     }
-    if (ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false) {
+    if (ragStatusLoading || !ragStatus?.available) {
       setError(
         ragStatus?.reason ||
           "Research must be ready before this content can start.",
@@ -1024,7 +1024,7 @@ export function NewCreateForm({
           : null,
     ragStatusLoading
       ? "Research and generation availability is still being checked."
-      : !ragStatus?.available || ragStatus.citeableGenerateAvailable === false
+      : !ragStatus?.available
         ? ragStatus?.reason || "Research and generation are temporarily unavailable."
         : null,
   ].filter((message): message is string => Boolean(message));
@@ -1324,11 +1324,11 @@ export function NewCreateForm({
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
               We will verify source material and citations automatically. Add optional focus below.
             </p>
-            <div className={`mt-5 rounded-lg border px-4 py-3 text-sm ${ragStatus?.available && ragStatus.citeableGenerateAvailable !== false ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`} aria-label="Research readiness">
+            <div className={`mt-5 rounded-lg border px-4 py-3 text-sm ${ragStatus?.available ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`} aria-label="Research readiness">
               <span className="font-semibold">
-                {ragStatusLoading ? "Checking research availability…" : ragStatus?.available && ragStatus.citeableGenerateAvailable !== false ? "Research is ready" : "Research is temporarily unavailable"}
+                {ragStatusLoading ? "Checking research availability…" : ragStatus?.available ? "Research is ready" : "Research is temporarily unavailable"}
               </span>
-              {!ragStatusLoading && (ragStatusError || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false) ? (
+              {!ragStatusLoading && (ragStatusError || !ragStatus?.available) ? (
                 <p className="mt-1 text-xs" aria-live="polite">{ragStatusError || ragStatus?.reason || "Try again in a moment."}</p>
               ) : null}
             </div>
@@ -1656,7 +1656,7 @@ export function NewCreateForm({
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"
-                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -1666,7 +1666,7 @@ export function NewCreateForm({
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available || ragStatus.citeableGenerateAvailable === false}
+                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />

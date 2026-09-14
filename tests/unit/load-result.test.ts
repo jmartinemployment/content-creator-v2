@@ -81,7 +81,7 @@ describe("rag-client injected non-401 failures", () => {
         headers: { "content-type": "application/json" },
       })) as typeof fetch;
 
-    const { fetchRagStatus } = await import("../../src/app/creates/rag-client/rag-generate-client");
+    const { fetchRagStatus } = await import("../../src/app/creates/rag-client/rag-library-client");
     const result = await fetchRagStatus();
     assert.equal(result.status, "error");
     if (result.status === "error") assert.equal(result.httpStatus, 503);
@@ -91,7 +91,7 @@ describe("rag-client injected non-401 failures", () => {
     globalThis.fetch = (async () =>
       new Response("nope", { status: 500 })) as typeof fetch;
 
-    const { indexRagAdTemplates } = await import("../../src/app/creates/rag-client/rag-generate-client");
+    const { indexRagAdTemplates } = await import("../../src/app/creates/rag-client/rag-library-client");
     const result = await indexRagAdTemplates([]);
     assert.equal(result.status, "error");
     if (result.status === "error") assert.equal(result.httpStatus, 500);

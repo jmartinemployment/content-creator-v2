@@ -1,4 +1,4 @@
-import type { RagAdTemplate, RagGenerateRequest, RagGenerateResponse, RagGenerateStatus } from "./types";
+import type { RagAdTemplate, RagLibraryStatus } from "./types";
 import { type LoadResult, loadError, loadOk, loadUnauthorized, readLoadResult } from "@/app/lib/load-result";
 
 async function ragFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -12,29 +12,10 @@ async function ragFetch(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-export async function fetchRagStatus(): Promise<LoadResult<RagGenerateStatus>> {
+/** Library readiness (query/pages). RAG does not generate drafts. */
+export async function fetchRagStatus(): Promise<LoadResult<RagLibraryStatus>> {
   const res = await ragFetch("status");
-  return readLoadResult(res, (body) => body as RagGenerateStatus);
-}
-
-export async function generateRagDraft(
-  body: RagGenerateRequest,
-): Promise<{ ok: true; data: RagGenerateResponse } | { ok: false; error: string; status: number }> {
-  const res = await ragFetch("generate", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let error = `Generate failed (HTTP ${res.status})`;
-    try {
-      const payload = (await res.json()) as { error?: string };
-      if (payload.error) error = payload.error;
-    } catch {
-      /* ignore */
-    }
-    return { ok: false, error, status: res.status };
-  }
-  return { ok: true, data: (await res.json()) as RagGenerateResponse };
+  return readLoadResult(res, (body) => body as RagLibraryStatus);
 }
 
 export async function indexRagAdTemplates(
