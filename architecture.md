@@ -93,12 +93,20 @@ Secrets and LLM keys stay on **GeekAPI** — never in the browser bundle.
 | **Client / account** | Brand the content is for |
 | **Project site** | URL/property bound to a create; grounds BrandKit + related pages |
 | **Create / job** | One writing effort: brief → evidence → PLAN → WRITE → VALIDATE → Canvas |
-| **Partner (tools)** | What we sell; `crawlType:"partner"`; indexed partner crawl run on **every Create** — **fail closed** |
-| **Competitor** | Alternatives to analyze/mention; competitor crawl on **every Create** — **fail closed**; never cited as partner |
+| **Partner (tools)** | What we sell / distribute; `crawlType:"partner"`; indexed partner crawl on **every Create** — **fail closed**. Product payloads + **SoftwareApplication** JSON-LD — [`plans/partner-extraction.md`](plans/partner-extraction.md) |
+| **Competitor** | Direct or content rivals to **analyze and (when honest) name**; competitor crawl on **every Create** — **fail closed**; never cited as partner. Extract + **competitor SoftwareApplication JSON-LD** — [`plans/competitor-analysis.md`](plans/competitor-analysis.md) |
 | **Citation** | URL · `pageId` · quote · `sourceDigest` · authorized `runId` · `sectionKey` · `crawlType` · `sourceRights` · provenance |
 | **shipReady** | Appendix B predicate only — `jobStatus: Ready` ≠ ship-ready |
 
 Generate / VALIDATE require real project-site (where typed) **and always** partner + competitor crawl runs (master-plan **Create evidence policy** + Appendix A). **Fail closed** if either corpus run is missing — not optional enrichment. Project-site does not replace them.
+
+### Competitor intelligence (contract pointer)
+
+Create uses competitor pages for **both** analysis and explicit mention when strategy warrants it—not as optional color. Authoritative plan: [`plans/competitor-analysis.md`](plans/competitor-analysis.md) — **minimum expand** (pricing, ICP, integrations, FAQ, proof, CTA destinations, disqualifiers), **competitor-specific** payloads (gap map, framing bank, demand signals, type label, deficit→partner swap, comparison axes, claim-risk), extended ad/SEO catalog, and competitor `SoftwareApplication` JSON-LD. Evidence binding remains fail-closed (`competitorSourceRunIds` / legacy singular every Create) per master-plan. Library extraction feeds `/v1/query` — Create drafting stays GeekAPI, not RAG generate. Excerpt-only resolve does not fulfill those payloads.
+
+### Partner extraction payloads (contract pointer)
+
+Partner library extraction isolates core assets (**Citable**, **Advertisement**, **Comparison**, **Alternatives**), a **minimum expand** set (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers), an **extended catalog**, plus **SoftwareApplication** JSON-LD — defined in [`plans/partner-extraction.md`](plans/partner-extraction.md). Binding remains fail-closed (`partnerSourceRunIds` / legacy singular every Create). Tools = partners; competitors never as `crawlType:"partner"`. Excerpt-only `GccQuoteablePage` resolve does not fulfill those payloads.
 
 ---
 

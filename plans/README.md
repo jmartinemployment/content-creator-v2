@@ -5,6 +5,9 @@
 | Concern | Where |
 |---------|--------|
 | Release gates, §7 tracker, smokes, kill switch, Appendices A–E | [master-plan.md](master-plan.md) |
+| **Competitor Analysis plan** (strategy, min-expand + competitor-specific payloads, chunking, competitor SoftwareApplication JSON-LD) | [competitor-analysis.md](competitor-analysis.md) |
+| **Partner extraction plan** (citable, ads, comparison, alternatives, pricing/ICP/FAQ min-expand, partner SoftwareApplication JSON-LD) | [partner-extraction.md](partner-extraction.md) |
+| **Remove partner/competitor Mongo seed-HTML fallback** (library-only resolve) | [remove-partner-seed-html-fallback.md](remove-partner-seed-html-fallback.md) |
 | Platform / API / isolation contracts | [`../architecture.md`](../architecture.md) |
 | Agent-enforced non-negotiables | [`../.cursor/rules/master-plan-nonnegotiables.mdc`](../.cursor/rules/master-plan-nonnegotiables.mdc) |
 | Honesty (stubs / fallbacks / correctness) | [`../.cursor/rules/`](../.cursor/rules/) |

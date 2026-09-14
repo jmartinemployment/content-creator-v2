@@ -44,7 +44,27 @@
 
 **Code follow-up:** GeekAPI pre-PLAN + Create library `researchPlanning` must require **both** run IDs on every Create (legacy optional / “in scope only” gates are **superseded**).
 
-**Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
+### Competitor intelligence — what Create obtains (locked 2026-09-14)
+
+**Authoritative plan:** [competitor-analysis.md](competitor-analysis.md) — strategy goals, direct vs content rivals, obtain brief, **named extraction payloads** (pricing/ICP/integrations/FAQ/proof/CTA/disqualifiers min-expand; gap map, framing, demand signals, type label, deficit router, comparison axes, claim-risk; extended ad/SEO catalog), semantic chunking, **competitor SoftwareApplication JSON-LD**, and fail-closed binding.
+
+Summary: competitor analysis + honest mention is required Create strategy (gaps, BOFU comparison, trust, SEO de-risk). Library extracts structured rival payloads for `/v1/query`; structured rival schema = `SoftwareApplication` (competitor-analysis §10). Create drafting remains GeekAPI `gcc-create-library.v1` (not RAG generate). Hard rules: always required · fail closed · never `crawlType:"partner"`. Excerpt-only resolve does not fulfill extraction payloads.
+
+### Partner extraction — product payloads (locked 2026-09-14)
+
+**Authoritative plan:** [partner-extraction.md](partner-extraction.md) — extract **Citable**, **Advertisement**, **Comparison**, **Alternatives**, plus **minimum expand** (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers) and an **extended catalog** from the partner library for sellable / distributable content; emit **partner** `SoftwareApplication` JSON-LD mapped from those payloads. Rival `SoftwareApplication` nodes: [competitor-analysis.md](competitor-analysis.md) §10.
+
+| Asset | Fields |
+|-------|--------|
+| **Citable** | `isolated_claim` · `origin_proof_url` · `temporal_anchor` |
+| **Advertisement** | `marketing_hook` · `pain_point_trigger` · `cta_wrapper` |
+| **Comparison** | `standardized_feature_id` · `capability_payload` · `normalized_cost` |
+| **Alternatives** | `trigger_deficit` · `recommended_swap` · `pivot_copy` |
+| **JSON-LD** | `SoftwareApplication` (+ `Offer` / `UnitPriceSpecification` / `Review`) — see partner-extraction §9 |
+
+Hard rules: partner crawl always required · fail closed · tools = partners · never label competitors as partner. Library query only — not RAG generate.
+
+**Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, [competitor-analysis.md](competitor-analysis.md), [partner-extraction.md](partner-extraction.md), deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 
 ### Roles
 
