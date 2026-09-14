@@ -18,7 +18,8 @@ Operators move from research and planning through outline approval, writing, val
 ### Capabilities
 
 - Project-site crawling, hierarchy, BrandKit, and related-page context
-- Persisted briefs (topic, keyword, intent, stage, voice, PAA, partners, competitors)
+- Persisted briefs (topic, keyword, intent, stage, voice, PAA, **partner tool URLs**, **competitor page URLs**)
+- Partner/competitor crawl runs **fail closed when in scope** (tools = partners; competitors never as partner)
 - Approval-driven `PLAN → WRITE → VALIDATE → REPAIR` Create jobs
 - Citeable blog/pillar path with verified quotations, partner-mention gate, and `sourceRights`
 - Articles, guides, comparisons, tool/service/local pages, ads, social, and related formats

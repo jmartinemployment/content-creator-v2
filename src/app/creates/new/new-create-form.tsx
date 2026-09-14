@@ -1322,11 +1322,11 @@ export function NewCreateForm({
             <p className="text-sm font-semibold text-[var(--cc-accent)]">Research</p>
             <h2 className="mt-1 text-2xl font-semibold text-[var(--cc-ink)]">Shape the research</h2>
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
-              We will verify source material and citations automatically. Add optional focus below.
+              Add partner tool URLs (what you sell) and competitor page URLs when you want comparison or gap analysis. Indexed crawl runs are required for each — we fail closed if they are missing.
             </p>
             <div className={`mt-5 rounded-lg border px-4 py-3 text-sm ${ragStatus?.available ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`} aria-label="Research readiness">
               <span className="font-semibold">
-                {ragStatusLoading ? "Checking research availability…" : ragStatus?.available ? "Research is ready" : "Research is temporarily unavailable"}
+                {ragStatusLoading ? "Checking research availability…" : ragStatus?.available ? "Research library is ready" : "Research library is temporarily unavailable"}
               </span>
               {!ragStatusLoading && (ragStatusError || !ragStatus?.available) ? (
                 <p className="mt-1 text-xs" aria-live="polite">{ragStatusError || ragStatus?.reason || "Try again in a moment."}</p>
@@ -1340,18 +1340,36 @@ export function NewCreateForm({
               <label className={labelClass} htmlFor="paaQuestions">Questions to answer</label>
               <textarea id="paaQuestions" className={`${inputClass} min-h-24`} value={paaQuestionsText} onChange={(event) => setPaaQuestionsText(event.target.value)} placeholder={"One question per line\nHow does the workflow improve quality?"} />
             </div>
+            <div className={`${fieldClass} mt-5`}>
+              <label className={labelClass} htmlFor="operatorTools">Partner tool URLs</label>
+              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
+                Partners you sell or name in the draft. Format: <span className="font-medium">Name | https://…</span> (one per line). Requires an indexed partner crawl run.
+              </p>
+              <textarea
+                id="operatorTools"
+                className={`${inputClass} min-h-24`}
+                value={operatorToolsText}
+                onChange={(event) => setOperatorToolsText(event.target.value)}
+                placeholder={"ApprovalMax | https://www.approvalmax.com\nPlooto | https://www.plooto.com"}
+              />
+            </div>
+            <div className={`${fieldClass} mt-5`}>
+              <label className={labelClass} htmlFor="competitorUrls">Competitor page URLs</label>
+              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
+                Competitors to analyze or mention (comparison, gaps, high-intent buyers). One URL per line. Requires an indexed competitor crawl run when listed.
+              </p>
+              <textarea
+                id="competitorUrls"
+                className={`${inputClass} min-h-24`}
+                value={competitorUrlsText}
+                onChange={(event) => setCompetitorUrlsText(event.target.value)}
+                placeholder={"https://competitor.example/product\nhttps://another.example/pricing"}
+              />
+            </div>
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-slate-50 p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">Additional research sources</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">Writing notes</summary>
               <div className={`${fieldClass} mt-4`}>
-                <label className={labelClass} htmlFor="competitorUrls">Reference page URLs</label>
-                <textarea id="competitorUrls" className={`${inputClass} min-h-20`} value={competitorUrlsText} onChange={(event) => setCompetitorUrlsText(event.target.value)} placeholder="One URL per line" />
-              </div>
-              <div className={`${fieldClass} mt-4`}>
-                <label className={labelClass} htmlFor="operatorTools">Partner destination URLs</label>
-                <textarea id="operatorTools" className={`${inputClass} min-h-20`} value={operatorToolsText} onChange={(event) => setOperatorToolsText(event.target.value)} placeholder="Name | https://example.com" />
-              </div>
-              <div className={`${fieldClass} mt-4`}>
-                <label className={labelClass} htmlFor="writingNotes">Writing notes</label>
+                <label className={labelClass} htmlFor="writingNotes">Notes carried into the brief</label>
                 <textarea
                   id="writingNotes"
                   className={`${inputClass} min-h-20`}

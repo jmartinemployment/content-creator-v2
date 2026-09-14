@@ -26,6 +26,22 @@
 | **Forbidden** | SoftDisabled / one-shot / capabilities negotiation as a citeable Create success path. |
 | **Naming** | `rag-generate.v2` / `rag-generate.v3` / `POST /v1/generate` are **deleted** from the Create + GeekAPI + Geek-Crawler-Rag product path. Historical wire/fixture names may remain in Phase U contracts — do not revive generate. |
 
+### Create evidence policy (locked 2026-09-14)
+
+**Products we sell are partner tools.** Competitor analysis / explicit competitor mention is a first-class growth strategy — not optional enrichment.
+
+| Evidence | When required | Behavior |
+|----------|---------------|----------|
+| **Partner crawl run** (`partnerSourceRunId`) | **`tool`** always; any Create that lists partner tool URLs / named partners; `ads` when partner URLs drive creative; `comparison` / `alternatives` when partners are named | **Fail closed** — no empty research plan, no project-site substitute for partner corpus |
+| **Competitor crawl run** (`competitorSourceRunId`) | Any Create that **lists competitor URLs** or is typed to analyze/mention competitors (`comparison` / `alternatives`; pillar/blog/battlecard when competitor URLs are supplied) | **Fail closed** — competitor strategy is first-class; never treat as soft-skip |
+| **Project-site crawl** | Owned-site grounding (structure, BrandKit, on-site quotes) where Appendix A requires it | Required for those types; **does not replace** partner or competitor when those are in scope |
+
+**UI (Create → Research):** Partners = **Partner tool URLs**; Competitors = **Competitor page URLs**. Do not bury competitors as vague “reference pages.”
+
+**Forbidden:** empty research plan / brief-only drafting as success when partner or competitor runs are in scope but unbound; silent substitute of another owner’s run; competitor cited as `crawlType:"partner"`.
+
+**Code follow-up:** Align GeekAPI pre-PLAN + Create library `researchPlanning` with this table (legacy “pillar/blog = partner optional enrichment” is **superseded** when partner/competitor URLs are present or type is `tool`).
+
 **Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 
 ### Roles
@@ -303,15 +319,17 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 1. Creates-canonical only.  
 2. Tools = partners.  
-3. No success-shaped stubs / silent required-evidence fallbacks.  
-4. Runtime ≠ release-readiness (Appendix A).  
-5. SignalR only for job status.  
-6. Isolation under `ContentCreatorV2/*`.  
-7. Repo identity = `content-creator-v2`.  
-8. Foreign `runId` → safe-fail only.  
-9. Ship-ready = Appendix B only (`jobStatus` Ready ≠ `shipReady`).  
-10. Source rights via `sourceRights` (P1.5).  
-11. Kill switch `GCC_V2_CITEABLE_CREATE_V1` OFF = **fail closed** (emergency stop) — never a degraded Ready / skipped-gates fallback.  
+3. Competitors never as partner; competitor URLs in scope → competitor crawl **fail closed**.  
+4. Partner tools in scope / `tool` type → partner crawl **fail closed**. Project-site does not substitute.  
+5. No success-shaped stubs / silent required-evidence fallbacks.  
+6. Runtime ≠ release-readiness (Appendix A).  
+7. SignalR only for job status.  
+8. Isolation under `ContentCreatorV2/*`.  
+9. Repo identity = `content-creator-v2`.  
+10. Foreign `runId` → safe-fail only.  
+11. Ship-ready = Appendix B only (`jobStatus` Ready ≠ `shipReady`).  
+12. Source rights via `sourceRights` (P1.5).  
+13. Kill switch `GCC_V2_CITEABLE_CREATE_V1` OFF = **fail closed** (emergency stop) — never a degraded Ready / skipped-gates fallback.  
 
 ---
 
@@ -319,11 +337,13 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 | Type | Project-site | Partner | Competitor |
 |------|--------------|---------|------------|
-| `blog` / `pillar` | Required fail-closed | Optional enrichment; §P1 when mention in body | Optional; never as partner |
-| `tool` | Required | Required fail-closed | Optional |
-| `ads` + tools | Required | Required fail-closed | Optional |
-| `ads` no tools | Required | Optional | Optional |
-| `comparison` / `alternatives` | Required | Per named partner subject | Per named competitor; omit if missing |
+| `tool` | Required | **Required fail-closed** (product) | If competitor URLs listed → **fail closed**; else N/A |
+| `comparison` / `alternatives` | Required | Per named partner → **fail closed** | Per named competitor → **fail closed** |
+| `ads` + partner URLs | Required | **Required fail-closed** | If competitor URLs listed → **fail closed** |
+| `ads` no partner URLs | Required | N/A | If competitor URLs listed → **fail closed** |
+| `blog` / `pillar` / `battlecard` / long-form | Required | If partner URLs / named partners listed → **fail closed**; else site-only OK | If competitor URLs listed → **fail closed**; else N/A |
+
+**Rules:** Tools = partners. Competitors never as `crawlType:"partner"`. Listing competitor URLs puts competitor corpus **in scope** — fail closed if unbound. Project-site never substitutes for required partner/competitor runs.
 
 ---
 
