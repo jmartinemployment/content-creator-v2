@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   createPrefillFromArtifactPayload,
   createPrefillSearchParams,
-} from "../../src/app/creates/create-prefill.ts";
+} from "../../src/app/creates/create-prefill";
 
 test("createPrefillFromArtifactPayload maps tools competitors and claims", () => {
   const prefill = createPrefillFromArtifactPayload({

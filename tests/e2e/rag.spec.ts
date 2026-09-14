@@ -5,9 +5,12 @@ test.beforeEach(({}, testInfo) => {
   skipIfNoE2eAuth(testInfo);
 });
 
-test("product /rag route is gone", async ({ page }) => {
-  await openAuthenticated(page, "/rag");
-  await expect(page.getByText(/404|This page could not be found/i)).toBeVisible();
+test("legacy /rag redirects to Create with migrated params", async ({ page }) => {
+  await openAuthenticated(page, "/rag?topic=hello-world&writingIntent=blog");
+  await expect(page).toHaveURL(/\/creates\/new/);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("topic")).toBe("hello-world");
+  expect(url.searchParams.get("contentType")).toBe("blog");
 });
 
 test("canonical Create offers all 17 content types and relevant RAG capabilities", async ({ page }) => {
