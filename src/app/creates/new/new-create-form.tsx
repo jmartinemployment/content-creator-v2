@@ -14,6 +14,7 @@ import {
 } from "../brief-catalog";
 import {
   alsoDraftOptionsFor,
+  labelForContentType,
   requiresCitationEvidenceGate,
   type ContentType,
   type PrimaryDraftType,
@@ -51,6 +52,8 @@ import {
 } from "../rag-contract";
 import { shortDigest, type ResolvedSkillSnapshot } from "@/app/skills/skill-contract";
 import {
+  formatsCoveredBy,
+  formatsSkippedBy,
   isCompatibleAgent,
   normalizeAgentCatalog,
   normalizeResolvedAgentTeam,
@@ -59,10 +62,30 @@ import {
 } from "@/app/agents/agent-contract";
 import {
   EMPTY_CONTEXT_SELECTION,
+  normalizeContextPreview,
   type ContextSelectionRequest,
   type ResolvedContextPreview,
 } from "@/app/brand-sources/context-contract";
 import { ContextSelector } from "./context-selector";
+
+/** Empty optional GUID fields must be omitted so Generate can auto-create brand kit / skip gates. */
+function sanitizeContextSelection(selection: ContextSelectionRequest): ContextSelectionRequest {
+  const trimOrUndef = (value?: string) => {
+    const next = value?.trim();
+    return next ? next : undefined;
+  };
+  return {
+    ...selection,
+    knowledgeAssetVersionIds: selection.knowledgeAssetVersionIds.filter(Boolean),
+    runAttachmentIds: selection.runAttachmentIds.filter(Boolean),
+    productSelections: selection.productSelections.filter((p) => Boolean(p.productVersionId)),
+    brandKitVersionId: trimOrUndef(selection.brandKitVersionId),
+    audienceVersionId: trimOrUndef(selection.audienceVersionId),
+    styleGuideVersionId: trimOrUndef(selection.styleGuideVersionId),
+    visualGuidelineVersionId: trimOrUndef(selection.visualGuidelineVersionId),
+    runNotes: trimOrUndef(selection.runNotes),
+  };
+}
 
 const selectClass =
   "rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm text-[var(--cc-ink)]";
@@ -464,7 +487,9 @@ export function NewCreateForm({
         .map((option) => option.value)
         .filter((value) => alsoDrafts.has(value)),
     ];
-    const compatible = agentCatalog.agents.filter((agent) => isCompatibleAgent(agent, contentTypes));
+    const compatible = agentCatalog.agents.filter((agent) =>
+      isCompatibleAgent(agent, primaryDraft),
+    );
     const selected = selectedAgentIds.filter((id) => compatible.some((agent) => agent.id === id));
     const producerCount = compatible.filter((agent) => agent.role === "producer" && selected.includes(agent.id)).length;
     if (producerCount !== 1) {
@@ -792,8 +817,16 @@ export function NewCreateForm({
     e.preventDefault();
     setError(null);
 
-    if (contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0) {
-      setError("Resolve context blockers and wait for uploads before creating content.");
+    if (
+      contextUploadProcessing
+      || (contextSelection.runAttachmentIds.length > 0 && contextPreview == null)
+      || (contextPreview?.blockingFindings.length ?? 0) > 0
+    ) {
+      setError(
+        contextSelection.runAttachmentIds.length > 0 && contextPreview == null
+          ? "Attachments are on this run. Check context (or remove them) before continuing."
+          : "Resolve context blockers and wait for uploads before creating content.",
+      );
       return;
     }
     if (!projectSiteCrawlRunId || !section || !section.relatedPages.length) {
@@ -828,7 +861,7 @@ export function NewCreateForm({
           ...(effectiveSelectedAgentIds.length > 0
             ? { selectedAgentIds: effectiveSelectedAgentIds }
             : {}),
-          contextSelection,
+          contextSelection: sanitizeContextSelection(contextSelection),
         }),
       });
       if (!createRes.ok) {
@@ -894,14 +927,45 @@ export function NewCreateForm({
         : "Select and resolve exactly one specialist producer before continuing.");
       return;
     }
-    if (contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0) {
-      setError("Resolve context blockers and wait for uploads before starting generation.");
+    if (contextUploadProcessing) {
+      setError("Wait for uploads to finish before starting generation.");
+      return;
+    }
+    if (contextSelection.runAttachmentIds.length > 0 && contextPreview == null) {
+      setError("Attachments are selected. Check context (or remove them) before Confirm — skipping Check does not drop attachments.");
+      return;
+    }
+    if ((contextPreview?.blockingFindings.length ?? 0) > 0) {
+      setError("Resolve context blockers before starting generation.");
       return;
     }
     setError(null);
     setBusy(true);
     try {
       const { contentTypes, brief } = buildBriefPayload();
+      const selection = sanitizeContextSelection(contextSelection);
+      // Confirm always re-runs the same resolve Check uses so blockers cannot hide behind a skipped Check.
+      const resolveRes = await fetch("/api/gcc-v2/context/resolve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          createId,
+          selection,
+          selectedAgentIds: effectiveSelectedAgentIds,
+          rawBriefJson: JSON.stringify(brief),
+        }),
+      });
+      const resolveBody = await resolveRes.json().catch(() => null);
+      if (!resolveRes.ok) {
+        throw new Error(resolveBody?.error || `Context preflight failed (HTTP ${resolveRes.status}).`);
+      }
+      const livePreview = normalizeContextPreview(resolveBody);
+      setContextPreview(livePreview);
+      if (livePreview.blockingFindings.length > 0) {
+        throw new Error(
+          `Context resolution blocked generation. Blockers: ${livePreview.blockingFindings.map((f) => f.message).join("; ")}`,
+        );
+      }
       const genRes = await fetch(`/api/gcc-v2/creates/${createId}/generate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -915,12 +979,46 @@ export function NewCreateForm({
           ...(effectiveSelectedAgentIds.length > 0
             ? { selectedAgentIds: effectiveSelectedAgentIds }
             : {}),
-          contextSelection,
+          contextSelection: selection,
         }),
       });
       if (!genRes.ok) {
-        const body = (await genRes.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || `generate failed: HTTP ${genRes.status}`);
+        const body = (await genRes.json().catch(() => null)) as {
+          error?: string;
+          preview?: { blockingFindings?: unknown; warnings?: unknown };
+          Preview?: { BlockingFindings?: unknown; Warnings?: unknown };
+        } | null;
+        const blockingRaw =
+          body?.preview?.blockingFindings
+          ?? body?.Preview?.BlockingFindings
+          ?? [];
+        const warningRaw =
+          body?.preview?.warnings
+          ?? body?.Preview?.Warnings
+          ?? [];
+        // Gateway timeouts can drop a successful GeekAPI 202; recover if jobs already exist.
+        if (genRes.status === 502 || genRes.status === 504) {
+          const jobsRes = await fetch(`/api/gcc-v2/creates/${createId}/jobs`, { cache: "no-store" });
+          const jobsBody = (await jobsRes.json().catch(() => null)) as
+            | { id?: string; jobs?: Array<{ id?: string }> }
+            | Array<{ id?: string }>
+            | null;
+          const jobs = Array.isArray(jobsBody)
+            ? jobsBody
+            : Array.isArray(jobsBody?.jobs)
+              ? jobsBody.jobs
+              : [];
+          const recoveredJobId = jobs.map((job) => job.id).find((id): id is string => Boolean(id));
+          if (recoveredJobId) {
+            clearNewCreateDraft();
+            router.push(`/creates/${createId}?jobId=${recoveredJobId}`);
+            return;
+          }
+        }
+        const blockerText = Array.isArray(blockingRaw) && blockingRaw.length
+          ? ` Blockers: ${blockingRaw.map((b) => typeof b === "string" ? b : JSON.stringify(b)).join("; ")}`
+          : "";
+        throw new Error((body?.error || `generate failed: HTTP ${genRes.status}`) + blockerText);
       }
       const data = (await genRes.json()) as {
         jobId?: string;
@@ -990,7 +1088,7 @@ export function NewCreateForm({
       .filter((value) => alsoDrafts.has(value)),
   ];
   const compatibleAgents = (agentCatalog?.agents ?? []).filter((agent) =>
-    isCompatibleAgent(agent, selectedContentTypes),
+    isCompatibleAgent(agent, primaryDraft),
   );
   const producerAgents = compatibleAgents.filter((agent) => agent.role === "producer");
   const optionalAgents = compatibleAgents.filter((agent) =>
@@ -1001,14 +1099,20 @@ export function NewCreateForm({
   const usingBackendDefaultTeam = Boolean(agentCatalogError) && !agentCatalog;
   const producerSelectionReady = selectedProducerCount === 1 || usingBackendDefaultTeam;
   const teamReady = Boolean(resolvedTeam) || usingBackendDefaultTeam;
-  // A specialist checked under one format combination can stop applying once a format is added
-  // that it does not cover (e.g. SEO/AEO do not cover Ads or PDF); exclude it here so no stale,
-  // now-incompatible id reaches a resolve or generate request under a mismatched combination.
+  // Keep specialists that still apply to the primary; Also drafts omit non-applicable members at Generate.
   const effectiveSelectedAgentIds = usingBackendDefaultTeam
     ? []
     : selectedAgentIds.filter((id) => compatibleAgents.some((agent) => agent.id === id));
+  const attachmentsAwaitingCheck =
+    contextSelection.runAttachmentIds.length > 0 && contextPreview == null;
+  const contextBlocked = (contextPreview?.blockingFindings.length ?? 0) > 0;
+  const confirmContextBlocked =
+    contextUploadProcessing || attachmentsAwaitingCheck || contextBlocked;
   const creationBlockers = [
     contextUploadProcessing ? "An attachment is still being processed." : null,
+    attachmentsAwaitingCheck
+      ? "Attachments are on this run. Check context (or remove them) before Confirm — skipping Check does not ignore attachments."
+      : null,
     ...(contextPreview?.blockingFindings.map((finding) => finding.message) ?? []),
     resolvedSkillsLoading
       ? "The approved instruction bundle is still loading."
@@ -1423,9 +1527,9 @@ export function NewCreateForm({
             <fieldset className="mt-6">
               <legend className={labelClass}>Specialist agent team</legend>
               <p className="mt-1 text-xs text-[var(--cc-muted)]">
-                Choose exactly one producer. Add any compatible Marketing, SEO, and AEO contributors or reviewers.
-                A specialist must apply to every format below (main format plus every Also draft) — SEO and AEO
-                do not cover every format, so adding one can remove them from this list.
+                Choose exactly one producer for the main format. Add Marketing, SEO, and AEO when they
+                apply to that format — they stay on this create even if an Also draft does not use them.
+                Those specialists run only on formats they cover.
               </p>
               {agentCatalogError ? (
                 <p role="status" className="mt-2 text-xs text-amber-800">
@@ -1450,7 +1554,13 @@ export function NewCreateForm({
                     <span><strong>{agent.name}</strong><span className="block text-xs capitalize text-[var(--cc-muted)]">{agent.specialty} producer · {agent.version}</span></span>
                   </label>
                 ))}
-                {optionalAgents.map((agent) => (
+                {optionalAgents.map((agent) => {
+                  const covered = formatsCoveredBy(agent, selectedContentTypes);
+                  const skipped = formatsSkippedBy(agent, selectedContentTypes);
+                  const coverage = skipped.length === 0
+                    ? `Applies to all selected formats`
+                    : `Applies to ${covered.map(labelForContentType).join(", ") || "none"} · skips ${skipped.map(labelForContentType).join(", ")}`;
+                  return (
                   <label key={agent.id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${selectedAgentIds.includes(agent.id) ? "border-[var(--cc-accent)] bg-blue-50" : "border-[var(--cc-line)]"}`}>
                     <input
                       type="checkbox"
@@ -1460,9 +1570,14 @@ export function NewCreateForm({
                         current.includes(agent.id) ? current.filter((id) => id !== agent.id) : [...current, agent.id],
                       )}
                     />
-                    <span><strong>{agent.name}</strong><span className="block text-xs capitalize text-[var(--cc-muted)]">{agent.specialty} {agent.role} · {agent.version}</span></span>
+                    <span>
+                      <strong>{agent.name}</strong>
+                      <span className="block text-xs capitalize text-[var(--cc-muted)]">{agent.specialty} {agent.role} · {agent.version}</span>
+                      <span className="mt-1 block text-xs text-[var(--cc-muted)]">{coverage}</span>
+                    </span>
                   </label>
-                ))}
+                  );
+                })}
               </div>
               {agentCatalog && producerAgents.length === 0 ? <p role="alert" className="mt-2 text-xs text-red-700">No compatible published producer is available for these outputs.</p> : null}
             </fieldset>
@@ -1615,7 +1730,10 @@ export function NewCreateForm({
 
             <section className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950" aria-label="Resolved specialist team">
               <strong>Immutable specialist team</strong>
-              <p className="mt-1 text-xs">The backend resolves stable catalog IDs to immutable versions and pinned skills before execution IDs are created.</p>
+              <p className="mt-1 text-xs">
+                Pinned against the main format. Generate keeps the applicable subset on each Also draft
+                (specialists that do not cover a format are omitted there only).
+              </p>
               {usingBackendDefaultTeam ? (
                 <p role="status" className="mt-2 text-xs text-amber-900">
                   Specialist catalog is temporarily unavailable. Create will pin the backend&apos;s default published team.
@@ -1627,7 +1745,14 @@ export function NewCreateForm({
                 <div className="mt-3 rounded-md bg-white/70 p-3">
                   <p className="font-mono text-xs">Team {shortDigest(resolvedTeam.snapshotDigest)} · catalog {resolvedTeam.catalogVersion}</p>
                   <ol className="mt-2 space-y-2 text-xs">
-                    {resolvedTeam.agents.map((agent) => (
+                    {resolvedTeam.agents.map((agent) => {
+                      const catalogAgent = agentCatalog?.agents.find(
+                        (row) => row.id === agent.id || row.versionId === agent.versionId,
+                      );
+                      const skipped = catalogAgent
+                        ? formatsSkippedBy(catalogAgent, selectedContentTypes)
+                        : [];
+                      return (
                       <li key={agent.versionId || agent.id}>
                         <strong>{agent.name} {agent.version}</strong> · <span className="capitalize">{agent.specialty}</span> · <span className="font-mono">{shortDigest(agent.digest)}</span>
                         <span className="block">
@@ -1636,8 +1761,14 @@ export function NewCreateForm({
                             : `${agent.supportedStages.join(", ")}: ${agent.role}`}
                         </span>
                         <span className="block">Pinned skills: {agent.pinnedSkills.map((skill) => `${skill.name || skill.id} ${skill.version} (${shortDigest(skill.digest)})`).join(", ") || "none"}</span>
+                        {skipped.length > 0 ? (
+                          <span className="block text-[var(--cc-muted)]">
+                            Omitted from Also drafts: {skipped.map(labelForContentType).join(", ")}
+                          </span>
+                        ) : null}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ol>
                 </div>
               ) : null}
@@ -1674,7 +1805,7 @@ export function NewCreateForm({
               {toolsPreflight?.toolsFound ? (
                 <button
                   type="button"
-                  disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
+                  disabled={busy || confirmContextBlocked || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -1684,7 +1815,7 @@ export function NewCreateForm({
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || contextUploadProcessing || (contextPreview?.blockingFindings.length ?? 0) > 0 || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
+                    disabled={busy || confirmContextBlocked || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />

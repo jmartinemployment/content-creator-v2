@@ -362,12 +362,23 @@ export function normalizeAgentAdminWorkspace(value: unknown): AgentAdminWorkspac
 }
 
 /**
- * A specialist is compatible only if it applies to every selected content type, not merely one of
- * them: the backend resolves and pins one team across all of a create's formats (primary plus every
- * "Also draft"), and rejects a team member that does not apply to all of them.
+ * A specialist is shown when it applies to the primary format. Create pins the selection against
+ * primary; Generate resolves the applicable subset per Also-draft job (SEO/AEO may skip email/social).
  */
-export function isCompatibleAgent(agent: AgentSummary, contentTypes: string[]): boolean {
+export function isCompatibleAgent(agent: AgentSummary, primaryContentType: string): boolean {
   return agent.status.toLowerCase() === "published"
     && (agent.supportedContentTypes.length === 0
-      || contentTypes.every((type) => agent.supportedContentTypes.includes(type)));
+      || agent.supportedContentTypes.includes(primaryContentType));
+}
+
+/** Selected formats this specialist covers (empty supportedContentTypes = all). */
+export function formatsCoveredBy(agent: AgentSummary, contentTypes: string[]): string[] {
+  if (agent.supportedContentTypes.length === 0) return [...contentTypes];
+  return contentTypes.filter((type) => agent.supportedContentTypes.includes(type));
+}
+
+/** Selected formats this specialist will be omitted from at Generate. */
+export function formatsSkippedBy(agent: AgentSummary, contentTypes: string[]): string[] {
+  const covered = new Set(formatsCoveredBy(agent, contentTypes));
+  return contentTypes.filter((type) => !covered.has(type));
 }
