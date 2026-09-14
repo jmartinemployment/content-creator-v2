@@ -166,6 +166,11 @@ export type RagCitation = {
   crawlType?: string | null;
   /** SHA-256 of source text when provided. */
   sourceDigest?: string | null;
+  /**
+   * Provenance rights on the source page/chunk. Missing ≡ `unknown`.
+   * Ship-ready requires `consented` | `licensed` on every displayed citation.
+   */
+  sourceRights?: "consented" | "licensed" | "unknown" | "prohibited" | string | null;
   /** True only after quote↔source verify succeeds. */
   verified?: boolean;
   coordinates?: {

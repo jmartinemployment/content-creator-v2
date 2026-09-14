@@ -77,7 +77,7 @@ test("Knowledge Add GSC queries creates a version from an owner connection", asy
   await openAuthenticated(page, "/brand-sources");
   await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
   await page.getByRole("button", { name: "Connect GSC" }).click();
-  await expect(page.getByRole("status")).toContainText("Connected GSC property");
+  await expect(page.getByRole("status")).toContainText("Stub (not connected): GSC");
   await expect(page.getByLabel("GSC connection")).toContainText("sc-domain:example.test");
   await page.getByRole("button", { name: "Add GSC queries to Knowledge" }).click();
   await expect(page.getByRole("status")).toContainText("Imported GSC queries from sc-domain:example.test");
@@ -97,7 +97,7 @@ test("Knowledge Add Drive file creates a version from an owner connection", asyn
   await openAuthenticated(page, "/brand-sources");
   await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
   await page.getByRole("button", { name: "Connect Drive" }).click();
-  await expect(page.getByRole("status")).toContainText("Connected Drive account");
+  await expect(page.getByRole("status")).toContainText("Stub (not connected): Drive");
   await expect(page.getByLabel("Drive connection")).toContainText("drive@example.test");
   await page.getByLabel("Drive file id or URL").fill(
     "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
@@ -121,7 +121,7 @@ test("Knowledge Add SharePoint file creates a version from an owner connection",
   await openAuthenticated(page, "/brand-sources");
   await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
   await page.getByRole("button", { name: "Connect SharePoint" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Connected SharePoint account" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Stub (not connected): SharePoint" })).toBeVisible();
   await expect(page.getByLabel("SharePoint connection")).toContainText("sharepoint@example.test");
   await page.getByLabel("SharePoint item id or URL").fill(
     "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",

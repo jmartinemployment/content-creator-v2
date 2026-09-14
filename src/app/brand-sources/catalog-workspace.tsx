@@ -17,6 +17,11 @@ import {
 } from "./context-contract";
 import { uploadContextFile } from "./direct-upload";
 import {
+  connectorOAuthUnavailableError,
+  connectorStubsAllowed,
+  stubNotConnectedNotice,
+} from "@/app/lib/connector-stubs";
+import {
   EMPTY_STYLE_GUIDE_POLICY,
   linesFromMultiline,
   normalizeStyleGuidePolicy,
@@ -1645,6 +1650,9 @@ export function CatalogWorkspace() {
       if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
         throw new Error(oauthBody?.error || `GSC OAuth start failed (HTTP ${oauthResponse.status}).`);
       }
+      if (!connectorStubsAllowed()) {
+        throw new Error(connectorOAuthUnavailableError("GSC"));
+      }
 
       const response = await fetch("/api/gcc-v2/gsc/connections", {
         method: "POST",
@@ -1664,7 +1672,7 @@ export function CatalogWorkspace() {
       const stub = body?.connection?.status === "stub";
       setNotice(
         stub
-          ? `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"} (stub).`
+          ? stubNotConnectedNotice("GSC", `property ${body?.connection?.siteUrl || "sc-domain:example.test"}`)
           : `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`,
       );
     } catch (cause) {
@@ -1723,6 +1731,9 @@ export function CatalogWorkspace() {
       if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
         throw new Error(oauthBody?.error || `Drive OAuth start failed (HTTP ${oauthResponse.status}).`);
       }
+      if (!connectorStubsAllowed()) {
+        throw new Error(connectorOAuthUnavailableError("Drive"));
+      }
 
       const response = await fetch("/api/gcc-v2/drive/connections", {
         method: "POST",
@@ -1741,7 +1752,7 @@ export function CatalogWorkspace() {
       setDriveConnectionId(connectionId);
       setNotice(
         body?.connection?.status === "stub"
-          ? `Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"} (stub).`
+          ? stubNotConnectedNotice("Drive", `account ${body?.connection?.accountLabel || "drive@example.test"}`)
           : `Connected Drive account ${body?.connection?.accountLabel || "drive@example.test"}.`,
       );
     } catch (cause) {
@@ -1806,6 +1817,9 @@ export function CatalogWorkspace() {
       if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
         throw new Error(oauthBody?.error || `SharePoint OAuth start failed (HTTP ${oauthResponse.status}).`);
       }
+      if (!connectorStubsAllowed()) {
+        throw new Error(connectorOAuthUnavailableError("SharePoint"));
+      }
 
       const response = await fetch("/api/gcc-v2/sharepoint/connections", {
         method: "POST",
@@ -1824,7 +1838,7 @@ export function CatalogWorkspace() {
       setSharePointConnectionId(connectionId);
       setNotice(
         body?.connection?.status === "stub"
-          ? `Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"} (stub).`
+          ? stubNotConnectedNotice("SharePoint", `account ${body?.connection?.accountLabel || "sharepoint@example.test"}`)
           : `Connected SharePoint account ${body?.connection?.accountLabel || "sharepoint@example.test"}.`,
       );
     } catch (cause) {
@@ -1977,7 +1991,7 @@ export function CatalogWorkspace() {
                         {gscConnections.map((connection) => (
                           <option key={connection.id} value={connection.id}>
                             {connection.siteUrl || connection.id}
-                            {connection.status === "stub" ? " (stub)" : ""}
+                            {connection.status === "stub" ? " (stub · not connected)" : ""}
                           </option>
                         ))}
                       </select>
@@ -2033,7 +2047,7 @@ export function CatalogWorkspace() {
                         {driveConnections.map((connection) => (
                           <option key={connection.id} value={connection.id}>
                             {connection.accountLabel || connection.id}
-                            {connection.status === "stub" ? " (stub)" : ""}
+                            {connection.status === "stub" ? " (stub · not connected)" : ""}
                           </option>
                         ))}
                       </select>
@@ -2101,7 +2115,7 @@ export function CatalogWorkspace() {
                         {sharePointConnections.map((connection) => (
                           <option key={connection.id} value={connection.id}>
                             {connection.accountLabel || connection.id}
-                            {connection.status === "stub" ? " (stub)" : ""}
+                            {connection.status === "stub" ? " (stub · not connected)" : ""}
                           </option>
                         ))}
                       </select>

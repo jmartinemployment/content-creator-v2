@@ -177,8 +177,8 @@ export function WorkspaceSection({
         ) : null}
         <span className="text-xs text-[var(--cc-muted)]">{item.wordCount} words</span>
         {item.usedFallbackStub ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-            Draft needs review
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+            Fallback stub — not live draft
           </span>
         ) : null}
       </div>

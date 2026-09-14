@@ -2,6 +2,8 @@
 
 Playwright runs the Next.js app locally and calls **production GeekOAuth + GeekAPI** (or overrides below). There is no in-repo mock platform.
 
+Release smokes and evidence quality live in [`plans/master-plan.md`](../../plans/master-plan.md) §7 / P2 — these Playwright tests are local/CI helpers, not a substitute for Jeff’s signed-in prod matrix.
+
 ## Required
 
 ```bash

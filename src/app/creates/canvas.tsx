@@ -1114,20 +1114,27 @@ export function Canvas({ createId, jobId }: CanvasProps) {
   }
 
   const hasReadinessFailures =
-    (report?.seoChecks?.some((c) => !c.passed) ?? false)
-    || (report?.geoChecks?.some((c) => !c.passed) ?? false);
+    (report?.seoChecks?.some((c) => !c.passed) ?? false);
+
+  const displayedCitations = useMemo(() => {
+    const fromSections = Array.from(sections.values()).flatMap((section) => section.citations);
+    return [...jobCitations, ...fromSections];
+  }, [jobCitations, sections]);
 
   const outstandingBlockers = useMemo(() => {
     const fromReport = report
-      ? listOutstandingBlockers({
-        ...report,
-        citationEvidenceGaps: report.citationEvidenceGaps?.length
-          ? report.citationEvidenceGaps
-          : citationEvidenceGaps,
-      })
+      ? listOutstandingBlockers(
+        {
+          ...report,
+          citationEvidenceGaps: report.citationEvidenceGaps?.length
+            ? report.citationEvidenceGaps
+            : citationEvidenceGaps,
+        },
+        { citations: displayedCitations },
+      )
       : citationEvidenceGaps.map((gap) => `Citation evidence · ${gap}`);
     return fromReport;
-  }, [report, citationEvidenceGaps]);
+  }, [report, citationEvidenceGaps, displayedCitations]);
 
   async function runCanvasAction(
     sectionKey: string,
@@ -1255,6 +1262,24 @@ export function Canvas({ createId, jobId }: CanvasProps) {
     (outline !== null || editableSections.length > 0);
   const showApproveOutline = !showBrandKitPanel && awaitingOutlineApproval;
   const showAddAdvanceOutline = showOutlinePanel && supportsAdvanceOutlineRows(contentType);
+  const statusBadgeLabel =
+    status === "failed"
+      ? "Needs attention"
+      : status === "ready"
+        ? report?.shipReady === false
+          ? "Ready · not ship-ready"
+          : report?.shipReady === true
+            ? "Ready · ship-ready"
+            : "Ready"
+        : "In progress";
+  const statusBadgeClass =
+    status === "ready" && report?.shipReady === true
+      ? "bg-green-50 text-green-700"
+      : status === "ready"
+        ? "bg-amber-50 text-amber-900"
+        : status === "failed"
+          ? "bg-red-50 text-red-700"
+          : "bg-blue-50 text-blue-700";
   const retryStage = provenance?.stage ?? stage ?? "";
   const retryModels =
     approvedStageModels[retryStage] ??
@@ -1279,10 +1304,8 @@ export function Canvas({ createId, jobId }: CanvasProps) {
             Writing for: <span className="font-medium">{siteUrl}</span>
           </p>
         ) : null}
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-          status === "ready" ? "bg-green-50 text-green-700" : status === "failed" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"
-        }`}>
-          {status === "ready" ? "Ready" : status === "failed" ? "Needs attention" : "In progress"}
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass}`}>
+          {statusBadgeLabel}
         </span>
         {orderedSections.length > 0 ? (
           <button

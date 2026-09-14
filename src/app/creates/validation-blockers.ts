@@ -1,8 +1,19 @@
 import type { ValidationReportView } from "@/app/creates/canvas-types";
+import type { RagCitation } from "@/app/creates/rag-contract";
+import { sourceRightsBlocksShip, sourceRightsGapLabel } from "@/app/creates/source-rights";
+
+export type OutstandingBlockerOptions = {
+  /** Displayed citations to check for sourceRights ship blocks (P1.5). */
+  citations?: RagCitation[];
+};
 
 /** Human-readable reasons `shipReady` is still false or Fix readiness left work undone. */
-export function listOutstandingBlockers(report: ValidationReportView): string[] {
+export function listOutstandingBlockers(
+  report: ValidationReportView,
+  options?: OutstandingBlockerOptions,
+): string[] {
   const items: string[] = [];
+
   if (report.overlapHits.length > 0) {
     items.push(
       `${report.overlapHits.length} overlap hit${report.overlapHits.length === 1 ? "" : "s"} — duplicate problem/solution across H2s`,
@@ -20,10 +31,7 @@ export function listOutstandingBlockers(report: ValidationReportView): string[] 
   if (seoFails > 0) {
     items.push(`${seoFails} SEO check${seoFails === 1 ? "" : "s"} still failing`);
   }
-  const geoFails = report.geoChecks?.filter((c) => !c.passed).length ?? 0;
-  if (geoFails > 0) {
-    items.push(`${geoFails} GEO check${geoFails === 1 ? "" : "s"} still failing`);
-  }
+  // GEO checks are advisory only — never list as ship blockers (master-plan / architecture).
 
   const ragIssues = report.validation?.issues ?? [];
   for (const issue of ragIssues.slice(0, 8)) {
@@ -47,6 +55,15 @@ export function listOutstandingBlockers(report: ValidationReportView): string[] 
     items.push(
       `${citationGaps.length - 8} more citation evidence gap${citationGaps.length - 8 === 1 ? "" : "s"}`,
     );
+  }
+
+  const rightsSeen = new Set<string>();
+  for (const citation of options?.citations ?? []) {
+    if (!sourceRightsBlocksShip(citation.sourceRights)) continue;
+    const label = sourceRightsGapLabel(citation);
+    if (rightsSeen.has(label)) continue;
+    rightsSeen.add(label);
+    items.push(label);
   }
 
   if (

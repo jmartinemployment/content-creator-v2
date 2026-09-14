@@ -38,6 +38,11 @@ import {
   leaveTaskAgentRun,
   onTaskAgentRunEvent,
 } from "@/app/task-agents/task-agent-run-hub";
+import {
+  connectorOAuthUnavailableError,
+  connectorStubsAllowed,
+  stubNotConnectedNotice,
+} from "@/app/lib/connector-stubs";
 
 export type TaskAgentDetail = {
   contractVersion: string;
@@ -495,8 +500,11 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       if (oauthResponse.status !== 503 && oauthResponse.status !== 404) {
         throw new Error(oauthBody?.error || `GSC OAuth start failed (HTTP ${oauthResponse.status}).`);
       }
+      if (!connectorStubsAllowed()) {
+        throw new Error(connectorOAuthUnavailableError("GSC"));
+      }
 
-      // Local/e2e fallback when Google OAuth env is unset: register a CC-owned stub connection.
+      // Local/e2e only: register a CC-owned stub connection (never presented as Connected).
       const response = await fetch("/api/gcc-v2/gsc/connections", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -519,7 +527,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
       }));
       setGscNotice(
         body?.connection?.status === "stub"
-          ? `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"} (stub).`
+          ? stubNotConnectedNotice("GSC", `property ${body?.connection?.siteUrl || "sc-domain:example.test"}`)
           : `Connected GSC property ${body?.connection?.siteUrl || "sc-domain:example.test"}.`,
       );
     } catch (cause) {

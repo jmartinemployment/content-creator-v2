@@ -181,7 +181,7 @@ test("query planner loads observed GSC queries with provenance", async ({ page, 
   await openAuthenticated(page, "/task-agents/query-planner");
   await expect(page.getByRole("heading", { name: "Query Planner" })).toBeVisible();
   await page.getByRole("button", { name: "Connect GSC property" }).click();
-  await expect(page.getByRole("status").filter({ hasText: /Connected GSC property/ })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /Stub \(not connected\): GSC/ })).toBeVisible();
   await page.waitForFunction(() => {
     const params = new URL(location.href).searchParams;
     return ["gsc", "connectionId", "siteUrl", "message"].every((k) => !params.has(k));

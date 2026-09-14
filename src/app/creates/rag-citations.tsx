@@ -1,4 +1,5 @@
 import type { RagCitation } from "./rag-contract";
+import { normalizeSourceRights, sourceRightsBlocksShip } from "./source-rights";
 
 function isVerified(citation: RagCitation): boolean {
   return citation.verified === true;
@@ -10,6 +11,7 @@ export function SectionCitations({ citations }: { citations: RagCitation[] }) {
   const verified = citations.filter(isVerified);
   const unverified = citations.filter((c) => !isVerified(c));
   const allVerified = unverified.length === 0;
+  const rightsBlocked = citations.filter((c) => sourceRightsBlocksShip(c.sourceRights));
 
   return (
     <div className="mt-3 border-t border-[var(--cc-line)] pt-3" aria-label="Citations">
@@ -20,10 +22,17 @@ export function SectionCitations({ citations }: { citations: RagCitation[] }) {
             {verified.length} verified · {unverified.length} need review
           </span>
         ) : null}
+        {rightsBlocked.length > 0 ? (
+          <span className="ml-2 font-normal text-red-700">
+            {rightsBlocked.length} sourceRights block ship
+          </span>
+        ) : null}
       </p>
       <ul className="mt-2 flex flex-col gap-2">
         {citations.map((citation, index) => {
           const ok = isVerified(citation);
+          const rights = normalizeSourceRights(citation.sourceRights);
+          const rightsOk = !sourceRightsBlocksShip(citation.sourceRights);
           return (
             <li key={`${citation.pageId ?? citation.url}-${index}`} className="text-xs">
               <blockquote className="border-l-2 border-[var(--cc-accent)] pl-2 italic">
@@ -40,6 +49,11 @@ export function SectionCitations({ citations }: { citations: RagCitation[] }) {
               <span className={`ml-2 ${ok ? "text-[var(--cc-muted)]" : "font-semibold text-amber-800"}`}>
                 {ok ? "verified" : citation.verified === false ? "not verified" : "unverified"}
                 {citation.crawlType ? ` · ${citation.crawlType}` : ""}
+              </span>
+              <span
+                className={`ml-2 ${rightsOk ? "text-[var(--cc-muted)]" : "font-semibold text-red-700"}`}
+              >
+                sourceRights:{rights}
               </span>
               {citation.assetVersionId || citation.coordinates ? (
                 <span className="mt-1 block text-[var(--cc-muted)]">

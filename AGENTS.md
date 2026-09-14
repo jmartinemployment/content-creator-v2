@@ -1,3 +1,17 @@
+# Agent guidance — content-creator-v2
+
+**Correctness over expediency. Always. No exceptions.**
+
+| Authority | Path |
+|-----------|------|
+| Sole release-plan | [`plans/master-plan.md`](plans/master-plan.md) |
+| Architecture contracts | [`architecture.md`](architecture.md) |
+| Non-negotiables + honesty | [`.cursor/rules/`](.cursor/rules/) (alwaysApply) |
+
+Before changing Create, RAG clients, BFF, or Canvas: read master-plan Non-negotiables and §Kill switch. Do not invent parallel plans, success-shaped stubs, timer polling for job status, or release-ready claims while §7 is open.
+
+RAG in this platform is dual-half (Library retrieval/verify + Generate via Geek-Crawler-Rag) — see `.cursor/rules/geek-crawler-rag.mdc`. Creates stay under GeekAPI `ContentCreatorV2/*` and UI `/creates/*`.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

@@ -2,19 +2,29 @@
 
 **Updated:** 2026-09-14  
 **Accountable owner:** Jeff Martin  
-**Platform map:** [architecture.md](../architecture.md) (authoritative for architecture contracts)
+**Platform map:** [architecture.md](../architecture.md) (authoritative for architecture contracts)  
+**Agent rules:** [`.cursor/rules/`](../.cursor/rules/) — mirrored from **Non-negotiables** (and P0 honesty); sync when this file’s policy changes
 
 ### Status (read this first)
 
 | | |
 |--|--|
-| **Where we are** | M2/M3 shipped; **P0–P1.5 eng impl landed locally** (A1–A4, partner-mention, sourceRights) — **not** release-ready until Jeff verifies §7 + P2 smokes |
+| **Where we are** | M2/M3 shipped; **P0–P1.5 eng impl landed locally**; **Create writer = GeekAPI `gcc-create-library.v1`** (RAG = query/library only — never `/v1/generate` for Create) — **not** release-ready until Jeff verifies §7 + P2 smokes |
 | **Goal** | Signed-in prod can ship citeable `blog` through Create → Canvas without success-shaped lies |
 | **Surfaces** | Phi `https://content-creator-v2-phi.vercel.app` · GeekAPI `https://api.geekatyourspot.com` |
 | **Decision date** | Release-ready yes/no by **2026-09-28** (slip only with a dated note here) |
 | **Kill switch** | `GCC_V2_CITEABLE_CREATE_V1` (default ON) — see §Kill switch |
 | **Seed** | ApprovalMax `04fbbd9c-6b11-478d-98bf-13f2377a0d7a` (248 chunks); Plooto OK; avoid Rytr |
 | **Live tracker** | **§7** |
+
+### Create drafting contract (locked 2026-09-14)
+
+| Role | Contract |
+|------|----------|
+| **RAG** | **Library only** (definition): `/v1/query` + page Markdown verify. RAG does not draft Create. |
+| **GeekAPI** | Canonical Create writer: `CreateLibraryDraft=true`, provenance `gcc-create-library.v1`. Fail closed on empty/failed retrieval. |
+| **Forbidden** | SoftDisabled / one-shot / capabilities negotiation as a citeable Create success path. |
+| **Naming** | `rag-generate.v2` / `rag-generate.v3` are legacy **producer executor IDs** on Geek-Crawler-Rag `/v1/generate` — **not** the product definition of RAG. Do not use them for Create drafting; do not describe Create writing as “RAG generate.” |
 
 **Authority:** This file is the **sole release-plan and release-decision record**. Referenced specifications (`architecture.md`, Appendices A–E, deployed contracts, linked evidence) remain authoritative for their stated contracts. Logs/tests/job artifacts are evidence — not competing plans.
 
@@ -70,7 +80,7 @@ Job id alone is **invalid** evidence.
 |----|------|---------------|-----------|
 | **A1** | Empty refresh token ≠ stub | GSC/Drive/SharePoint connectors + Knowledge + controllers | Fail closed unless `status=="stub"` **and** stubs allowed |
 | **A2** | RAG fail ≠ empty success | `HttpGeekCrawlerRagClient`; Create PLAN callers | Typed error; never empty-Pages-as-success |
-| **A3** | Citeable soft-disable honesty | `RagGenerateService` | Soft-disable/one-shot ≠ citeable success; Create `RequireCiteable=true` |
+| **A3** | Citeable soft-disable honesty | `RagGenerateService` | Soft-disable/one-shot ≠ citeable success; Create uses `CreateLibraryDraft` (`gcc-create-library.v1`), never SoftDisabled success |
 | **A4** | Acceptance tests | `GccV2Fallback*` / new | A1–A3 CI green |
 
 **Performer:** eng · **Verifier:** Jeff · **Target:** 2026-09-21
@@ -178,7 +188,7 @@ Job id alone is **invalid** evidence.
 | R8 | Partner-mention gate | Fixture draft + VALIDATE; gap string exact |
 | R9 | No offsets | Quote/digest verifies |
 | R10 | Corpus usable | PLAN ≥1 usable source |
-| **R11** | Kill switch OFF | Set `GCC_V2_CITEABLE_CREATE_V1=false` on GeekAPI (Jeff); complete a create: `jobStatus` may be Ready, `shipReady=false`, `validationMode=degraded`, Canvas **unavoidable** degraded-provenance banner; restore flag ON after. Evidence includes parse matrix unset/true/false/0/off |
+| **R11** | Kill switch OFF | Set `GCC_V2_CITEABLE_CREATE_V1=false` on GeekAPI (Jeff); attempt Create citeable path: **fail closed** (start rejected **or** terminal `failed` with explicit citeable-disabled error) — **never** Ready with ship gates skipped; restore flag ON after. Evidence includes parse matrix unset/true/false/0/off |
 
 Fill Env / SHAs / date / Evidence pack / Job id / Result in §7 (or attach pack links there).
 
@@ -203,10 +213,12 @@ Never call “M2/M3 complete” while gate open.
 |-------|------|
 | **Parse** | ON: unset, `true`, `1`, `on` (case-insensitive). OFF: `false`, `0`, `off`. Other values → treat as ON and log warning |
 | **Who** | Jeff only on Railway GeekAPI prod; date+reason in Evidence |
-| **OFF behavior** | Skip quote-verify, section-coverage, partner-mention, and sourceRights ship gates in VALIDATE (degraded mode) |
-| **Invariants** | `jobStatus: Ready` = stages completed; `shipReady: false` whenever `validationMode: degraded` **or** any Appendix B failure; `validationMode: citeable \| degraded`; Canvas **always** shows unavoidable degraded-provenance banner when OFF |
-| **Release** | OFF **cannot** make program release-ready; degraded Ready ≠ Appendix B ship-ready |
-| **Tests** | Unit parse matrix unset/true/false/0/off; R11 smoke |
+| **OFF behavior** | **Fail closed.** Citeable Create MUST NOT skip quote-verify, section-coverage, partner-mention, or `sourceRights` and still succeed. Prefer: reject Create start **or** terminal job `failed` with an explicit “citeable VALIDATE disabled” error. **Forbidden:** Ready / soft-success / “degraded mode” while ship gates are skipped (that is a fallback) |
+| **Invariants** | No `validationMode=degraded`. No success-shaped path when OFF. `shipReady` remains Appendix B only when citeable VALIDATE actually ran with gates ON |
+| **Release** | OFF **cannot** make the program release-ready; OFF is an emergency stop, not an alternate ship path |
+| **Tests** | Unit parse matrix unset/true/false/0/off; R11 smoke (fail-closed, not Ready-with-skipped-gates) |
+
+**Impl note (2026-09-14):** Kill switch OFF is fail closed in GeekAPI VALIDATE for citeable content types (throws; job fails). Do not restore skip-gates Ready.
 
 ---
 
@@ -287,6 +299,8 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 ## Non-negotiables
 
+**Cursor mirror:** `.cursor/rules/master-plan-nonnegotiables.mdc` (and honesty rules) — sync from this section when it changes.
+
 1. Creates-canonical only.  
 2. Tools = partners.  
 3. No success-shaped stubs / silent required-evidence fallbacks.  
@@ -297,7 +311,7 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 8. Foreign `runId` → safe-fail only.  
 9. Ship-ready = Appendix B only (`jobStatus` Ready ≠ `shipReady`).  
 10. Source rights via `sourceRights` (P1.5).  
-11. Kill switch = degraded mode, not release bypass.  
+11. Kill switch `GCC_V2_CITEABLE_CREATE_V1` OFF = **fail closed** (emergency stop) — never a degraded Ready / skipped-gates fallback.  
 
 ---
 
@@ -323,7 +337,7 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 6. No unverified labeled verified  
 7. **Partner-mention gate:** only for sections whose scanned body hits a named partner token (§P1) — not “brief lists partners” alone; **not** sentence-level claim verification  
 8. **sourceRights** on every displayed citation ∈ {`consented`,`licensed`}; `unknown`/`prohibited`/missing → not shipReady (P1.5)  
-9. `validationMode=citeable` for release claims (degraded ≠ releasable)  
+9. Citeable VALIDATE ran with gates ON for any release / shipReady claim (kill switch OFF = fail closed, not a releasable alternate path)  
 
 ---
 
