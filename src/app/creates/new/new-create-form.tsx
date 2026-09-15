@@ -68,6 +68,15 @@ import {
 } from "@/app/brand-sources/context-contract";
 import { humanizeContextBlocks } from "./humanize-context-blocks";
 import { ContextSelector } from "./context-selector";
+import {
+  clearNewCreateDraft,
+  consumeNewCreateResumeIntent,
+  draftHasProgress,
+  loadNewCreateDraft,
+  saveNewCreateDraft,
+  type NewCreateDraftV1,
+  type NewCreateWizardStep,
+} from "./new-create-draft";
 
 /** Empty optional GUID fields must be omitted so Generate can auto-create brand kit / skip gates. */
 function sanitizeContextSelection(selection: ContextSelectionRequest): ContextSelectionRequest {
@@ -95,17 +104,8 @@ const labelClass = "text-sm font-medium text-[var(--cc-ink)]";
 const fieldClass = "flex flex-col gap-1.5";
 
 const CRAWL_WAIT_MS = 15 * 60 * 1000;
-/** Persist in-progress new-create wizard so a hard refresh resumes instead of wiping state. */
-const NEW_CREATE_DRAFT_KEY = "gcc-v2-new-create-draft";
 
-type Step =
-  | "source"
-  | "analyzing"
-  | "goal"
-  | "audience"
-  | "research"
-  | "outputs"
-  | "review";
+type Step = NewCreateWizardStep;
 
 const WIZARD_STEPS = [
   { key: "source", label: "Source" },
@@ -135,13 +135,14 @@ const FORMAT_GROUPS = [
   },
 ] as const;
 
-function clearNewCreateDraft(): void {
-  try {
-    sessionStorage.removeItem(NEW_CREATE_DRAFT_KEY);
-  } catch {
-    /* ignore */
-  }
-}
+const RESTORABLE_STEPS = new Set<Step>([
+  "source",
+  "goal",
+  "audience",
+  "research",
+  "outputs",
+  "review",
+]);
 
 async function loadSectionFromCrawlRun(
   runId: string,
@@ -187,22 +188,32 @@ type PartnerToolsPreflight = {
   siteHierarchy?: SiteHierarchy | null;
 };
 
-function parseOperatorTools(text: string): Array<{ name?: string; url: string }> {
+/**
+ * `Name | https://… | perk` — one partner per line. The optional third field carries an
+ * affiliate perk (discount code, extended trial, bonus). Perks are negotiated with the vendor and
+ * appear nowhere on their site, so no crawl can ever extract them; they are operator-asserted and
+ * travel labelled as such, never as verified evidence.
+ */
+function parseOperatorTools(text: string): Array<{ name?: string; url: string; perk?: string }> {
   return text
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const pipe = line.indexOf("|");
-      if (pipe >= 0) {
-        const name = line.slice(0, pipe).trim();
-        const url = line.slice(pipe + 1).trim();
-        if (!url) return null;
-        return name ? { name, url } : { url };
+      const parts = line.split("|").map((part) => part.trim());
+      if (parts.length === 1) {
+        return parts[0] ? { url: parts[0] } : null;
       }
-      return { url: line };
+      const [name, url, ...rest] = parts;
+      if (!url) return null;
+      const perk = rest.join(" | ").trim();
+      return {
+        ...(name ? { name } : {}),
+        url,
+        ...(perk ? { perk } : {}),
+      };
     })
-    .filter((row): row is { name?: string; url: string } => row !== null);
+    .filter((row): row is { name?: string; url: string; perk?: string } => row !== null);
 }
 
 function primaryDraftHelperCopy(primary: PrimaryDraftType): string {
@@ -336,6 +347,8 @@ export function NewCreateForm({
   const [resolvedTeamLoading, setResolvedTeamLoading] = useState(false);
   const [resolvedTeamError, setResolvedTeamError] = useState<string | null>(null);
   const [savedProjectSites, setSavedProjectSites] = useState<SavedProjectSite[]>([]);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [restoredDraftNotice, setRestoredDraftNotice] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -343,6 +356,116 @@ export function NewCreateForm({
       void hubRef.current?.stop();
     };
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resumeFromQuery = params.get("resume") === "1";
+    const resumeFromFlag = consumeNewCreateResumeIntent();
+    const shouldResume = resumeFromQuery || resumeFromFlag;
+    const draft = shouldResume ? loadNewCreateDraft() : null;
+
+    if (draft && draftHasProgress(draft)) {
+      const nextStep = RESTORABLE_STEPS.has(draft.step) ? draft.step : "source";
+      setStep(nextStep === "analyzing" ? "source" : nextStep);
+      setSiteUrlInput(draft.siteUrlInput);
+      setSiteUrl(draft.siteUrl);
+      setForceRecrawl(Boolean(draft.forceRecrawl));
+      setProjectSiteCrawlRunId(draft.projectSiteCrawlRunId);
+      setSection(draft.section);
+      setTitle(draft.title);
+      setPrimaryDraft(draft.primaryDraft);
+      setAlsoDrafts(new Set(draft.alsoDrafts));
+      setTargetKeyword(draft.targetKeyword);
+      setOperatorToolsText(draft.operatorToolsText);
+      setPaaQuestionsText(draft.paaQuestionsText);
+      setCompetitorUrlsText(draft.competitorUrlsText);
+      setWritingNotes(draft.writingNotes);
+      setPrimaryIntent(draft.primaryIntent);
+      setBuyingStage(draft.buyingStage);
+      setToneOfVoice(draft.toneOfVoice);
+      setTargetEntities(draft.targetEntities);
+      setSelectedTemplateIds(draft.selectedTemplateIds);
+      setModelPolicy(draft.modelPolicy);
+      setContextSelection(draft.contextSelection);
+      setPendingCreateId(draft.pendingCreateId);
+      setSiteHierarchy(draft.siteHierarchy);
+      setSelectedAgentIds(draft.selectedAgentIds);
+      setRestoredDraftNotice(true);
+    } else {
+      clearNewCreateDraft();
+    }
+
+    if (resumeFromQuery) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resume");
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, "", next);
+    }
+
+    setDraftHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+    const draft: NewCreateDraftV1 = {
+      version: 1,
+      step,
+      siteUrlInput,
+      siteUrl,
+      forceRecrawl,
+      projectSiteCrawlRunId,
+      section,
+      title,
+      primaryDraft,
+      alsoDrafts: Array.from(alsoDrafts),
+      targetKeyword,
+      operatorToolsText,
+      paaQuestionsText,
+      competitorUrlsText,
+      writingNotes,
+      primaryIntent,
+      buyingStage,
+      toneOfVoice,
+      targetEntities,
+      selectedTemplateIds,
+      modelPolicy,
+      contextSelection,
+      pendingCreateId,
+      siteHierarchy,
+      selectedAgentIds,
+    };
+    if (!draftHasProgress(draft)) {
+      clearNewCreateDraft();
+      return;
+    }
+    saveNewCreateDraft(draft);
+  }, [
+    draftHydrated,
+    step,
+    siteUrlInput,
+    siteUrl,
+    forceRecrawl,
+    projectSiteCrawlRunId,
+    section,
+    title,
+    primaryDraft,
+    alsoDrafts,
+    targetKeyword,
+    operatorToolsText,
+    paaQuestionsText,
+    competitorUrlsText,
+    writingNotes,
+    primaryIntent,
+    buyingStage,
+    toneOfVoice,
+    targetEntities,
+    selectedTemplateIds,
+    modelPolicy,
+    contextSelection,
+    pendingCreateId,
+    siteHierarchy,
+    selectedAgentIds,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -784,11 +907,6 @@ export function NewCreateForm({
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    // The wizard keeps no cross-visit draft: wipe anything an older build left behind.
-    clearNewCreateDraft();
-  }, []);
 
   function buildBriefPayload() {
     const also = alsoDraftOptionsFor(primaryDraft)
@@ -1340,12 +1458,10 @@ export function NewCreateForm({
                 type="button"
                 onClick={() => {
                   setStep("source");
-                  setSection(null);
-                  setProjectSiteCrawlRunId(null);
                 }}
                 className="ml-2 font-semibold underline"
               >
-                Change
+                Change site
               </button>
             </div>
             {sourceLibraryStatus !== "idle" || sourceLibraryError ? (
@@ -1497,14 +1613,14 @@ export function NewCreateForm({
             <div className={`${fieldClass} mt-5`}>
               <label className={labelClass} htmlFor="operatorTools">Partner tool URLs (required)</label>
               <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
-                Partners you sell or name. Format: <span className="font-medium">Name | https://…</span> (one per line). An indexed partner crawl run is always required.
+                Partners you sell or name. Format: <span className="font-medium">Name | https://… | perk</span> (one per line). The perk is optional — a discount code, extended trial or bonus your audience can use. An indexed partner crawl run is always required.
               </p>
               <textarea
                 id="operatorTools"
                 className={`${inputClass} min-h-24`}
                 value={operatorToolsText}
                 onChange={(event) => setOperatorToolsText(event.target.value)}
-                placeholder={"ApprovalMax | https://www.approvalmax.com\nPlooto | https://www.plooto.com"}
+                placeholder={"ApprovalMax | https://www.approvalmax.com | 20% off the first year with code GEEK20\nPlooto | https://www.plooto.com"}
               />
             </div>
             <div className={`${fieldClass} mt-5`}>
@@ -1890,5 +2006,56 @@ export function NewCreateForm({
     </div>
   );
 
-  return guidedWorkflow;
+  function discardRestoredDraft() {
+    clearNewCreateDraft();
+    setRestoredDraftNotice(false);
+    setStep("source");
+    setSiteUrlInput("");
+    setSiteUrl("");
+    setForceRecrawl(false);
+    setProjectSiteCrawlRunId(null);
+    setSection(null);
+    setTitle(initialTopic);
+    setPrimaryDraft(initialContentType);
+    setAlsoDrafts(new Set());
+    setTargetKeyword("");
+    setOperatorToolsText(initialTools);
+    setPaaQuestionsText("");
+    setCompetitorUrlsText(initialCompetitors);
+    setWritingNotes(initialNotes);
+    setPrimaryIntent("");
+    setBuyingStage("");
+    setToneOfVoice("");
+    setTargetEntities([]);
+    setSelectedTemplateIds([]);
+    setModelPolicy({ version: "content-model-policy.v1", preset: "best-quality" });
+    setContextSelection(EMPTY_CONTEXT_SELECTION);
+    setContextPreview(null);
+    setPendingCreateId(null);
+    setToolsPreflight(null);
+    setSiteHierarchy(null);
+    setSelectedAgentIds([]);
+    setError(null);
+  }
+
+  return (
+    <>
+      {restoredDraftNotice ? (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950"
+        >
+          <p>Restored your Create draft after Geek IQ. Everything you entered is still here.</p>
+          <button
+            type="button"
+            onClick={discardRestoredDraft}
+            className="font-semibold underline"
+          >
+            Start over
+          </button>
+        </div>
+      ) : null}
+      {guidedWorkflow}
+    </>
+  );
 }
