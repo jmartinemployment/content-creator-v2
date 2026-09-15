@@ -9,13 +9,14 @@
 
 | | |
 |--|--|
-| **Where we are** | M2/M3 shipped; **P0–P1.5 eng impl landed locally**; **Create writer = GeekAPI `gcc-create-library.v1`** (RAG = query/library only — never `/v1/generate` for Create) — **not** release-ready until Jeff verifies §7 + P2 smokes |
+| **Where we are** | M2/M3 shipped; **P0–P1.5 eng impl + unit tests green** (2026-09-14 audit); Create writer = GeekAPI `gcc-create-library.v1`; partner/competitor extraction + remaining fallbacks **eng complete** — **not** release-ready until Jeff fills §7 **Result=pass** (A1–A4, P1/P1.5, R1a–R11) then **P3** |
 | **Goal** | Signed-in prod can ship citeable `blog` through Create → Canvas without success-shaped lies |
 | **Surfaces** | Phi `https://content-creator-v2-phi.vercel.app` · GeekAPI `https://api.geekatyourspot.com` |
 | **Decision date** | Release-ready yes/no by **2026-09-28** (slip only with a dated note here) |
 | **Kill switch** | `GCC_V2_CITEABLE_CREATE_V1` (default ON) — see §Kill switch |
 | **Seed** | ApprovalMax `04fbbd9c-6b11-478d-98bf-13f2377a0d7a` (248 chunks); Plooto OK; avoid Rytr |
 | **Live tracker** | **§7** |
+| **Eng vs release** | Eng cannot mark release-ready. §7 **Result** cells require Jeff Evidence packs (Env · SHAs · UTC date · pack · job id). |
 
 ### Create drafting contract (locked 2026-09-14)
 
@@ -42,7 +43,7 @@
 
 **Forbidden:** empty research plan / brief-only / site-only drafting as success without both runs; silent substitute of another owner’s run; competitor cited as `crawlType:"partner"`.
 
-**Code follow-up:** GeekAPI pre-PLAN + Create library `researchPlanning` must require **both** run IDs on every Create (legacy optional / “in scope only” gates are **superseded**).
+**Code follow-up:** **Done** (2026-09-14) — pre-PLAN + Create library `researchPlanning` require **both** partner and competitor run IDs on every Create (Appendix A); brief/topic-only paths throw.
 
 **Remaining fallback closure:** **Complete** — [remove-remaining-fallbacks-complete.md](remove-remaining-fallbacks-complete.md). Partner/competitor Mongo seed-HTML: [remove-partner-seed-html-fallback-complete.md](remove-partner-seed-html-fallback-complete.md).
 
@@ -313,14 +314,16 @@ A1–A4 / P1 / P1.5 not `pass` by **2026-09-22 23:59 UTC** → P3 **not ready** 
 
 ### Open / in flight
 
+**Eng audit (2026-09-14):** A1–A4 / P1 / P1.5 **plumbing** locked by unit tests (`GccV2FallbackCorrectnessTests`, partner-mention, sourceRights, citeable kill-switch). **Result remains empty until Jeff signs Evidence packs** — do not treat eng-complete as release-ready.
+
 | ID | Depends on | Target | Impl status | Performer | Verifier | Evidence pack | Result |
 |----|------------|--------|-------------|-----------|----------|---------------|--------|
-| A1 | — | 2026-09-21 | impl-local | eng | Jeff | GeekAPI empty-token≠stub; unit tests green | — |
-| A2 | — | 2026-09-21 | impl-local | eng | Jeff | RAG `Failed` typed; no Continuing-without | — |
-| A3 | — | 2026-09-21 | impl-local | eng | Jeff | SoftDisabled PromptVersion unavailable; 503 | — |
-| A4 | A1–A3 | 2026-09-21 | impl-local | eng | Jeff | `GccV2FallbackCorrectnessTests` green | — |
-| P1/R8 | **A4 required to verify** | 2026-09-21 | impl-local | eng | Jeff | `GccV2PartnerMentionGate` + tests; VALIDATE wired | — |
-| **P1.5** | **A4 required to verify** | 2026-09-21 | impl-local | eng+Jeff | Jeff | Gate + RAG metadata; Jeff: consent backfill/reindex ApprovalMax+Plooto | — |
+| A1 | — | 2026-09-21 | **eng-complete** (tests) | eng | Jeff | GeekAPI empty-token≠stub; unit tests green | — |
+| A2 | — | 2026-09-21 | **eng-complete** (tests) | eng | Jeff | RAG `Failed` typed; no Continuing-without | — |
+| A3 | — | 2026-09-21 | **eng-complete** (tests) | eng | Jeff | SoftDisabled PromptVersion unavailable; CreateLibraryDraft only | — |
+| A4 | A1–A3 | 2026-09-21 | **eng-complete** (tests) | eng | Jeff | `GccV2FallbackCorrectnessTests` green (2026-09-14) | — |
+| P1/R8 | **A4 required to verify** | 2026-09-21 | **eng-complete** (tests) | eng | Jeff | `GccV2PartnerMentionGate` + VALIDATE wired | — |
+| **P1.5** | **A4 required to verify** | 2026-09-21 | **eng-complete** (plumbing); **Jeff backfill open** | eng+Jeff | Jeff | Gate + RAG `source_rights_consented_hosts` (approvalmax/plooto); Jeff: confirm reindex + smoke | — |
 | R1a | A*, P1, P1.5 | 2026-09-25 | not-started | Jeff | Jeff | | — |
 | R1b | A*, P1.5 | 2026-09-25 | not-started | Jeff | Jeff | | — |
 | R2 | A* | 2026-09-25 | not-started | Jeff | Jeff | | — |
