@@ -286,7 +286,6 @@ export function NewCreateForm({
 }: NewCreateFormProps) {
   const router = useRouter();
   const crawlAbortRef = useRef<AbortController | null>(null);
-  const promotedRunsRef = useRef<Set<string>>(new Set());
   const hubRef = useRef<ReturnType<typeof createProjectSiteHubConnection> | null>(null);
 
   const [step, setStep] = useState<Step>("source");
@@ -296,8 +295,6 @@ export function NewCreateForm({
   const [analyzingLabel, setAnalyzingLabel] = useState<string | null>(null);
 
   const [projectSiteCrawlRunId, setProjectSiteCrawlRunId] = useState<string | null>(null);
-  const [sourceLibraryStatus, setSourceLibraryStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [sourceLibraryError, setSourceLibraryError] = useState<string | null>(null);
   const [section, setSection] = useState<SiteSectionContext | null>(null);
 
   const [title, setTitle] = useState(initialTopic);
@@ -696,33 +693,6 @@ export function NewCreateForm({
     }
   }, []);
 
-  /** Every completed project-site crawl becomes a reusable source — no operator prompt. */
-  const promoteRunToSourceLibrary = useCallback(async (runId: string) => {
-    if (promotedRunsRef.current.has(runId)) return;
-    promotedRunsRef.current.add(runId);
-    setSourceLibraryStatus("saving");
-    setSourceLibraryError(null);
-    try {
-      const response = await fetch(
-        `/api/gcc-v2/project-site/runs/${runId}/promote-to-source`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ approve: true }),
-        },
-      );
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
-      setSourceLibraryStatus("saved");
-    } catch (cause) {
-      promotedRunsRef.current.delete(runId);
-      setSourceLibraryStatus("idle");
-      setSourceLibraryError(
-        cause instanceof Error ? cause.message : "Could not add the website to the source library.",
-      );
-    }
-  }, []);
-
   const applyReadyCrawl = useCallback(async (runId: string, resolvedSiteUrl: string) => {
     setAnalyzingLabel("Loading pages from this site…");
     const loaded = await loadSectionFromCrawlRun(runId, resolvedSiteUrl);
@@ -733,8 +703,11 @@ export function NewCreateForm({
     setAnalyzingLabel("Loading mobile site hierarchy…");
     setBusy(false);
     void loadSiteHierarchyFromRun(runId).finally(() => setAnalyzingLabel(null));
-    void promoteRunToSourceLibrary(runId);
-  }, [loadSiteHierarchyFromRun, promoteRunToSourceLibrary]);
+    // Promotion to the source library is no longer driven from here. Completing a project-site crawl
+    // is what promotes and indexes it, server-side (GccV2ProjectSiteCrawlService), so crawls finishing
+    // via API, retry or stall recovery reach the corpus too — and a failure is logged rather than
+    // discarded with the wizard advancing regardless.
+  }, [loadSiteHierarchyFromRun]);
 
   const waitForCrawlComplete = useCallback(
     async (
@@ -841,8 +814,6 @@ export function NewCreateForm({
     setAnalyzingLabel(force ? "Starting a new crawl…" : "Looking up existing crawl…");
     setSection(null);
     setProjectSiteCrawlRunId(null);
-    setSourceLibraryStatus("idle");
-    setSourceLibraryError(null);
     setSiteHierarchy(null);
     setHierarchyError(null);
     setToolsPreflight(null);
@@ -1464,18 +1435,6 @@ export function NewCreateForm({
                 Change site
               </button>
             </div>
-            {sourceLibraryStatus !== "idle" || sourceLibraryError ? (
-              <p
-                className={`mt-2 text-xs ${sourceLibraryError ? "text-red-700" : "text-[var(--cc-muted)]"}`}
-                {...(sourceLibraryError ? { role: "alert" as const } : {})}
-              >
-                {sourceLibraryError
-                  ? `This website was not added to the Source Library: ${sourceLibraryError}`
-                  : sourceLibraryStatus === "saving"
-                    ? "Adding this website to the Source Library…"
-                    : "Added to the Source Library · processing"}
-              </p>
-            ) : null}
             <div className={`${fieldClass} mt-6`}>
               <label className={labelClass} htmlFor="title">Working title</label>
               <input
