@@ -10,7 +10,7 @@
 
 Before changing Create, RAG clients, BFF, or Canvas: read master-plan Non-negotiables and §Kill switch. Do not invent parallel plans, success-shaped stubs, timer polling for job status, or release-ready claims while §7 is open.
 
-RAG in this platform is dual-half (Library retrieval/verify + Generate via Geek-Crawler-Rag) — see `.cursor/rules/geek-crawler-rag.mdc`. Creates stay under GeekAPI `ContentCreatorV2/*` and UI `/creates/*`.
+RAG in this platform is **Library-only — retrieval and verification**. It never generates: `/v1/generate` and `rag-generate.*` were removed and must never be revived. Drafting is GeekAPI-side, grounded on Markdown that RAG retrieved and verified — see `.cursor/rules/geek-crawler-rag.mdc`. Creates stay under GeekAPI `ContentCreatorV2/*` and UI `/creates/*`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
