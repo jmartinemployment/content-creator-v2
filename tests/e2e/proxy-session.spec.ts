@@ -8,9 +8,14 @@ test.beforeEach(({}, testInfo) => {
 
 test("proxy matcher is limited to gcc-v2 routes", async () => {
   // Source contract — matcher must not broaden to v1 hubs.
+  // Playwright transpiles specs to CommonJS, where import.meta is a syntax error that fails the
+  // whole run at collection - not just this spec. Resolve from the repo root instead.
   const fs = await import("node:fs/promises");
-  const path = new URL("../../src/proxy.ts", import.meta.url);
-  const source = await fs.readFile(path, "utf8");
+  const nodePath = await import("node:path");
+  const source = await fs.readFile(
+    nodePath.join(process.cwd(), "src", "proxy.ts"),
+    "utf8",
+  );
   expect(source).toContain('"/creates/:path*"');
   expect(source).toContain('"/api/gcc-v2/:path*"');
   expect(source).not.toContain('"/content-creator');
