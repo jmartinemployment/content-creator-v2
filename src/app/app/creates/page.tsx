@@ -49,7 +49,15 @@ export default function CreatesListPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-brand">
           Content Creator
         </p>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">Creates</h1>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-bold text-foreground">Creates</h1>
+          <Link
+            href="/app/creates/new"
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
+          >
+            New create
+          </Link>
+        </div>
         <p className="mt-2 text-sm text-muted">
           Happy path: Site Analyzer → Content Brief → generate → revise / SEO /
           approve / Mix. Start a create by picking a gap in Site Analyzer.
@@ -72,7 +80,7 @@ export default function CreatesListPage() {
 
       {visible.length === 0 && !error ? (
         <p className="text-sm text-muted">
-          No creates yet for this client. Pick a gap in Site Analyzer to start one.
+          No creates yet for this client. Start one from a topic, or pick a gap in Site Analyzer for site-grounded writing.
         </p>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
