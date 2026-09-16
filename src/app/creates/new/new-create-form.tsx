@@ -194,6 +194,20 @@ type PartnerToolsPreflight = {
  * appear nowhere on their site, so no crawl can ever extract them; they are operator-asserted and
  * travel labelled as such, never as verified evidence.
  */
+type SeedStatus = {
+  seed: string;
+  ready: boolean;
+  runId: string | null;
+  indexState: string | null;
+  reason: string | null;
+};
+
+type SeedReadiness = {
+  partners: SeedStatus[];
+  competitors: SeedStatus[];
+  partnerReady: boolean;
+};
+
 function parseOperatorTools(text: string): Array<{ name?: string; url: string; perk?: string }> {
   return text
     .split("\n")
@@ -302,6 +316,8 @@ export function NewCreateForm({
   const [alsoDrafts, setAlsoDrafts] = useState<Set<ContentType>>(() => new Set());
   const [targetKeyword, setTargetKeyword] = useState("");
   const [operatorToolsText, setOperatorToolsText] = useState(initialTools);
+  const [seedReadiness, setSeedReadiness] = useState<SeedReadiness | null>(null);
+  const [seedReadinessBusy, setSeedReadinessBusy] = useState(false);
   const [paaQuestionsText, setPaaQuestionsText] = useState("");
   const [competitorUrlsText, setCompetitorUrlsText] = useState(initialCompetitors);
   const [writingNotes, setWritingNotes] = useState(initialNotes);
@@ -692,6 +708,46 @@ export function NewCreateForm({
       setHierarchyLoading(false);
     }
   }, []);
+
+  // Partner evidence is mandatory and nothing in Create crawls partners - the backend looks up runs
+  // that already exist. Check here so the operator learns which partners have evidence on screen one,
+  // not at PLAN after the whole wizard is filled in.
+  useEffect(() => {
+    if (step !== "source") return;
+    const partnerUrls = parseOperatorTools(operatorToolsText).map((row) => row.url);
+    const competitorUrls = competitorUrlsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      if (partnerUrls.length === 0 && competitorUrls.length === 0) {
+        setSeedReadiness(null);
+        return;
+      }
+      setSeedReadinessBusy(true);
+      void fetch("/api/gcc-v2/research-readiness", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ partnerUrls, competitorUrls }),
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          setSeedReadiness((await response.json()) as SeedReadiness);
+        })
+        .catch(() => {
+          // Silent: this is advisory. The backend gate still fails closed at PLAN.
+          setSeedReadiness(null);
+        })
+        .finally(() => setSeedReadinessBusy(false));
+    }, 600);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [step, operatorToolsText, competitorUrlsText]);
 
   const applyReadyCrawl = useCallback(async (runId: string, resolvedSiteUrl: string) => {
     setAnalyzingLabel("Loading pages from this site…");
@@ -1419,13 +1475,49 @@ export function NewCreateForm({
                 so Create cannot proceed without one.
               </p>
             ) : null}
+            {step === "source" && seedReadiness ? (
+              <div className="mt-4 rounded-lg border border-[var(--cc-line)] bg-slate-50 p-4" aria-label="Crawl evidence readiness">
+                <p className="text-xs font-semibold text-[var(--cc-ink)]">
+                  Crawl evidence{seedReadinessBusy ? " · checking…" : ""}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {seedReadiness.partners.map((status) => (
+                    <li key={`p-${status.seed}`} className="text-xs">
+                      <span className={status.ready ? "text-green-800" : "text-amber-800"}>
+                        {status.ready ? "✓" : "✕"} Partner · {status.seed}
+                      </span>
+                      {status.reason ? (
+                        <span className="text-[var(--cc-muted)]"> — {status.reason}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                  {seedReadiness.competitors.map((status) => (
+                    <li key={`c-${status.seed}`} className="text-xs">
+                      <span className={status.ready ? "text-green-800" : "text-[var(--cc-muted)]"}>
+                        {status.ready ? "✓" : "○"} Competitor · {status.seed}
+                      </span>
+                      {status.reason ? (
+                        <span className="text-[var(--cc-muted)]"> — {status.reason} (optional)</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                {!seedReadiness.partnerReady && seedReadiness.partners.length > 0 ? (
+                  <p role="status" className="mt-2 text-xs text-amber-800">
+                    No partner has indexed evidence yet. Create needs at least one — crawl the partner
+                    first, or Create will fail before drafting.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {step === "analyzing" && analyzingLabel ? (
               <div className="mt-4"><LoadingRow label={analyzingLabel} /></div>
             ) : null}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                disabled={busy || !siteUrlInput.trim() || !operatorToolsText.trim()}
+                disabled={busy || !siteUrlInput.trim() || !operatorToolsText.trim()
+                  || (seedReadiness !== null && !seedReadiness.partnerReady)}
                 onClick={() => void resolveSite(forceRecrawl)}
                 className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
