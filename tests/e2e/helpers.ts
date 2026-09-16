@@ -139,3 +139,19 @@ export function expectRequestLogContains(
   expect(match).toBeTruthy();
   return match as GccV2RequestEntry;
 }
+
+/**
+ * Fill the Source step's required partner tool URL.
+ *
+ * Partner evidence is mandatory for a draft, so the wizard disables Continue until at least one
+ * partner URL is present. Any test that advances past step one must supply one.
+ */
+export async function fillRequiredPartnerTool(
+  page: Page,
+  entry = "ApprovalMax | https://www.approvalmax.com",
+) {
+  const field = page.getByLabel("Partner tool URLs (required)");
+  if (await field.isVisible().catch(() => false)) {
+    await field.fill(entry);
+  }
+}

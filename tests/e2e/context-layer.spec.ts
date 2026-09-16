@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin,
+  fillRequiredPartnerTool,
+} from "./helpers";
 import { e2eAccessToken } from "./platform";
 
 test.beforeEach(({}, testInfo) => {
@@ -16,21 +18,25 @@ async function reachContextReview(page: Page, open = true) {
   } else if (!(await siteUrl.inputValue())) {
     await siteUrl.fill("example.test");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   const title = page.getByLabel("Working title");
   if (!(await title.inputValue())) {
     await title.fill("Governed Context Content");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   const addEvidenceEngine = page.getByRole("button", { name: "+ Evidence Engine" });
   if (await addEvidenceEngine.isVisible()) {
     await addEvidenceEngine.click();
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   const searchPhrase = page.getByLabel("Primary search phrase");
   if (!(await searchPhrase.inputValue())) {
     await searchPhrase.fill("governed context");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Review" }).click();
   await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();
@@ -309,6 +315,7 @@ test("approved source upload sends bytes directly to issued storage URL and fina
 test("completed website research is promoted to the source library without asking", async ({ page, request }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Using 1 page from")).toBeVisible();
 
@@ -400,6 +407,7 @@ test("BFF rejects object bytes on upload control routes before forwarding", asyn
 test("the create wizard always starts at step one, including after a refresh", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Using 1 page from")).toBeVisible();
 
@@ -413,4 +421,21 @@ test("the create wizard always starts at step one, including after a refresh", a
   expect(
     await page.evaluate(() => sessionStorage.getItem("gcc-v2-new-create-draft")),
   ).toBeNull();
+});
+
+test("returning from Geek IQ restores the in-progress create draft", async ({ page }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+  await page.getByLabel("Working title").fill("Resume me after Geek IQ");
+  await expect
+    .poll(async () => page.evaluate(() => sessionStorage.getItem("gcc-v2-new-create-draft")))
+    .not.toBeNull();
+
+  await openAuthenticated(page, "/creates/new?resume=1");
+  await expect(page.getByText("Restored your Create draft after Geek IQ")).toBeVisible();
+  await expect(page.getByLabel("Working title")).toHaveValue("Resume me after Geek IQ");
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
 });

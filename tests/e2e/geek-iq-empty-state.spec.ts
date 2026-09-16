@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, skipIfNoE2eAuth } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth,
+  fillRequiredPartnerTool,
+} from "./helpers";
 
 test.beforeEach(({}, testInfo) => {
   skipIfNoE2eAuth(testInfo);
@@ -39,17 +41,21 @@ async function reachReviewWithEmptyGeekIq(page: import("@playwright/test").Page)
   if (!(await siteUrl.inputValue())) {
     await siteUrl.fill("example.test");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   const title = page.getByLabel("Working title");
   if (!(await title.inputValue())) {
     await title.fill("Geek IQ empty state");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   const searchPhrase = page.getByLabel("Primary search phrase");
   if (!(await searchPhrase.inputValue())) {
     await searchPhrase.fill("empty geek iq");
   }
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Review" }).click();
   await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();

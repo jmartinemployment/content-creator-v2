@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, skipIfNoE2eAuth, skipIfScenarioInjectionRequired } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, skipIfScenarioInjectionRequired,
+  fillRequiredPartnerTool,
+} from "./helpers";
 
 test.beforeEach(({}, testInfo) => {
   skipIfNoE2eAuth(testInfo);
@@ -14,6 +16,7 @@ test("legacy /rag is 404 — Create is the only authoring path", async ({ page }
 test("canonical Create offers all 17 content types and relevant RAG capabilities", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByLabel("Main format").locator("option")).toHaveCount(17);
   await page.getByLabel("Main format").selectOption("ads");
@@ -25,10 +28,14 @@ test("canonical Create offers all 17 content types and relevant RAG capabilities
 test("o3-only policy requires explicit quality-tradeoff confirmation", async ({ page }) => {
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Working title").fill("Explicit model policy");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Review" }).click();
   await page.getByText(/Advanced run settings/).click();
@@ -43,9 +50,12 @@ test("RAG unavailable state is an inline canonical quality gate", async ({ page 
   skipIfScenarioInjectionRequired(testInfo);
   await openAuthenticated(page, "/creates/new");
   await page.getByLabel("Project site URL").fill("example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Working title").fill("Unavailable research");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByLabel("Research readiness")).toContainText("Research is temporarily unavailable");
   await expect(page.getByText("Deterministic RAG outage.")).toBeVisible();

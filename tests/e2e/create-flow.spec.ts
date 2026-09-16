@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin, authenticateViewer, skipIfNoViewerToken } from "./helpers";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin, authenticateViewer, skipIfNoViewerToken,
+  fillRequiredPartnerTool,
+} from "./helpers";
 
 test.beforeEach(({}, testInfo) => {
   skipIfNoE2eAuth(testInfo);
@@ -209,17 +211,21 @@ test("guided create flow reaches approved, validated canvas with citations and p
   await openAuthenticated(page, "/creates/new");
 
   await page.getByLabel("Project site URL").fill("example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "What do you want to create?" })).toBeVisible();
 
   await page.getByLabel("Working title").fill("Reliable Content Operations");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Key concepts to emphasize").fill("Evidence Engine");
   await page.getByRole("button", { name: "Add", exact: true }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByLabel("Research readiness")).toContainText("Research is ready");
   await page.getByLabel("Primary search phrase").fill("deterministic content workflow");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("radio", { name: "Content Producer producer" })).toBeChecked();
   await page.getByRole("checkbox", { name: "Marketing Strategist contributor" }).check();
@@ -355,11 +361,15 @@ test("create continues when specialist catalog is unavailable", async ({ page, r
   await openAuthenticated(page, "/creates/new");
 
   await page.getByLabel("Project site URL").fill("example.test");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Working title").fill("Catalog Outage Continue");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Primary search phrase").fill("deterministic content workflow");
+  await fillRequiredPartnerTool(page);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByText(/Specialists unavailable/)).toBeVisible();
