@@ -38,6 +38,24 @@ same-origin BFS per host"; that assumption is the reason the corpus reached ~223
 the top 12 runs holding 75% of it. **Any new crawl type ships with a scope policy — depth, path
 allow/deny, page budget — on day one.**
 
+**Crawl types are not one size fits all.** Scope and *retention* are separate axes, because the types
+feed different consumers:
+
+| | Project site | Partner / competitor |
+|---|---|---|
+| Consumer | `GccV2SiteHierarchyFromCrawl.Build` → `GccV2HierarchyToolMatch` | RAG retrieval + quote verification |
+| Must retain | **Raw HTML** — DOM tree, heading levels, anchors under a heading | Verbatim prose |
+| Scale | Own site, bounded | 50,000+ pages, scope hard |
+| Failure mode if wrong | Tools/partners silently stop being found — **no error, fewer matches** | Quote verification fails, loudly |
+
+**Grounding cannot be derived from the RAG text path.** `Geek-Crawler-Rag/extract.py:44` does
+`body.get_text(separator=" ", strip=True)` — text nodes only. Every href, every tag and every heading
+marker is discarded. So h6→anchor tool links, "the keyword matched an h5", and h2 message pillars are
+all unrecoverable from RAG's Markdown. `Build` filters on `p.Html` for exactly this reason.
+
+Whichever crawler takes project-site **must persist raw HTML per page**, and hierarchy must be derived
+from that, never from normalized text.
+
 `crawl_pages.Html` is load-bearing: partner/competitor extraction reads it directly
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
 space until extraction moves to Markdown.
