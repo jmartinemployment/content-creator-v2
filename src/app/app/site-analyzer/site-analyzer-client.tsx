@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { clearSiteSectionHandoff } from "@/lib/site-section-storage";
@@ -929,15 +930,15 @@ export function SiteAnalyzerClient() {
         </ul>
       ) : !siteAnalysisProfileId ? (
         <div className="rounded-md border border-dashed border-[var(--gcc-line)] bg-white px-4 py-6 text-center">
-          <p className="text-sm text-[var(--gcc-muted)]">No Site Analyzer run yet — run Analyze to enable Create.</p>
-          <button
-            type="button"
-            disabled
-            className="mt-3 rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white opacity-40 cursor-not-allowed"
-            title="Run Site Analyzer first"
+          <p className="text-sm text-[var(--gcc-muted)]">
+            Creates do not depend on Site Analyzer.
+          </p>
+          <Link
+            href="/app/creates/new"
+            className="mt-3 inline-block rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white"
           >
-            Create disabled — run Site Analyzer
-          </button>
+            Start a create
+          </Link>
         </div>
       ) : null}
       {gaps.length === 0 && siteAnalysisProfileId && !busy && !error ? (
