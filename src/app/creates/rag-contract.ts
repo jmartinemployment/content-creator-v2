@@ -244,7 +244,7 @@ export function ragCapabilitiesFor(contentType: ContentType): RagCapability[] {
 
 export function modelPolicyLabel(policy: ModelPolicySelection | null | undefined): string {
   if (!policy) return "Backend default";
-  if (policy.preset === "o3-only") return "o3 only";
+  if (policy.preset === "o3-only") return "o3";
   if (policy.preset === "custom") return "Custom";
-  return "Best quality";
+  return "o3-mini";
 }

@@ -1049,7 +1049,7 @@ export function NewCreateForm({
       return;
     }
     if (modelPolicy.preset !== "best-quality" && !modelPolicy.downgradeConfirmed) {
-      setError("Confirm the model-policy quality tradeoff before continuing.");
+      setError("Confirm the model-policy change before continuing.");
       return;
     }
     if (!producerSelectionReady || !teamReady) {
@@ -1901,7 +1901,7 @@ export function NewCreateForm({
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Title</dt><dd className="mt-1 font-semibold">{title}</dd></div>
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Main format</dt><dd className="mt-1 font-semibold">{PRIMARY_DRAFT_TYPES.find((item) => item.value === primaryDraft)?.label}</dd></div>
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Source</dt><dd className="mt-1 text-sm">{siteUrl}</dd></div>
-                  <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Quality</dt><dd className="mt-1 text-sm font-semibold">{modelPolicy.preset === "best-quality" ? "Best available" : "Custom"}</dd></div>
+                  <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Quality</dt><dd className="mt-1 text-sm font-semibold">{modelPolicy.preset === "best-quality" ? "o3-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}</dd></div>
                   {targetEntities.length ? <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Key concepts</dt><dd className="mt-1 text-sm">{targetEntities.join(", ")}</dd></div> : null}
                 </dl>
               </div>
@@ -1909,17 +1909,17 @@ export function NewCreateForm({
 
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
-                  Advanced run settings · Quality: {modelPolicy.preset === "best-quality" ? "Best available" : "Custom"}
+                  Advanced run settings · Model: {modelPolicy.preset === "best-quality" ? "o3-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}
                 </summary>
                 <fieldset className="mt-4 flex flex-col gap-3">
                   <legend className="sr-only">Quality routing</legend>
                   <label className="flex gap-2 text-sm">
                     <input type="radio" name="model-policy" checked={modelPolicy.preset === "best-quality"} onChange={() => setModelPolicy({ version: "content-model-policy.v1", preset: "best-quality" })} />
-                    <span><strong>Best available (recommended)</strong><span className="block text-xs text-[var(--cc-muted)]">Use the strongest approved routing for each stage.</span></span>
+                    <span><strong>Standard — o3-mini (recommended)</strong><span className="block text-xs text-[var(--cc-muted)]">Routes every stage to o3-mini. Fast, and priced for the factual extraction this pipeline does.</span></span>
                   </label>
                   <label className="flex gap-2 text-sm">
                     <input type="radio" name="model-policy" checked={modelPolicy.preset === "o3-only"} onChange={() => setModelPolicy({ version: "content-model-policy.v1", preset: "o3-only" })} />
-                    <span><strong>Faster run</strong><span className="block text-xs text-[var(--cc-muted)]">May reduce strategic depth and whole-document synthesis.</span></span>
+                    <span><strong>Deeper reasoning — o3</strong><span className="block text-xs text-[var(--cc-muted)]">Pins full o3 on every stage. Slower and more expensive per run; use it when synthesis depth matters.</span></span>
                   </label>
                   {ragStatus?.approvedStageModels && Object.keys(ragStatus.approvedStageModels).length > 0 ? (
                     <label className="flex gap-2 text-sm">
@@ -1956,7 +1956,7 @@ export function NewCreateForm({
                           checked={modelPolicy.downgradeConfirmed === true}
                           onChange={(event) => setModelPolicy((current) => ({ ...current, downgradeConfirmed: event.target.checked, downgradeReason: current.downgradeReason ?? "operator" }))}
                         />
-                        I understand the quality tradeoff.
+                        I understand this changes cost and run time.
                       </span>
                     </label>
                   ) : null}
