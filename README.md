@@ -8,8 +8,8 @@ Content Creator v2 is an authenticated, AI-assisted writing workspace for market
 |--|--|
 | **Production UI** | `https://content-creator-v2-phi.vercel.app` |
 | **GeekAPI** | `https://api.geekatyourspot.com` |
-| **Release status** | Implementation landed for M2/M3 + P0–P1.5; **not release-ready** until [`plans/master-plan.md`](plans/master-plan.md) §7 passes |
-| **Authority** | [`plans/master-plan.md`](plans/master-plan.md) (sole release-plan) · [`architecture.md`](architecture.md) (platform contracts) · [`.cursor/rules/`](.cursor/rules/) (agent-enforced non-negotiables) |
+| **Release status** | **Not release-ready.** v1's frontend is restored and in production; drafting is off by default (`ContentCreatorV2:DraftingEnabled=false`). See [`AGENTS.md`](AGENTS.md) § Current state |
+| **Authority** | [`AGENTS.md`](AGENTS.md) (service boundaries + current state) · [`architecture.md`](architecture.md) (platform contracts) · [`.cursor/rules/`](.cursor/rules/) (agent-enforced non-negotiables) |
 
 ## Product overview
 
@@ -64,17 +64,17 @@ Configure GeekOAuth and GeekAPI per [`.env.example`](.env.example). Tokens stay 
 
 `/creates/new → persisted job → Canvas` is the only authoring path. Product `/rag` is **404**. The BFF still proxies `/api/rag/*` to GeekAPI for research status and Create helpers.
 
-Canvas stays backward-compatible with older jobs. Newer results may include `citations`, `sectionCitations`, `provenance`, `evidenceManifest`, `modelPolicy`, and `approvedStageModels`. `jobStatus: Ready` is not `shipReady` — ship-ready is Appendix B only ([`plans/master-plan.md`](plans/master-plan.md)).
+The draft workspace stays backward-compatible with older jobs. Newer results may include `citations`, `sectionCitations`, `provenance`, `evidenceManifest`, `modelPolicy`, and `approvedStageModels`. `jobStatus: Ready` is not `shipReady`.
 
 ## Documentation
 
 | Doc | Role |
 |-----|------|
-| [`plans/master-plan.md`](plans/master-plan.md) | **Sole** release-plan & decision record (§7 tracker) |
+| [`AGENTS.md`](AGENTS.md) | Service boundaries, crawl types, fail-closed rules, current state |
 | [`plans/README.md`](plans/README.md) | Plans index + rules sync note |
 | [`architecture.md`](architecture.md) | Platform map, copy/call/do-not-reuse, Create contracts |
 | [`.cursor/rules/`](.cursor/rules/) | Agent rules mirrored from master-plan non-negotiables |
 | [`AGENTS.md`](AGENTS.md) | Agent entry (Next.js notice + project pointers) |
 | [`tests/e2e/README.md`](tests/e2e/README.md) | Playwright against real GeekOAuth + GeekAPI |
 
-Historical `plan/*` docs were consolidated into `plans/master-plan.md`. Do not resurrect parallel living plans.
+`plans/master-plan.md` was deleted; [`AGENTS.md`](AGENTS.md) is the standing authority. Do not resurrect parallel living plans.

@@ -4,11 +4,12 @@
 
 | Authority | Path |
 |-----------|------|
+| **Service boundaries + current state** | [`AGENTS.md`](./AGENTS.md) |
 | **This file** | Platform map, isolation, Create/BFF/hub contracts |
-| **Release / decisions** | [`plans/master-plan.md`](./plans/master-plan.md) (sole release-plan; §7 tracker) |
-| **Agent rules** | [`.cursor/rules/`](./.cursor/rules/) (mirrored from master-plan Non-negotiables) |
+| **Agent rules** | [`.cursor/rules/`](./.cursor/rules/) |
 
-When this file conflicts with an older doc or git history, **this file + master-plan win** unless Jeff overrides in chat.
+`plans/master-plan.md` no longer exists. When this file conflicts with an older doc or git history,
+**AGENTS.md + this file win** unless Jeff overrides in chat.
 
 **Preferred term:** **site section context** (related pages, headings, excerpts, section path). Not “neighborhood.”
 
@@ -23,9 +24,11 @@ When this file conflicts with an older doc or git history, **this file + master-
 | GeekAPI prefix | `api/geek-content-creator-v2` |
 | Persistence | `content_creator_v2` schema (GeekRepository via GeekAPI) |
 | Backend isolation | GeekAPI `Services/ContentCreatorV2/*` |
-| Authoring path | `/creates/new` → job → Canvas only (product `/rag` is 404) |
+| Authoring path | `/app/creates/new` → job → draft workspace |
 
-phi is the product surface. It is **not** a feature inside Geek Content Workflow and **not** a thin form over legacy Content Writer UI.
+phi is the product surface. **As of 2026-09-16 it serves v1's frontend** (restored from
+`GeekContentCreator`); V2's frontend was removed. It is **not** a feature inside Geek Content Workflow
+and **not** a thin form over legacy Content Writer UI.
 
 ---
 
@@ -92,7 +95,7 @@ Secrets and LLM keys stay on **GeekAPI** — never in the browser bundle.
 | **User** | GeekOAuth identity |
 | **Client / account** | Brand the content is for |
 | **Project site** | URL/property bound to a create; grounds BrandKit + related pages |
-| **Create / job** | One writing effort: brief → evidence → PLAN → WRITE → VALIDATE → Canvas |
+| **Create / job** | One writing effort: brief → evidence → PLAN → WRITE → VALIDATE → draft workspace |
 | **Partner (tools)** | What we sell / distribute; `crawlType:"partner"`; indexed partner crawl on **every Create** — **fail closed**. Product payloads + **SoftwareApplication** JSON-LD — [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md) |
 | **Competitor** | Direct or content rivals to **analyze and (when honest) name**; competitor crawl on **every Create** — **fail closed**; never cited as partner. Extract + **competitor SoftwareApplication JSON-LD** — [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) |
 | **Citation** | URL · `pageId` · quote · `sourceDigest` · authorized `runId` · `sectionKey` · `crawlType` · `sourceRights` · provenance |
@@ -116,8 +119,14 @@ Partner library extraction isolates core assets (**Citable**, **Advertisement**,
 
 ## 5. North-star job flow
 
+> **As of 2026-09-16, PLAN and WRITE call v1's engine** (`ContentGenerationOrchestrator`) through
+> `GeekAPI/Services/ContentCreatorV2/V1Restore/`. VALIDATE, REPAIR and final synthesis still run
+> V2-side against v1's output. Drafting is gated by `ContentCreatorV2:DraftingEnabled` (default
+> **false**), which stops a create after the free evidence gates and before the first paid model call.
+
+
 ```text
-/creates/new → brief → evidence → PLAN → approve → WRITE (citeable) → VALIDATE → Canvas → export
+/app/creates/new → brief → evidence → PLAN → approve → WRITE (citeable) → VALIDATE → draft workspace → export
 ```
 
 RAG runs **inside** the Create job — not as a parallel product UI.
@@ -127,7 +136,7 @@ RAG runs **inside** the Create job — not as a parallel product UI.
 | **PLAN** | Research plan / outline grounded on usable sources |
 | **WRITE** | Section / complete / final synthesis with provenance |
 | **VALIDATE** | Quote verify, coverage, partner-mention gate, `sourceRights` (kill switch ON). OFF = fail closed — no skipped-gates Ready |
-| **Canvas** | Operator edit/export; Ready ≠ shipReady; no degraded-success banner |
+| **Draft workspace** | Operator edit/export; Ready ≠ shipReady; no degraded-success banner |
 
 Live progress: **SignalR** `JobEvent` on `/hubs/gcc-v2-realtime`. REST is for start, snapshot, `/result`, and reconnect catch-up — **never** a timer poll loop for status.
 
@@ -137,11 +146,17 @@ Live progress: **SignalR** `JobEvent` on `/hubs/gcc-v2-realtime`. REST is for st
 
 | Path | Role |
 |------|------|
-| `/creates/new` | Brief + start job |
-| `/creates/...` Canvas | Result editing, citations, ship readiness |
-| `/api/gcc-v2/[...path]` | BFF → `api/geek-content-creator-v2/*` |
-| `/api/rag/[...path]` | BFF → `api/rag/*` (status / helpers; not a product page) |
-| `src/app/creates/rag-client/*` | Create-side RAG client helpers |
+| `/app/creates` | Create list |
+| `/app/creates/new` | Start a create from a topic + content type (20 types) |
+| `/app/creates/[id]` | Draft workspace |
+| `/app/creates/[id]/repurpose` | Repurpose |
+| `/app/workflow`, `/app/workflow/projects/[id]` | Workflow surfaces |
+| `/app/site-analyzer` | **Broken and deprecated** — its endpoints were retired; gap analysis is Geek-SEO's, arriving via RAG |
+| `/api/cw/[...path]` | BFF passthrough → GeekAPI |
+| `/api/auth/*` | PKCE start / token / logout / hub-token |
+
+**Known broken:** ~15 `api/geek-content-creator/*` calls target v1 endpoints deleted in `582a171`.
+Only `/app/creates/new` avoids them. See AGENTS.md § Current state.
 
 Foreign `runId` → **safe-fail only** (no cross-tenant corpus adoption).
 
@@ -202,9 +217,10 @@ Full predicate: master-plan **Appendix B**. Release decision: master-plan **P3**
 |------|------|
 | `content-creator-v2` | This UI (phi) |
 | `GeekBackend` / GeekAPI | Create orchestration, RAG facade, hubs |
-| `Geek-Crawler` | Partner/competitor/project crawls |
-| `Geek-Crawler-Rag` | Query / pages / generate |
-| `GeekContentCreator` | Legacy v1 UI (decommission after release gate) |
+| `Geek-Crawler` | **All crawling** — partner / competitors / geo / project-site / future |
+| `Geek-Crawler-Rag` | Query / pages. **Retrieval + verification only — never generates** |
+| `Geek-SEO` | Site + gap analysis (owns Site Analyzer) |
+| `GeekContentCreator` | v1 UI — **source of the frontend now running in this repo** |
 | `GeekContentWorkflow` | Pattern reference only — not the product shell |
 
 ---
@@ -214,7 +230,7 @@ Full predicate: master-plan **Appendix B**. Release decision: master-plan **P3**
 1. GeekOAuth + env from `.env.example` (phi redirect URIs registered).
 2. BFF can reach GeekAPI (`/api/gcc-v2/*`, `/api/rag/*`).
 3. Hub connects: `/hubs/gcc-v2-realtime` (no status polling).
-4. Create job reaches PLAN with healthy RAG; Canvas shows citations / gaps honestly.
+4. Create job reaches PLAN with healthy RAG; the draft workspace shows citations / gaps honestly.
 5. CORS includes this app’s origins on GeekAPI.
 
 Until signed-in against real GeekAPI, local UI is not a substitute for §7 smokes.

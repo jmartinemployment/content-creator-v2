@@ -4,13 +4,68 @@
 
 | Authority | Path |
 |-----------|------|
-| Sole release-plan | [`plans/master-plan.md`](plans/master-plan.md) |
-| Architecture contracts | [`architecture.md`](architecture.md) |
+| Service boundaries + current state | this file |
+| Architecture detail | [`architecture.md`](architecture.md) |
 | Non-negotiables + honesty | [`.cursor/rules/`](.cursor/rules/) (alwaysApply) |
 
-Before changing Create, RAG clients, BFF, or Canvas: read master-plan Non-negotiables and §Kill switch. Do not invent parallel plans, success-shaped stubs, timer polling for job status, or release-ready claims while §7 is open.
+## Target architecture — one concern per service
 
-RAG in this platform is **Library-only — retrieval and verification**. It never generates: `/v1/generate` and `rag-generate.*` were removed and must never be revived. Drafting is GeekAPI-side, grounded on Markdown that RAG retrieved and verified — see `.cursor/rules/geek-crawler-rag.mdc`. Creates stay under GeekAPI `ContentCreatorV2/*` and UI `/creates/*`.
+| Service | Owns | Must not |
+|---|---|---|
+| **Geek-Crawler** | ALL crawling: `partner`, `competitors`, `geo`, `project-site`, future types | — |
+| **Geek-Crawler-Rag** | Retrieval + verification over what was crawled | **Never generates** |
+| **GeekAPI** | Service layer / BLL. Generation, grounded on verified Markdown | **No crawler, no browser** |
+| **Geek-SEO** | Site + gap analysis (owns Site Analyzer) | — |
+| **Content Creator** (this repo) | Passes a **Run ID** → GeekAPI → displays results | **No crawler, no browser** |
+
+Do not re-expose Site Analyzer through Content Creator. Gap analysis is Geek-SEO's and reaches
+Create via RAG. It was retired from the v2 path deliberately (`5072820`).
+
+RAG is **Library-only — retrieval and verification**. `/v1/generate` and `rag-generate.*` were
+removed and must never be revived. See `.cursor/rules/geek-crawler-rag.mdc`.
+
+## Crawl types
+
+`CrawlTypes` (`GeekApplication/Models/GeekCrawler/CrawlTypes.cs`):
+
+- `partner`, `competitors` — third-party, feed RAG
+- `local` — **means GEOGRAPHY (local SEO), not the own site.** `Geo` is the better name; the stored
+  value stays `"local"` unless migrated. Never conflate it with the project site.
+- **`project-site` does not exist yet.** It is a new type to be added, not a rename of `local`.
+
+Sites exceeding 50,000 pages are normal. `SameOriginBfsCrawler` documents itself as "Unlimited
+same-origin BFS per host"; that assumption is the reason the corpus reached ~223k pages / 93 GB with
+the top 12 runs holding 75% of it. **Any new crawl type ships with a scope policy — depth, path
+allow/deny, page budget — on day one.**
+
+`crawl_pages.Html` is load-bearing: partner/competitor extraction reads it directly
+(`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
+space until extraction moves to Markdown.
+
+## Fail closed. No middle states.
+
+The system is binary by design: it either has real evidence and proceeds, or it refuses and says why.
+
+- No fallback methods, no auto-repair, no default substitution (`.cursor/rules/no-fallbacks.mdc`)
+- No stubs, no success-shaped empty results (`.cursor/rules/no-stubs.mdc`)
+- Read env vars so `""` counts as absent — `??` passes an empty string through and has caused two
+  production auth outages
+- **Partial extraction is failure.** Catching a per-page error and logging "page skipped" is a middle
+  state; it hid a total extraction outage behind thirteen drafts of filler
+
+## Current state (2026-09-16)
+
+- **Frontend is v1's** (`GeekContentCreator`), restored into this repo and in production. V2's
+  frontend is gone.
+- **PLAN and WRITE call v1's engine** — `ContentGenerationOrchestrator` via
+  `ContentCreatorV2/V1Restore/`. VALIDATE/REPAIR/synthesis still run V2-side.
+- **Drafting is OFF by default** — `ContentCreatorV2:DraftingEnabled=false` stops every create before
+  the first paid model call, after the free evidence gates. Model default is `gpt-4o-mini`.
+- **Known broken:** the restored frontend calls ~15 `api/geek-content-creator/*` endpoints that no
+  longer exist (renamed to `-v2` in `582a171`, which also deleted `GccController.cs`, 1,486 lines —
+  recoverable via `git show 582a171^:`). Only `/app/creates/new` avoids them.
+- **Project-site crawling still runs inside GeekAPI**, which is why Chromium is installed into the
+  API image (`Dockerfile:33`). That is the one live violation of the boundaries above.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
