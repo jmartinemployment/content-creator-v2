@@ -5,8 +5,8 @@ import {
   PKCE_COOKIE,
   REFRESH_COOKIE,
   cookieOpts,
-} from "@/app/auth/cookies";
-import { exchangeAuthorizationCode } from "@/app/auth/tokens";
+} from "@/lib/auth/cookies";
+import { exchangeAuthorizationCode } from "@/services/auth-tokens";
 
 export async function POST(request: Request) {
   const { code } = (await request.json()) as { code?: string };
@@ -17,13 +17,7 @@ export async function POST(request: Request) {
   const jar = await cookies();
   const verifier = jar.get(PKCE_COOKIE)?.value;
   if (!verifier) {
-    // Recoverable, and the only recovery is starting over: the authorization code is single-use and
-    // already spent, so there is nothing to retry with. Tell the client to restart rather than
-    // leaving it on a dead end.
-    return NextResponse.json(
-      { error: "Sign-in session expired", restart: true },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Sign-in session expired" }, { status: 400 });
   }
 
   try {
