@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAccessTokenWithRefresh } from "@/app/auth/session";
+import { getAccessTokenWithRefresh } from "@/lib/auth/session";
 
-/** Access token JSON for SignalR (browser cannot read the httpOnly cookie). */
+/** Short-lived JWT for the Geek-SEO SignalR hub (browser cannot read the httpOnly cookie). */
 export async function GET() {
   const token = await getAccessTokenWithRefresh();
   if (!token) {
