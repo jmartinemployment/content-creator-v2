@@ -317,6 +317,9 @@ export function NewCreateForm({
   const [seedReadiness, setSeedReadiness] = useState<SeedReadiness | null>(null);
   const [seedReadinessBusy, setSeedReadinessBusy] = useState(false);
   const [seedReadinessError, setSeedReadinessError] = useState<string | null>(null);
+  // Generation spans two requests and can take a while. A changed button label is easy to miss, so
+  // the current phase is named explicitly.
+  const [generatePhase, setGeneratePhase] = useState<string | null>(null);
   const [paaQuestionsText, setPaaQuestionsText] = useState("");
   const [competitorUrlsText, setCompetitorUrlsText] = useState(initialCompetitors);
   const [writingNotes, setWritingNotes] = useState(initialNotes);
@@ -1131,6 +1134,7 @@ export function NewCreateForm({
     }
     setError(null);
     setBusy(true);
+    setGeneratePhase("Checking your context and evidence…");
     try {
       const { contentTypes, brief } = buildBriefPayload();
       const selection = sanitizeContextSelection(contextSelection);
@@ -1158,6 +1162,7 @@ export function NewCreateForm({
           ).join("; ")}`,
         );
       }
+      setGeneratePhase("Starting your draft…");
       const genRes = await fetch(`/api/gcc-v2/creates/${createId}/generate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1230,6 +1235,7 @@ export function NewCreateForm({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start job");
       setBusy(false);
+      setGeneratePhase(null);
     }
   }
 
@@ -1866,7 +1872,7 @@ export function NewCreateForm({
           <section className="mx-auto max-w-2xl">
             <p className="text-sm font-semibold text-[var(--cc-accent)]">Review</p>
             <h2 className="mt-1 text-2xl font-semibold text-[var(--cc-ink)]">
-              {toolsPreflight?.toolsFound ? "Confirm the partners we found" : "Ready to create"}
+              Ready to create
             </h2>
             {toolsPreflight?.toolsFound ? (
               <>
@@ -2029,22 +2035,28 @@ export function NewCreateForm({
               ) : null}
             </section>
 
+            {generatePhase ? (
+              <div className="mt-6" role="status" aria-live="polite">
+                <LoadingRow label={generatePhase} />
+              </div>
+            ) : null}
+
             <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
               <button type="button" onClick={() => { setToolsPreflight(null); setStep("outputs"); }} className="text-sm font-semibold text-[var(--cc-muted)]">Back</button>
-              {toolsPreflight?.toolsFound ? (
+              {true ? (
                 <button
                   type="button"
                   disabled={busy || confirmContextBlocked || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
                   onClick={() => void confirmAndGenerate()}
                   className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  <ButtonBusyLabel busy={busy} busyLabel="Starting…" idleLabel="Confirm partners & create" />
+                  <ButtonBusyLabel busy={busy} busyLabel="Starting your draft…" idleLabel="Create content" />
                 </button>
               ) : (
                 <form onSubmit={onSubmit}>
                   <button
                     type="submit"
-                    disabled={busy || confirmContextBlocked || resolvedSkillsLoading || !resolvedSkills || (!usingBackendDefaultTeam && (resolvedTeamLoading || !resolvedTeam)) || ragStatusLoading || !ragStatus?.available}
+                    disabled={busy}
                     className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <ButtonBusyLabel busy={busy} busyLabel="Preparing your workspace…" idleLabel="Create content" />
