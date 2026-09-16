@@ -13,8 +13,9 @@ export function CrawlsClient() {
   // Delete destroys vectors and crawl data, so it is confirmed per-run rather than fired on click.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  // Loading is only flipped on after the first await, so the initial fetch never calls setState
+  // synchronously inside the effect.
+  const load = useCallback(async () => {
     try {
       setRuns(await listCrawls());
       setError(null);
@@ -25,9 +26,32 @@ export function CrawlsClient() {
     }
   }, []);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    await load();
+  }, [load]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = await listCrawls();
+        if (!cancelled) {
+          setRuns(items);
+          setError(null);
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "Could not load crawls.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onCancel(run: CrawlRun) {
     setBusyId(run.id);
