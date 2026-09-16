@@ -23,7 +23,7 @@ import {
 const STAGES = ["researchPlanning", "outline", "section", "repair", "validation", "finalSynthesis", "complete"];
 const CONTENT_TYPES = ["blog", "pillar", "guide", "tech-article", "listicle", "whitepaper", "tool", "comparison", "alternatives", "case-study", "service", "local", "email", "social", "ads", "linkedin-document", "image-prompt"];
 const TOOLS = ["search_corpus", "load_evidence_page", "get_brief_context", "get_outline_context", "get_completed_section_summaries", "get_specialist_artifacts", "activate_skill", "read_skill_resource", "submit_contribution", "submit_review", "submit_research_plan", "submit_outline", "submit_section", "submit_repair", "submit_validation", "submit_final_synthesis"];
-const MODELS = ["o3-mini", "o3"];
+const MODELS = ["gpt-4o-mini", "o3-mini", "o3"];
 const MODEL_POLICY_VERSION = "content-model-policy.v1";
 
 async function api(path: string, init?: RequestInit): Promise<unknown> {

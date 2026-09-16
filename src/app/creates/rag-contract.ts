@@ -246,5 +246,5 @@ export function modelPolicyLabel(policy: ModelPolicySelection | null | undefined
   if (!policy) return "Backend default";
   if (policy.preset === "o3-only") return "o3";
   if (policy.preset === "custom") return "Custom";
-  return "o3-mini";
+  return "gpt-4o-mini";
 }

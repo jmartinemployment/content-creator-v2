@@ -1901,7 +1901,7 @@ export function NewCreateForm({
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Title</dt><dd className="mt-1 font-semibold">{title}</dd></div>
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Main format</dt><dd className="mt-1 font-semibold">{PRIMARY_DRAFT_TYPES.find((item) => item.value === primaryDraft)?.label}</dd></div>
                   <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Source</dt><dd className="mt-1 text-sm">{siteUrl}</dd></div>
-                  <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Quality</dt><dd className="mt-1 text-sm font-semibold">{modelPolicy.preset === "best-quality" ? "o3-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}</dd></div>
+                  <div><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Quality</dt><dd className="mt-1 text-sm font-semibold">{modelPolicy.preset === "best-quality" ? "gpt-4o-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}</dd></div>
                   {targetEntities.length ? <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-[var(--cc-muted)]">Key concepts</dt><dd className="mt-1 text-sm">{targetEntities.join(", ")}</dd></div> : null}
                 </dl>
               </div>
@@ -1909,13 +1909,13 @@ export function NewCreateForm({
 
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
-                  Advanced run settings · Model: {modelPolicy.preset === "best-quality" ? "o3-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}
+                  Advanced run settings · Model: {modelPolicy.preset === "best-quality" ? "gpt-4o-mini" : modelPolicy.preset === "o3-only" ? "o3" : "Custom"}
                 </summary>
                 <fieldset className="mt-4 flex flex-col gap-3">
                   <legend className="sr-only">Quality routing</legend>
                   <label className="flex gap-2 text-sm">
                     <input type="radio" name="model-policy" checked={modelPolicy.preset === "best-quality"} onChange={() => setModelPolicy({ version: "content-model-policy.v1", preset: "best-quality" })} />
-                    <span><strong>Standard — o3-mini (recommended)</strong><span className="block text-xs text-[var(--cc-muted)]">Routes every stage to o3-mini. Fast, and priced for the factual extraction this pipeline does.</span></span>
+                    <span><strong>Cheapest — gpt-4o-mini (recommended)</strong><span className="block text-xs text-[var(--cc-muted)]">Routes every stage to gpt-4o-mini while the v1 restore is in progress. Lowest cost per run.</span></span>
                   </label>
                   <label className="flex gap-2 text-sm">
                     <input type="radio" name="model-policy" checked={modelPolicy.preset === "o3-only"} onChange={() => setModelPolicy({ version: "content-model-policy.v1", preset: "o3-only" })} />
