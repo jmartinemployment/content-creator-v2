@@ -31,7 +31,13 @@ export const authConfig = {
   authUrl,
   authorizeUrl: `${authUrl}/connect/authorize`,
   tokenUrl: `${authUrl}/connect/token`,
-  clientId: process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID?.trim() || "geek-content-creator",
+  // GeekOAuth registers one client per host (OidcPublicClientSeeds.cs):
+  //   geek-content-creator     -> geek-content-creator.vercel.app/auth/callback
+  //   geek-content-creator-v2  -> content-creator-v2-phi.vercel.app/auth/callback
+  // This app is served from the v2 host, so that is the client whose redirect_uri matches.
+  // Sending the v1 id from the v2 host is what produced OpenIddict ID2043,
+  // "The specified 'redirect_uri' is not valid for this client application."
+  clientId: process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID?.trim() || "geek-content-creator-v2",
   // Always derived from appUrl. The callback lives at src/app/auth/callback, so the path is
   // fixed — an override only creates a second host that can disagree with NEXT_PUBLIC_APP_URL,
   // which is exactly what stranded the PKCE cookie and broke sign-in.
