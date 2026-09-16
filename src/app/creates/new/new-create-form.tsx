@@ -1385,13 +1385,47 @@ export function NewCreateForm({
                 Refresh the source instead of using the latest saved scan
               </label>
             </details>
+            <div className={`${fieldClass} mt-6`}>
+              <label className={labelClass} htmlFor="operatorTools">Partner tool URLs (required)</label>
+              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
+                The partner tools you implement and recommend. Format: <span className="font-medium">Name | https://… | perk</span> (one per line). The perk is optional — a discount code, extended trial or bonus your audience can use.
+                <br />
+                Partner evidence is what a draft is built from, so an indexed partner crawl run is always required.
+              </p>
+              <textarea
+                id="operatorTools"
+                className={`${inputClass} min-h-24`}
+                value={operatorToolsText}
+                onChange={(event) => setOperatorToolsText(event.target.value)}
+                placeholder={"ApprovalMax | https://www.approvalmax.com | 20% off the first year with code GEEK20\nPlooto | https://www.plooto.com"}
+              />
+            </div>
+            <div className={`${fieldClass} mt-5`}>
+              <label className={labelClass} htmlFor="competitorUrls">Competitor page URLs (optional)</label>
+              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
+                Rival consultancies, or publishers competing for the same search results. One URL per line. Leave empty if the piece names none — competitors sharpen positioning but are never required to draft.
+              </p>
+              <textarea
+                id="competitorUrls"
+                className={`${inputClass} min-h-24`}
+                value={competitorUrlsText}
+                onChange={(event) => setCompetitorUrlsText(event.target.value)}
+                placeholder={"https://rival-consultancy.example/services\nhttps://review-site.example/best-tools"}
+              />
+            </div>
+            {step === "source" && siteUrlInput.trim() && !operatorToolsText.trim() ? (
+              <p role="status" className="mt-4 text-xs text-amber-800">
+                Add at least one partner tool URL to continue. A draft is built from partner evidence,
+                so Create cannot proceed without one.
+              </p>
+            ) : null}
             {step === "analyzing" && analyzingLabel ? (
               <div className="mt-4"><LoadingRow label={analyzingLabel} /></div>
             ) : null}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                disabled={busy || !siteUrlInput.trim()}
+                disabled={busy || !siteUrlInput.trim() || !operatorToolsText.trim()}
                 onClick={() => void resolveSite(forceRecrawl)}
                 className="rounded-lg bg-[var(--cc-accent)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
@@ -1551,7 +1585,7 @@ export function NewCreateForm({
             <p className="text-sm font-semibold text-[var(--cc-accent)]">Research</p>
             <h2 className="mt-1 text-2xl font-semibold text-[var(--cc-ink)]">Shape the research</h2>
             <p className="mt-2 text-sm text-[var(--cc-muted)]">
-              Add **Partner tool URLs** (what you sell) and **Competitor page URLs** (alternatives to analyze). Both are required — indexed crawl runs must exist for each, or Create fails closed before PLAN.
+              Sharpen the brief with keywords and questions. Partner and competitor URLs were captured on the first step.
             </p>
             <div className={`mt-5 rounded-lg border px-4 py-3 text-sm ${ragStatus?.available ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`} aria-label="Research readiness">
               <span className="font-semibold">
@@ -1568,32 +1602,6 @@ export function NewCreateForm({
             <div className={`${fieldClass} mt-5`}>
               <label className={labelClass} htmlFor="paaQuestions">Questions to answer</label>
               <textarea id="paaQuestions" className={`${inputClass} min-h-24`} value={paaQuestionsText} onChange={(event) => setPaaQuestionsText(event.target.value)} placeholder={"One question per line\nHow does the workflow improve quality?"} />
-            </div>
-            <div className={`${fieldClass} mt-5`}>
-              <label className={labelClass} htmlFor="operatorTools">Partner tool URLs (required)</label>
-              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
-                Partners you sell or name. Format: <span className="font-medium">Name | https://… | perk</span> (one per line). The perk is optional — a discount code, extended trial or bonus your audience can use. An indexed partner crawl run is always required.
-              </p>
-              <textarea
-                id="operatorTools"
-                className={`${inputClass} min-h-24`}
-                value={operatorToolsText}
-                onChange={(event) => setOperatorToolsText(event.target.value)}
-                placeholder={"ApprovalMax | https://www.approvalmax.com | 20% off the first year with code GEEK20\nPlooto | https://www.plooto.com"}
-              />
-            </div>
-            <div className={`${fieldClass} mt-5`}>
-              <label className={labelClass} htmlFor="competitorUrls">Competitor page URLs (required)</label>
-              <p className="mb-1.5 text-xs text-[var(--cc-muted)]">
-                Competitors to analyze or mention. One URL per line. An indexed competitor crawl run is always required.
-              </p>
-              <textarea
-                id="competitorUrls"
-                className={`${inputClass} min-h-24`}
-                value={competitorUrlsText}
-                onChange={(event) => setCompetitorUrlsText(event.target.value)}
-                placeholder={"https://competitor.example/product\nhttps://another.example/pricing"}
-              />
             </div>
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-slate-50 p-4">
               <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">Writing notes</summary>
