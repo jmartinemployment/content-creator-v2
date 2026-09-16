@@ -11,7 +11,11 @@ export const cookieOpts = {
     secure,
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 600,
+    // The verifier must outlive the whole IdP round trip. prompt=login forces a full
+    // re-authentication - password, MFA, consent - which regularly takes longer than ten minutes if
+    // the operator is interrupted. When it expires the exchange fails with "Sign-in session expired"
+    // and the authorization code is already spent, so the only recovery is starting over.
+    maxAge: 60 * 30,
   },
   refresh: {
     httpOnly: true,

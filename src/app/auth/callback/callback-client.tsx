@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const RESTART_KEY = "gcc-v2-auth-restarted";
+
 export function AuthCallbackClient() {
   const router = useRouter();
   const params = useSearchParams();
@@ -33,10 +35,21 @@ export function AuthCallbackClient() {
           body: JSON.stringify({ code }),
         });
         if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string; restart?: boolean }
+            | null;
+          // An expired verifier is recoverable but not retryable: the code is spent. Restart the
+          // flow once automatically instead of stranding the operator on an error page. The guard
+          // stops a redirect loop if the verifier cannot be set at all.
+          if (body?.restart && !sessionStorage.getItem(RESTART_KEY)) {
+            sessionStorage.setItem(RESTART_KEY, "1");
+            window.location.href = "/api/auth/start";
+            return;
+          }
           setExchangeError(body?.error || "Sign-in failed");
           return;
         }
+        sessionStorage.removeItem(RESTART_KEY);
         router.replace("/");
       } catch {
         setExchangeError("Sign-in failed — could not reach the server.");
