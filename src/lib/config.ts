@@ -2,17 +2,30 @@
  * Geek Content Creator → GeekOAuth → GeekAPI → GeekRepository.
  * Never call GeekRepository from this app.
  */
-const authUrl = (process.env.NEXT_PUBLIC_AUTH_URL ?? "https://auth.geekatyourspot.com").replace(
-  /\/$/,
-  "",
+
+/**
+ * Reads an env var, treating empty and whitespace-only as absent.
+ *
+ * `??` only falls back on null/undefined, so a var set to "" passes straight through. That is what
+ * broke sign-in in production: NEXT_PUBLIC_AUTH_URL is set to an empty string on this project, the
+ * default never applied, and authorizeUrl became the bare "/connect/authorize" - which `new URL()`
+ * rejects with ERR_INVALID_URL, so /api/auth/start returned 500 on every attempt.
+ */
+function envOrDefault(value: string | undefined, fallback: string): string {
+  const trimmed = (value ?? "").trim();
+  return (trimmed.length > 0 ? trimmed : fallback).replace(/\/$/, "");
+}
+
+const authUrl = envOrDefault(process.env.NEXT_PUBLIC_AUTH_URL, "https://auth.geekatyourspot.com");
+// appUrl feeds redirectUri, so a wrong value here is a redirect_uri mismatch at the IdP rather than
+// a visible error. When NEXT_PUBLIC_APP_URL is absent or empty, prefer the host Vercel reports over
+// the localhost default - otherwise production would send users to http://localhost:3003/auth/callback.
+const vercelProductionUrl = (process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "").trim();
+const appUrl = envOrDefault(
+  process.env.NEXT_PUBLIC_APP_URL,
+  vercelProductionUrl.length > 0 ? `https://${vercelProductionUrl}` : "http://localhost:3003",
 );
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3003").replace(
-  /\/$/,
-  "",
-);
-const geekApiUrl = (
-  process.env.NEXT_PUBLIC_GEEK_API_URL ?? "https://api.geekatyourspot.com"
-).replace(/\/$/, "");
+const geekApiUrl = envOrDefault(process.env.NEXT_PUBLIC_GEEK_API_URL, "https://api.geekatyourspot.com");
 
 export const authConfig = {
   authUrl,
@@ -29,14 +42,14 @@ export const authConfig = {
 
 export const apiConfig = {
   baseUrl: geekApiUrl,
-  seoHubUrl:
-    (process.env.NEXT_PUBLIC_SEO_HUB_URL ?? "https://seo-api.geekatyourspot.com/hubs/seo-realtime").replace(
-      /\/$/,
-      "",
-    ),
-  workflowHubUrl: (
-    process.env.NEXT_PUBLIC_WORKFLOW_HUB_URL ?? `${geekApiUrl}/hubs/workflow-realtime`
-  ).replace(/\/$/, ""),
+  seoHubUrl: envOrDefault(
+    process.env.NEXT_PUBLIC_SEO_HUB_URL,
+    "https://seo-api.geekatyourspot.com/hubs/seo-realtime",
+  ),
+  workflowHubUrl: envOrDefault(
+    process.env.NEXT_PUBLIC_WORKFLOW_HUB_URL,
+    `${geekApiUrl}/hubs/workflow-realtime`,
+  ),
 };
 
 export const LLM_PROVIDERS = ["OpenAi", "Anthropic"] as const;
