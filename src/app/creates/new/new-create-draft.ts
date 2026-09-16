@@ -5,13 +5,9 @@ import type { SiteSectionContext } from "../site-section";
 import type { ContextSelectionRequest } from "@/app/brand-sources/context-contract";
 import type { SiteHierarchy } from "./site-hierarchy-panel";
 
-/** In-progress Create wizard — restored when returning from Geek IQ (not on plain refresh). */
+/** In-progress Create wizard draft, held in session storage. */
 export const NEW_CREATE_DRAFT_KEY = "gcc-v2-new-create-draft";
-/** Set before leaving Create for Geek IQ so browser Back also restores. */
-export const NEW_CREATE_RESUME_KEY = "gcc-v2-new-create-resume";
 
-export const CREATE_RETURN_PATH = "/creates/new?resume=1";
-export const GEEK_IQ_FROM_CREATE_HREF = `/brand-sources?returnTo=${encodeURIComponent(CREATE_RETURN_PATH)}`;
 
 export type NewCreateWizardStep =
   | "source"
@@ -55,24 +51,6 @@ export function clearNewCreateDraft(): void {
     sessionStorage.removeItem(NEW_CREATE_DRAFT_KEY);
   } catch {
     /* ignore quota / private mode */
-  }
-}
-
-export function markNewCreateResumeIntent(): void {
-  try {
-    sessionStorage.setItem(NEW_CREATE_RESUME_KEY, "1");
-  } catch {
-    /* ignore */
-  }
-}
-
-export function consumeNewCreateResumeIntent(): boolean {
-  try {
-    const flagged = sessionStorage.getItem(NEW_CREATE_RESUME_KEY) === "1";
-    sessionStorage.removeItem(NEW_CREATE_RESUME_KEY);
-    return flagged;
-  } catch {
-    return false;
   }
 }
 

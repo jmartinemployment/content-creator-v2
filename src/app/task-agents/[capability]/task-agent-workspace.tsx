@@ -8,7 +8,6 @@ import {
   type ContextSelectionRequest,
   type ResolvedContextPreview,
 } from "@/app/brand-sources/context-contract";
-import { ContextSelector } from "@/app/creates/new/context-selector";
 import {
   adaptTaskAgentInput,
   resolveTaskAgentUiFields,
@@ -1272,16 +1271,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
             ) : null}
           </>
         )}
-        <ContextSelector
-          value={contextSelection}
-          selectedAgentIds={[detail.agent.id]}
-          onChange={setContextSelection}
-          onPreviewChange={setContextPreview}
-          onProcessingChange={setContextUploadProcessing}
-          resolvePath="/api/gcc-v2/context/resolve-task-agent"
-          allowAttachments={false}
-          checkLabel="Check Geek IQ"
-        />
         {useSchemaDrivenForm ? (
           <div className="mt-5 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] p-3" data-testid="save-agent-config">
             <label className="block text-sm font-semibold text-[var(--cc-ink)]">
@@ -1355,7 +1344,7 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           <p className="mt-2 text-sm text-[var(--cc-muted)]">{run.phase} · {run.progressPercent}%</p>
           {pinnedContext?.contextManifestDigest ? (
             <p className="mt-2 font-mono text-xs text-[var(--cc-muted)]" data-testid="shared-context-digest">
-              Geek IQ digest · {pinnedContext.contextManifestDigest}
+              Context digest · {pinnedContext.contextManifestDigest}
             </p>
           ) : null}
         </section>

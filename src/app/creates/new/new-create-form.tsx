@@ -67,10 +67,8 @@ import {
   type ResolvedContextPreview,
 } from "@/app/brand-sources/context-contract";
 import { humanizeContextBlocks } from "./humanize-context-blocks";
-import { ContextSelector } from "./context-selector";
 import {
   clearNewCreateDraft,
-  consumeNewCreateResumeIntent,
   draftHasProgress,
   loadNewCreateDraft,
   saveNewCreateDraft,
@@ -372,9 +370,7 @@ export function NewCreateForm({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const resumeFromQuery = params.get("resume") === "1";
-    const resumeFromFlag = consumeNewCreateResumeIntent();
-    const shouldResume = resumeFromQuery || resumeFromFlag;
+    const shouldResume = params.get("resume") === "1";
     const draft = shouldResume ? loadNewCreateDraft() : null;
 
     if (draft && draftHasProgress(draft)) {
@@ -408,7 +404,7 @@ export function NewCreateForm({
       clearNewCreateDraft();
     }
 
-    if (resumeFromQuery) {
+    if (shouldResume) {
       const url = new URL(window.location.href);
       url.searchParams.delete("resume");
       const next = `${url.pathname}${url.search}${url.hash}`;
@@ -1887,17 +1883,6 @@ export function NewCreateForm({
               </div>
             )}
 
-            <ContextSelector
-              createId={pendingCreateId ?? toolsPreflight?.createId ?? null}
-              ensureCreateId={ensureCreateId}
-              rawBriefJson={JSON.stringify(buildBriefPayload().brief)}
-              value={contextSelection}
-              selectedAgentIds={selectedAgentIds}
-              onChange={setContextSelection}
-              onPreviewChange={setContextPreview}
-              onProcessingChange={setContextUploadProcessing}
-            />
-
             <details className="mt-5 rounded-lg border border-[var(--cc-line)] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--cc-ink)]">
                   Advanced run settings · Quality: {modelPolicy.preset === "best-quality" ? "Best available" : "Custom"}
@@ -2104,7 +2089,7 @@ export function NewCreateForm({
           role="status"
           className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950"
         >
-          <p>Restored your Create draft after Geek IQ. Everything you entered is still here.</p>
+          <p>Restored your in-progress Create draft. Everything you entered is still here.</p>
           <button
             type="button"
             onClick={discardRestoredDraft}
