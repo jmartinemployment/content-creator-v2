@@ -2,7 +2,6 @@ import { ACCESS_COOKIE } from "@/app/auth/cookies";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { fetchGccV2 } from "@/app/auth/server-bff";
-import { WorkspaceOpsCard } from "@/app/components/workspace-ops-card";
 
 type ContentSummary = {
   id: string;
@@ -40,29 +39,17 @@ export default async function HomePage() {
           </Link>
         </section>
 
-        <WorkspaceOpsCard />
-
         <section>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-[var(--cc-ink)]">Workspace</h2>
               <p className="mt-1 text-sm text-[var(--cc-muted)]">
-                Projects, batch Grid, Studio, Task Agents, and transparent ROI.
+                Studio, Task Agents, and transparent ROI.
               </p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Workspace surfaces">
             {[
-              {
-                href: "/projects",
-                label: "Projects",
-                detail: "Multi-asset Canvas with review, publish, and handoffs.",
-              },
-              {
-                href: "/grid",
-                label: "Grid",
-                detail: "Sample/full batches with due schedules.",
-              },
               {
                 href: "/pipelines",
                 label: "Pipelines",

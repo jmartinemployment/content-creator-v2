@@ -186,11 +186,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
   const [lineageParents, setLineageParents] = useState<string[]>([]);
   const [lineageRelationship, setLineageRelationship] = useState<string | undefined>();
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
-  const [canvasHandoff, setCanvasHandoff] = useState<{
-    projectId: string;
-    assetId: string;
-    versionId: string;
-  } | null>(null);
   const capabilityId = detail.agent.id;
   const schemaFields = useMemo(
     () => resolveTaskAgentUiFields(capabilityId, detail.workflow),
@@ -229,16 +224,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
 
     const topic = params.get("topic")?.trim() ?? "";
     const sourceContent = params.get("sourceContent")?.trim() ?? "";
-    const fromCanvasProjectId = params.get("fromCanvasProjectId")?.trim() ?? "";
-    const fromCanvasAssetId = params.get("fromCanvasAssetId")?.trim() ?? "";
-    const fromCanvasVersionId = params.get("fromCanvasVersionId")?.trim() ?? "";
-    if (fromCanvasProjectId && fromCanvasAssetId && fromCanvasVersionId) {
-      setCanvasHandoff({
-        projectId: fromCanvasProjectId,
-        assetId: fromCanvasAssetId,
-        versionId: fromCanvasVersionId,
-      });
-    }
     if (topic || sourceContent) {
       if (topic) setFaqTopic(topic);
       if (sourceContent) {
@@ -1346,20 +1331,6 @@ export function TaskAgentWorkspace({ detail }: { detail: TaskAgentDetail }) {
           className="mt-3 rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)] px-4 py-3 text-sm text-[var(--cc-ink)]"
         >
           {handoffNotice}
-        </p>
-      ) : null}
-
-      {canvasHandoff ? (
-        <p role="status" className="mt-5 rounded-lg border border-teal-200 bg-teal-50/50 px-4 py-3 text-sm text-teal-950">
-          Prefills arrived from Canvas asset{" "}
-          <span className="font-mono text-xs">{canvasHandoff.assetId}</span>
-          {" · "}
-          <Link
-            href={`/projects/${encodeURIComponent(canvasHandoff.projectId)}`}
-            className="font-semibold underline"
-          >
-            Back to project
-          </Link>
         </p>
       ) : null}
 

@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ButtonBusyLabel } from "@/app/components/loading-indicator";
+import {
+  CREATE_RETURN_PATH,
+  markNewCreateResumeIntent,
+} from "@/app/creates/new/new-create-draft";
 import {
   createContextIngestionConnection,
   joinContextIngestion,
@@ -163,6 +168,153 @@ function AudienceListField({
         onChange={(event) => onChange(linesFromMultiline(event.target.value))}
       />
     </label>
+  );
+}
+
+function GuidedListField({
+  label,
+  hint,
+  placeholder,
+  ariaLabel,
+  values,
+  starters,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  ariaLabel: string;
+  values: string[];
+  starters: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function addStarter(starter: string) {
+    const exists = values.some((value) => value.toLowerCase() === starter.toLowerCase());
+    if (exists) return;
+    onChange([...values, starter]);
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)]/40 p-3">
+      <label className="block text-sm font-semibold text-[var(--cc-ink)]">
+        {label}
+        <span className="mt-1 block text-xs font-normal text-[var(--cc-muted)]">{hint}</span>
+        <textarea
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+          className="mt-2 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal placeholder:text-slate-400"
+          value={multilineFromLines(values)}
+          onChange={(event) => onChange(linesFromMultiline(event.target.value))}
+        />
+      </label>
+      {starters.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="w-full text-[11px] font-medium text-[var(--cc-muted)]">Click to add:</span>
+          {starters.map((starter) => (
+            <button
+              key={starter}
+              type="button"
+              onClick={() => addStarter(starter)}
+              className="rounded-md border border-[var(--cc-line)] bg-white px-2 py-1 text-xs text-[var(--cc-ink)] hover:border-[var(--cc-accent)]"
+            >
+              {starter}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BrandVoicePolicyEditor({
+  policy,
+  busy,
+  onChange,
+  onSave,
+}: {
+  policy: BrandVoicePolicy;
+  busy: boolean;
+  onChange: (next: BrandVoicePolicy) => void;
+  onSave: () => void;
+}) {
+  return (
+    <section aria-label="Brand Voice policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
+      <div>
+        <h3 className="text-base font-semibold text-[var(--cc-ink)]">How should we sound?</h3>
+        <p className="mt-1 text-sm text-[var(--cc-muted)]">
+          Answer in plain language. Creates that pin this Brand Voice will follow it.
+          Start with a few lines, save, then Approve so it appears in Create.
+        </p>
+        <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-[var(--cc-muted)]">
+          <li>Fill what you know (skip blank fields).</li>
+          <li>Save as a new version.</li>
+          <li>Click Approve on this version so it shows up in Create.</li>
+        </ol>
+      </div>
+
+      <GuidedListField
+        label="Tone"
+        hint="3–8 adjectives for how writing should feel. Not your product features."
+        placeholder={"Example:\nconfident\nclear\npractical\nwarm without being casual"}
+        ariaLabel="Brand Voice tone attributes"
+        values={policy.toneAttributes}
+        starters={["confident", "clear", "practical", "plain-spoken", "expert but approachable"]}
+        onChange={(toneAttributes) => onChange({ ...policy, toneAttributes })}
+      />
+
+      <GuidedListField
+        label="Say it this way"
+        hint="Phrases or wording you want used when they fit. One per line."
+        placeholder={"Example:\nbuilt for operators\nfail closed\nevidence before claims"}
+        ariaLabel="Brand Voice preferred phrases"
+        values={policy.preferredPhrases}
+        starters={["built for operators", "show the evidence", "plain language first"]}
+        onChange={(preferredPhrases) => onChange({ ...policy, preferredPhrases })}
+      />
+
+      <GuidedListField
+        label="Never say this"
+        hint="Buzzwords and soft wording to keep out of drafts. Soft preference — models try to avoid these."
+        placeholder={"Example:\nsynergy\ngame-changer\nleverage\nbest-in-class"}
+        ariaLabel="Brand Voice avoid phrases"
+        values={policy.avoidPhrases}
+        starters={["synergy", "game-changer", "leverage", "best-in-class", "cutting-edge"]}
+        onChange={(avoidPhrases) => onChange({ ...policy, avoidPhrases })}
+      />
+
+      <GuidedListField
+        label="Hard bans (claims we must not make)"
+        hint="Claims that are false, risky, or illegal for your brand. These are treated as hard gates."
+        placeholder={"Example:\nguaranteed ROI\nFDA approved\n#1 in the market\nno risk"}
+        ariaLabel="Brand Voice banned claims"
+        values={policy.bannedClaims}
+        starters={["guaranteed ROI", "no risk", "#1 in the market"]}
+        onChange={(bannedClaims) => onChange({ ...policy, bannedClaims })}
+      />
+
+      <label className="block rounded-lg border border-[var(--cc-line)] bg-[var(--cc-paper)]/40 p-3 text-sm font-semibold text-[var(--cc-ink)]">
+        Anything else writers should know?
+        <span className="mt-1 block text-xs font-normal text-[var(--cc-muted)]">
+          Free-form notes: point of view, reading level, pronoun rules, humor, what “on brand” means for you.
+        </span>
+        <textarea
+          aria-label="Brand Voice custom instructions"
+          placeholder="Example: Write like a careful operator talking to another operator. Prefer short sentences. Never invent customer logos or metrics."
+          className="mt-2 min-h-28 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm font-normal placeholder:text-slate-400"
+          value={policy.customInstructions}
+          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
+        />
+      </label>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onSave}
+        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
+      </button>
+    </section>
   );
 }
 
@@ -414,76 +566,6 @@ function AudiencePolicyEditor({
         Custom instructions
         <textarea
           aria-label="Audience custom instructions"
-          className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
-          value={policy.customInstructions}
-          onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
-        />
-      </label>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onSave}
-        className="rounded-md bg-[var(--cc-accent)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        <ButtonBusyLabel busy={busy} busyLabel="Saving version…" idleLabel="Save as new version" />
-      </button>
-    </section>
-  );
-}
-
-function BrandVoicePolicyEditor({
-  policy,
-  busy,
-  onChange,
-  onSave,
-}: {
-  policy: BrandVoicePolicy;
-  busy: boolean;
-  onChange: (next: BrandVoicePolicy) => void;
-  onSave: () => void;
-}) {
-  return (
-    <section aria-label="Brand Voice policy" className="mt-6 space-y-4 border-t border-[var(--cc-line)] pt-4">
-      <div>
-        <h3 className="text-sm font-semibold">Typed Brand Voice policy</h3>
-        <p className="mt-1 text-xs text-[var(--cc-muted)]">
-          Gateable avoid/banned phrases for generation. Crawl identity samples stay soft.
-          Saving always creates a new accepted Brand Kit revision.
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <AudienceListField
-          label="Tone attributes (one per line)"
-          ariaLabel="Brand Voice tone attributes"
-          values={policy.toneAttributes}
-          onChange={(toneAttributes) => onChange({ ...policy, toneAttributes })}
-        />
-        <AudienceListField
-          label="Preferred phrases (one per line)"
-          ariaLabel="Brand Voice preferred phrases"
-          values={policy.preferredPhrases}
-          onChange={(preferredPhrases) => onChange({ ...policy, preferredPhrases })}
-        />
-        <AudienceListField
-          label="Avoid phrases (one per line)"
-          ariaLabel="Brand Voice avoid phrases"
-          values={policy.avoidPhrases}
-          onChange={(avoidPhrases) => onChange({ ...policy, avoidPhrases })}
-        />
-        <AudienceListField
-          label="Banned claims (one per line)"
-          ariaLabel="Brand Voice banned claims"
-          values={policy.bannedClaims}
-          onChange={(bannedClaims) => onChange({ ...policy, bannedClaims })}
-        />
-      </div>
-
-      <label className="block text-xs font-semibold">
-        Custom instructions
-        <textarea
-          aria-label="Brand Voice custom instructions"
           className="mt-1 min-h-24 w-full rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm"
           value={policy.customInstructions}
           onChange={(event) => onChange({ ...policy, customInstructions: event.target.value })}
@@ -1046,6 +1128,7 @@ export function CatalogWorkspace() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [returnToCreate, setReturnToCreate] = useState(false);
   const [ingestionEvents, setIngestionEvents] = useState<IngestionEvent[]>([]);
   const [showActivity, setShowActivity] = useState(false);
   const [stylePolicy, setStylePolicy] = useState<StyleGuidePolicy>(EMPTY_STYLE_GUIDE_POLICY);
@@ -1106,6 +1189,12 @@ export function CatalogWorkspace() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get("returnTo") ?? "";
+    setReturnToCreate(returnTo.startsWith("/creates/new"));
   }, []);
 
   useEffect(() => {
@@ -1368,23 +1457,26 @@ export function CatalogWorkspace() {
       if (!response.ok) throw new Error(body?.error || `Draft creation failed (HTTP ${response.status}).`);
       const catalogId = typeof body?.id === "string" ? body.id : null;
       if ((active.kind === "style-guide" || active.kind === "visual-guideline"
-        || active.kind === "product-schema" || active.kind === "audience")
+        || active.kind === "product-schema" || active.kind === "audience"
+        || active.kind === "brand-kit")
         && catalogId) {
-        const payload = active.kind === "style-guide"
-          ? EMPTY_STYLE_GUIDE_POLICY
-          : active.kind === "visual-guideline"
-            ? EMPTY_VISUAL_GUIDELINE_POLICY
-          : active.kind === "audience"
-            ? EMPTY_AUDIENCE_POLICY
-            : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] };
+        const versionBodyPayload = active.kind === "brand-kit"
+          ? { voicePolicy: brandVoicePolicyPayload(EMPTY_BRAND_VOICE_POLICY) }
+          : {
+              payload: active.kind === "style-guide"
+                ? EMPTY_STYLE_GUIDE_POLICY
+                : active.kind === "visual-guideline"
+                  ? EMPTY_VISUAL_GUIDELINE_POLICY
+                  : active.kind === "audience"
+                    ? EMPTY_AUDIENCE_POLICY
+                    : { ...EMPTY_PRODUCT_SCHEMA, fields: [emptyProductSchemaField()] },
+              schemaVersion: 1,
+              locale: active.kind === "audience" ? EMPTY_AUDIENCE_POLICY.locale : "en",
+            };
         const versionResponse = await fetch(`/api/gcc-v2/${active.path}/${encodeURIComponent(catalogId)}/versions`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            payload,
-            schemaVersion: 1,
-            locale: active.kind === "audience" ? EMPTY_AUDIENCE_POLICY.locale : "en",
-          }),
+          body: JSON.stringify(versionBodyPayload),
         });
         const versionBody = await versionResponse.json().catch(() => null);
         if (!versionResponse.ok) {
@@ -1888,6 +1980,21 @@ export function CatalogWorkspace() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
+      {returnToCreate ? (
+        <div
+          role="status"
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950"
+        >
+          <p>Your Create draft is saved. Finish Geek IQ setup, then return — nothing you entered will be lost.</p>
+          <Link
+            href={CREATE_RETURN_PATH}
+            onClick={() => markNewCreateResumeIntent()}
+            className="rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            Back to Create
+          </Link>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--cc-accent)]">Geek IQ</p>
@@ -1898,6 +2005,15 @@ export function CatalogWorkspace() {
           </p>
         </div>
         <div className="flex gap-2">
+          {returnToCreate ? (
+            <Link
+              href={CREATE_RETURN_PATH}
+              onClick={() => markNewCreateResumeIntent()}
+              className="rounded-lg border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-semibold"
+            >
+              Back to Create
+            </Link>
+          ) : null}
           <button type="button" onClick={() => void loadActivity()} className="rounded-lg border border-[var(--cc-line)] bg-white px-4 py-2 text-sm font-semibold">Connections &amp; activity</button>
           <button type="button" disabled={actionBusy !== null} onClick={() => void createDraft()} className="rounded-lg bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
             <ButtonBusyLabel busy={actionBusy === "create"} busyLabel="Creating…" idleLabel="New draft" />
@@ -2176,7 +2292,7 @@ export function CatalogWorkspace() {
           <section className="rounded-xl border border-[var(--cc-line)] bg-white p-5">
             {selected && selectedVersion ? <>
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{selected.name}</h2><p className="mt-1 text-sm text-[var(--cc-muted)]">{selected.description || "No description provided."}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(selectedVersion.lifecycle)}`}>{selectedVersion.lifecycle}</span></div>
-              <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-xs font-semibold">Exact version<select aria-label="Exact version" className="mt-1 block rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" value={selectedVersion.id} onChange={(event) => setSelectedVersionId(event.target.value)}>{[...selected.versions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => <option key={version.id} value={version.id}>Version {version.versionNumber} · {version.lifecycle}</option>)}</select></label>{active.kind !== "brand-kit" ? ["review", "approve", "deprecate", "revoke"].map((action) => <button key={action} type="button" disabled={actionBusy !== null || selectedVersion.lifecycle === "revoked"} onClick={() => void lifecycleAction(action)} className="rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold capitalize disabled:opacity-40">{actionBusy === action ? "Working…" : action}</button>) : null}</div>
+              <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-xs font-semibold">Exact version<select aria-label="Exact version" className="mt-1 block rounded-md border border-[var(--cc-line)] bg-white px-3 py-2 text-sm" value={selectedVersion.id} onChange={(event) => setSelectedVersionId(event.target.value)}>{[...selected.versions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => <option key={version.id} value={version.id}>Version {version.versionNumber} · {version.lifecycle}</option>)}</select></label>{["review", "approve", "deprecate", "revoke"].map((action) => <button key={action} type="button" disabled={actionBusy !== null || selectedVersion.lifecycle === "revoked"} onClick={() => void lifecycleAction(action)} className="rounded-md border border-[var(--cc-line)] px-3 py-2 text-xs font-semibold capitalize disabled:opacity-40">{actionBusy === action ? "Working…" : action}</button>)}</div>
               {selected.versions.length > 1 ? <p className="mt-3 text-xs text-[var(--cc-muted)]">Compare versions by selecting an immutable revision. Approved content is never edited in place.</p> : null}
               <dl><VersionDetail version={selectedVersion} /></dl>
               {active.kind === "audience" ? (

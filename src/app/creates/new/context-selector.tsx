@@ -20,6 +20,10 @@ import {
   normalizeProductSchemaPolicy,
   type ProductSchemaField,
 } from "@/app/brand-sources/product-policy";
+import {
+  GEEK_IQ_FROM_CREATE_HREF,
+  markNewCreateResumeIntent,
+} from "./new-create-draft";
 
 type ContextSelectorProps = {
   createId?: string | null;
@@ -424,7 +428,11 @@ export function ContextSelector({
             Knowledge, and Products. Independent of the task inputs above.
           </p>
         </div>
-        <a href="/brand-sources" className="text-xs font-semibold text-[var(--cc-accent)] underline">
+        <a
+          href={GEEK_IQ_FROM_CREATE_HREF}
+          onClick={() => markNewCreateResumeIntent()}
+          className="text-xs font-semibold text-[var(--cc-accent)] underline"
+        >
           {fullEmptyState ? "Set up Geek IQ" : "Manage Geek IQ"}
         </a>
       </div>
@@ -438,12 +446,13 @@ export function ContextSelector({
           data-testid="geek-iq-empty-state"
         >
           <p className="text-sm text-[var(--cc-ink)]">
-            No approved Geek IQ items yet. Catalogs are optional for this run — Locale, search, notes, and Check
-            still work. Selectors unlock after you approve Brand Voice, Audience, Style, Visual, Knowledge, or
-            Products.
+            No approved Geek IQ items yet — catalogs are optional for this run. Locale, search, notes, and Check
+            still work. Approve Brand Voice, Audience, Style, Visual, Knowledge, or Products to unlock selectors.
+            Your Create draft is saved while you set this up.
           </p>
           <a
-            href="/brand-sources"
+            href={GEEK_IQ_FROM_CREATE_HREF}
+            onClick={() => markNewCreateResumeIntent()}
             className="mt-3 inline-flex rounded-md bg-[var(--cc-accent)] px-4 py-2 text-sm font-semibold text-white"
           >
             Set up Geek IQ
