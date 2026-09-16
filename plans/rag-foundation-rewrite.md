@@ -83,9 +83,9 @@ deliberately; leaving them empty means no release authority exists. `.cursor/rul
 needs no change — mirror its wording.
 
 **Note on sourcing:** an earlier draft of this plan cited `plans/rag-foundation-rewrite.md` §0.0/§6.0
-as the authority for the acceptance bar and the "never produced usable content" finding. That file was
-empty on disk; this document now occupies it. Those two claims are operator-stated and remain
-unsourced in code — treat them as premises, not findings.
+as the authority for the "never produced usable content" finding. That file was empty on disk; this
+document now occupies it. That claim is operator-stated and remains unsourced in code — treat it as a
+premise, not a finding.
 
 ## §0. Model specs
 
@@ -134,7 +134,7 @@ the gaps are. Positioning is downstream of that, not the point of it.
 
 | # | Job | Fields | Reaches the model at |
 |---|---|---|---|
-| 1 | **Find content gaps** — topics they missed or covered shallowly, so we publish the comprehensive resource and take the untapped traffic | `GapMap` (`GapTopic`, `DepthAssessment`, `OpportunityForUs`) | `GccV2ContextAdapter.cs:203` |
+| 1 | ~~**Find content gaps**~~ — **SEPARATE CONCERN.** Content gap analysis is outside Content Creation's scope and belongs to a different system. `GapMap`/`CoverageMap` are retained only as the source of Information Gain's anti-duplication check during drafting (W4), not as topic discovery | `GapMap`, `CoverageMap` | `GccV2ContextAdapter.cs:203` |
 | 2 | **Capture bottom-of-funnel intent** — buyers actively comparing; we control the narrative rather than letting a third party define the difference | `ComparisonAxes`, `DeficitRouter`, `PricingCatalog` | `:207`, `:200`, `:194` |
 | 3 | **Build trust through honesty** — a fair breakdown, including where we're weaker | `ProofPack`, `FaqBank`, `FramingBank`; `ClaimRiskFlags` *enforces* it | `:205`, `:293`, gate at `Validate/GccV2ValidateService.cs:288` |
 | 4 | **De-risk SEO** — reverse-engineer the keywords, ad themes and formats already earning traffic | `DemandSignals` (`PrimaryKeywordFocus`, `ContentFormat`, `SearchIntentCategory`, `AdOrCopyTheme`) | `:211` |
@@ -419,10 +419,6 @@ named partner, with `GccV2PartnerCitableBridge` repairing rather than failing.
 
 **Extraction swap:** competitor pages containing SaaS-style pricing copy produce no seat-cap or
 billing-period fields; every extracted asset still carries a verified quote with offsets.
-
-**End to end:** run one Create and read the output. The acceptance bar is a human judging it
-publishable — a green suite is a baseline, not the gate. (Previously cited to
-`plans/rag-foundation-rewrite.md` §0.0; that file is empty on disk, see W0.)
 
 **W0:** grep the repo for `/v1/generate` and confirm the only surviving references are the ones
 saying it is removed.
