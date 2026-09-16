@@ -53,8 +53,23 @@ feed different consumers:
 marker is discarded. So h6→anchor tool links, "the keyword matched an h5", and h2 message pillars are
 all unrecoverable from RAG's Markdown. `Build` filters on `p.Html` for exactly this reason.
 
-Whichever crawler takes project-site **must persist raw HTML per page**, and hierarchy must be derived
-from that, never from normalized text.
+**Raw HTML is needed at derivation time, not forever.** Everything project-site grounding consumes
+lives in the derived tree, not the source:
+
+| Purpose | Reads |
+|---|---|
+| Hierarchy / keyword match | `GccV2HeadingNode.Level` + `Children` |
+| Tools & partners | `GccV2HeadingNode.Links` (anchors under a heading) |
+| Don't repeat ourselves | `RelatedPageDto(Url, Title, Headings[0..4], Excerpt≤120)`, 12 pages max — `BuildPartialInformationGain` |
+| Paragraphs | **not consumed** |
+
+So the rule is: HTML must be present **when `GccV2SiteHierarchyFromCrawl.Build` runs**. Once
+`GccV2PageHierarchy` exists, the HTML for those pages is dead weight and can be dropped. Given
+`crawl_pages.Html` is ~98% of corpus size, that is the difference between project-site being expensive
+once and expensive forever.
+
+This does **not** apply to partner/competitor pages, whose HTML is still read at extraction time
+(`GccV2GeekCrawlerResearchResolver.cs:372,583`).
 
 `crawl_pages.Html` is load-bearing: partner/competitor extraction reads it directly
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
