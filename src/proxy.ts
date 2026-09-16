@@ -109,11 +109,12 @@ export const config = {
   matcher: [
     "/",
     "/creates/:path*",
+    "/crawls/:path*",
     "/agents/:path*",
     "/skills/:path*",
-    "/brand-sources/:path*",
     "/legacy/:path*",
     "/api/gcc-v2/:path*",
+    "/api/geek-crawler/:path*",
     "/api/rag/:path*",
   ],
 };
