@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOpts } from "@/lib/auth/cookies";
-import { authConfig } from "@/lib/config";
+import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOpts } from "@/app/auth/cookies";
+import { authConfig } from "@/app/auth/config";
 
 /** Clear app session, then end GeekOAuth SSO so the next Sign in shows credentials. */
 export async function POST() {

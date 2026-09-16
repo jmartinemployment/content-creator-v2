@@ -5,7 +5,7 @@ export default function AuthCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center text-sm text-[var(--gcc-muted)]">
+        <div className="flex min-h-screen items-center justify-center text-sm text-[var(--cc-muted)]">
           Completing sign-in…
         </div>
       }

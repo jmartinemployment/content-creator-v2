@@ -1,0 +1,441 @@
+import { expect, test, type Page } from "@playwright/test";
+import { openAuthenticated, skipIfNoE2eAuth, getGccV2RequestLog, skipIfScenarioInjectionRequired, appOrigin,
+  fillRequiredPartnerTool,
+} from "./helpers";
+import { e2eAccessToken } from "./platform";
+
+test.beforeEach(({}, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
+});
+
+async function reachContextReview(page: Page, open = true) {
+  if (open) {
+    await openAuthenticated(page, "/creates/new");
+  }
+  const siteUrl = page.getByLabel("Project site URL");
+  if (!open) {
+    await expect(siteUrl).toHaveValue("example.test");
+  } else if (!(await siteUrl.inputValue())) {
+    await siteUrl.fill("example.test");
+  }
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  const title = page.getByLabel("Working title");
+  if (!(await title.inputValue())) {
+    await title.fill("Governed Context Content");
+  }
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  const addEvidenceEngine = page.getByRole("button", { name: "+ Evidence Engine" });
+  if (await addEvidenceEngine.isVisible()) {
+    await addEvidenceEngine.click();
+  }
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  const searchPhrase = page.getByLabel("Primary search phrase");
+  if (!(await searchPhrase.inputValue())) {
+    await searchPhrase.fill("governed context");
+  }
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Review" }).click();
+  await expect(page.getByRole("heading", { name: "Ready to create" })).toBeVisible();
+}
+
+test("Geek IQ catalogs expose lifecycle, provenance, and ingestion activity", async ({ page }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("heading", { name: "Geek IQ" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Brand & Sources" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Editorial Handbook" })).toBeVisible();
+  await expect(page.getByText("plain-text 1.0.0")).toBeVisible();
+  await page.getByRole("tab", { name: "Audiences" }).click();
+  await expect(page.getByRole("heading", { name: "Technical Leaders" })).toBeVisible();
+  await page.getByRole("button", { name: "revoke" }).click();
+  await expect(page.getByText("Technical Leaders revoked.")).toBeVisible();
+  await page.getByRole("button", { name: "Connections & activity" }).click();
+  await expect(page.getByRole("heading", { name: "Ingestion activity" })).toBeVisible();
+  await expect(page.getByText("Editorial handbook indexed")).toBeVisible();
+});
+
+test("Knowledge Add URL creates a version with source URL provenance", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByLabel("Knowledge source URL").fill("https://example.com/docs/readiness");
+  await page.getByRole("button", { name: "Add URL to Knowledge" }).click();
+  await expect(page.getByRole("status")).toContainText("Fetched https://example.com/docs/readiness");
+  await expect(page.getByRole("heading", { name: "Fetched readiness page" })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+  await expect(page.getByRole("link", { name: /Fetched readiness page|example\.com\/docs\/readiness/ })).toHaveAttribute(
+    "href",
+    "https://example.com/docs/readiness",
+  );
+
+  const requests = getGccV2RequestLog(page);
+  const fromUrl = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-url");
+  expect(fromUrl).toBeTruthy();
+  expect(JSON.parse(fromUrl!.body!)).toMatchObject({
+    url: "https://example.com/docs/readiness",
+  });
+});
+
+test("Knowledge Add GSC queries creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect GSC" }).click();
+  await expect(page.getByRole("status")).toContainText("Stub (not connected): GSC");
+  await expect(page.getByLabel("GSC connection")).toContainText("sc-domain:example.test");
+  await page.getByRole("button", { name: "Add GSC queries to Knowledge" }).click();
+  await expect(page.getByRole("status")).toContainText("Imported GSC queries from sc-domain:example.test");
+  await expect(page.getByRole("heading", { name: /GSC queries · sc-domain:example\.test/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = getGccV2RequestLog(page);
+  const fromGsc = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-gsc");
+  expect(fromGsc).toBeTruthy();
+  expect(JSON.parse(fromGsc!.body!)).toMatchObject({
+    gscConnectionId: "11111111-1111-4111-8111-111111111111",
+  });
+});
+
+test("Knowledge Add Drive file creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect Drive" }).click();
+  await expect(page.getByRole("status")).toContainText("Stub (not connected): Drive");
+  await expect(page.getByLabel("Drive connection")).toContainText("drive@example.test");
+  await page.getByLabel("Drive file id or URL").fill(
+    "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
+  );
+  await page.getByRole("button", { name: "Add Drive file to Knowledge" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Imported Drive file 1a2b3c4d5e6f7g8h9i0j" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Drive stub · 1a2b3c4d5e6f7g8h9i0j/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = getGccV2RequestLog(page);
+  const fromDrive = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-drive");
+  expect(fromDrive).toBeTruthy();
+  expect(JSON.parse(fromDrive!.body!)).toMatchObject({
+    driveConnectionId: "22222222-2222-4222-8222-222222222222",
+    fileIdOrUrl: "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
+  });
+});
+
+test("Knowledge Add SharePoint file creates a version from an owner connection", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await expect(page.getByRole("tab", { name: "Knowledge Base" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect SharePoint" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Stub (not connected): SharePoint" })).toBeVisible();
+  await expect(page.getByLabel("SharePoint connection")).toContainText("sharepoint@example.test");
+  await page.getByLabel("SharePoint item id or URL").fill(
+    "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",
+  );
+  await page.getByRole("button", { name: "Add SharePoint file to Knowledge" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Imported SharePoint file" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /SharePoint stub ·/ })).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 1");
+
+  const requests = getGccV2RequestLog(page);
+  const fromSharePoint = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/knowledge/from-sharepoint");
+  expect(fromSharePoint).toBeTruthy();
+  expect(JSON.parse(fromSharePoint!.body!)).toMatchObject({
+    sharePointConnectionId: "33333333-3333-4333-8333-333333333333",
+    itemIdOrUrl: "https://contoso.sharepoint.com/:w:/s/Team/EaBcDeFgHiJkLmNoPqRsTuVwXyZ",
+  });
+});
+
+test("Brand Voice policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Brand Voice" }).click();
+  await expect(page.getByRole("heading", { name: "Example Systems" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Brand Voice policy" })).toBeVisible();
+  await page.getByLabel("Brand Voice avoid phrases").fill("synergy\ngame-changer");
+  await page.getByLabel("Brand Voice banned claims").fill("guaranteed ROI");
+  await page.getByLabel("Brand Voice custom instructions").fill("Sound like a careful operator.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Example Systems as a new Brand Voice version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = getGccV2RequestLog(page);
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/brand-kits/brand-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
+    voicePolicy: {
+      schemaVersion: 1,
+      avoidPhrases: ["synergy", "game-changer"],
+      bannedClaims: ["guaranteed ROI"],
+      customInstructions: "Sound like a careful operator.",
+    },
+  });
+});
+
+test("Visual Guidelines policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Visual Guidelines" }).click();
+  await expect(page.getByRole("heading", { name: "Product Visual System" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Visual Guidelines policy" })).toBeVisible();
+  await expect(page.getByLabel("Palette primary")).toHaveValue("#0F172A");
+  await page.getByLabel("Palette accent").fill("#115E59");
+  await page.getByLabel("Imagery style notes").fill("Natural light product photography only.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Product Visual System as a new Visual Guidelines version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = getGccV2RequestLog(page);
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/visual-guidelines/visual-1/versions");
+  expect(versionCreate).toBeTruthy();
+  const body = JSON.parse(versionCreate!.body!);
+  expect(body.payload.palette.accent).toBe("#115E59");
+  expect(body.payload.imagery.styleNotes).toContain("Natural light");
+});
+
+test("Style Guide policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Style Guides" }).click();
+  await expect(page.getByRole("heading", { name: "Clear Technical Style" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Style Guide policy" })).toBeVisible();
+  await expect(page.getByLabel("Term rule 1 match")).toHaveValue("synergy");
+  await page.getByRole("button", { name: "Add rule" }).click();
+  await page.getByLabel("Term rule 3 kind").selectOption("capitalize");
+  await page.getByLabel("Term rule 3 match").fill("Acme Cloud");
+  await page.getByLabel("Custom instructions").fill("Prefer concrete operational outcomes and named systems.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Clear Technical Style as a new Style Guide version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = getGccV2RequestLog(page);
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/style-guides/style-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
+    schemaVersion: 1,
+    payload: {
+      schemaVersion: 1,
+      customInstructions: "Prefer concrete operational outcomes and named systems.",
+    },
+  });
+});
+
+test("Audience policy editor saves an immutable typed version", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Audiences" }).click();
+  await expect(page.getByRole("heading", { name: "Technical Leaders" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Audience policy" })).toBeVisible();
+  await expect(page.getByLabel("Audience summary")).toHaveValue(
+    "Technical buyers evaluating evidence systems.",
+  );
+  await expect(page.getByLabel("Audience roles")).toHaveValue("VP Engineering\nStaff Engineer");
+  await page.getByLabel("Audience banned topics").fill("hype\nunverified claims");
+  await page.getByLabel("Audience custom instructions").fill(
+    "Prefer concrete systems and citeable outcomes.",
+  );
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Technical Leaders as a new Audience version")).toBeVisible();
+  await expect(page.getByLabel("Exact version")).toContainText("Version 2");
+
+  const requests = getGccV2RequestLog(page);
+  const versionCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/audiences/audience-1/versions");
+  expect(versionCreate).toBeTruthy();
+  expect(JSON.parse(versionCreate!.body!)).toMatchObject({
+    schemaVersion: 1,
+    locale: "en",
+    payload: {
+      schemaVersion: 1,
+      bannedTopics: ["hype", "unverified claims"],
+      customInstructions: "Prefer concrete systems and citeable outcomes.",
+    },
+  });
+});
+
+test("Product Schema and Product IQ editors save typed versions with claims", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByRole("tab", { name: "Product Schemas" }).click();
+  await expect(page.getByRole("heading", { name: "Core Product Schema" })).toBeVisible();
+  await expect(page.getByLabel("Schema field 1 label")).toHaveValue("Pricing");
+  await page.getByRole("button", { name: "Add field" }).click();
+  await page.getByLabel("Schema field 3 label").fill("Compatibility");
+  await page.getByLabel("Schema field 3 key").fill("compatibility");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Core Product Schema as a new Product Schema version")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Products" }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Engine" })).toBeVisible();
+  await expect(page.getByLabel("Product field Pricing")).toHaveValue("Contact sales");
+  await page.getByLabel("Approved claims").fill("Evidence Engine cites every claim\nSOC2 ready");
+  await page.getByLabel("Mandatory disclaimers").fill("Results depend on source coverage.");
+  await page.getByRole("button", { name: "Save as new version" }).click();
+  await expect(page.getByText("Saved Evidence Engine as a new Product version")).toBeVisible();
+
+  const requests = getGccV2RequestLog(page);
+  const productCreate = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST" && entry.path === "/api/geek-content-creator-v2/products/product-1/versions");
+  expect(JSON.parse(productCreate!.body!)).toMatchObject({
+    productSchemaVersionId: "schema-version-1",
+    approvedClaims: ["Evidence Engine cites every claim", "SOC2 ready"],
+    mandatoryDisclaimers: ["Results depend on source coverage."],
+  });
+});
+
+test("approved source upload sends bytes directly to issued storage URL and finalizes with JSON", async ({ page, request }) => {
+  await openAuthenticated(page, "/brand-sources");
+  await page.getByLabel("Upload additional reference").setInputFiles({
+    name: "source.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Private governed source"),
+  });
+  await expect(page.getByRole("status")).toContainText("Upload verified");
+
+  const requests = getGccV2RequestLog(page);
+  const storage = requests.find((entry: { path: string }) => entry.path === "/storage/upload-1");
+  expect(storage).toMatchObject({ method: "PUT", directStorage: true, byteLength: 23 });
+  const bffUploadCalls = requests.filter((entry: { path: string }) =>
+    entry.path.includes("/knowledge/uploads"),
+  );
+  expect(bffUploadCalls.map((entry: { path: string }) => entry.path)).toEqual([
+    "/api/geek-content-creator-v2/knowledge/uploads",
+    "/api/geek-content-creator-v2/knowledge/uploads/upload-1/complete",
+  ]);
+  const uploadInit = bffUploadCalls[0]!;
+  const uploadComplete = bffUploadCalls[1]!;
+  expect(uploadInit.body).toBeTruthy();
+  expect(uploadComplete.body).toBeTruthy();
+  const initPayload = JSON.parse(uploadInit.body as string) as { fileName: string; byteSize: number; sha256: string };
+  const completePayload = JSON.parse(uploadComplete.body as string) as { sha256: string };
+  expect(initPayload).toMatchObject({ fileName: "source.txt", byteSize: 23 });
+  expect(initPayload.sha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(completePayload.sha256).toMatch(/^[a-f0-9]{64}$/);
+});
+
+test("completed website research is promoted to the source library without asking", async ({ page, request }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+
+  await expect(page.getByText("Added to the Source Library · processing")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Source Library/ })).toHaveCount(0);
+
+  const requests = getGccV2RequestLog(page);
+  const promotions = requests.filter((entry: { path: string }) =>
+    entry.path.endsWith("/promote-to-source"),
+  );
+  expect(promotions).toHaveLength(1);
+  expect(JSON.parse(promotions[0]!.body!)).toMatchObject({ approve: true });
+});
+
+test("context selector can attach a public URL to the run", async ({ page, request }) => {
+  await reachContextReview(page);
+  await page.getByRole("button", { name: "Create content" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
+  await page.getByLabel("Attachment URL").fill("https://example.com/run-brief");
+  await page.getByRole("button", { name: "Add URL to this run" }).click();
+  await expect(page.getByRole("status")).toContainText("Fetched attachment page");
+
+  const requests = getGccV2RequestLog(page);
+  const fromUrl = requests.find((entry: { method: string; path: string }) =>
+    entry.method === "POST"
+    && /\/creates\/[^/]+\/attachments\/from-url$/.test(entry.path));
+  expect(fromUrl).toBeTruthy();
+  expect(JSON.parse(fromUrl!.body!)).toMatchObject({
+    url: "https://example.com/run-brief",
+  });
+});
+
+test("context selector restores stable IDs and shows warning versus blocking preflight", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
+  await reachContextReview(page);
+  await page.getByRole("button", { name: "Create content" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm the partners we found" })).toBeVisible();
+  await page.getByLabel("Editorial Handbook version 1").check();
+  await page.getByLabel("Audience").selectOption("audience-version-1");
+  await page.getByLabel("Style Guide").selectOption("style-version-1");
+  await page.getByLabel("Evidence Engine product version 1").check();
+  await expect(page.getByLabel("Evidence Engine field Pricing")).toBeChecked();
+  await page.getByLabel("Evidence Engine field Differentiator").uncheck();
+  await page.getByRole("button", { name: "Check context" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toContainText("Editorial Handbook is stale");
+  await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeEnabled();
+  await page.getByRole("button", { name: "Check context" }).click();
+  await expect(page.getByLabel("Effective context preflight")).toContainText("You no longer have access");
+  await expect(page.getByRole("button", { name: "Confirm partners & create" })).toBeDisabled();
+});
+
+test("manifest details distinguish original-context retry from refresh lineage", async ({ page }, testInfo) => {
+  skipIfScenarioInjectionRequired(testInfo);
+  await openAuthenticated(page, "/creates/create-1?jobId=job-1");
+  await page.getByText("Technical details", { exact: true }).click();
+  await expect(page.getByLabel("Context manifest")).toContainText("manifest-1");
+  await expect(page.getByLabel("Context manifest")).toContainText("run-context-manifest.v1");
+  await expect(page.getByLabel("Context manifest")).toContainText("Editorial Handbook");
+
+  await page.getByRole("button", { name: "Retry with original context" }).click();
+  await expect(page).toHaveURL(/jobId=job-retry-1/);
+  await page.reload();
+  await page.getByText("Technical details", { exact: true }).click();
+  await expect(page.getByLabel("Context manifest")).toContainText("same manifest");
+
+  await page.getByRole("button", { name: "Refresh context & rerun" }).click();
+  await expect(page).toHaveURL(/jobId=job-refresh-1/);
+  await page.reload();
+  await page.getByText("Technical details", { exact: true }).click();
+  await expect(page.getByLabel("Context manifest")).toContainText("manifest-2");
+  await expect(page.getByLabel("Context manifest")).toContainText("new manifest");
+});
+
+test("BFF rejects object bytes on upload control routes before forwarding", async ({ request }, testInfo) => {
+  skipIfNoE2eAuth(testInfo);
+  const response = await request.post(`${appOrigin}/api/gcc-v2/knowledge/uploads`, {
+    headers: {
+      cookie: `gcc_v2_access=${e2eAccessToken()}`,
+      "content-type": "application/octet-stream",
+    },
+    data: Buffer.alloc(32, 1),
+  });
+  expect(response.status()).toBe(415);
+  await expect(response.json()).resolves.toEqual({
+    error: "File bytes must be uploaded directly to the issued storage URL.",
+  });
+});
+
+test("the create wizard always starts at step one, including after a refresh", async ({ page }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("Previously analyzed sites")).toBeVisible();
+  await expect(page.getByText("Using 1 page from")).toHaveCount(0);
+
+  await openAuthenticated(page, "/creates/new");
+  await expect(page.getByLabel("Previously analyzed sites")).toBeVisible();
+  await expect(page.getByText("Using 1 page from")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("gcc-v2-new-create-draft")),
+  ).toBeNull();
+});
+
+test("returning from Geek IQ restores the in-progress create draft", async ({ page }) => {
+  await openAuthenticated(page, "/creates/new");
+  await page.getByLabel("Previously analyzed sites").selectOption("https://example.test");
+  await fillRequiredPartnerTool(page);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+  await page.getByLabel("Working title").fill("Resume me after Geek IQ");
+  await expect
+    .poll(async () => page.evaluate(() => sessionStorage.getItem("gcc-v2-new-create-draft")))
+    .not.toBeNull();
+
+  await openAuthenticated(page, "/creates/new?resume=1");
+  await expect(page.getByText("Restored your Create draft after Geek IQ")).toBeVisible();
+  await expect(page.getByLabel("Working title")).toHaveValue("Resume me after Geek IQ");
+  await expect(page.getByText("Using 1 page from")).toBeVisible();
+});

@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { Source_Sans_3 } from "next/font/google";
+import { cookies } from "next/headers";
+import { ACCESS_COOKIE } from "@/app/auth/cookies";
+import { ProductShell } from "@/app/components/product-shell";
 import "./globals.css";
-
-const display = Fraunces({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
 
 const body = Source_Sans_3({
   variable: "--font-body",
@@ -15,22 +12,23 @@ const body = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Geek Content Creator",
-  description:
-    "Find site content gaps, generate with site section context, revise, approve, and repurpose.",
+  title: "Content Creator",
+  description: "Create evidence-backed content from one guided workspace.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jar = await cookies();
+  const signedIn = Boolean(jar.get(ACCESS_COOKIE)?.value);
+
   return (
-    <html
-      lang="en"
-      className={`${display.variable} ${body.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${body.variable} h-full antialiased`}>
+      <body className="min-h-full">
+        {signedIn ? <ProductShell>{children}</ProductShell> : children}
+      </body>
     </html>
   );
 }
