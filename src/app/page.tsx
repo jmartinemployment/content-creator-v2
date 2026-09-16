@@ -51,11 +51,6 @@ export default async function HomePage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Workspace surfaces">
             {[
               {
-                href: "/pipelines",
-                label: "Pipelines",
-                detail: "Plan → Create → Adapt → Activate → Optimize stage runs.",
-              },
-              {
                 href: "/task-agents",
                 label: "Task Agents",
                 detail: "Outcome agents with durable runs and artifacts.",

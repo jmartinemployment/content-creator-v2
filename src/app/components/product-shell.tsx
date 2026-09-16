@@ -7,7 +7,6 @@ import type { ReactNode } from "react";
 const primaryNav = [
   { href: "/", label: "Dashboard", glyph: "⌂" },
   { href: "/creates", label: "Content", glyph: "▤" },
-  { href: "/pipelines", label: "Pipelines", glyph: "⇢" },
   { href: "/roi", label: "ROI", glyph: "%" },
   { href: "/task-agents", label: "Task Agents", glyph: "◎" },
   { href: "/studio", label: "Studio", glyph: "✎" },
