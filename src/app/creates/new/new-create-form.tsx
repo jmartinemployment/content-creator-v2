@@ -316,6 +316,7 @@ export function NewCreateForm({
   const [operatorToolsText, setOperatorToolsText] = useState(initialTools);
   const [seedReadiness, setSeedReadiness] = useState<SeedReadiness | null>(null);
   const [seedReadinessBusy, setSeedReadinessBusy] = useState(false);
+  const [seedReadinessError, setSeedReadinessError] = useState<string | null>(null);
   const [paaQuestionsText, setPaaQuestionsText] = useState("");
   const [competitorUrlsText, setCompetitorUrlsText] = useState(initialCompetitors);
   const [writingNotes, setWritingNotes] = useState(initialNotes);
@@ -722,6 +723,7 @@ export function NewCreateForm({
         return;
       }
       setSeedReadinessBusy(true);
+      setSeedReadinessError(null);
       void fetch("/api/gcc-v2/research-readiness", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -733,8 +735,14 @@ export function NewCreateForm({
           setSeedReadiness((await response.json()) as SeedReadiness);
         })
         .catch(() => {
-          // Silent: this is advisory. The backend gate still fails closed at PLAN.
+          // Never silent: "no evidence" and "the check did not run" must not look identical.
+          // Still advisory - the operator is not blocked, because the backend gate fails closed
+          // at PLAN regardless.
           setSeedReadiness(null);
+          setSeedReadinessError(
+            "Could not check crawl evidence — the research service is unavailable. "
+            + "Create will still refuse to draft without an indexed partner run.",
+          );
         })
         .finally(() => setSeedReadinessBusy(false));
     }, 600);
@@ -1469,6 +1477,16 @@ export function NewCreateForm({
               <p role="status" className="mt-4 text-xs text-amber-800">
                 Add at least one partner tool URL to continue. A draft is built from partner evidence,
                 so Create cannot proceed without one.
+              </p>
+            ) : null}
+            {step === "source" && seedReadinessError ? (
+              <p role="status" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                {seedReadinessError}
+              </p>
+            ) : null}
+            {step === "source" && !seedReadiness && !seedReadinessError && seedReadinessBusy ? (
+              <p role="status" className="mt-4 text-xs text-[var(--cc-muted)]">
+                Checking crawl evidence…
               </p>
             ) : null}
             {step === "source" && seedReadiness ? (
