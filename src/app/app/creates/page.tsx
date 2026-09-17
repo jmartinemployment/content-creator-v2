@@ -6,7 +6,6 @@ import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import { getClients, ApiError } from "@/services/content-writer-api";
 import type { Client } from "@/lib/types";
 import { listGccCreates, type GccCreate } from "@/services/gcc-api";
-import { contentTypeLabel } from "@/lib/content-types";
 
 export default function CreatesListPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -49,17 +48,10 @@ export default function CreatesListPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-brand">
           Content Creator
         </p>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold text-foreground">Creates</h1>
-          <Link
-            href="/app/creates/new"
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
-          >
-            New create
-          </Link>
-        </div>
+        <h1 className="mt-1 text-3xl font-bold text-foreground">Creates</h1>
         <p className="mt-2 text-sm text-muted">
-          Happy path: Create → Content Brief → generate → revise / SEO / approve / Mix.
+          Happy path: Site Analyzer → Content Brief → generate → revise / SEO /
+          approve / Mix. Start a create by picking a gap in Site Analyzer.
         </p>
       </div>
 
@@ -79,7 +71,7 @@ export default function CreatesListPage() {
 
       {visible.length === 0 && !error ? (
         <p className="text-sm text-muted">
-          No creates yet for this client. Start one from a topic.
+          No creates yet for this client. Pick a gap in Site Analyzer to start one.
         </p>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
@@ -92,9 +84,9 @@ export default function CreatesListPage() {
                 <div>
                   <p className="font-medium text-foreground">{c.topic}</p>
                   <p className="text-xs text-muted">
-                    {contentTypeLabel(c.startingContentType)} · {c.status}
+                    {c.startingContentType ?? "no type yet"} · {c.status}
                     {c.briefJson ? " · brief" : " · brief missing"}
-                    {c.siteAnalysisProfileId ? " · site grounded" : ""}
+                    {c.siteAnalysisProfileId ? " · Site Analyzer" : ""}
                   </p>
                 </div>
                 <span className="text-sm font-semibold text-brand">Open →</span>

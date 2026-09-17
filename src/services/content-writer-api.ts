@@ -385,6 +385,71 @@ export async function generateToolsFromNames(
   return waitForToolsJob(projectId, started.jobId, onProgress);
 }
 
+/** Candidate tool names from pillar Tools section, existing tool drafts, and Desired Headings. */
+export async function listToolNameCandidates(projectId: string): Promise<string[]> {
+  const res = await request<{ names: string[] }>(
+    `/api/geek-content-creator/projects/${projectId}/tool-name-candidates`,
+  );
+  return res.names ?? [];
+}
+
+/**
+ * Content Creator addition: operator Revise (Full/Section) on a CWV2 project draft.
+ */
+export function reviseProjectContent(
+  projectId: string,
+  input: {
+    contentType?: string;
+    feedback: string;
+    scope?: "full" | "section";
+    sectionPath?: string;
+    toolSlug?: string;
+    slug?: string;
+    provider?: string;
+  },
+): Promise<GeneratedContentSet> {
+  return request<GeneratedContentSet>(
+    `/api/geek-content-creator/projects/${projectId}/revise`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        contentType: input.contentType ?? null,
+        feedback: input.feedback,
+        scope: input.scope ?? "full",
+        sectionPath: input.sectionPath ?? null,
+        toolSlug: input.toolSlug ?? null,
+        slug: input.slug ?? null,
+        provider: input.provider ?? "OpenAi",
+      }),
+    },
+  );
+}
+
+export async function listImagePromptRows(
+  projectId: string,
+): Promise<{ slug: string; title: string; contentType: string; promptPreview: string }[]> {
+  const res = await request<{
+    rows: { slug: string; title: string; contentType: string; promptPreview: string }[];
+  }>(`/api/geek-content-creator/projects/${projectId}/image-prompt-rows`);
+  return res.rows ?? [];
+}
+
+export function setProjectContentApproval(
+  projectId: string,
+  approved: boolean,
+): Promise<{ projectId: string; contentApprovedAtUtc: string | null }> {
+  return request(`/api/geek-content-creator/projects/${projectId}/content-approval`, {
+    method: "POST",
+    body: JSON.stringify({ approved }),
+  });
+}
+
+export function getProjectContentApproval(
+  projectId: string,
+): Promise<{ projectId: string; approved: boolean; contentApprovedAtUtc: string | null }> {
+  return request(`/api/geek-content-creator/projects/${projectId}/content-approval`);
+}
+
 export function generateBlogContent(
   projectId: string,
 ): Promise<GeneratedContentSet> {
@@ -401,6 +466,38 @@ export function generateSocialContent(
     `/api/projects/${projectId}/generate/social`,
     { method: "POST" },
   );
+}
+
+export function generateSocialPack(
+  projectId: string,
+  counts: {
+    facebookCount?: number;
+    linkedInCount?: number;
+    xCount?: number;
+    instagramCount?: number;
+    metaAdsCount?: number;
+    googleAdsCount?: number;
+    provider?: string;
+  },
+): Promise<{
+  set: GeneratedContentSet;
+  packJson: string;
+  channels: string[];
+  variantCount: number;
+  llmCalls: number;
+}> {
+  return request(`/api/geek-content-creator/projects/${projectId}/social-pack`, {
+    method: "POST",
+    body: JSON.stringify({
+      facebookCount: counts.facebookCount ?? 0,
+      linkedInCount: counts.linkedInCount ?? 0,
+      xCount: counts.xCount ?? 0,
+      instagramCount: counts.instagramCount ?? 0,
+      metaAdsCount: counts.metaAdsCount ?? 0,
+      googleAdsCount: counts.googleAdsCount ?? 0,
+      provider: counts.provider ?? defaultLlmProvider(),
+    }),
+  });
 }
 
 export function generateColdOutreachContent(

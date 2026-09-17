@@ -1,6 +1,5 @@
 "use client";
 
-import { contentTypeLabel } from "@/lib/content-types";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
@@ -142,7 +141,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
   const canGenerate = briefFormComplete && briefReady;
-  // Crawl-handoff creates require relatedPages; domain-only grounding does not.
+  // Site Analyzer handoff creates require relatedPages; domain-only grounding does not.
   const saMissingPages =
     !!detail.siteAnalysisProfileId &&
     !!siteSection &&
@@ -227,14 +226,14 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
 
       <div className="mb-8 mt-2">
         <p className="text-sm font-semibold uppercase tracking-wide text-brand">
-          {contentTypeLabel(detail.startingContentType)}
+          {detail.startingContentType ?? "no type yet"}
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">{detail.topic}</h1>
         <p className="mt-2 text-sm text-muted">
           Create {detail.id}
           {briefReady ? " · brief saved" : " · brief missing"}
           {researchReady ? " · research saved" : ""}
-          {detail.siteAnalysisProfileId ? " · site grounded" : ""}
+          {detail.siteAnalysisProfileId ? " · Site Analyzer" : ""}
         </p>
       </div>
 

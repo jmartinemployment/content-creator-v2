@@ -41,7 +41,7 @@ export default function HomePage() {
           Write from site gaps — grounded in what the site already says.
         </h1>
         <p className="mt-4 max-w-lg text-base leading-relaxed text-white/60">
-          A crawled site gives a create real section context. Content
+          Site Analyzer gaps start a create with real site section context. Content
           Brief, deep research, generate, revise, on-page SEO, approve, and Mix —
           pillar optional.
         </p>
@@ -53,7 +53,7 @@ export default function HomePage() {
             Sign in to create
           </a>
           <Link
-            href="/app/create"
+            href="/app/site-analyzer"
             className="inline-flex items-center justify-center rounded-md border border-white/20 px-5 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
           >
             Open app
