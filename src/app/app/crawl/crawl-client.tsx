@@ -312,16 +312,26 @@ export function SiteAnalyzerClient() {
           };
           const wanted = host ? seedHost(host) : null;
 
+          // One crawl per URL. A site has one current corpus, not a history to choose from --
+          // the publish slot resolves (owner, crawlType, seedKey) to a single run, so offering
+          // several for one host would let the operator pick one the rest of the system will not
+          // use. Runs arrive newest-first, so the first seen for a host is the one that counts.
+          const newestPerHost = new Map<string, (typeof runs)[number]>();
+          for (const r of runs) {
+            if (wanted && !r.seedUrls.some((u) => seedHost(u) === wanted)) continue;
+            const key = seedHost(r.seedUrls[0] ?? "");
+            if (!key || newestPerHost.has(key)) continue;
+            newestPerHost.set(key, r);
+          }
+
           setProfiles(
-            runs
-              .filter((r) => !wanted || r.seedUrls.some((u) => seedHost(u) === wanted))
-              .map((r) => ({
-                id: r.runId,
-                domain: r.seedUrls[0] ?? "",
-                status: r.status,
-                analyzedAt: r.completedAtUtc ?? r.startedAtUtc ?? r.createdAtUtc ?? null,
-                primaryFocus: null,
-              })),
+            [...newestPerHost.values()].map((r) => ({
+              id: r.runId,
+              domain: r.seedUrls[0] ?? "",
+              status: r.status,
+              analyzedAt: r.completedAtUtc ?? r.startedAtUtc ?? r.createdAtUtc ?? null,
+              primaryFocus: null,
+            })),
           );
         } catch (e) {
           if (!cancelled) {
