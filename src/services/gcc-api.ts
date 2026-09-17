@@ -680,3 +680,36 @@ export function createGccClient(input: { name: string; notes?: string }): Promis
 }
 
 export const GCC_CREATE_STORAGE_PREFIX = "gcc-create-id:";
+
+export interface GeekCrawlerRunSnapshot {
+  runId: string;
+  crawlType: string;
+  status: string;
+  seedUrls: string[];
+  errorSummary: string | null;
+}
+
+/**
+ * Start a Geek-Crawler run for a third-party crawl type.
+ *
+ * partner and competitors answer different questions and are never one crawl: partner pages are
+ * evidence to cite, competitor pages are the angle. They are started separately so a failure in
+ * one does not silently take the other's seeds with it.
+ */
+export function startGeekCrawl(
+  crawlType: "partner" | "competitors" | "local" | "project-site",
+  seeds: string[],
+): Promise<GeekCrawlerRunSnapshot> {
+  return gccRequest<GeekCrawlerRunSnapshot>("/api/geek-crawler/crawls", {
+    method: "POST",
+    body: JSON.stringify({ crawlType, seeds }),
+  });
+}
+
+/** One URL per line; blank lines and stray whitespace dropped. */
+export function parseSeedLines(raw: string): string[] {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
