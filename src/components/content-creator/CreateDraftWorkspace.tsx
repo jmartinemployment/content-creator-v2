@@ -27,6 +27,7 @@ import {
   type GccSeoReport,
   type GccStaleGroundingError,
 } from "@/services/gcc-api";
+import { connectThroughCoverageHub } from "@/services/site-analysis-hub";
 
 export default function CreateDraftWorkspace({ createId }: { createId: string }) {
   const [detail, setDetail] = useState<GccCreateDetail | null>(null);
@@ -42,6 +43,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const [generateMsg, setGenerateMsg] = useState<string | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   // Seed the checked set from the create's starting type once the detail loads;
   // never clobber a selection the operator has already made.
@@ -185,6 +187,37 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
     }
   }
 
+  async function reanalyzeThenGenerate() {
+    if (!stalePrompt?.domain) return;
+    setReanalyzing(true);
+    setGenerateMsg(null);
+    const ac = new AbortController();
+    try {
+      const hub = await connectThroughCoverageHub({
+        signal: ac.signal,
+        onProgress: () => {},
+      });
+      const res = await fetch("/api/site-analyzer/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: stalePrompt.domain, force: true }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        ac.abort();
+        await hub.done.catch(() => {});
+        throw new Error(body.error || "Re-analyze failed");
+      }
+      await hub.done;
+      setStalePrompt(null);
+      await reload();
+      await runGenerate(false);
+    } catch (err) {
+      setGenerateMsg(err instanceof Error ? err.message : "Re-analyze failed");
+    } finally {
+      setReanalyzing(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -201,7 +234,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           Create {detail.id}
           {briefReady ? " · brief saved" : " · brief missing"}
           {researchReady ? " · research saved" : ""}
-          {detail.siteAnalysisProfileId ? " · site grounded" : ""}
+          {detail.siteAnalysisProfileId ? " · Site Analyzer" : ""}
         </p>
       </div>
 
@@ -261,7 +294,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
 
           <button
             type="button"
-            disabled={!canGenerate || saMissingPages || generating || outputTypes.length === 0}
+            disabled={!canGenerate || saMissingPages || generating || reanalyzing || outputTypes.length === 0}
             onClick={() => void runGenerate(false)}
             className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -283,7 +316,15 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={generating}
+                  disabled={generating || reanalyzing}
+                  onClick={() => void reanalyzeThenGenerate()}
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
+                >
+                  {reanalyzing ? "Re-analyzing…" : "Re-analyze now"}
+                </button>
+                <button
+                  type="button"
+                  disabled={generating || reanalyzing}
                   onClick={() => void runGenerate(true)}
                   className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 disabled:opacity-50"
                 >
