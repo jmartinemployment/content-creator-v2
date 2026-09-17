@@ -687,6 +687,9 @@ export interface GeekCrawlerRunSnapshot {
   status: string;
   seedUrls: string[];
   errorSummary: string | null;
+  createdAtUtc?: string;
+  startedAtUtc?: string | null;
+  completedAtUtc?: string | null;
 }
 
 /**

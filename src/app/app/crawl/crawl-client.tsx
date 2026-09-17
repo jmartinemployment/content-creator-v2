@@ -12,7 +12,7 @@ import { createGccCreate, createGccClient, getGccClientByName, ApiError } from "
 import { getClients } from "@/services/content-writer-api";
 import type { Client } from "@/lib/types";
 import { connectThroughCoverageHub } from "@/services/site-analysis-hub";
-import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
+import { checkHostsIndexed, listGeekCrawls, type HostIndexed } from "@/services/gcc-api";
 const SHOW_GAP_GENERATE_BUTTON = false; // Site Analyzer currently only returns headings without matching pages (missing-page gaps). Generate is disabled pending Workflow rebuild. Flip this line if gap types expand to include real content gaps.
 
 type SiteAnalysisProfileListItem = {
@@ -296,42 +296,37 @@ export function SiteAnalyzerClient() {
         setLoadingProfiles(true);
         setProfilesError(null);
         try {
-          const host = domain.trim();
-          const url = host
-            ? `/api/site-analyzer/profiles/by-domain?domain=${encodeURIComponent(host)}&limit=50`
-            : `/api/site-analyzer/profiles/recent?limit=50`;
-          const res = await fetch(url, { cache: "no-store" });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new Error(
-              typeof body.error === "string" ? body.error : "Could not list site_analysis_profiles",
-            );
-          }
-          const list = (Array.isArray(body) ? body : []) as SiteAnalysisProfileListItem[];
+          // The existing-crawl picker. Was site-analyzer/profiles/{recent,by-domain}, which is
+          // retired and 404s on mount and on every keystroke in the domain field. Geek-Crawler owns
+          // crawls now, so the runs come from there and are filtered to project-site.
+          const host = domain.trim().toLowerCase();
+          const runs = await listGeekCrawls("project-site", 50);
           if (cancelled) return;
+
+          const seedHost = (u: string) => {
+            try {
+              return new URL(u.includes("://") ? u : `https://${u}`).hostname.toLowerCase();
+            } catch {
+              return u.toLowerCase();
+            }
+          };
+          const wanted = host ? seedHost(host) : null;
+
           setProfiles(
-            list.map((p) => ({
-              id: String((p as { id?: string; Id?: string }).id ?? (p as { Id?: string }).Id ?? ""),
-              domain: String(
-                (p as { domain?: string; Domain?: string }).domain ??
-                  (p as { Domain?: string }).Domain ??
-                  "",
-              ),
-              status: (p as { status?: string }).status ?? null,
-              analyzedAt:
-                (p as { analyzedAt?: string; AnalyzedAt?: string }).analyzedAt ??
-                (p as { AnalyzedAt?: string }).AnalyzedAt ??
-                null,
-              primaryFocus:
-                (p as { primaryFocus?: string; PrimaryFocus?: string }).primaryFocus ??
-                (p as { PrimaryFocus?: string }).PrimaryFocus ??
-                null,
-            })).filter((p) => p.id),
+            runs
+              .filter((r) => !wanted || r.seedUrls.some((u) => seedHost(u) === wanted))
+              .map((r) => ({
+                id: r.runId,
+                domain: r.seedUrls[0] ?? "",
+                status: r.status,
+                analyzedAt: r.completedAtUtc ?? r.startedAtUtc ?? r.createdAtUtc ?? null,
+                primaryFocus: null,
+              })),
           );
         } catch (e) {
           if (!cancelled) {
-            setProfiles([]);
             setProfilesError(e instanceof Error ? e.message : "Could not list crawls.");
+            setProfiles([]);
           }
         } finally {
           if (!cancelled) setLoadingProfiles(false);
@@ -343,6 +338,7 @@ export function SiteAnalyzerClient() {
       window.clearTimeout(handle);
     };
   }, [domain]);
+
 
   async function applyFinishedCrawl(profileId: string) {
     const res = await fetch(`/api/site-analyzer/${encodeURIComponent(profileId)}`, {
