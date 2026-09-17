@@ -19,14 +19,6 @@ import {
 } from "@/services/gcc-api";
 const SHOW_GAP_GENERATE_BUTTON = false; // Site Analyzer currently only returns headings without matching pages (missing-page gaps). Generate is disabled pending Workflow rebuild. Flip this line if gap types expand to include real content gaps.
 
-type SiteAnalysisProfileListItem = {
-  id: string;
-  domain: string;
-  status?: string | null;
-  analyzedAt?: string | null;
-  primaryFocus?: string | null;
-};
-
 type TreeNode = {
   level?: number;
   Level?: number;
@@ -265,10 +257,6 @@ export function SiteAnalyzerClient() {
   const [showReuseConfirm, setShowReuseConfirm] = useState(false);
   const [reportBefore, setReportBefore] = useState<NonNullable<SiteAnalysis['pages']> | null>(null);
   const [reportAfter, setReportAfter] = useState<NonNullable<SiteAnalysis['pages']>>([]);
-  const [profiles, setProfiles] = useState<SiteAnalysisProfileListItem[]>([]);
-  const [profilesError, setProfilesError] = useState<string | null>(null);
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [loadingTrees, setLoadingTrees] = useState(false);
 
   // For hierarchy helpers that still need a pages array (use AFTER when available, else BEFORE)
   const sitePages = (reportAfter?.length ?? 0) > 0 ? (reportAfter as SiteAnalysis["pages"]) : (reportBefore ?? []);
@@ -293,65 +281,7 @@ export function SiteAnalyzerClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const handle = window.setTimeout(() => {
-      void (async () => {
-        setLoadingProfiles(true);
-        setProfilesError(null);
-        try {
-          // The existing-crawl picker. Was site-analyzer/profiles/{recent,by-domain}, which is
-          // retired and 404s on mount and on every keystroke in the domain field. Geek-Crawler owns
-          // crawls now, so the runs come from there and are filtered to project-site.
-          const host = domain.trim().toLowerCase();
-          const runs = await listGeekCrawls("project-site", 50);
-          if (cancelled) return;
 
-          const seedHost = (u: string) => {
-            try {
-              return new URL(u.includes("://") ? u : `https://${u}`).hostname.toLowerCase();
-            } catch {
-              return u.toLowerCase();
-            }
-          };
-          const wanted = host ? seedHost(host) : null;
-
-          // One crawl per URL. A site has one current corpus, not a history to choose from --
-          // the publish slot resolves (owner, crawlType, seedKey) to a single run, so offering
-          // several for one host would let the operator pick one the rest of the system will not
-          // use. Runs arrive newest-first, so the first seen for a host is the one that counts.
-          const newestPerHost = new Map<string, (typeof runs)[number]>();
-          for (const r of runs) {
-            if (wanted && !r.seedUrls.some((u) => seedHost(u) === wanted)) continue;
-            const key = seedHost(r.seedUrls[0] ?? "");
-            if (!key || newestPerHost.has(key)) continue;
-            newestPerHost.set(key, r);
-          }
-
-          setProfiles(
-            [...newestPerHost.values()].map((r) => ({
-              id: r.runId,
-              domain: r.seedUrls[0] ?? "",
-              status: r.status,
-              analyzedAt: r.completedAtUtc ?? r.startedAtUtc ?? r.createdAtUtc ?? null,
-              primaryFocus: null,
-            })),
-          );
-        } catch (e) {
-          if (!cancelled) {
-            setProfilesError(e instanceof Error ? e.message : "Could not list crawls.");
-            setProfiles([]);
-          }
-        } finally {
-          if (!cancelled) setLoadingProfiles(false);
-        }
-      })();
-    }, 300);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(handle);
-    };
-  }, [domain]);
 
 
   async function applyFinishedCrawl(profileId: string) {
@@ -464,82 +394,6 @@ export function SiteAnalyzerClient() {
     setError("Analysis cancelled.");
   }
 
-  async function selectSiteAnalysisProfile(profileId: string) {
-    const id = profileId.trim();
-    if (!id) return;
-    setError(null);
-    setSiteAnalysisProfileId(id);
-    setLoadingTrees(true);
-    try {
-      const res = await fetch(
-        `/api/site-analyzer/profiles/${encodeURIComponent(id)}/trees`,
-        { cache: "no-store" },
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof body.error === "string" ? body.error : "Could not load trees for crawl",
-        );
-      }
-      const rows = Array.isArray(body) ? body : [];
-      const pages = treesToSitePages(rows);
-      setReportBefore(pages);
-      setReportAfter(pages);
-      setGaps([]);
-
-      const picked = profiles.find((p) => p.id === id);
-      const domainTrimmed = (picked?.domain || domain).trim() || domain.trim();
-      if (domainTrimmed && !domain.trim()) setDomain(domainTrimmed);
-
-      let resolvedClientId: string | null = null;
-      try {
-        const name = domainTrimmed || picked?.domain || "site";
-        const existing = await getGccClientByName(name);
-        if (existing) resolvedClientId = existing.id;
-        else {
-          const created = await createGccClient({ name });
-          resolvedClientId = created.id;
-        }
-      } catch (e) {
-        console.error("Failed to resolve Workflow client for selected crawl:", e);
-      }
-
-      unlockWorkflow({
-        siteAnalysisProfileId: id,
-        domain: domainTrimmed,
-        clientId: resolvedClientId,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load crawl trees");
-    } finally {
-      setLoadingTrees(false);
-    }
-  }
-
-  function openGapDetail(gap: ContentGap) {
-    setError(null);
-    setSelectedGapId(gap.id);
-    setSection(null);
-    setCuratedSerp(null);
-    if (!siteAnalysisProfileId) return;
-    startTransition(async () => {
-      try {
-        const res = await fetch(
-          `/api/site-analyzer/section-context?siteAnalysisProfileId=${encodeURIComponent(siteAnalysisProfileId)}&gapTopic=${encodeURIComponent(gap.topic)}`,
-        );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || "Section context failed");
-        if (!body.relatedPages?.length) {
-          throw new Error("Site section context missing related pages");
-        }
-        setSection(body as SiteSectionContext);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load gap detail");
-        setSelectedGapId(null);
-      }
-    });
-  }
-
   async function doCreate() {
     if (!siteAnalysisProfileId || !selectedGap || !section) return;
     if (!clientId) {
@@ -587,6 +441,30 @@ export function SiteAnalyzerClient() {
   }
 
   const busy = pending || analyzing || creating;
+
+  function openGapDetail(gap: ContentGap) {
+    setError(null);
+    setSelectedGapId(gap.id);
+    setSection(null);
+    setCuratedSerp(null);
+    if (!siteAnalysisProfileId) return;
+    startTransition(async () => {
+      try {
+        const res = await fetch(
+          `/api/site-analyzer/section-context?siteAnalysisProfileId=${encodeURIComponent(siteAnalysisProfileId)}&gapTopic=${encodeURIComponent(gap.topic)}`,
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Section context failed");
+        if (!body.relatedPages?.length) {
+          throw new Error("Site section context missing related pages");
+        }
+        setSection(body as SiteSectionContext);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load gap detail");
+        setSelectedGapId(null);
+      }
+    });
+  }
 
   function startCreate() {
     if (!siteAnalysisProfileId || !selectedGap || !section) return;
@@ -643,41 +521,7 @@ export function SiteAnalyzerClient() {
           error={indexError}
         />
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-[var(--gcc-ink)]">Existing crawl</span>
-          <select
-            value={siteAnalysisProfileId ?? ""}
-            disabled={loadingProfiles || analyzing || loadingTrees}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v) void selectSiteAnalysisProfile(v);
-              else setSiteAnalysisProfileId(null);
-            }}
-            className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="">
-              {loadingProfiles
-                ? "Loading crawls…"
-                : profiles.length === 0
-                  ? "No crawls found — crawl the site, or clear the URL to see all"
-                  : "Select a crawl…"}
-            </option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.domain}
-                {p.analyzedAt ? ` · ${new Date(p.analyzedAt).toLocaleString()}` : ""}
-                {` · ${p.id.slice(0, 8)}…`}
-              </option>
-            ))}
-          </select>
-          {profilesError ? <span className="text-xs text-red-700">{profilesError}</span> : null}
-          {loadingTrees ? (
-            <span className="text-xs text-[var(--gcc-muted)]">Loading trees for reports…</span>
-          ) : null}
-        </label>
-        <p className="text-xs text-[var(--gcc-muted)]">
-          Enter a site URL and crawl it, or pick a crawl already held for it.
-        </p>
+
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
