@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 import {
   createGccClient,
   getGccClientByName,
-  parseSeedLines,
+  listGeekCrawls,
   startGeekCrawl,
+  type GeekCrawlerRunSnapshot,
 } from "@/services/gcc-api";
+import { checkSeedBatch, MAX_SEEDS_PER_REQUEST, type SeedBatch } from "@/lib/crawl-seeds";
 
 /**
  * Start crawls. All three types go to Geek-Crawler.
@@ -27,6 +29,40 @@ type CrawlOutcome = {
   ok: boolean;
 };
 
+/** Per-line verdicts for one field. Every problem at once, each naming the line it came from. */
+function SeedReport({ batch }: { batch: SeedBatch }) {
+  if (batch.checks.length === 0) return null;
+
+  return (
+    <div className="space-y-1 text-xs">
+      {batch.capError ? <p className="text-red-600">{batch.capError}</p> : null}
+
+      {batch.rejected.map((c, i) => (
+        <p key={`bad-${i}-${c.raw}`} className="text-red-600">
+          <span className="font-mono">{c.raw.trim() || "(blank)"}</span> — {c.reason}
+        </p>
+      ))}
+
+      {batch.duplicates.map((c, i) => (
+        <p key={`dup-${i}-${c.raw}`} className="text-amber-700">
+          <span className="font-mono">{c.raw.trim()}</span> — duplicate of an earlier line, sent
+          once.
+        </p>
+      ))}
+
+      {batch.accepted.length > 0 ? (
+        <p className="text-[var(--gcc-muted)]">
+          {batch.accepted.length} URL{batch.accepted.length === 1 ? "" : "s"} ready
+          {batch.checks.length > batch.accepted.length
+            ? ` of ${batch.checks.length} line${batch.checks.length === 1 ? "" : "s"}`
+            : ""}
+          .
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function CreateClient() {
   const { unlockWorkflow } = useWorkflowGate();
   const [domain, setDomain] = useState("");
@@ -39,67 +75,79 @@ export function CreateClient() {
   const [projectRunId, setProjectRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
-  const hasAnySeed =
-    (!useExistingSite && domain.trim().length > 0) ||
-    parseSeedLines(partnerSeeds).length > 0 ||
-    parseSeedLines(competitorSeeds).length > 0;
+  // "Use existing site" claims a crawl is already held. That claim has to be checked -- asserting
+  // it without looking is how a create ends up grounded on nothing while the page reports success.
+  const [existingRuns, setExistingRuns] = useState<GeekCrawlerRunSnapshot[] | null>(null);
+  const [existingError, setExistingError] = useState<string | null>(null);
 
-  async function startCrawls() {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const runs = await listGeekCrawls("project-site");
+        if (!cancelled) setExistingRuns(runs);
+      } catch (e) {
+        if (!cancelled) {
+          setExistingRuns([]);
+          setExistingError(e instanceof Error ? e.message : "Could not list existing crawls.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const completedRuns = (existingRuns ?? []).filter(
+    (r) => r.status.toLowerCase() === "complete",
+  );
+  const checkingExisting = existingRuns === null;
+  const noExistingSite = !checkingExisting && completedRuns.length === 0;
+
+  // Checked as you type, against the same rules the server applies -- so a bad URL is named here
+  // rather than coming back as a single "Invalid seed URL" that rejects the whole batch.
+  const siteBatch = checkSeedBatch(domain);
+  const partnerBatch = checkSeedBatch(partnerSeeds);
+  const competitorBatch = checkSeedBatch(competitorSeeds);
+
+  // A project-site run is single-seed. GccV2MongoProjectSitePageSource.FirstSeedUrl takes the first
+  // seed and ignores the rest, so a second URL here would not error -- it would be crawled and then
+  // silently dropped from grounding. Refuse it instead.
+  const siteTooMany = siteBatch.accepted.length > 1;
+  const siteBlocked =
+    siteBatch.rejected.length > 0 || siteBatch.capError !== null || siteTooMany;
+
+  // Partner and competitor URLs are validated here, never crawled from here, so they do not gate
+  // the crawl button and their problems do not block it.
+  const canCrawlSite = !useExistingSite && siteBatch.accepted.length > 0;
+
+  async function crawlProjectSite() {
     setOutcomes([]);
     setProjectRunId(null);
     setStarting(true);
 
-    const results: CrawlOutcome[] = [];
-
-    // Each type is its own run. partner is evidence a draft may cite, competitors is positioning,
-    // project-site is grounding — a failure in one must not take the others' seeds with it.
-    const jobs: Array<{
-      label: string;
-      type: "project-site" | "partner" | "competitors";
-      seeds: string[];
-    }> = [
-      { label: "Project site", type: "project-site", seeds: parseSeedLines(domain) },
-      { label: "Partner", type: "partner", seeds: parseSeedLines(partnerSeeds) },
-      { label: "Competitor", type: "competitors", seeds: parseSeedLines(competitorSeeds) },
-    ];
-
-    for (const job of jobs) {
-      if (job.seeds.length === 0) continue;
-
-      // StartCrawlAsync requeues the run already held for a seed key rather than adding a second
-      // one, so starting a project-site crawl always replaces the copy behind it. That is a
-      // destructive act on the only grounding this app has, so it is gated on an explicit tick
-      // rather than happening because a URL happened to be in the box.
-      if (job.type === "project-site" && useExistingSite) {
-        results.push({
-          label: job.label,
-          detail: "Using the existing crawl — not re-crawled.",
+    try {
+      const run = await startGeekCrawl("project-site", siteBatch.accepted);
+      setProjectRunId(run.runId);
+      await attachProjectSite(run.runId);
+      setOutcomes([
+        {
+          label: "Project site",
+          detail: `${siteBatch.accepted.length} URL${siteBatch.accepted.length === 1 ? "" : "s"} — run ${run.runId}`,
           ok: true,
-        });
-        continue;
-      }
-      try {
-        const run = await startGeekCrawl(job.type, job.seeds);
-        results.push({
-          label: job.label,
-          detail: `${job.seeds.length} URL${job.seeds.length === 1 ? "" : "s"} — run ${run.runId}`,
-          ok: true,
-        });
-        if (job.type === "project-site") {
-          setProjectRunId(run.runId);
-          await attachProjectSite(run.runId);
-        }
-      } catch (e) {
-        results.push({
-          label: job.label,
+        },
+      ]);
+    } catch (e) {
+      setOutcomes([
+        {
+          label: "Project site",
           detail: e instanceof Error ? e.message : "Could not start the crawl",
           ok: false,
-        });
-      }
+        },
+      ]);
+    } finally {
+      setStarting(false);
     }
-
-    setOutcomes(results);
-    setStarting(false);
   }
 
   /**
@@ -148,16 +196,27 @@ export function CreateClient() {
         />
         <span>Use existing site</span>
       </label>
-      <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-        Keeps the crawl already held for this site. Untick to crawl it again — that replaces the
-        existing copy.
-      </p>
+      {checkingExisting ? (
+        <p className="-mt-2 text-xs text-[var(--gcc-muted)]">Checking for an existing crawl…</p>
+      ) : noExistingSite ? (
+        <p className="-mt-2 text-xs text-red-600">
+          There is no completed project-site crawl to use
+          {existingError ? ` (${existingError})` : ""}. Untick this to crawl the site — until then a
+          draft has no site grounding.
+        </p>
+      ) : (
+        <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
+          Keeps the crawl already held for this site ({completedRuns.length} available). Untick to
+          crawl it again — that replaces the existing copy.
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-[var(--gcc-ink)]">Partner URLs</span>
           <span className="text-xs text-[var(--gcc-muted)]">
-            Products you sell or recommend. Crawled as evidence a draft can cite.
+            Products you sell or recommend — evidence a draft can cite. Checked here; crawled in
+            Geek-Crawler.
           </span>
           <textarea
             value={partnerSeeds}
@@ -167,13 +226,14 @@ export function CreateClient() {
             placeholder={"https://partner.example/pricing\nhttps://partner.example/docs"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
+          <SeedReport batch={partnerBatch} />
         </label>
 
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-[var(--gcc-ink)]">Competitor URLs</span>
           <span className="text-xs text-[var(--gcc-muted)]">
-            Rivals writing on the same topics. Crawled for positioning, never cited as product
-            evidence.
+            Rivals writing on the same topics — positioning, never cited as product evidence.
+            Checked here; crawled in Geek-Crawler.
           </span>
           <textarea
             value={competitorSeeds}
@@ -183,18 +243,30 @@ export function CreateClient() {
             placeholder={"https://rival.example/services\nhttps://rival.example/about"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
+          <SeedReport batch={competitorBatch} />
         </label>
       </div>
-      <p className="-mt-2 text-xs text-[var(--gcc-muted)]">One URL per line. Leave blank to skip.</p>
+      <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
+        One URL per line, up to {MAX_SEEDS_PER_REQUEST} per field. These are validated against the
+        crawler&rsquo;s own admission rules so a bad URL is caught before you take the list to
+        Geek-Crawler — nothing here starts a partner or competitor crawl. A scheme is added when
+        missing, and bullets or numbering are tolerated.
+      </p>
 
       <button
         type="button"
-        disabled={starting || !hasAnySeed}
-        onClick={() => void startCrawls()}
+        disabled={starting || !canCrawlSite || siteBlocked}
+        onClick={() => void crawlProjectSite()}
         className="rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
-        {starting ? "Starting…" : "Crawl"}
+        {starting ? "Crawling…" : "Crawl project site"}
       </button>
+
+      {useExistingSite && noExistingSite ? (
+        <p className="text-xs text-red-600">
+          Untick “Use existing site” before crawling — there is nothing existing to use.
+        </p>
+      ) : null}
 
       {outcomes.length > 0 ? (
         <ul className="space-y-1 text-sm">

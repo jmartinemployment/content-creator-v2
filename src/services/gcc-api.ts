@@ -713,3 +713,21 @@ export function parseSeedLines(raw: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 }
+
+/** Cancel a crawl run. Used to undo a partially-started batch. */
+export function cancelGeekCrawl(runId: string): Promise<GeekCrawlerRunSnapshot> {
+  return gccRequest<GeekCrawlerRunSnapshot>(
+    `/api/geek-crawler/crawls/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST" },
+  );
+}
+
+/** Crawl runs owned by the signed-in user, newest first. */
+export function listGeekCrawls(
+  crawlType?: "partner" | "competitors" | "local" | "project-site",
+  limit = 50,
+): Promise<GeekCrawlerRunSnapshot[]> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (crawlType) q.set("crawlType", crawlType);
+  return gccRequest<GeekCrawlerRunSnapshot[]>(`/api/geek-crawler/crawls?${q.toString()}`);
+}
