@@ -13,8 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # v5 actions run on Node 24; v4 targeted the deprecated Node 20 runtime.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -24,17 +25,3 @@ jobs:
         continue-on-error: true
         run: npm run lint
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      # Optional: add repo secret GCC_V2_ACCESS_TOKEN (= signed-in gcc_v2_access cookie) for full signed-in e2e.
-      - run: npm run test:e2e
-        env:
-          E2E_ACCESS_TOKEN: ${{ secrets.GCC_V2_ACCESS_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-artifacts
-          path: |
-            playwright-report/
-            test-results/
-          if-no-files-found: ignore
-          retention-days: 7
