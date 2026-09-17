@@ -75,6 +75,31 @@ This does **not** apply to partner/competitor pages, whose HTML is still read at
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
 space until extraction moves to Markdown.
 
+## Crawls are atomic. A run is binary or it is not a run.
+
+A crawl cannot run inside a database transaction — it takes minutes to hours, Mongo's
+multi-document transactions default to a 60-second lifetime, and crawl documents carry multi-MB HTML.
+The commit is therefore placed on a boundary that is atomic on its own: **a single-document status
+flip**. Batch-publish semantics, not 2PC.
+
+| Phase | Rule |
+|---|---|
+| **create** | A crawl always gets its **own** run. The run currently published for the slot is never touched. Abandoned staging in the slot is reclaimed first — it never published, so nothing read it |
+| **publish** | A slot `(ownerUserId, crawlType, seedKey)` resolves to its newest **`complete`** run. A crawl in flight is invisible **by construction**, not because a caller remembered to check |
+| **commit** | `PatchRun → complete`. One document, one write. Before it readers see the old corpus whole; after it, the new corpus whole |
+| **retire** | The superseded run is deleted **after** the commit. Failing here costs disk, never correctness — two complete runs resolve to the newer by `CreatedAtUtc` |
+| **abort** | `failed`/`cancelled` purges vectors and pages. The run **document** survives carrying `ErrorSummary`; it stays uncommitted and therefore unreadable |
+
+**Never purge before the replacement exists.** The original replace-on-recrawl purged the old run and
+re-used its id *before* the new crawl ran, so a crawl dying at page 3 of 2,500 destroyed the good
+corpus with nothing to roll back to. Peak cost of doing it correctly is 2x for one site during its own
+re-crawl; only one copy is ever visible.
+
+**`publishedOnly` is explicit at every call site.** Partner and competitor evidence resolution passes
+it too: citing a partner site mid-crawl is the same defect as grounding on a partial project-site
+crawl. Vectors are always purged **before** their pages — an index citing deleted rows can never be
+verified.
+
 ## Fail closed. No middle states.
 
 The system is binary by design: it either has real evidence and proceeds, or it refuses and says why.
