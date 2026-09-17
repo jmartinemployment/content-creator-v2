@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 import {
   createGccClient,
   getGccClientByName,
-  listGeekCrawls,
   startGeekCrawl,
   checkHostsIndexed,
-  type GeekCrawlerRunSnapshot,
   type HostIndexed,
 } from "@/services/gcc-api";
 
@@ -87,33 +85,6 @@ export function CreateClient() {
   const [projectRunId, setProjectRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
-  // "Use existing site" claims a crawl is already held. That claim has to be checked -- asserting
-  // it without looking is how a create ends up grounded on nothing while the page reports success.
-  const [existingRuns, setExistingRuns] = useState<GeekCrawlerRunSnapshot[] | null>(null);
-  const [existingError, setExistingError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const runs = await listGeekCrawls("project-site");
-        if (!cancelled) setExistingRuns(runs);
-      } catch (e) {
-        if (!cancelled) {
-          setExistingRuns([]);
-          setExistingError(e instanceof Error ? e.message : "Could not list existing crawls.");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const completedRuns = (existingRuns ?? []).filter((r) => r.status.toLowerCase() === "complete");
-  const checkingExisting = existingRuns === null;
-  const noExistingSite = !checkingExisting && completedRuns.length === 0;
-
   const siteUrls = parseLines(domain);
   const partnerUrls = parseLines(partnerSeeds);
   const competitorUrls = parseLines(competitorSeeds);
@@ -123,7 +94,12 @@ export function CreateClient() {
   const siteTooMany = siteUrls.length > 1;
   const canCrawlSite = !useExistingSite && siteUrls.length === 1;
 
-  // Partner and competitor URLs are checked against the index, never crawled from here.
+  // Every field is answered the same way: does an index exist for the URL. The project site used to
+  // ask a different question -- whether a crawl run existed -- which could say yes for a run that
+  // completed with nothing indexed, and therefore nothing a draft could cite.
+  const siteChecked = siteUrls.length > 0 && siteUrls.every((u) => indexed[u] !== undefined);
+  const siteIndexed = siteUrls.length > 0 && siteUrls.every((u) => indexed[u]?.indexed === true);
+
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
   const [checking, setChecking] = useState(false);
   const [indexError, setIndexError] = useState<string | null>(null);
@@ -227,20 +203,11 @@ export function CreateClient() {
         />
         <span>Use existing site</span>
       </label>
-      {checkingExisting ? (
-        <p className="-mt-2 text-xs text-[var(--gcc-muted)]">Checking for an existing crawl…</p>
-      ) : noExistingSite ? (
-        <p className="-mt-2 text-xs text-red-600">
-          There is no completed project-site crawl to use
-          {existingError ? ` (${existingError})` : ""}. Untick this to crawl the site — until then a
-          draft has no site grounding.
-        </p>
-      ) : (
-        <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-          Keeps the crawl already held for this site ({completedRuns.length} available). Untick to
-          crawl it again — that replaces the existing copy.
-        </p>
-      )}
+      <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
+        {siteIndexed
+          ? "Uses what is already indexed for this site. Untick to crawl it again — that replaces it."
+          : "Untick to crawl the site. Until it is indexed a draft has no site grounding."}
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm">
@@ -290,9 +257,9 @@ export function CreateClient() {
         {starting ? "Crawling…" : "Crawl project site"}
       </button>
 
-      {useExistingSite && noExistingSite ? (
+      {useExistingSite && siteChecked && !siteIndexed ? (
         <p className="text-xs text-red-600">
-          Untick “Use existing site” before crawling — there is nothing existing to use.
+          Nothing is indexed for this site — untick “Use existing site” and crawl it.
         </p>
       ) : null}
 
