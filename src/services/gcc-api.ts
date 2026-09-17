@@ -731,23 +731,3 @@ export function listGeekCrawls(
   if (crawlType) q.set("crawlType", crawlType);
   return gccRequest<GeekCrawlerRunSnapshot[]>(`/api/geek-crawler/crawls?${q.toString()}`);
 }
-
-export type SeedReachability = {
-  url: string;
-  verdict: "Reachable" | "Questionable" | "Unreachable";
-  detail: string | null;
-  statusCode: number | null;
-};
-
-export type SeedCheckResult = {
-  rejected: { raw: string; reason: string }[];
-  reachability: SeedReachability[];
-};
-
-/** Server-side seed check: admission, then DNS, then a HEAD per URL. */
-export function checkSeedsOnServer(seeds: string[]): Promise<SeedCheckResult> {
-  return gccRequest<SeedCheckResult>("/api/geek-crawler/seeds/check", {
-    method: "POST",
-    body: JSON.stringify({ crawlType: "partner", seeds }),
-  });
-}
