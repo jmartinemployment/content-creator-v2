@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 import {
@@ -9,63 +9,103 @@ import {
   parseSeedLines,
   startGeekCrawl,
 } from "@/services/gcc-api";
-import { connectThroughCoverageHub } from "@/services/site-analysis-hub";
 
 /**
- * Crawl a project site.
+ * Start crawls. All three types go to Geek-Crawler.
  *
- * This page used to carry the whole gap-to-create flow: content gaps, heading trees, site page
- * reports, an existing-crawl picker, SERP ingest and a create form. All of it read analysis that
- * belongs to Geek-SEO, and none of it is how a create starts any more — creates begin from a topic
- * on /app/creates/new, and site grounding comes from the crawl itself.
+ * The project site used to be the odd one out: it posted to /api/site-analyzer/analyze and waited
+ * on a Geek-SEO progress hub, while partner and competitor crawls went to Geek-Crawler. That split
+ * is why this page depended on twelve Site Analyzer endpoints, and it was never a real difference —
+ * a project-site crawl is a crawl, and Geek-Crawler owns crawling.
  *
- * What is left is the one thing Content Creator genuinely needs from this page: point it at a URL
- * and crawl it.
+ * One endpoint, three crawl types, three independent runs.
  */
+
+type CrawlOutcome = {
+  label: string;
+  detail: string;
+  ok: boolean;
+};
+
 export function CreateClient() {
   const { unlockWorkflow } = useWorkflowGate();
   const [domain, setDomain] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [stepLabel, setStepLabel] = useState<string | null>(null);
-  const [doneLabel, setDoneLabel] = useState<string | null>(null);
-  const [doneProfileId, setDoneProfileId] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  // Unchecked reuses the crawl already held for this site; checked fetches it again. The old code
-  // always sent force:true, so every visit re-crawled whether or not anything had changed.
   const [recrawl, setRecrawl] = useState(false);
   const [partnerSeeds, setPartnerSeeds] = useState("");
   const [competitorSeeds, setCompetitorSeeds] = useState("");
-  const [sideResults, setSideResults] = useState<string[]>([]);
-  const [, startTransition] = useTransition();
-  const abortRef = useRef<AbortController | null>(null);
+  const [outcomes, setOutcomes] = useState<CrawlOutcome[]>([]);
+  const [projectRunId, setProjectRunId] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
-  // Any one of the three is enough. Requiring a project-site URL would block a partner-only or
-  // competitor-only crawl, which are legitimate on their own.
   const hasAnySeed =
-    domain.trim().length > 0 ||
+    (recrawl && domain.trim().length > 0) ||
     parseSeedLines(partnerSeeds).length > 0 ||
     parseSeedLines(competitorSeeds).length > 0;
 
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, []);
+  async function startCrawls() {
+    setOutcomes([]);
+    setProjectRunId(null);
+    setStarting(true);
 
-  async function applyFinishedCrawl(profileId: string) {
-    const res = await fetch(`/api/site-analyzer/${encodeURIComponent(profileId)}`, {
-      cache: "no-store",
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(body.error || "Could not load crawl");
+    const results: CrawlOutcome[] = [];
+
+    // Each type is its own run. partner is evidence a draft may cite, competitors is positioning,
+    // project-site is grounding — a failure in one must not take the others' seeds with it.
+    const jobs: Array<{
+      label: string;
+      type: "project-site" | "partner" | "competitors";
+      seeds: string[];
+    }> = [
+      { label: "Project site", type: "project-site", seeds: parseSeedLines(domain) },
+      { label: "Partner", type: "partner", seeds: parseSeedLines(partnerSeeds) },
+      { label: "Competitor", type: "competitors", seeds: parseSeedLines(competitorSeeds) },
+    ];
+
+    for (const job of jobs) {
+      if (job.seeds.length === 0) continue;
+
+      // StartCrawlAsync requeues the run already held for a seed key rather than adding a second
+      // one, so starting a project-site crawl always replaces the copy behind it. That is a
+      // destructive act on the only grounding this app has, so it is gated on an explicit tick
+      // rather than happening because a URL happened to be in the box.
+      if (job.type === "project-site" && !recrawl) {
+        results.push({
+          label: job.label,
+          detail: "Skipped — tick “Crawl project site” to replace the crawl held for it.",
+          ok: true,
+        });
+        continue;
+      }
+      try {
+        const run = await startGeekCrawl(job.type, job.seeds);
+        results.push({
+          label: job.label,
+          detail: `${job.seeds.length} URL${job.seeds.length === 1 ? "" : "s"} — run ${run.runId}`,
+          ok: true,
+        });
+        if (job.type === "project-site") {
+          setProjectRunId(run.runId);
+          await attachProjectSite(run.runId);
+        }
+      } catch (e) {
+        results.push({
+          label: job.label,
+          detail: e instanceof Error ? e.message : "Could not start the crawl",
+          ok: false,
+        });
+      }
     }
 
-    const pageCount = ((body.pages ?? body.Pages ?? []) as unknown[]).length;
-    const domainTrimmed = domain.trim();
+    setOutcomes(results);
+    setStarting(false);
+  }
 
-    // Resolve the Workflow client for this domain. Reuse before create -- creating
-    // unconditionally is how the same site ends up with several client rows.
+  /**
+   * Hand the project-site run to Workflow. The run id is the grounding id now — there is no
+   * site_analysis_profiles row behind it any more.
+   */
+  async function attachProjectSite(runId: string) {
+    const domainTrimmed = domain.trim();
     let resolvedClientId: string | null = null;
     try {
       const existing = await getGccClientByName(domainTrimmed);
@@ -77,133 +117,38 @@ export function CreateClient() {
     }
 
     unlockWorkflow({
-      siteAnalysisProfileId: profileId,
+      siteAnalysisProfileId: runId,
       domain: domainTrimmed,
       clientId: resolvedClientId,
     });
-
-    setStepLabel(null);
-    setDoneProfileId(profileId);
-    setDoneLabel(`Crawled ${domainTrimmed} — ${pageCount} page${pageCount === 1 ? "" : "s"}.`);
-  }
-
-  function analyze() {
-    setError(null);
-    setDoneLabel(null);
-    setDoneProfileId(null);
-    setSideResults([]);
-    setStepLabel(null);
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    setAnalyzing(true);
-
-    startTransition(async () => {
-      // partner and competitors are separate runs on purpose -- they answer different questions and
-      // a failure in one must not take the other's seeds down with it.
-      const started: string[] = [];
-      for (const [label, type, raw] of [
-        ["Partner", "partner", partnerSeeds],
-        ["Competitor", "competitors", competitorSeeds],
-      ] as const) {
-        const seeds = parseSeedLines(raw);
-        if (seeds.length === 0) continue;
-        try {
-          const run = await startGeekCrawl(type, seeds);
-          started.push(`${label}: ${seeds.length} URL${seeds.length === 1 ? "" : "s"} — run ${run.runId}`);
-        } catch (e) {
-          started.push(`${label}: failed — ${e instanceof Error ? e.message : "could not start"}`);
-        }
-      }
-      setSideResults(started);
-
-      if (!domain.trim()) {
-        // Nothing to crawl for the project site; the third-party runs above are the whole job.
-        setAnalyzing(false);
-        return;
-      }
-
-      try {
-        const hub = await connectThroughCoverageHub({
-          signal: ac.signal,
-          onProgress: (p) => {
-            if (p.stepNumber || p.step) {
-              setStepLabel(
-                p.step
-                  ? `Step ${p.stepNumber}${p.totalSteps ? `/${p.totalSteps}` : ""}: ${p.step}`
-                  : `Step ${p.stepNumber}${p.totalSteps ? `/${p.totalSteps}` : ""}`,
-              );
-            }
-          },
-        });
-        const res = await fetch("/api/site-analyzer/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, force: recrawl }),
-          signal: ac.signal,
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || "Could not start the crawl");
-        const profileId = await hub.done;
-        await applyFinishedCrawl(profileId);
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        setError(e instanceof Error ? e.message : "Crawl failed");
-      } finally {
-        if (!ac.signal.aborted) setAnalyzing(false);
-      }
-    });
-  }
-
-  function cancel() {
-    abortRef.current?.abort();
-    setAnalyzing(false);
-    setStepLabel(null);
-    setError("Crawl cancelled.");
   }
 
   return (
     <div className="mt-8 space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-[var(--gcc-ink)]">Project site URL</span>
         <input
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
           placeholder="geekatyourspot.com"
-          className="flex-1 rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
-          disabled={analyzing}
+          className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
+          disabled={starting}
         />
-        <button
-          type="button"
-          disabled={analyzing || !hasAnySeed}
-          onClick={analyze}
-          className="rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {analyzing ? "Crawling…" : "Crawl"}
-        </button>
-        {analyzing ? (
-          <button
-            type="button"
-            onClick={cancel}
-            className="rounded-md border border-[var(--gcc-line)] px-4 py-2 text-sm font-semibold"
-          >
-            Cancel
-          </button>
-        ) : null}
-      </div>
+      </label>
 
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={recrawl}
           onChange={(e) => setRecrawl(e.target.checked)}
-          disabled={analyzing}
+          disabled={starting}
           className="h-4 w-4 rounded border-[var(--gcc-line)]"
         />
-        <span>Re-crawl project site</span>
+        <span>Crawl project site</span>
       </label>
       <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-        Leave unchecked to reuse the crawl already held for this site. Check it to fetch the site
-        again — do that when the site has changed since the last crawl.
+        Replaces the crawl already held for this site. Leave unchecked to keep it and crawl only the
+        partner and competitor URLs below.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -215,7 +160,7 @@ export function CreateClient() {
           <textarea
             value={partnerSeeds}
             onChange={(e) => setPartnerSeeds(e.target.value)}
-            disabled={analyzing}
+            disabled={starting}
             rows={5}
             placeholder={"https://partner.example/pricing\nhttps://partner.example/docs"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
@@ -231,7 +176,7 @@ export function CreateClient() {
           <textarea
             value={competitorSeeds}
             onChange={(e) => setCompetitorSeeds(e.target.value)}
-            disabled={analyzing}
+            disabled={starting}
             rows={5}
             placeholder={"https://rival.example/services\nhttps://rival.example/about"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
@@ -240,25 +185,34 @@ export function CreateClient() {
       </div>
       <p className="-mt-2 text-xs text-[var(--gcc-muted)]">One URL per line. Leave blank to skip.</p>
 
-      {sideResults.length > 0 ? (
-        <ul className="space-y-1 text-sm text-[var(--gcc-muted)]">
-          {sideResults.map((line) => (
-            <li key={line}>{line}</li>
+      <button
+        type="button"
+        disabled={starting || !hasAnySeed}
+        onClick={() => void startCrawls()}
+        className="rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {starting ? "Starting…" : "Crawl"}
+      </button>
+
+      {outcomes.length > 0 ? (
+        <ul className="space-y-1 text-sm">
+          {outcomes.map((o) => (
+            <li key={o.label} className={o.ok ? "text-[var(--gcc-muted)]" : "text-red-600"}>
+              <span className="font-medium">{o.label}:</span> {o.detail}
+            </li>
           ))}
         </ul>
       ) : null}
 
-      {stepLabel ? <p className="text-sm text-[var(--gcc-muted)]">{stepLabel}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {doneLabel ? (
+      {projectRunId ? (
         <div className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-3 text-sm">
-          <p className="font-medium">{doneLabel}</p>
-          <p className="mt-1 text-[var(--gcc-muted)]">
+          <p className="text-[var(--gcc-muted)]">
+            Crawls run in Geek-Crawler and continue after you leave this page.{" "}
             <Link href="/app/creates/new" className="font-semibold text-[var(--gcc-teal)]">
               Start a create
             </Link>{" "}
             or open{" "}
-            <Link href={workflowHref(doneProfileId)} className="font-semibold text-[var(--gcc-teal)]">
+            <Link href={workflowHref(projectRunId)} className="font-semibold text-[var(--gcc-teal)]">
               Workflow
             </Link>
             .
