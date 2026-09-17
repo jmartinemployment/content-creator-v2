@@ -1,14 +1,15 @@
 /**
  * Seed URL admission, mirroring GeekCrawlerSeedNormalizer on the server.
  *
- * The server rejects the whole batch on the FIRST bad URL (ValidateRawSeeds returns
- * `Invalid seed URL: {raw}` and stops), so pasting twelve URLs with three problems means three
- * round trips to find them. This checks every line up front and reports each one.
+ * One bad URL does not spoil the list: the usable seeds are admitted and the rest are reported with
+ * their reasons, matching AdmitSeeds on the server. This checks every line up front so the problems
+ * are visible before the list is submitted anywhere.
  *
  * These rules are a copy of the server's and must stay a copy. Anything accepted here that the
  * server rejects is a lie told to the operator; anything rejected here that the server accepts is a
  * URL silently dropped. Source: GeekApplication/Models/GeekCrawler/GeekCrawlerSeedNormalizer.cs
- * (TryNormalizeSeedUrl, IsAllowedCrawlUri, StripListPrefix) and GeekCrawlerCaps.MaxSeedsPerRequest.
+ * (AdmitSeeds, TryNormalizeSeedUrl, IsAllowedCrawlUri, StripListPrefix) and
+ * GeekCrawlerCaps.MaxSeedsPerRequest.
  */
 
 export const MAX_SEEDS_PER_REQUEST = 25;
@@ -118,36 +119,59 @@ export type SeedBatch = {
   rejected: SeedCheck[];
   /** Accepted URLs dropped as duplicates of an earlier line. */
   duplicates: SeedCheck[];
-  /** Set when the batch exceeds the server's per-request cap. */
-  capError: string | null;
+  /**
+   * Always null. Kept so callers compile; the cap is reported per URL now, because a list over the
+   * limit still crawls the seeds that fit rather than failing whole.
+   */
+  capError: null;
 };
 
 export function checkSeedBatch(rawText: string): SeedBatch {
   const lines = rawText.split("\n").filter((l) => l.trim().length > 0);
-  const checks = lines.map(checkSeed);
 
+  const checks: SeedCheck[] = [];
   const accepted: string[] = [];
   const duplicates: SeedCheck[] = [];
   const seen = new Set<string>();
 
-  for (const c of checks) {
-    if (!c.url) continue;
-    const key = c.url.toLowerCase();
-    if (seen.has(key)) {
-      duplicates.push(c);
+  for (const line of lines) {
+    const c = checkSeed(line);
+
+    if (!c.url) {
+      checks.push(c);
       continue;
     }
+
+    const key = c.url.toLowerCase();
+    if (seen.has(key)) {
+      // A duplicate is not a failure and does not count against the cap -- the server dedupes
+      // before counting, so the same URL typed twice is one seed.
+      duplicates.push(c);
+      checks.push(c);
+      continue;
+    }
+
+    if (accepted.length >= MAX_SEEDS_PER_REQUEST) {
+      // Over the cap is rejected per URL, not as a batch error. The allowed seeds still go.
+      const over: SeedCheck = {
+        raw: c.raw,
+        url: null,
+        reason: `Over the limit of ${MAX_SEEDS_PER_REQUEST} seed URLs per request.`,
+      };
+      checks.push(over);
+      continue;
+    }
+
     seen.add(key);
     accepted.push(c.url);
+    checks.push(c);
   }
 
-  const rejected = checks.filter((c) => c.reason !== null);
-
-  // The server counts non-blank raw lines, not accepted URLs, against the cap.
-  const capError =
-    lines.length > MAX_SEEDS_PER_REQUEST
-      ? `At most ${MAX_SEEDS_PER_REQUEST} seed URLs are allowed per request — ${lines.length} given.`
-      : null;
-
-  return { checks, accepted, rejected, duplicates, capError };
+  return {
+    checks,
+    accepted,
+    rejected: checks.filter((c) => c.reason !== null),
+    duplicates,
+    capError: null,
+  };
 }

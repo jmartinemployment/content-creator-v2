@@ -95,10 +95,24 @@ describe("batch reporting", () => {
     assert.equal(batch.duplicates.length, 1);
   });
 
-  test("the cap counts non-blank raw lines, as the server does", () => {
-    const lines = Array.from({ length: MAX_SEEDS_PER_REQUEST + 1 }, (_, i) => `https://e${i}.example`);
-    assert.ok(checkSeedBatch(lines.join("\n")).capError);
-    assert.equal(checkSeedBatch(lines.slice(0, MAX_SEEDS_PER_REQUEST).join("\n")).capError, null);
+  test("over the cap still admits the seeds that fit", () => {
+    // Matches AdmitSeeds: the overflow is rejected per URL, the rest are crawled. A list one URL
+    // too long is not a reason to crawl nothing.
+    const lines = Array.from({ length: MAX_SEEDS_PER_REQUEST + 2 }, (_, i) => `https://e${i}.example`);
+    const batch = checkSeedBatch(lines.join("\n"));
+
+    assert.equal(batch.accepted.length, MAX_SEEDS_PER_REQUEST);
+    assert.equal(batch.rejected.length, 2);
+    assert.ok(batch.rejected.every((r) => r.reason?.includes("Over the limit")));
+  });
+
+  test("duplicates do not count against the cap", () => {
+    // The server dedupes before counting, so a list of repeats is one seed, not many.
+    const lines = Array.from({ length: MAX_SEEDS_PER_REQUEST + 5 }, () => "https://same.example/a");
+    const batch = checkSeedBatch(lines.join("\n"));
+
+    assert.deepEqual(batch.accepted, ["https://same.example/a"]);
+    assert.equal(batch.rejected.length, 0);
   });
 
   test("blank lines are skipped, not rejected", () => {
