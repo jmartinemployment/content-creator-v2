@@ -84,12 +84,8 @@ export default function NewCreatePage() {
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">New create</h1>
         <p className="mt-2 text-sm text-muted">
-          Start from a topic you already have. For site-grounded writing — where the draft
-          cites your own section structure —{" "}
-          <Link href="/app/site-analyzer" className="font-semibold text-brand">
-            start from a Site Analyzer gap
-          </Link>{" "}
-          instead.
+          Start from a topic you already have. Drafts are grounded in your own section
+          structure when the project site has been crawled.
         </p>
       </div>
 

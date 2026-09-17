@@ -70,5 +70,5 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Only paths that need a session. Static assets and the auth routes must not trigger a refresh —
   // /api/auth/token in particular sets these cookies itself.
-  matcher: ["/app/:path*", "/api/cw/:path*", "/api/site-analyzer/:path*"],
+  matcher: ["/app/:path*", "/api/cw/:path*"],
 };

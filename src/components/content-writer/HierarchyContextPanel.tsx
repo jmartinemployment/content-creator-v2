@@ -123,7 +123,7 @@ export default function HierarchyContextPanel({
     async function run() {
       if (!siteAnalysisProfileId) {
         setLoadError(
-          "No site_analysis_profiles.Id on this project. Select a crawl in Site Analyzer, then create the project again, or acknowledge an out-of-scope keyword.",
+          "This project has no site grounding attached. Crawl the project site, then create the project again, or acknowledge an out-of-scope keyword.",
         );
         setMatches([]);
         setSelected(null);
