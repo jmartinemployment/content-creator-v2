@@ -30,7 +30,9 @@ type CrawlOutcome = {
 export function CreateClient() {
   const { unlockWorkflow } = useWorkflowGate();
   const [domain, setDomain] = useState("");
-  const [recrawl, setRecrawl] = useState(false);
+  // Default is to reuse. Crawling a project site REPLACES the copy held for it, so the destructive
+  // path is the one that needs a deliberate untick rather than the one that happens by default.
+  const [useExistingSite, setUseExistingSite] = useState(true);
   const [partnerSeeds, setPartnerSeeds] = useState("");
   const [competitorSeeds, setCompetitorSeeds] = useState("");
   const [outcomes, setOutcomes] = useState<CrawlOutcome[]>([]);
@@ -38,7 +40,7 @@ export function CreateClient() {
   const [starting, setStarting] = useState(false);
 
   const hasAnySeed =
-    (recrawl && domain.trim().length > 0) ||
+    (!useExistingSite && domain.trim().length > 0) ||
     parseSeedLines(partnerSeeds).length > 0 ||
     parseSeedLines(competitorSeeds).length > 0;
 
@@ -68,10 +70,10 @@ export function CreateClient() {
       // one, so starting a project-site crawl always replaces the copy behind it. That is a
       // destructive act on the only grounding this app has, so it is gated on an explicit tick
       // rather than happening because a URL happened to be in the box.
-      if (job.type === "project-site" && !recrawl) {
+      if (job.type === "project-site" && useExistingSite) {
         results.push({
           label: job.label,
-          detail: "Skipped — tick “Crawl project site” to replace the crawl held for it.",
+          detail: "Using the existing crawl — not re-crawled.",
           ok: true,
         });
         continue;
@@ -139,16 +141,16 @@ export function CreateClient() {
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
-          checked={recrawl}
-          onChange={(e) => setRecrawl(e.target.checked)}
+          checked={useExistingSite}
+          onChange={(e) => setUseExistingSite(e.target.checked)}
           disabled={starting}
           className="h-4 w-4 rounded border-[var(--gcc-line)]"
         />
-        <span>Crawl project site</span>
+        <span>Use existing site</span>
       </label>
       <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-        Replaces the crawl already held for this site. Leave unchecked to keep it and crawl only the
-        partner and competitor URLs below.
+        Keeps the crawl already held for this site. Untick to crawl it again — that replaces the
+        existing copy.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
