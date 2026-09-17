@@ -142,7 +142,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
   const canGenerate = briefFormComplete && briefReady;
-  // Site Analyzer handoff creates require relatedPages; domain-only grounding does not.
+  // Crawl-handoff creates require relatedPages; domain-only grounding does not.
   const saMissingPages =
     !!detail.siteAnalysisProfileId &&
     !!siteSection &&
@@ -234,7 +234,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           Create {detail.id}
           {briefReady ? " · brief saved" : " · brief missing"}
           {researchReady ? " · research saved" : ""}
-          {detail.siteAnalysisProfileId ? " · Site Analyzer" : ""}
+          {detail.siteAnalysisProfileId ? " · site grounded" : ""}
         </p>
       </div>
 

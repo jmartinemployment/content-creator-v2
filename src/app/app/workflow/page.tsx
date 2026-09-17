@@ -49,9 +49,9 @@ export default function WorkflowPage() {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="text-sm text-muted">
-          Workflow is disabled. Run Site Analyzer first to unlock it.{" "}
-          <Link href="/app/site-analyzer" className="text-brand hover:underline">
-            Go to Site Analyzer
+          Workflow is disabled. Crawl a site first to unlock it.{" "}
+          <Link href="/app/create" className="text-brand hover:underline">
+            Go to Create
           </Link>
         </p>
       </div>
@@ -78,7 +78,7 @@ export default function WorkflowPage() {
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">Workflow</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Crawl a client site was replaced by Site Analyzer hierarchy. Upload research, generate a
+          Upload research, generate a
           pillar article + companion content, run editorial review, and publish.
         </p>
       </div>

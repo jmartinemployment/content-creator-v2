@@ -17,7 +17,7 @@ import { connectThroughCoverageHub } from "@/services/site-analysis-hub";
  * What is left is the one thing Content Creator genuinely needs from this page: point it at a URL
  * and crawl it.
  */
-export function SiteAnalyzerClient() {
+export function CreateClient() {
   const { unlockWorkflow } = useWorkflowGate();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +25,9 @@ export function SiteAnalyzerClient() {
   const [doneLabel, setDoneLabel] = useState<string | null>(null);
   const [doneProfileId, setDoneProfileId] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  // Unchecked reuses the crawl already held for this site; checked fetches it again. The old code
+  // always sent force:true, so every visit re-crawled whether or not anything had changed.
+  const [recrawl, setRecrawl] = useState(false);
   const [, startTransition] = useTransition();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -96,7 +99,7 @@ export function SiteAnalyzerClient() {
         const res = await fetch("/api/site-analyzer/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, force: true }),
+          body: JSON.stringify({ domain, force: recrawl }),
           signal: ac.signal,
         });
         const body = await res.json().catch(() => ({}));
@@ -147,6 +150,21 @@ export function SiteAnalyzerClient() {
           </button>
         ) : null}
       </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={recrawl}
+          onChange={(e) => setRecrawl(e.target.checked)}
+          disabled={analyzing}
+          className="h-4 w-4 rounded border-[var(--gcc-line)]"
+        />
+        <span>Re-crawl project site</span>
+      </label>
+      <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
+        Leave unchecked to reuse the crawl already held for this site. Check it to fetch the site
+        again — do that when the site has changed since the last crawl.
+      </p>
 
       {stepLabel ? <p className="text-sm text-[var(--gcc-muted)]">{stepLabel}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

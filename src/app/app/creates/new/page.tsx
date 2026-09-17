@@ -10,9 +10,9 @@ import { createGccCreate } from "@/services/gcc-api";
 import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE } from "@/lib/content-types";
 
 /**
- * Start a create directly, without going through Site Analyzer.
+ * Start a create directly, without crawling first.
  *
- * Site Analyzer remains the grounded path: it attaches real site-section context, which is what
+ * Crawling remains the grounded path: it attaches real site-section context, which is what
  * lets generation cite the site's own structure. This page exists because that was the *only* way
  * in - if a topic was not surfaced as a gap, there was no way to write about it at all.
  *
@@ -86,10 +86,9 @@ export default function NewCreatePage() {
         <p className="mt-2 text-sm text-muted">
           Start from a topic you already have. For site-grounded writing — where the draft
           cites your own section structure —{" "}
-          <Link href="/app/site-analyzer" className="font-semibold text-brand">
-            start from a Site Analyzer gap
-          </Link>{" "}
-          instead.
+          <Link href="/app/create" className="font-semibold text-brand">
+            crawl the site first
+          </Link>.
         </p>
       </div>
 
