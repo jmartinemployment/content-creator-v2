@@ -696,11 +696,23 @@ export interface GeekCrawlerRunSnapshot {
  * evidence to cite, competitor pages are the angle. They are started separately so a failure in
  * one does not silently take the other's seeds with it.
  */
+export interface StartCrawlResult {
+  run: GeekCrawlerRunSnapshot;
+  seedsAccepted: number;
+  rejected: { raw: string; reason: string }[];
+}
+
+/**
+ * Start a crawl. Returns the run plus any seeds the server refused.
+ *
+ * The rejected list rides on success on purpose: a run that quietly crawled 9 of 12 seeds and said
+ * nothing is how a corpus ends up smaller than the operator believes it is.
+ */
 export function startGeekCrawl(
   crawlType: "partner" | "competitors" | "local" | "project-site",
   seeds: string[],
-): Promise<GeekCrawlerRunSnapshot> {
-  return gccRequest<GeekCrawlerRunSnapshot>("/api/geek-crawler/crawls", {
+): Promise<StartCrawlResult> {
+  return gccRequest<StartCrawlResult>("/api/geek-crawler/crawls", {
     method: "POST",
     body: JSON.stringify({ crawlType, seeds }),
   });

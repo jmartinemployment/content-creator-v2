@@ -155,13 +155,16 @@ export function CreateClient() {
     setStarting(true);
 
     try {
-      const run = await startGeekCrawl("project-site", siteUrls);
-      setProjectRunId(run.runId);
-      await attachProjectSite(run.runId);
+      const started = await startGeekCrawl("project-site", siteUrls);
+      const runId = started.run?.runId;
+      if (!runId) throw new Error("The crawl started but returned no run id.");
+
+      setProjectRunId(runId);
+      await attachProjectSite(runId);
       setOutcomes([
         {
           label: "Project site",
-          detail: `${siteUrls.length} URL${siteUrls.length === 1 ? "" : "s"} — run ${run.runId}`,
+          detail: `${siteUrls.length} URL${siteUrls.length === 1 ? "" : "s"} — run ${runId}`,
           ok: true,
         },
       ]);
