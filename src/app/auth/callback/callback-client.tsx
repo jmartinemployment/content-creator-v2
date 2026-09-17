@@ -40,7 +40,7 @@ export function AuthCallbackClient() {
           setExchangeError(body?.error || "Sign-in failed");
           return;
         }
-        window.location.assign("/app/create");
+        window.location.assign("/app/crawl");
       } catch {
         setExchangeError("Sign-in failed — could not reach the server.");
       }

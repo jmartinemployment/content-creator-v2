@@ -76,7 +76,7 @@ export default function WorkflowProjectPage() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="text-sm text-muted">
           Workflow is disabled. Run Site Analyzer first to unlock it.{" "}
-          <Link href="/app/create" className="text-brand hover:underline">
+          <Link href="/app/crawl" className="text-brand hover:underline">
             Go to Site Analyzer
           </Link>
         </p>
