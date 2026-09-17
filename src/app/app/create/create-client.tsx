@@ -6,8 +6,10 @@ import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 import {
   createGccClient,
   getGccClientByName,
+  checkSeedsOnServer,
   listGeekCrawls,
   startGeekCrawl,
+  type SeedReachability,
   type GeekCrawlerRunSnapshot,
 } from "@/services/gcc-api";
 import { checkSeedBatch, MAX_SEEDS_PER_REQUEST, type SeedBatch } from "@/lib/crawl-seeds";
@@ -30,7 +32,13 @@ type CrawlOutcome = {
 };
 
 /** Per-line verdicts for one field. Every problem at once, each naming the line it came from. */
-function SeedReport({ batch }: { batch: SeedBatch }) {
+function SeedReport({
+  batch,
+  reach,
+}: {
+  batch: SeedBatch;
+  reach?: Record<string, SeedReachability>;
+}) {
   if (batch.checks.length === 0) return null;
 
   return (
@@ -49,6 +57,20 @@ function SeedReport({ batch }: { batch: SeedBatch }) {
           once.
         </p>
       ))}
+
+      {reach
+        ? batch.accepted
+            .map((u) => reach[u])
+            .filter((r): r is SeedReachability => Boolean(r) && r.verdict !== "Reachable")
+            .map((r) => (
+              <p
+                key={`reach-${r.url}`}
+                className={r.verdict === "Unreachable" ? "text-red-600" : "text-amber-700"}
+              >
+                <span className="font-mono">{r.url}</span> — {r.detail}
+              </p>
+            ))
+        : null}
 
       {batch.accepted.length > 0 ? (
         <p className="text-[var(--gcc-muted)]">
@@ -74,6 +96,28 @@ export function CreateClient() {
   const [outcomes, setOutcomes] = useState<CrawlOutcome[]>([]);
   const [projectRunId, setProjectRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+
+  // Syntax cannot tell a real site from a well-formed one that does not exist. The server resolves
+  // DNS and sends a HEAD, which is the only way to answer "will this fail later".
+  const [reach, setReach] = useState<Record<string, SeedReachability>>({});
+  const [checking, setChecking] = useState(false);
+
+  async function checkUrls(seeds: string[]) {
+    if (seeds.length === 0) return;
+    setChecking(true);
+    try {
+      const res = await checkSeedsOnServer(seeds);
+      setReach((prev) => {
+        const next = { ...prev };
+        for (const r of res.reachability) next[r.url] = r;
+        return next;
+      });
+    } catch {
+      // A failed check is not a verdict on the URLs. Leave them unmarked rather than implying good.
+    } finally {
+      setChecking(false);
+    }
+  }
 
   // "Use existing site" claims a crawl is already held. That claim has to be checked -- asserting
   // it without looking is how a create ends up grounded on nothing while the page reports success.
@@ -215,8 +259,7 @@ export function CreateClient() {
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-[var(--gcc-ink)]">Partner URLs</span>
           <span className="text-xs text-[var(--gcc-muted)]">
-            Products you sell or recommend — evidence a draft can cite. Checked here; crawled in
-            Geek-Crawler.
+            Products you sell or recommend.
           </span>
           <textarea
             value={partnerSeeds}
@@ -226,14 +269,23 @@ export function CreateClient() {
             placeholder={"https://partner.example/pricing\nhttps://partner.example/docs"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
-          <SeedReport batch={partnerBatch} />
+          <SeedReport batch={partnerBatch} reach={reach} />
+          {partnerBatch.accepted.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void checkUrls(partnerBatch.accepted)}
+              disabled={checking}
+              className="self-start rounded-md border border-[var(--gcc-line)] px-2 py-1 text-xs font-semibold disabled:opacity-50"
+            >
+              {checking ? "Checking…" : "Check URLs"}
+            </button>
+          ) : null}
         </label>
 
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-[var(--gcc-ink)]">Competitor URLs</span>
           <span className="text-xs text-[var(--gcc-muted)]">
-            Rivals writing on the same topics — positioning, never cited as product evidence.
-            Checked here; crawled in Geek-Crawler.
+            Rivals writing on the same topics.
           </span>
           <textarea
             value={competitorSeeds}
@@ -243,14 +295,21 @@ export function CreateClient() {
             placeholder={"https://rival.example/services\nhttps://rival.example/about"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
-          <SeedReport batch={competitorBatch} />
+          <SeedReport batch={competitorBatch} reach={reach} />
+          {competitorBatch.accepted.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void checkUrls(competitorBatch.accepted)}
+              disabled={checking}
+              className="self-start rounded-md border border-[var(--gcc-line)] px-2 py-1 text-xs font-semibold disabled:opacity-50"
+            >
+              {checking ? "Checking…" : "Check URLs"}
+            </button>
+          ) : null}
         </label>
       </div>
       <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-        One URL per line, up to {MAX_SEEDS_PER_REQUEST} per field. These are validated against the
-        crawler&rsquo;s own admission rules so a bad URL is caught before you take the list to
-        Geek-Crawler — nothing here starts a partner or competitor crawl. A scheme is added when
-        missing, and bullets or numbering are tolerated.
+        One URL per line, up to {MAX_SEEDS_PER_REQUEST} per field.
       </p>
 
       <button
