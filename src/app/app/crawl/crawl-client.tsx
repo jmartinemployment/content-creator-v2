@@ -629,6 +629,42 @@ export function SiteAnalyzerClient() {
           error={indexError}
         />
 
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-[var(--gcc-ink)]">Existing crawl</span>
+          <select
+            value={siteAnalysisProfileId ?? ""}
+            disabled={loadingProfiles || analyzing || loadingTrees}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v) void selectSiteAnalysisProfile(v);
+              else setSiteAnalysisProfileId(null);
+            }}
+            className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
+          >
+            <option value="">
+              {loadingProfiles
+                ? "Loading crawls…"
+                : profiles.length === 0
+                  ? "No crawls found — crawl the site, or clear the URL to see all"
+                  : "Select a crawl…"}
+            </option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.domain}
+                {p.analyzedAt ? ` · ${new Date(p.analyzedAt).toLocaleString()}` : ""}
+                {` · ${p.id.slice(0, 8)}…`}
+              </option>
+            ))}
+          </select>
+          {profilesError ? <span className="text-xs text-red-700">{profilesError}</span> : null}
+          {loadingTrees ? (
+            <span className="text-xs text-[var(--gcc-muted)]">Loading trees for reports…</span>
+          ) : null}
+        </label>
+        <p className="text-xs text-[var(--gcc-muted)]">
+          Enter a site URL and crawl it, or pick a crawl already held for it.
+        </p>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-[var(--gcc-ink)]">Partner URLs</span>
@@ -675,45 +711,7 @@ export function SiteAnalyzerClient() {
         <p className="text-xs text-[var(--gcc-muted)]">
           One URL per line. Checked against the index when you leave the field.
         </p>
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-[var(--gcc-ink)]">
-            Existing crawl (site_analysis_profiles.Id)
-          </span>
-          <select
-            value={siteAnalysisProfileId ?? ""}
-            disabled={loadingProfiles || analyzing || loadingTrees}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v) void selectSiteAnalysisProfile(v);
-              else setSiteAnalysisProfileId(null);
-            }}
-            className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="">
-              {loadingProfiles
-                ? "Loading crawls…"
-                : profiles.length === 0
-                  ? "No crawls found — Analyze or clear domain filter"
-                  : "Select a crawl…"}
-            </option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.domain}
-                {p.analyzedAt ? ` · ${new Date(p.analyzedAt).toLocaleString()}` : ""}
-                {` · ${p.id.slice(0, 8)}…`}
-              </option>
-            ))}
-          </select>
-          {profilesError ? <span className="text-xs text-red-700">{profilesError}</span> : null}
-          {loadingTrees ? (
-            <span className="text-xs text-[var(--gcc-muted)]">Loading trees for reports…</span>
-          ) : null}
-        </label>
-        <p className="text-xs text-[var(--gcc-muted)]">
-          Enter a site domain and click Analyze, or pick an existing site_analysis_profiles.Id.
-          That GUID is handed to Workflow for hierarchy SQL match. Keyword and department stay on
-          Create Project.
-        </p>
+
         {siteAnalysisProfileId ? (
           <div className="flex flex-wrap items-center gap-3">
             <p className="break-all text-xs text-[var(--gcc-muted)]">
