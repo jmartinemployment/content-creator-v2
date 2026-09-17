@@ -731,3 +731,23 @@ export function listGeekCrawls(
   if (crawlType) q.set("crawlType", crawlType);
   return gccRequest<GeekCrawlerRunSnapshot[]>(`/api/geek-crawler/crawls?${q.toString()}`);
 }
+
+export interface HostIndexed {
+  url: string;
+  host: string | null;
+  indexed: boolean;
+}
+
+/**
+ * Whether an index exists for each URL's host.
+ *
+ * The only question that decides whether a create can use an entered URL. A URL that will not parse
+ * has no host and comes back not indexed, so nothing checks syntax separately.
+ */
+export async function checkHostsIndexed(urls: string[]): Promise<HostIndexed[]> {
+  const res = await gccRequest<{ results: HostIndexed[] }>("/api/rag/hosts-indexed", {
+    method: "POST",
+    body: JSON.stringify({ urls }),
+  });
+  return res.results ?? [];
+}

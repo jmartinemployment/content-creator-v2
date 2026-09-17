@@ -8,9 +8,15 @@ import {
   getGccClientByName,
   listGeekCrawls,
   startGeekCrawl,
+  checkHostsIndexed,
   type GeekCrawlerRunSnapshot,
+  type HostIndexed,
 } from "@/services/gcc-api";
-import { checkSeedBatch, MAX_SEEDS_PER_REQUEST, type SeedBatch } from "@/lib/crawl-seeds";
+
+/** One URL per line; blanks dropped. Parsing only — validity is the index's answer, not ours. */
+function parseLines(raw: string): string[] {
+  return raw.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+}
 
 /**
  * Start crawls. All three types go to Geek-Crawler.
@@ -29,36 +35,42 @@ type CrawlOutcome = {
   ok: boolean;
 };
 
-/** Per-line verdicts for one field. Every problem at once, each naming the line it came from. */
-function SeedReport({ batch }: { batch: SeedBatch }) {
-  if (batch.checks.length === 0) return null;
+/**
+ * Whether an index exists for each entered URL. Green yes, red no.
+ *
+ * One check, because it subsumes the rest: a URL that will not parse was never crawled, so no index
+ * can exist for it, and it lands red alongside a well-formed URL that was never crawled. The
+ * operator does the same thing about both.
+ */
+function IndexReport({
+  urls,
+  results,
+  checking,
+  error,
+}: {
+  urls: string[];
+  results: Record<string, HostIndexed>;
+  checking: boolean;
+  error: string | null;
+}) {
+  if (urls.length === 0) return null;
+  if (checking) return <p className="text-xs text-[var(--gcc-muted)]">Checking the index…</p>;
+  if (error) return <p className="text-xs text-red-600">{error}</p>;
+
+  const seen = urls.filter((u) => results[u] !== undefined);
+  if (seen.length === 0) return null;
 
   return (
     <div className="space-y-1 text-xs">
-      {batch.capError ? <p className="text-red-600">{batch.capError}</p> : null}
-
-      {batch.rejected.map((c, i) => (
-        <p key={`bad-${i}-${c.raw}`} className="text-red-600">
-          <span className="font-mono">{c.raw.trim() || "(blank)"}</span> — {c.reason}
-        </p>
-      ))}
-
-      {batch.duplicates.map((c, i) => (
-        <p key={`dup-${i}-${c.raw}`} className="text-amber-700">
-          <span className="font-mono">{c.raw.trim()}</span> — duplicate of an earlier line, sent
-          once.
-        </p>
-      ))}
-
-      {batch.accepted.length > 0 ? (
-        <p className="text-[var(--gcc-muted)]">
-          {batch.accepted.length} URL{batch.accepted.length === 1 ? "" : "s"} ready
-          {batch.checks.length > batch.accepted.length
-            ? ` of ${batch.checks.length} line${batch.checks.length === 1 ? "" : "s"}`
-            : ""}
-          .
-        </p>
-      ) : null}
+      {seen.map((u) => {
+        const r = results[u];
+        return (
+          <p key={u} className={r.indexed ? "text-green-700" : "text-red-600"}>
+            <span className="font-mono">{u}</span> —{" "}
+            {r.indexed ? "indexed" : "no index — crawl it first"}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -102,22 +114,40 @@ export function CreateClient() {
   const checkingExisting = existingRuns === null;
   const noExistingSite = !checkingExisting && completedRuns.length === 0;
 
-  // Checked as you type, against the same rules the server applies -- so a bad URL is named here
-  // rather than coming back as a single "Invalid seed URL" that rejects the whole batch.
-  const siteBatch = checkSeedBatch(domain);
-  const partnerBatch = checkSeedBatch(partnerSeeds);
-  const competitorBatch = checkSeedBatch(competitorSeeds);
+  const siteUrls = parseLines(domain);
+  const partnerUrls = parseLines(partnerSeeds);
+  const competitorUrls = parseLines(competitorSeeds);
 
   // A project-site run is single-seed. GccV2MongoProjectSitePageSource.FirstSeedUrl takes the first
-  // seed and ignores the rest, so a second URL here would not error -- it would be crawled and then
-  // silently dropped from grounding. Refuse it instead.
-  const siteTooMany = siteBatch.accepted.length > 1;
-  const siteBlocked =
-    siteBatch.rejected.length > 0 || siteBatch.capError !== null || siteTooMany;
+  // and ignores the rest, so a second URL would be crawled and then silently dropped from grounding.
+  const siteTooMany = siteUrls.length > 1;
+  const canCrawlSite = !useExistingSite && siteUrls.length === 1;
 
-  // Partner and competitor URLs are validated here, never crawled from here, so they do not gate
-  // the crawl button and their problems do not block it.
-  const canCrawlSite = !useExistingSite && siteBatch.accepted.length > 0;
+  // Partner and competitor URLs are checked against the index, never crawled from here.
+  const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
+  const [checking, setChecking] = useState(false);
+  const [indexError, setIndexError] = useState<string | null>(null);
+
+  async function checkIndex(urls: string[]) {
+    const pending = urls.filter((u) => indexed[u] === undefined);
+    if (pending.length === 0) return;
+    setChecking(true);
+    setIndexError(null);
+    try {
+      const rows = await checkHostsIndexed(pending);
+      setIndexed((prev) => {
+        const next = { ...prev };
+        for (const r of rows) next[r.url] = r;
+        return next;
+      });
+    } catch (e) {
+      // The check not running is not a verdict. Leave the URLs unmarked rather than showing them
+      // red, which would blame the URL for a failure on our side.
+      setIndexError(e instanceof Error ? e.message : "Could not reach the index.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function crawlProjectSite() {
     setOutcomes([]);
@@ -125,13 +155,13 @@ export function CreateClient() {
     setStarting(true);
 
     try {
-      const run = await startGeekCrawl("project-site", siteBatch.accepted);
+      const run = await startGeekCrawl("project-site", siteUrls);
       setProjectRunId(run.runId);
       await attachProjectSite(run.runId);
       setOutcomes([
         {
           label: "Project site",
-          detail: `${siteBatch.accepted.length} URL${siteBatch.accepted.length === 1 ? "" : "s"} — run ${run.runId}`,
+          detail: `${siteUrls.length} URL${siteUrls.length === 1 ? "" : "s"} — run ${run.runId}`,
           ok: true,
         },
       ]);
@@ -218,12 +248,13 @@ export function CreateClient() {
           <textarea
             value={partnerSeeds}
             onChange={(e) => setPartnerSeeds(e.target.value)}
+            onBlur={() => void checkIndex(partnerUrls)}
             disabled={starting}
             rows={5}
             placeholder={"https://partner.example/pricing\nhttps://partner.example/docs"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
-          <SeedReport batch={partnerBatch} />
+          <IndexReport urls={partnerUrls} results={indexed} checking={checking} error={indexError} />
         </label>
 
         <label className="flex flex-col gap-1.5 text-sm">
@@ -234,21 +265,22 @@ export function CreateClient() {
           <textarea
             value={competitorSeeds}
             onChange={(e) => setCompetitorSeeds(e.target.value)}
+            onBlur={() => void checkIndex(competitorUrls)}
             disabled={starting}
             rows={5}
             placeholder={"https://rival.example/services\nhttps://rival.example/about"}
             className="rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 font-mono text-xs"
           />
-          <SeedReport batch={competitorBatch} />
+          <IndexReport urls={competitorUrls} results={indexed} checking={checking} error={indexError} />
         </label>
       </div>
       <p className="-mt-2 text-xs text-[var(--gcc-muted)]">
-        One URL per line, up to {MAX_SEEDS_PER_REQUEST} per field.
+        One URL per line. Checked against the index when you leave the field.
       </p>
 
       <button
         type="button"
-        disabled={starting || !canCrawlSite || siteBlocked}
+        disabled={starting || !canCrawlSite || siteTooMany}
         onClick={() => void crawlProjectSite()}
         className="rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
