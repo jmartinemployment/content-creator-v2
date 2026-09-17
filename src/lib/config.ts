@@ -48,10 +48,6 @@ export const authConfig = {
 
 export const apiConfig = {
   baseUrl: geekApiUrl,
-  seoHubUrl: envOrDefault(
-    process.env.NEXT_PUBLIC_SEO_HUB_URL,
-    "https://seo-api.geekatyourspot.com/hubs/seo-realtime",
-  ),
   workflowHubUrl: envOrDefault(
     process.env.NEXT_PUBLIC_WORKFLOW_HUB_URL,
     `${geekApiUrl}/hubs/workflow-realtime`,

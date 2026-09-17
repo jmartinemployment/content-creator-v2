@@ -11,8 +11,12 @@ import { SiteHeadingHierarchy } from "@/components/SiteHeadingHierarchy";
 import { createGccCreate, createGccClient, getGccClientByName, ApiError } from "@/services/gcc-api";
 import { getClients } from "@/services/content-writer-api";
 import type { Client } from "@/lib/types";
-import { connectThroughCoverageHub } from "@/services/site-analysis-hub";
-import { checkHostsIndexed, listGeekCrawls, type HostIndexed } from "@/services/gcc-api";
+import {
+  checkHostsIndexed,
+  listGeekCrawls,
+  startGeekCrawl,
+  type HostIndexed,
+} from "@/services/gcc-api";
 const SHOW_GAP_GENERATE_BUTTON = false; // Site Analyzer currently only returns headings without matching pages (missing-page gaps). Generate is disabled pending Workflow rebuild. Flip this line if gap types expand to include real content gaps.
 
 type SiteAnalysisProfileListItem = {
@@ -418,31 +422,31 @@ export function SiteAnalyzerClient() {
 
     startTransition(async () => {
       try {
-        const hub = await connectThroughCoverageHub({
-          signal: ac.signal,
-          onProgress: (p) => {
-            if (p.stepNumber || p.step) {
-              setStepLabel(
-                p.step
-                  ? `Step ${p.stepNumber}${p.totalSteps ? `/${p.totalSteps}` : ""}: ${p.step}`
-                  : `Step ${p.stepNumber}${p.totalSteps ? `/${p.totalSteps}` : ""}`,
-              );
-            }
-          },
-        });
-        const res = await fetch("/api/site-analyzer/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            domain,
-            force: true,
-          }),
-          signal: ac.signal,
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || "Could not start site analysis");
-        const profileId = await hub.done;
-        await applyFinishedCrawl(profileId);
+        // Geek-Crawler owns crawling. This used to POST site-analyzer/analyze and wait on
+        // Geek-SEO's SignalR hub -- the endpoint is retired (404) and the hub is cross-origin, so
+        // the browser blocked the negotiate on CORS before the 404 even mattered.
+        //
+        // GeekAPI records the run and returns immediately with status `external`: it does not crawl.
+        // Geek-Crawler-v2 runs locally against the seed, which is why there is no progress stream to
+        // wait on here and the button reports "started" rather than "finished".
+        const started = await startGeekCrawl("project-site", [domain.trim()]);
+        const runId = started.run?.runId;
+        if (!runId) throw new Error("The crawl was accepted but returned no run id.");
+
+        if (started.rejected?.length) {
+          // Seeds the server refused travel on success. Saying nothing here is how a crawl that
+          // took fewer URLs than were given looks like one that took them all.
+          setError(
+            started.rejected.map((r: { raw: string; reason: string }) => `${r.raw}: ${r.reason}`).join(" · "),
+          );
+        }
+
+        setSiteAnalysisProfileId(runId);
+        setStepLabel(
+          `Run ${runId.slice(0, 8)}… created. Crawling runs in Geek-Crawler; this page will not ` +
+          `advance on its own.`,
+        );
+        await checkIndex([domain.trim()]);
       } catch (e) {
         if (ac.signal.aborted) return;
         setError(e instanceof Error ? e.message : "Site analysis failed");
