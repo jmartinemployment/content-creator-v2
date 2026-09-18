@@ -11,7 +11,6 @@ const nav: {
   requiresWorkflow?: boolean;
 }[] = [
   { href: "/app/crawl", label: "Crawl", match: "prefix" },
-  { href: "/app/create", label: "Create", match: "prefix" },
   { href: "/app/workflow", label: "Workflow", match: "prefix", requiresWorkflow: true },
 ];
 

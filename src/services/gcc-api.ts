@@ -765,3 +765,30 @@ export async function checkHostsIndexed(urls: string[]): Promise<HostIndexed[]> 
   });
   return res.results ?? [];
 }
+
+export interface ProjectSiteReadiness {
+  seed: string;
+  ready: boolean;
+  runId: string | null;
+  indexState: string | null;
+  reason: string | null;
+}
+
+/**
+ * Whether a project site has crawl evidence a create can use, and the Run ID that holds it.
+ *
+ * Distinct from `checkHostsIndexed`, which asks the vector store whether a host has anything at
+ * all. This runs the same retrieval PLAN runs, so a crawl that completed but fetched or indexed
+ * nothing reports not-ready here instead of passing the gate and failing later.
+ *
+ * The run id is the reason the project URL goes through this call: Create is handed a Run ID, never
+ * a URL, and only a resolved run names the crawl that was committed for it.
+ */
+export function checkProjectSiteReadiness(
+  projectUrl: string,
+): Promise<ProjectSiteReadiness> {
+  return gccRequest<ProjectSiteReadiness>(
+    "/api/geek-content-creator/project-site/readiness",
+    { method: "POST", body: JSON.stringify({ projectUrl }) },
+  );
+}
