@@ -11,13 +11,13 @@ export function SiteHeadingHierarchy({
   const isGap = (headingText: string) => gapTopics.has(headingText.toLowerCase());
 
   return (
-    <div className="rounded-md border border-[var(--gcc-teal)]/30 bg-[var(--gcc-teal)]/10 px-4 py-3 text-sm text-[var(--gcc-ink)]">
-      <p className="font-semibold text-[var(--gcc-teal-deep)]">Site structure</p>
+    <div className="rounded-md border border-[var(--gcc-accent)]/30 bg-[var(--gcc-accent)]/10 px-4 py-3 text-sm text-[var(--gcc-ink)]">
+      <p className="font-semibold text-[var(--gcc-accent-deep)]">Site structure</p>
       <p className="mt-1 text-xs text-[var(--gcc-muted)]">
         {pages.length} page{pages.length === 1 ? "" : "s"} with heading hierarchy
       </p>
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs font-medium text-[var(--gcc-teal-deep)]">
+        <summary className="cursor-pointer text-xs font-medium text-[var(--gcc-accent-deep)]">
           Expand to view headings
         </summary>
         <ul className="mt-2 space-y-2 pl-2">

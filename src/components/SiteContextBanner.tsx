@@ -9,8 +9,8 @@ export function SiteContextBanner({
   const pages = siteSection.relatedPages ?? [];
   const n = pages.length;
   return (
-    <div className="rounded-md border border-[var(--gcc-teal)]/30 bg-[var(--gcc-teal)]/10 px-4 py-3 text-sm text-[var(--gcc-ink)]">
-      <p className="font-semibold text-[var(--gcc-teal-deep)]">
+    <div className="rounded-md border border-[var(--gcc-accent)]/30 bg-[var(--gcc-accent)]/10 px-4 py-3 text-sm text-[var(--gcc-ink)]">
+      <p className="font-semibold text-[var(--gcc-accent-deep)]">
         Site section context attached
       </p>
       <p className="mt-1 text-[var(--gcc-muted)]">

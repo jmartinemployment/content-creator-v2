@@ -443,7 +443,7 @@ export function SiteAnalyzerClient() {
             type="button"
             disabled={busy || !domain.trim()}
             onClick={analyze}
-            className="rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--gcc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {analyzing ? "Analyzing…" : "Analyze"}
           </button>
@@ -569,8 +569,8 @@ export function SiteAnalyzerClient() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="font-medium text-[var(--gcc-ink)]">{g.topic}</p>
-                  <div className="rounded-md border border-[var(--gcc-line)] bg-[var(--gcc-teal)]/5 px-3 py-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gcc-teal-deep)]">
+                  <div className="rounded-md border border-[var(--gcc-line)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--gcc-accent-deep)]">
                       Hierarchy
                     </p>
                     <ul className="mt-1.5 space-y-0.5">
@@ -600,7 +600,7 @@ export function SiteAnalyzerClient() {
                           href={sourcePageUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="break-all underline decoration-[var(--gcc-line)] hover:text-[var(--gcc-teal-deep)]"
+                          className="break-all underline decoration-[var(--gcc-line)] hover:text-[var(--gcc-accent-deep)]"
                         >
                           {sourcePageUrl}
                         </a>
@@ -613,7 +613,7 @@ export function SiteAnalyzerClient() {
                   type="button"
                   disabled={busy}
                   onClick={() => openGapDetail(g)}
-                  className="shrink-0 rounded-md border border-[var(--gcc-teal)] px-3 py-1.5 text-sm font-semibold text-[var(--gcc-teal-deep)]"
+                  className="shrink-0 rounded-md border border-[var(--gcc-accent)] px-3 py-1.5 text-sm font-semibold text-[var(--gcc-accent-deep)]"
                 >
                   {selectedGapId === g.id ? "Selected" : "Review gap"}
                 </button>
@@ -675,7 +675,7 @@ export function SiteAnalyzerClient() {
                             type="button"
                             disabled={busy || !clientId || !siteAnalysisProfileId || !selectedGap || !section || creating}
                             onClick={() => void startCreate()}
-                            className="mt-3 rounded-md bg-[var(--gcc-teal)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            className="mt-3 rounded-md bg-[var(--gcc-accent)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                             title={
                               !siteAnalysisProfileId || !selectedGap || !section
                                 ? "Run Site Analyzer and select a gap to enable"
@@ -695,7 +695,7 @@ export function SiteAnalyzerClient() {
                                   type="button"
                                   disabled={creating}
                                   onClick={() => void doCreate()}
-                                  className="rounded-md bg-[var(--gcc-teal)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                                  className="rounded-md bg-[var(--gcc-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                                 >
                                   {creating ? "Starting…" : "Use existing run"}
                                 </button>
