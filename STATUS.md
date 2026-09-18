@@ -1,5 +1,17 @@
 # Where things stand — 2026-09-17
 
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+
+
 ## Pushed and live
 
 | Commit | Repo | What |
@@ -29,8 +41,9 @@ endpoint would remove the duplication; that is a backend change.
 
 1. **`GET /api/geek-content-creator/creates` returns 500.** The live bug. The page the
    sidebar points at. Handler is 3 lines, so the exception is inside `ListCreatesAsync`.
-2. `CreateDraftWorkspace` and `HierarchyContextPanel` still call `/api/site-analyzer/*`
-   — leftovers from the old path, will 404 if reached.
+2. **Three frontend calls 404, all Site Analyzer** — `CreateStartForm.tsx:145,161` and
+   `HierarchyContextPanel.tsx:137`. There is no `site-analyzer` route anywhere in GeekAPI.
+   (Corrected 2026-09-18: `CreateDraftWorkspace` no longer calls them.)
 3. `src/proxy.ts` still matches `/api/site-analyzer/:path*`.
 4. **`DraftingEnabled` is still `false`** — creates stop before the first paid model call.
    Nothing has tested whether v1 actually produces content again.

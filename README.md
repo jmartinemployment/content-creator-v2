@@ -1,5 +1,16 @@
 # content-creator-v2
 
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+
 **Correctness over expediency.**
 
 Content Creator v2 is an authenticated, AI-assisted writing workspace for marketing operators and agencies. It turns a project website, content brief, and partner/competitor research into grounded, citeable content for editing, publishing, or export.
@@ -8,6 +19,7 @@ Content Creator v2 is an authenticated, AI-assisted writing workspace for market
 |--|--|
 | **Production UI** | `https://content-creator-v2-phi.vercel.app` |
 | **GeekAPI** | `https://api.geekatyourspot.com` |
+| **Direction** | **Version one is what is being implemented.** v2 lost features and was rolled back. The repo name and the `ContentCreatorV2/*` namespace are historical, not a statement of direction. New work extends `api/geek-content-creator` (v1) |
 | **Release status** | **Not release-ready.** v1's frontend is restored and in production; drafting is off by default (`ContentCreatorV2:DraftingEnabled=false`). See [`AGENTS.md`](AGENTS.md) § Current state |
 | **Authority** | [`AGENTS.md`](AGENTS.md) (service boundaries + current state) · [`architecture.md`](architecture.md) (platform contracts) · [`.cursor/rules/`](.cursor/rules/) (agent-enforced non-negotiables) |
 

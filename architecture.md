@@ -1,5 +1,16 @@
 # Content Creator v2 — Architecture
 
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+
 **Correctness over expediency. No polling for live job status.**
 
 | Authority | Path |
@@ -155,8 +166,10 @@ Live progress: **SignalR** `JobEvent` on `/hubs/gcc-v2-realtime`. REST is for st
 | `/api/cw/[...path]` | BFF passthrough → GeekAPI |
 | `/api/auth/*` | PKCE start / token / logout / hub-token |
 
-**Known broken:** ~15 `api/geek-content-creator/*` calls target v1 endpoints deleted in `582a171`.
-Only `/app/creates/new` avoids them. See AGENTS.md § Current state.
+**Known broken (corrected 2026-09-18):** this said "~15 `api/geek-content-creator/*` calls target v1
+endpoints deleted in `582a171`." That was true when written and is now false — `GccController` was
+restored by `714ef8d` + `998f5ad`, and **all 26** v1 endpoints the frontend calls exist. Exactly
+**three** calls still 404, all Site Analyzer. See AGENTS.md § Current state.
 
 Foreign `runId` → **safe-fail only** (no cross-tenant corpus adoption).
 
@@ -191,11 +204,20 @@ Honesty (master-plan P0):
 
 ## 8. Copy, call, do not reuse
 
+> **Superseded 2026-09-18.** This table described the v2 cutover. That cutover was rolled back —
+> v2 lost features and **version one is what is being implemented**. The rows below are kept as a
+> record of the previous direction; do not follow them.
+>
+> | Action | What | Why |
+> |--------|------|-----|
+> | ~~Copy~~ | ~~v1-specific shapes into `ContentCreatorV2/*`~~ | ~~v1 can be deleted after cutover~~ |
+> | ~~Do not reuse~~ | ~~v1 GCC controllers/repos as permanent runtime~~ | ~~New work uses v2 prefix only~~ |
+
 | Action | What | Why |
 |--------|------|-----|
-| **Copy** | v1-specific shapes into `ContentCreatorV2/*` | v1 can be deleted after cutover |
+| **Extend** | `api/geek-content-creator` (v1) — `GccController`, restored, 30 routes | v1 is the target surface |
 | **Call** | Shared prompt/SEO/GEO engines in-process in GeekAPI | One stack — call, don’t fork casually |
-| **Do not reuse** | v1 GCC controllers/repos as permanent runtime | New work uses v2 prefix only |
+| **Do not add** | New frontend calls on the `-v2` prefix | Existing ≠ correct when the direction is v1 |
 
 ### Isolation hard rules
 

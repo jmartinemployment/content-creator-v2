@@ -1,5 +1,16 @@
 # Agent guidance — content-creator-v2
 
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+I am implementing Content Creator version one.
+
 **Correctness over expediency. Always. No exceptions.**
 
 | Authority | Path |
@@ -60,7 +71,9 @@ exactly two places, neither of them the corpus: an **operator-supplied asset** (
 - `partner`, `competitors` — third-party, feed RAG
 - `local` — **means GEOGRAPHY (local SEO), not the own site.** `Geo` is the better name; the stored
   value stays `"local"` unless migrated. Never conflate it with the project site.
-- **`project-site` does not exist yet.** It is a new type to be added, not a rename of `local`.
+- `project-site` — the operator's own site. **It exists**: `CrawlTypes.ProjectSite = "project-site"`,
+  in the `Valid` set. It is not a rename of `local`. (This file claimed it did not exist until
+  2026-09-18; check `CrawlTypes.cs` before trusting any claim here about which types are live.)
 
 Sites exceeding 50,000 pages are normal. `SameOriginBfsCrawler` documents itself as "Unlimited
 same-origin BFS per host"; that assumption is the reason the corpus reached ~223k pages / 93 GB with
@@ -146,19 +159,52 @@ The system is binary by design: it either has real evidence and proceeds, or it 
 - **Partial extraction is failure.** Catching a per-page error and logging "page skipped" is a middle
   state; it hid a total extraction outage behind thirteen drafts of filler
 
-## Current state (2026-09-16)
+## The direction: version one
 
-- **Frontend is v1's** (`GeekContentCreator`), restored into this repo and in production. V2's
-  frontend is gone.
-- **PLAN and WRITE call v1's engine** — `ContentGenerationOrchestrator` via
-  `ContentCreatorV2/V1Restore/`. VALIDATE/REPAIR/synthesis still run V2-side.
+**V2 lost features and was rolled back. Version one is what is being implemented.**
+
+This reverses the migration older text in these docs describes. Anything asserting a v2 cutover —
+"v1 can be deleted after cutover", "new work uses v2 prefix only", "do not couple into v1 Content
+Writer" — records the *previous* direction and is not the instruction. The repo name and the
+`ContentCreatorV2/*` namespace are historical, not a statement of direction.
+
+**New work extends `api/geek-content-creator` (v1).** Do not add calls to the `-v2` surface, and do
+not reach for a `-v2` endpoint merely because one already exists — existing is not the same as
+correct when the direction is v1.
+
+## Current state (2026-09-18)
+
+- **`GccController` is restored and live** — `GeekAPI/Controllers/ContentCreator/GccController.cs`,
+  1,747 lines, `[Route("api/geek-content-creator")]`, **30 routes**. Restored in two steps:
+  `714ef8d` (+1,175, minus Site Analyzer) then `998f5ad` (the 7 Project endpoints retired
+  2026-08-06).
+- **The "~15 dead endpoints" claim was true and is now false.** Verified 2026-09-18 by diffing every
+  frontend call against the live route table: **all 26** `api/geek-content-creator/*` endpoints the
+  frontend calls exist. Do not re-copy that number out of an older doc.
+- **Exactly three frontend calls still 404, all Site Analyzer:** `CreateStartForm.tsx:145`
+  (`POST .../site-analyzer/analyze`), `CreateStartForm.tsx:161` (polls `GET .../site-analyzer/{id}`),
+  `HierarchyContextPanel.tsx:137` (`GET .../site-analyzer/profiles/{id}/hierarchy-match`). There is
+  **no `site-analyzer` route anywhere in GeekAPI** — `582a171` deleted v1's; `5072820` removed the
+  three v2 replacements it had added.
 - **Drafting is OFF by default** — `ContentCreatorV2:DraftingEnabled=false` stops every create before
   the first paid model call, after the free evidence gates. Model default is `gpt-4o-mini`.
-- **Known broken:** the restored frontend calls ~15 `api/geek-content-creator/*` endpoints that no
-  longer exist (renamed to `-v2` in `582a171`, which also deleted `GccController.cs`, 1,486 lines —
-  recoverable via `git show 582a171^:`). Only `/app/creates/new` avoids them.
+- **`GET /api/geek-content-creator/creates` returns 500** — the route exists; the throw is inside
+  `ListCreatesAsync`. It is where every create lands after it is made.
 - **Project-site crawling still runs inside GeekAPI**, which is why Chromium is installed into the
   API image (`Dockerfile:33`). That is the one live violation of the boundaries above.
+
+### Input the UI collects and then discards
+
+Verified 2026-09-18. Not dead endpoints — fields with no destination at all:
+
+| Field | Where | What happens |
+|---|---|---|
+| Partner URLs, Competitor URLs | `crawl-client.tsx` | Index-checked on blur, coloured, then forgotten. Never persisted. `startGeekCrawl` is the only function that would take them and has **zero call sites** |
+| Target keyword | `ContentBriefPanel.tsx:317` | Only reaches a body inside `ensureCreateId()`, which short-circuits when a create exists — so on every live path it is dropped |
+| All of `SerpIngestPanel` | orphaned | Zero importers; its `onCurated` has no implementation |
+
+`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with **no
+inbound link**.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

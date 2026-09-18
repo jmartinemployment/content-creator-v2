@@ -321,11 +321,17 @@ export default function HierarchyContextPanel({
         </div>
       ) : null}
 
-      {!loading && matches.length === 0 && !loadError ? (
+      {/* The acknowledgement is also the only way past `hierarchyOk`, so it has to render when the
+          hierarchy could not be loaded at all — not just when it loaded and matched nothing.
+          Hiding it on loadError left Generate permanently blocked with no path through the UI.
+          Still fail-closed: the operator says so explicitly, nothing is assumed on their behalf. */}
+      {!loading && matches.length === 0 ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-amber-800">
-            No hierarchy match for &ldquo;{targetKeyword}&rdquo; — page/site hierarchy context will be
-            omitted. Generate stays blocked until you acknowledge the keyword is outside site scope.
+            {loadError
+              ? `Hierarchy context is unavailable, so it will be omitted for “${targetKeyword}”.`
+              : `No hierarchy match for “${targetKeyword}” — page/site hierarchy context will be omitted.`}{" "}
+            Generate stays blocked until you acknowledge the keyword is outside site scope.
           </p>
           <label className="flex items-start gap-2 text-sm font-medium text-foreground">
             <input

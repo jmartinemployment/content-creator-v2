@@ -104,16 +104,17 @@ export default function ProjectForm({
     <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">New Project</h2>
       <p className="mt-1 text-sm text-muted">
-        Enter the client site URL and the primary keyword. Hierarchy match uses
-        site_analysis_profiles.Id from the query string (Site Analyzer Open Workflow).
+        Enter the client site URL and the primary keyword. Hierarchy match uses the crawl Run ID
+        carried in from the project site check.
       </p>
+      {/* The query param is still spelled siteAnalysisProfileId, but since 4f7d540 the value is a
+          Geek-Crawler run id. Renaming the param is a coordinated change across WorkflowGate,
+          workflowHref, this form and CreateStartForm — the label tells the truth meanwhile. */}
       {siteAnalysisProfileId ? (
-        <p className="mt-2 break-all text-xs text-muted">
-          site_analysis_profiles.Id: {siteAnalysisProfileId}
-        </p>
+        <p className="mt-2 break-all text-xs text-muted">Run ID: {siteAnalysisProfileId}</p>
       ) : (
         <p className="mt-2 text-xs text-amber-800">
-          No site_analysis_profiles.Id yet — open Site Analyzer, select a crawl, then return here.
+          No Run ID yet — confirm a project site has crawl evidence, then return here.
         </p>
       )}
 
