@@ -97,11 +97,40 @@ export function SiteAnalyzerClient() {
   const { unlockWorkflow } = useWorkflowGate();
 
   /**
-   * The gate into the rest of the app.
+   * Checks the project site the same way the partner and competitor boxes check theirs — on blur,
+   * reported inline — but against readiness rather than the host index.
    *
-   * Deliberately not the host index check the partner and competitor boxes use: that asks whether a
-   * host has vectors, which a crawl that fetched nothing can satisfy. This runs the same retrieval
-   * PLAN runs and returns the run id of the crawl that actually holds the evidence.
+   * The host index only asks whether a host has vectors, which a crawl that fetched nothing can
+   * satisfy. Readiness runs the same retrieval PLAN runs and returns the run id of the crawl that
+   * actually holds the evidence. One signal for this field: asking both is how a run once read
+   * "status says fine, store says empty, index says populated".
+   *
+   * Returns the verdict so the caller can act on it without re-reading state it just set.
+   */
+  async function checkProject(): Promise<ProjectSiteReadiness | null> {
+    const projectUrl = domain.trim();
+    if (!projectUrl) return null;
+
+    setCheckingProject(true);
+    setProjectError(null);
+    try {
+      const row = await checkProjectSiteReadiness(projectUrl);
+      setProject(row);
+      return row;
+    } catch (e) {
+      // A check that did not complete is not a verdict on the URL, so this reports the real failure
+      // rather than marking the site unusable.
+      setProject(null);
+      setProjectError(e instanceof Error ? e.message : "Could not check this URL.");
+      return null;
+    } finally {
+      setCheckingProject(false);
+    }
+  }
+
+  /**
+   * The gate into the rest of the app. Acts on the verdict already on screen, re-checking only if
+   * the field has not been checked yet, so the button never disagrees with the line above it.
    *
    * Nothing downstream is handed the URL. Workflow is unlocked with the run id, and the run id is
    * what travels on the query string, because only it names a committed crawl.
@@ -110,23 +139,11 @@ export function SiteAnalyzerClient() {
     const projectUrl = domain.trim();
     if (!projectUrl) return;
 
-    setCheckingProject(true);
-    setProjectError(null);
-    setProject(null);
-    try {
-      const row = await checkProjectSiteReadiness(projectUrl);
-      setProject(row);
-      if (!row.ready || !row.runId) return;
+    const row = project ?? (await checkProject());
+    if (!row?.ready || !row.runId) return;
 
-      unlockWorkflow({ siteAnalysisProfileId: row.runId, domain: projectUrl, clientId: null });
-      router.push(workflowHref(row.runId));
-    } catch (e) {
-      // A check that did not complete is not a verdict on the URL, so this reports the real failure
-      // rather than marking the site unusable.
-      setProjectError(e instanceof Error ? e.message : "Could not check this URL.");
-    } finally {
-      setCheckingProject(false);
-    }
+    unlockWorkflow({ siteAnalysisProfileId: row.runId, domain: projectUrl, clientId: null });
+    router.push(workflowHref(row.runId));
   }
 
   return (
@@ -145,6 +162,7 @@ export function SiteAnalyzerClient() {
             placeholder="geekatyourspot.com"
             className="flex-1 rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
             disabled={checkingProject}
+            onBlur={() => void checkProject()}
           />
           <button
             type="button"
@@ -158,8 +176,15 @@ export function SiteAnalyzerClient() {
 
         {/* The project site is checked only here, never also against the host index. Two answers
             that can disagree is how a run reported "complete" while holding nothing. */}
-        {projectError ? (
+        {checkingProject ? (
+          <p className="text-xs text-[var(--gcc-muted)]">Checking the crawl…</p>
+        ) : projectError ? (
           <p className="text-xs text-red-600">{projectError}</p>
+        ) : project && project.ready && project.runId ? (
+          <p className="text-xs text-green-700">
+            <span className="font-mono">{domain.trim()}</span> — crawled and retrievable. Run{" "}
+            {project.runId.slice(0, 8)}…
+          </p>
         ) : project && !project.ready ? (
           <p className="text-xs text-red-600">
             {project.reason ?? "No indexed pages are retrievable for this URL yet."}{" "}
