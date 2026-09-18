@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
-import { Figtree, Sora } from "next/font/google";
+import { Fraunces, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-// Sora + Figtree are geekatyourspot.com's own pairing (--font-sora / --font-sans
-// there). This app is a subdomain, so it inherits the parent's typography rather
-// than picking its own.
-const display = Sora({
+const display = Fraunces({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["500", "600", "700"],
 });
 
-const body = Figtree({
+const body = Source_Sans_3({
   variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],

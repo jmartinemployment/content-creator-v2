@@ -1,47 +1,30 @@
 @import "tailwindcss";
 
-/*
-  Brand tokens inherited from geekatyourspot.com — this app is a subdomain and
-  must read as the same property. Values are taken from the parent's live
-  markup, not chosen here:
-    #0B162A  primary navy   (507 text / 321 background uses)
-    #C83803  accent orange  (530 text /  21 background uses)
-    #023059  secondary blue (full-bleed sections, dark theme-color)
-    #8C2703  deep orange    (hover/active partner, same 16deg hue)
-
-  The 530:21 ratio is the rule: orange is a TEXT colour first. A solid orange
-  fill means "act here" and is reserved for the one primary action in a view.
-*/
 :root {
-  --gcc-navy: #0b162a;
-  --gcc-navy-raised: #023059;
+  --gcc-ink: #0b162a;
+  --gcc-slate: #1a2436;
+  --gcc-muted: #6b7a90;
+  --gcc-line: #d5dde8;
+  --gcc-paper: #f3f6fb;
   --gcc-accent: #c83803;
+  --gcc-navy-raised: #023059;
   --gcc-accent-deep: #8c2703;
-
-  /* Neutrals derived at the navy's own hue (219deg) so greys belong to the
-     brand rather than reading as generic slate. */
-  --gcc-ink: var(--gcc-navy);
-  --gcc-muted: #5b6e8f;
-  --gcc-line: #cbd3e2;
-  --gcc-paper: #f1f4f9;
-
+  --gcc-glow: rgba(200, 56, 3, 0.18);
   --background: var(--gcc-paper);
   --foreground: var(--gcc-ink);
-
-  /* CWV2 theme tokens. Folded onto the same brand values so the two token
-     systems can no longer drift apart. */
+  /* CWV2 theme tokens (ProjectForm / ContentResults) */
   --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-muted: var(--gcc-paper);
-  --color-border: var(--gcc-line);
-  --color-border-strong: #a9b8ce;
-  --color-text-primary: var(--gcc-ink);
-  --color-text-secondary: var(--gcc-muted);
-  --color-text-muted: #8496b0;
-  --color-accent: var(--gcc-accent);
-  --color-accent-hover: var(--gcc-accent-deep);
-  --color-brand: var(--gcc-accent);
-  --color-muted: var(--gcc-muted);
+  --color-surface-muted: #f5f5f7;
+  --color-border: #e8e8ea;
+  --color-border-strong: #c8c8cc;
+  --color-text-primary: #1a1a2c;
+  --color-text-secondary: #6b6b80;
+  --color-text-muted: #a0a0b0;
+  --color-accent: #c83803;
+  --color-accent-hover: #8c2703;
+  --color-brand: #c83803;
+  --color-muted: #6b7280;
 }
 
 @theme inline {
@@ -58,8 +41,6 @@
   --color-accent-hover: var(--color-accent-hover);
   --color-brand: var(--color-brand);
   --color-brand-dark: var(--gcc-accent-deep);
-  --color-navy: var(--gcc-navy);
-  --color-navy-raised: var(--gcc-navy-raised);
   --color-muted: var(--color-muted);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
@@ -71,11 +52,8 @@ body {
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Sora is a geometric sans, not a serif — headings are set tight and dark to
-   match the parent's display treatment. */
 .font-display {
-  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display), ui-serif, Georgia, serif;
 }
 
 .btn-primary {
@@ -91,24 +69,6 @@ body {
 
 .btn-primary:disabled {
   opacity: 0.5;
-}
-
-/* Keyboard focus is visible on both the light app ground and the navy chrome. */
-:where(a, button, [role="button"], input, select, textarea):focus-visible {
-  outline: 2px solid var(--gcc-accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
 }
 
 .rendered-content h2 {

@@ -1,30 +1,19 @@
 # Restyle to brand colours — shipped
 
-Content Creator is a **subdomain of geekatyourspot.com**, so the brief is not "use two hex values",
-it is "read as the same property". Every colour and both typefaces below were extracted from the
-parent's live markup rather than chosen here.
+Content Creator is a **subdomain of geekatyourspot.com**. The brand values below were extracted from
+that site's live markup rather than chosen here, so the two properties match by construction.
 
 ## Source of truth — extracted from geekatyourspot.com
 
 | Hex | as `text-` | as `bg-` | Role |
 |---|---|---|---|
-| `#0b162a` | 507 | 321 | **Primary navy.** Body text, headings, *and* the dominant section background |
+| `#0b162a` | 507 | 321 | **Primary navy.** Body text, headings, and section backgrounds |
 | `#c83803` | 530 | 21 | **Accent orange.** Overwhelmingly a text colour; fill reserved for CTAs |
-| `#023059` | 2 | 8 | Secondary blue. Full-bleed alternating sections; dark `theme-color` + `TileColor` |
-| `#8c2703` | 0 | 1 | Deep orange, hover/active partner (same 16° hue as `#c83803`) |
+| `#023059` | 2 | 8 | Secondary blue. Full-bleed sections; dark `theme-color` + `TileColor` |
+| `#8c2703` | 0 | 1 | Deep orange, hover/active (same 16° hue as `#c83803`) |
 | `#e40014` | – | – | The parent's `--destructive` |
 
-**The 530:21 ratio is the rule the app now follows:** orange is a text colour first; a solid orange
-fill means "act here" and belongs to one action per view.
-
-Type: the parent sets `html { font-family: var(--font-sans) }` where `--font-sans: "Figtree"`, and
-declares `--font-sora: "Sora"` for display. This app now uses that exact pairing, replacing
-Fraunces + Source Sans 3. Since both sites already shared the colours, typography was the strongest
-remaining tie-together lever.
-
 ## Corrections to the previous version of this plan
-
-Two claims in the earlier draft were wrong and are recorded here so they are not repeated:
 
 1. It said the `--color-*` set was used only by `ProjectForm` / `ContentResults`. In fact
    `--color-brand` is consumed through Tailwind's `@theme inline` bridge as `text-brand` / `bg-brand`
@@ -33,41 +22,38 @@ Two claims in the earlier draft were wrong and are recorded here so they are not
 2. It proposed `#9e2c02` as an invented hover shade. The parent already ships `#8c2703` for exactly
    that role, so nothing needed inventing.
 
-`--gcc-ink` was `#0b1220`; it is now `#0B162A`, the stated primary.
+## What shipped — colour values only
 
-## What shipped
+This is a token-level reskin. No component structure, typography, or copy was changed.
 
-- `globals.css` — token system rebuilt on the four brand values. Neutrals re-derived at the navy's
-  own hue (219°) so greys belong to the brand instead of reading as generic slate. The two token
-  systems (`--gcc-*` and `--color-*`) were folded onto shared values so they can no longer drift.
-- `--gcc-teal` / `--gcc-teal-deep` renamed to `--gcc-accent` / `--gcc-accent-deep` across 7 files.
-- `layout.tsx` — Sora + Figtree.
-- `page.tsx` — the radial-glow gradient and crosshatch texture were removed. The parent builds
-  sections as flat `bg-[#0b162a]` with no gradients; recolouring the glow orange would also have
-  produced a sunset cliché. The hero is now the product's actual subject: a site heading tree with
-  one unanswered question marked in orange.
-- `AppSidebar.tsx` — navy chrome; active item is an orange left rule, **no fill** (see below).
+- `--gcc-ink`: `#0b1220` → `#0b162a` (the stated primary)
+- `--gcc-teal` / `--gcc-teal-deep` → renamed `--gcc-accent` / `--gcc-accent-deep`, set to
+  `#c83803` / `#8c2703`
+- `--gcc-glow`: teal → `rgba(200, 56, 3, 0.18)`
+- `--color-accent` / `--color-accent-hover` / `--color-brand` / `--color-brand-dark` → the same
+  accent pair
+- `--gcc-navy-raised`: `#023059` added; used as the landing page background
+- Landing page gradient stops moved onto the brand navy/blue so the blue reads through
 
-## Contrast — measured, not assumed
+Neutrals (`--gcc-muted`, `--gcc-line`, `--gcc-paper`, and the `--color-*` greys) were deliberately
+left at their existing values.
 
-All pairs pass WCAG AA, with two findings:
+## Contrast — measured
 
-- The active nav item originally used a `#023059` fill behind the orange rule: **2.56:1**, below the
-  3:1 for non-text UI. No lightened fill can clear 3:1 under this orange (the maths caps the
-  background at L ≤ 0.017; `#023059` is L 0.028). The fill was therefore dropped — the rule on bare
-  navy measures **3.46:1** and passes.
-- `--gcc-line` (`#cbd3e2`) on `--gcc-paper` is **1.36:1**. Reaching 3:1 needs roughly `#6b7c96`,
-  a border heavy enough to change the app's character, and the border is never the sole indicator of
-  a control (inputs are white on a tinted ground, buttons carry labels). Left light, deliberately.
+Accent on white 5.22:1, accent on page ground 4.74:1, accent-deep on white 8.73:1, white on accent
+5.22:1, navy on page ground 16.39:1, muted on page ground 4.68:1 — all pass AA.
+
+Known deviation: `--gcc-line` on `--gcc-paper` is 1.36:1. Reaching 3:1 needs roughly `#6b7c96`, a
+border heavy enough to change the app's character, and the border is never the sole indicator of a
+control. Left as-is (this is unchanged from before the reskin).
 
 ## Open — the semantic-colour collision
 
 Burnt orange sits at hue 16°, **between** the app's existing error red (`red-600`, 0°) and warning
 amber (`amber-800` `#92400e`, 23° — nearly identical to `#8c2703`). 30 files use these Tailwind
-utilities. Nothing is broken, but the amber panels now read as a foreign visual language.
+utilities, so warning panels read as a slightly foreign visual language next to the new buttons.
 
-The fix is to separate by **treatment, not hue**: solid saturated fill belongs to the accent alone,
-and warnings/errors become a tinted ground + left rule + navy text. Tokens for that were drafted and
-then removed rather than shipped unused — a half-adopted system is worse than none. Values, if
-adopted: danger `#e40014` / `#a3000e` / bg `#fef2f2`; warn rule `#e8a317` / bg `#fdf6e3`; ok
-`#0f7b4a` / bg `#ecf8f1`.
+Reviewed and **declined** — no sweep. If it is ever picked up, the fix is to separate by *treatment*
+rather than hue: solid saturated fill belongs to the accent alone, warnings/errors become a tinted
+ground + left rule + navy text. Values: danger `#e40014` / `#a3000e` / bg `#fef2f2`; warn rule
+`#e8a317` / bg `#fdf6e3`; ok `#0f7b4a` / bg `#ecf8f1`.

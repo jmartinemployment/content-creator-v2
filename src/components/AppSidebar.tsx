@@ -21,7 +21,7 @@ export function AppSidebar() {
   const workflowLink = workflowHref(siteAnalysisProfileId);
 
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col bg-[var(--gcc-navy)] px-3 py-5 text-white">
+    <aside className="flex w-[220px] shrink-0 flex-col border-r border-[var(--gcc-line)] bg-[var(--gcc-slate)] px-3 py-5 text-white">
       <Link href="/app/crawl" className="mb-8 px-2">
         <span className="font-display text-lg font-semibold leading-tight">
           Geek Content Creator
@@ -36,7 +36,7 @@ export function AppSidebar() {
               <span
                 key={item.href}
                 aria-disabled="true"
-                className="cursor-not-allowed rounded-md border-l-2 border-transparent px-3 py-2 text-sm font-medium text-white/35"
+                className="cursor-not-allowed rounded-md px-3 py-2 text-sm font-medium text-white/35"
               >
                 {item.label}
               </span>
@@ -54,10 +54,10 @@ export function AppSidebar() {
                   ? workflowLink
                   : item.href
               }
-              className={`rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? "border-[var(--gcc-accent)] text-white"
-                  : "border-transparent text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "bg-[var(--gcc-accent)] text-white"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
               {item.label}
