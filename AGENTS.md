@@ -14,7 +14,7 @@
 |---|---|---|
 | **Geek-Crawler** | ALL crawling: `partner`, `competitors`, `geo`, `project-site`, future types | — |
 | **Geek-Crawler-Rag** | Retrieval + verification over what was crawled | **Never generates** |
-| **GeekAPI** | Service layer / BLL. Generation, grounded on verified Markdown | **No crawler, no browser** |
+| **GeekAPI** | Service layer / BLL. Generation, grounded on verified block text | **No crawler, no browser** |
 | **Geek-SEO** | Site + gap analysis (owns Site Analyzer) | — |
 | **Content Creator** (this repo) | Passes a **Run ID** → GeekAPI → displays results | **No crawler, no browser** |
 
@@ -23,6 +23,35 @@ Create via RAG. It was retired from the v2 path deliberately (`5072820`).
 
 RAG is **Library-only — retrieval and verification**. `/v1/generate` and `rag-generate.*` were
 removed and must never be revived. See `.cursor/rules/geek-crawler-rag.mdc`.
+
+## Markdown is forbidden
+
+**Markdown is not a corpus format, not a verification target, and not an interchange format between
+these services.** There is no Markdown converter anywhere in the crawl path
+(`Geek-Crawler-v2/src/crawl/extract-content.ts`) and nothing may reintroduce one.
+
+| Concern | The method |
+|---|---|
+| Corpus body | Typed **`blocks`** — `heading`(+`level`) · `paragraph` · `listItem` · `quote` · `code` · `row`(`cells`) · `term` · `definition`, each carrying `text`, `html`, `anchors` |
+| Display / audit | **`contentHtml`** — the clean semantic fragment |
+| Page as a string | **One shared block→text projection**, `Geek-Crawler-Rag/src/geek_crawler_rag/block_text.py` (`derive_plaintext_from_blocks`) |
+| Quote verification | `citation_verify.quote_in_text(quote, plain_text, blocks)` against that same projection |
+| Run readiness | **`ContentReadyAt`** — never `MarkdownReadyAt` |
+
+Chunk text and verification text come from the *same* projection deliberately: a quote is taken from
+a retrieved chunk and then matched against the page, so two implementations of "join the blocks" make
+correct citations fail. Do not write a second one.
+
+**This is not stylistic.** The crawler migrated off Markdown and the Library did not; every page
+then classified `no_markdown` and 5,274 of them were deleted from Mongo with their Qdrant points on
+2026-09-18. Writing "Markdown" into a doc is how the two halves drifted in the first place.
+
+**Forbidden, concretely:** `MarkdownReadyAt` / `MarkdownBackfilledAt` / `MarkdownBackfillSkip` as
+readiness or gating signals; a `no_markdown` reject reason; HTML→Markdown conversion at any hop
+(crawl, ingest, index, extraction, prompt assembly); `parserId: "crawler-markdown"`; synthesizing
+Markdown in order to re-parse it with `#`/`[text](href)` regexes. Markdown remains legitimate in
+exactly two places, neither of them the corpus: an **operator-supplied asset** (`text/markdown` in
+`asset_context.py`) and a **generated report** a human reads.
 
 ## Crawl types
 
@@ -48,10 +77,16 @@ feed different consumers:
 | Scale | Own site, bounded | 50,000+ pages, scope hard |
 | Failure mode if wrong | Tools/partners silently stop being found — **no error, fewer matches** | Quote verification fails, loudly |
 
-**Grounding cannot be derived from the RAG text path.** `Geek-Crawler-Rag/extract.py:44` does
-`body.get_text(separator=" ", strip=True)` — text nodes only. Every href, every tag and every heading
-marker is discarded. So h6→anchor tool links, "the keyword matched an h5", and h2 message pillars are
-all unrecoverable from RAG's Markdown. `Build` filters on `p.Html` for exactly this reason.
+**Grounding cannot be derived from the RAG *text* path.** RAG's page string is the flat block
+projection (`block_text.derive_plaintext_from_blocks`): block text joined on blank lines, table rows
+on `" | "`, inline markup stripped. Every href, every tag and every heading marker is discarded, so
+h6→anchor tool links, "the keyword matched an h5", and h2 message pillars are unrecoverable **from
+that string**. `Build` filters on `p.Html` for exactly this reason.
+
+The *blocks* are a different matter: `heading.level`, per-block `html` and per-block `anchors` are all
+retained, so structure is recoverable from `blocks` even though it is not recoverable from the
+projection. That is the migration target for `Build` — not a Markdown slice, and not a second text
+projection.
 
 **Raw HTML is needed at derivation time, not forever.** Everything project-site grounding consumes
 lives in the derived tree, not the source:
@@ -73,7 +108,7 @@ This does **not** apply to partner/competitor pages, whose HTML is still read at
 
 `crawl_pages.Html` is load-bearing: partner/competitor extraction reads it directly
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
-space until extraction moves to Markdown.
+space until extraction moves to `blocks`.
 
 ## Crawls are atomic. A run is binary or it is not a run.
 

@@ -93,7 +93,6 @@ export default function HierarchyContextPanel({
         hierarchyPath: next?.path.join(" › ") ?? null,
         hierarchyChildHeadings: next?.childHeadings ?? [],
         hierarchyToolsByHeading: next?.toolsByHeading ?? [],
-        hierarchyAssignmentMarkdown: next?.assignmentMarkdown ?? null,
         hierarchySourcePageUrl: next?.sourcePageUrl ?? null,
         allowOutsideSiteScope: next ? false : outside,
         siteAnalysisProfileId: siteAnalysisProfileId ?? undefined,

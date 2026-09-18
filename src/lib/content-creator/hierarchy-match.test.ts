@@ -1,10 +1,8 @@
 import {
-  findHierarchyMatches,
   findDuplicateMatches,
-  matchKeywordToHierarchy,
+  hierarchyMatchId,
+  hierarchyMatchKindLabel,
   normalizeHierarchyMatchesFromApi,
-  parseHierarchyTools,
-  type PageContextPage,
 } from "./hierarchy-match.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -17,179 +15,109 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
   }
 }
 
-const fiveAnchors = parseHierarchyTools(
-  ["Zapier, QuickBooks, Lido, Jotform, UiPath."],
-  [
-    { text: "Zapier", href: "/tools/accounting/zapier" },
-    { text: "QuickBooks", href: "/tools/accounting/quickbooks" },
-    { text: "Lido", href: "/tools/accounting/lido" },
-    { text: "Jotform", href: "/tools/accounting/jotform" },
-    { text: "UiPath", href: "/tools/accounting/uipath" },
-  ],
-);
-assertEqual(fiveAnchors.length, 5, "five comma-separated anchors");
-assert(fiveAnchors.every((t) => typeof t.href === "string" && t.href.length > 0), "each tool has href");
+// Tools arrive as structure. Five anchors under an H6 come back as one named group with hrefs
+// intact — no text slice is parsed to recover them.
+const toolMatches = normalizeHierarchyMatchesFromApi([
+  {
+    path: ["Accounting", "Top 5 Automated Data Entry Processing Tools:"],
+    childHeadings: [],
+    sourcePageUrl: "https://example.com/accounting",
+    matchedHeading: "Top 5 Automated Data Entry Processing Tools:",
+    kind: "exact-heading",
+    toolsByHeading: [
+      {
+        heading: "Top 5 Automated Data Entry Processing Tools:",
+        tools: [
+          { name: "Zapier", href: "/tools/accounting/zapier" },
+          { name: "QuickBooks", href: "/tools/accounting/quickbooks" },
+          { name: "Lido", href: "/tools/accounting/lido" },
+          { name: "Jotform", href: "/tools/accounting/jotform" },
+          { name: "UiPath", href: "/tools/accounting/uipath" },
+        ],
+      },
+    ],
+  },
+]);
+assertEqual(toolMatches.length, 1, "one API match");
+assertEqual(toolMatches[0]?.toolsByHeading.length, 1, "one tool group");
 assertEqual(
-  fiveAnchors.map((t) => t.name),
+  toolMatches[0]?.toolsByHeading[0]?.heading,
+  "Top 5 Automated Data Entry Processing Tools:",
+  "group heading",
+);
+assertEqual(toolMatches[0]?.toolsByHeading[0]?.tools.length, 5, "five tools on the H6");
+assert(
+  toolMatches[0]?.toolsByHeading[0]?.tools.every((t) => typeof t.href === "string" && t.href.length > 0),
+  "each tool keeps its href",
+);
+assertEqual(
+  toolMatches[0]?.toolsByHeading[0]?.tools.map((t) => t.name),
   ["Zapier", "QuickBooks", "Lido", "Jotform", "UiPath"],
   "tool names",
 );
 
-const prose = parseHierarchyTools(
-  ["Teams that already use Zapier for routing and QuickBooks for books should start here."],
-  [
-    { text: "Zapier", href: "/tools/zapier" },
-    { text: "QuickBooks", href: "/tools/quickbooks" },
-  ],
-);
-assertEqual(prose, [], "two inline links in prose are not a tool list");
-
-const pages: PageContextPage[] = [
+// A single anchor is not a tool list, and a repeated name is one tool.
+const thinTools = normalizeHierarchyMatchesFromApi([
   {
-    pageUrl: "https://example.com/accounting",
-    headings: ["Accounting", "Top 5 Automated Data Entry Processing Tools:"],
-    markdown: `# Accounting
-
-###### Top 5 Automated Data Entry Processing Tools:
-
-- [Zapier](/tools/zapier)
-- [QuickBooks](/tools/quickbooks)
-- [Lido](/tools/lido)
-- [Jotform](/tools/jotform)
-- [UiPath](/tools/uipath)
-`,
-  },
-];
-
-const match = matchKeywordToHierarchy(pages, "Accounting");
-assert(match, "hierarchy match");
-assertEqual(match.toolsByHeading.length, 1, "one tool group");
-assertEqual(match.toolsByHeading[0]?.heading, "Top 5 Automated Data Entry Processing Tools:", "group heading");
-assertEqual(match.toolsByHeading[0]?.tools.length, 5, "five tools with hrefs on the H6");
-assert(match.assignmentMarkdown.includes("###### Top 5"), "assignment markdown is the heading slice");
-
-// Regression: SQL hierarchy-match API shape for "AI Content Creation Workflow"
-const apiMatches = normalizeHierarchyMatchesFromApi([
-  {
-    path: ["Services", "AI Content Creation Workflow"],
-    childHeadings: ["Brief", "Generate"],
-    sourcePageUrl: "https://geekatyourspot.com/services/ai-content",
-    matchedHeading: "AI Content Creation Workflow",
+    path: ["Services", "Routing"],
+    childHeadings: [],
+    sourcePageUrl: "https://example.com/services",
+    matchedHeading: "Routing",
     kind: "exact-heading",
-    assignmentMarkdown: "## AI Content Creation Workflow\n\nDraft with Brief and Generate.\n",
+    toolsByHeading: [
+      { heading: "Routing", tools: [{ name: "Zapier", href: "/tools/zapier" }] },
+      {
+        heading: "Books",
+        tools: [
+          { name: "QuickBooks", href: "/tools/quickbooks" },
+          { name: "quickbooks", href: "/tools/quickbooks" },
+        ],
+      },
+      { heading: "", tools: [{ name: "A" }, { name: "B" }] },
+    ],
   },
 ]);
-assertEqual(apiMatches.length, 1, "one API match");
-assertEqual(apiMatches[0]?.matchedHeading, "AI Content Creation Workflow", "exact heading");
-assertEqual(apiMatches[0]?.kind, "exact-heading", "exact-heading kind");
-assertEqual(apiMatches[0]?.childHeadings, ["Brief", "Generate"], "children");
+assertEqual(thinTools[0]?.toolsByHeading, [], "one-anchor, de-duped and unheaded groups are dropped");
+
+// Pascal-cased payloads normalize identically.
+const pascal = normalizeHierarchyMatchesFromApi([
+  {
+    Path: ["Services", "AI Content Creation Workflow"],
+    ChildHeadings: ["Brief", "Generate"],
+    SourcePageUrl: "https://geekatyourspot.com/services/ai-content",
+    MatchedHeading: "AI Content Creation Workflow",
+    Kind: "exact-heading",
+    ToolsByHeading: [
+      {
+        Heading: "AI Content Creation Workflow",
+        Tools: [
+          { Name: "Brief", Href: "/tools/brief" },
+          { Name: "Generate", Href: "/tools/generate" },
+        ],
+      },
+    ],
+  },
+]);
+assertEqual(pascal.length, 1, "one Pascal-cased match");
+assertEqual(pascal[0]?.matchedHeading, "AI Content Creation Workflow", "exact heading");
+assertEqual(pascal[0]?.kind, "exact-heading", "exact-heading kind");
+assertEqual(pascal[0]?.childHeadings, ["Brief", "Generate"], "children");
+assertEqual(pascal[0]?.toolsByHeading[0]?.tools.length, 2, "two tools from Pascal payload");
+
 assertEqual(
   normalizeHierarchyMatchesFromApi([]).length,
   0,
   "unknown keyword → empty matches (outside-scope checkbox)",
 );
 assertEqual(
-  findHierarchyMatches(pages, "AI Content Creation Workflow").length,
+  normalizeHierarchyMatchesFromApi([{ path: [], childHeadings: [], sourcePageUrl: "", matchedHeading: "" }]).length,
   0,
-  "markdown matcher does not invent AI workflow on unrelated pages",
+  "an identity-less row is not a match",
 );
 
-// Regression: the "6 matches" report for Ad Spend Optimization.
-// Same section crawled under www + bare host, and twin responsive copies, must collapse to one
-// entry per distinct section — and the richer section must outrank the barren exact-slug one.
-const adSpendPages = [
-  {
-    pageUrl: "https://www.geekatyourspot.com/use-cases/marketing/ai-marketing-systems",
-    markdown: `# AI Marketing Systems
-
-## Introduction to AI Marketing Systems
-
-### Ad Spend Optimization
-
-#### Predictive Analytics for Advertising
-`,
-  },
-  {
-    pageUrl: "https://geekatyourspot.com/use-cases/marketing/ai-marketing-systems",
-    markdown: `# AI Marketing Systems
-
-## Introduction to AI Marketing Systems
-
-### Ad Spend Optimization
-
-#### Predictive Analytics for Advertising
-`,
-  },
-  {
-    pageUrl: "https://www.geekatyourspot.com/",
-    markdown: `# Redefine Your Business
-
-## Artificial Intelligence Use Cases
-
-### Marketing
-
-#### Automated Ad Spend Optimization
-
-##### Dynamic Creative Optimization:
-
-###### Top AI Dynamic Optimization Tools:
-
-- [Omneky](/tools/marketing/omneky)
-
-##### Automated Rules & Bidding:
-
-##### Real-Time Budget Reallocation:
-
-##### Data Quality Assessments:
-`,
-  },
-  {
-    pageUrl: "https://geekatyourspot.com/",
-    markdown: `# Redefine Your Business
-
-## Artificial Intelligence Use Cases
-
-### Marketing
-
-#### Automated Ad Spend Optimization
-
-##### Dynamic Creative Optimization:
-
-###### Top AI Dynamic Optimization Tools:
-
-- [Omneky](/tools/marketing/omneky)
-
-##### Automated Rules & Bidding:
-
-##### Real-Time Budget Reallocation:
-
-##### Data Quality Assessments:
-`,
-  },
-];
-
-const adSpend = findHierarchyMatches(adSpendPages, "Ad Spend Optimization");
-assertEqual(adSpend.length, 4, "duplicates are NOT collapsed - all matches are returned");
-assertEqual(
-  findDuplicateMatches(adSpend).length,
-  2,
-  "both duplicated sections are reported as crawl defects",
-);
-assertEqual(
-  adSpend[0]?.matchedHeading,
-  "Automated Ad Spend Optimization",
-  "richest section ranks first, not the barren exact-slug heading",
-);
-assertEqual(adSpend[0]?.childHeadings.length, 5, "winning section keeps its child headings");
-assertEqual(
-  adSpend[adSpend.length - 1]?.matchedHeading,
-  "Ad Spend Optimization",
-  "barren exact match ranks last",
-);
-
-// Regression: the exact API payload behind the "6 matches" screen. This is the path the
-// HierarchyContextPanel actually uses (normalizeHierarchyMatchesFromApi), which had no dedupe
-// or ranking at all — it rendered whatever the API returned.
+// Regression: the exact API payload behind the "6 matches" screen. Same section crawled under
+// www + bare host, and twin responsive copies, must all be returned and reported as defects —
+// and the richer section must outrank the barren exact-slug one.
 const homePath = [
   "Redefine Your Business",
   "Artificial Intelligence Use Cases",
@@ -208,7 +136,7 @@ const apiSix = normalizeHierarchyMatchesFromApi([
     sourcePageUrl: "https://www.geekatyourspot.com/use-cases/marketing/ai-marketing-systems",
     matchedHeading: "Ad Spend Optimization",
     kind: "exact-heading",
-    assignmentMarkdown: "### Ad Spend Optimization\n",
+    toolsByHeading: [],
   },
   {
     path: barrenPath,
@@ -216,7 +144,7 @@ const apiSix = normalizeHierarchyMatchesFromApi([
     sourcePageUrl: "https://geekatyourspot.com/use-cases/marketing/ai-marketing-systems",
     matchedHeading: "Ad Spend Optimization",
     kind: "exact-heading",
-    assignmentMarkdown: "### Ad Spend Optimization\n",
+    toolsByHeading: [],
   },
   ...["https://www.geekatyourspot.com/", "https://www.geekatyourspot.com/", "https://geekatyourspot.com/", "https://geekatyourspot.com/"].map(
     (url) => ({
@@ -230,7 +158,15 @@ const apiSix = normalizeHierarchyMatchesFromApi([
       sourcePageUrl: url,
       matchedHeading: "Automated Ad Spend Optimization",
       kind: "contains-heading" as const,
-      assignmentMarkdown: "#### Automated Ad Spend Optimization\n",
+      toolsByHeading: [
+        {
+          heading: "Top AI Dynamic Optimization Tools:",
+          tools: [
+            { name: "Omneky", href: "/tools/marketing/omneky" },
+            { name: "Smartly", href: "/tools/marketing/smartly" },
+          ],
+        },
+      ],
     }),
   ),
 ]);
@@ -249,10 +185,24 @@ assertEqual(
   "4-child section outranks the 1-child exact-slug match",
 );
 assertEqual(apiSix[0]?.childHeadings.length, 4, "winner keeps its 4 child headings");
+assertEqual(apiSix[0]?.toolsByHeading[0]?.tools.length, 2, "winner keeps its tools");
 assertEqual(
   apiSix[apiSix.length - 1]?.matchedHeading,
   "Ad Spend Optimization",
   "barren exact match ranks last",
+);
+
+// Identity collapses host and trailing-slash noise; the label is stable per kind.
+assertEqual(
+  hierarchyMatchId(apiSix[0]!),
+  hierarchyMatchId(apiSix[1]!),
+  "www and bare host share one match id",
+);
+assertEqual(hierarchyMatchKindLabel("exact-heading"), "Exact heading", "exact-heading label");
+assertEqual(
+  hierarchyMatchKindLabel("contains-page"),
+  "Page URL contains keyword",
+  "contains-page label",
 );
 
 console.log("hierarchy-match tests passed");

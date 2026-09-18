@@ -617,7 +617,6 @@ export function previewBodyDocument(bodyDocumentJson: string, max = 1200): strin
     const body =
       (typeof parsed.body === "string" && parsed.body) ||
       (typeof parsed.content === "string" && parsed.content) ||
-      (typeof parsed.markdown === "string" && parsed.markdown) ||
       "";
     const title = typeof parsed.title === "string" ? parsed.title : "";
     const prompt =

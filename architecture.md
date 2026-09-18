@@ -41,7 +41,7 @@ Browser (phi)
   → GeekAPI (ContentCreatorV2 + Rag facade)
        → GeekRepository (content_creator_v2)
        → Geek-Crawler / Mongo (partner & competitor corpus)
-       → Geek-Crawler-Rag / Qdrant (query + page Markdown)
+       → Geek-Crawler-Rag / Qdrant (query + page block text)
 ```
 
 | Layer | System | Use for |
@@ -51,7 +51,7 @@ Browser (phi)
 | Data | **GeekRepository** | Creates, versions, approvals under `content_creator_v2` |
 | Project site | **ContentCreatorV2 ProjectSite** | Owned crawl / BrandKit / site section context |
 | Partner / competitor | **Geek-Crawler** (read via GeekAPI) | Indexed HTML → RAG library; never treat competitor as partner |
-| Evidence library | **Geek-Crawler-Rag** | `/v1/query` + page Markdown verify only for Create |
+| Evidence library | **Geek-Crawler-Rag** | `/v1/query` + page block-text quote verify only for Create |
 | Create writer | **GeekAPI** (`gcc-create-library.v1`) | Drafts PLAN/WRITE/VALIDATE grounded on library excerpts |
 | Realtime | **SignalR** `/hubs/gcc-v2-realtime` | Job + crawl progress only (no timer polling) |
 
@@ -107,13 +107,13 @@ Generate / VALIDATE require real project-site (where typed) **and always** partn
 
 Create uses competitor pages for **both** analysis and explicit mention when strategy warrants it—not as optional color. Authoritative plan: [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) — **minimum expand** (pricing, ICP, integrations, FAQ, proof, CTA destinations, disqualifiers), **competitor-specific** payloads (gap map, framing bank, demand signals, type label, deficit→partner swap, comparison axes, claim-risk), extended ad/SEO catalog, and competitor `SoftwareApplication` JSON-LD. Evidence binding remains fail-closed (`competitorSourceRunIds` / legacy singular every Create) per master-plan. Library extraction feeds `/v1/query` — Create drafting stays GeekAPI, not RAG generate.
 
-**Live path (GeekAPI + library):** After competitor quoteables resolve, `GccV2CompetitorExtractionService` (`gcc-competitor-extraction.v1`) writes brief `competitorExtraction` (always `crawlType:competitors`); Markdown verify via `GccV2CompetitorExtractionVerify`; deficit→partner swaps join partner Alternatives; WRITE notes include COMPETITOR EXTRACTION + claim-risk guidance; JSON-LD via `GccV2CompetitorSoftwareApplicationJsonLd`. Indexer stamps competitor chunk metadata (`competitorName`, `competitorChunkKind`, `featureTag`). PLAN applies `GccV2CompetitorTypePlanRouting` (content rivals ≠ product substitutes). VALIDATE fail-closes rival claim-risk echoes via `GccV2CompetitorClaimRiskGate`.
+**Live path (GeekAPI + library):** After competitor quoteables resolve, `GccV2CompetitorExtractionService` (`gcc-competitor-extraction.v1`) writes brief `competitorExtraction` (always `crawlType:competitors`); quote verify against block text via `GccV2CompetitorExtractionVerify`; deficit→partner swaps join partner Alternatives; WRITE notes include COMPETITOR EXTRACTION + claim-risk guidance; JSON-LD via `GccV2CompetitorSoftwareApplicationJsonLd`. Indexer stamps competitor chunk metadata (`competitorName`, `competitorChunkKind`, `featureTag`). PLAN applies `GccV2CompetitorTypePlanRouting` (content rivals ≠ product substitutes). VALIDATE fail-closes rival claim-risk echoes via `GccV2CompetitorClaimRiskGate`.
 
 ### Partner extraction payloads (contract pointer)
 
 Partner library extraction isolates core assets (**Citable**, **Advertisement**, **Comparison**, **Alternatives**), a **minimum expand** set (Pricing catalog, ICP, Integrations, FAQ/objections, Proof pack, Offer/CTA destinations, Disqualifiers), an **extended catalog**, plus **SoftwareApplication** JSON-LD — defined in [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md). Binding remains fail-closed (`partnerSourceRunIds` / legacy singular every Create). Tools = partners; competitors never as `crawlType:"partner"`.
 
-**Live path (GeekAPI):** After partner quoteables resolve, `GccV2PartnerExtractionService` (`gcc-partner-extraction.v2`) writes brief `partnerExtraction`; `GccV2PartnerExtractionVerify` Markdown-verifies claim assets via `GET /v1/pages`; competitor deficits join via `GccV2PartnerAlternativesJoin` (never `crawlType:"partner"` on rivals); VALIDATE uses `GccV2PartnerCitableBridge` for §P1. Publish uses `GccV2PartnerSoftwareApplicationJsonLd` (no price without Pricing catalog evidence).
+**Live path (GeekAPI):** After partner quoteables resolve, `GccV2PartnerExtractionService` (`gcc-partner-extraction.v2`) writes brief `partnerExtraction`; `GccV2PartnerExtractionVerify` verifies claim assets against block text via `GET /v1/pages`; competitor deficits join via `GccV2PartnerAlternativesJoin` (never `crawlType:"partner"` on rivals); VALIDATE uses `GccV2PartnerCitableBridge` for §P1. Publish uses `GccV2PartnerSoftwareApplicationJsonLd` (no price without Pricing catalog evidence).
 
 ---
 
@@ -168,10 +168,17 @@ Foreign `runId` → **safe-fail only** (no cross-tenant corpus adoption).
 
 | Half | System | Contract |
 |------|--------|----------|
-| **Library (RAG)** | Geek-Crawler-Rag | Index crawls; `/v1/query` / pages; verify quotes against Markdown. Fail closed on empty/Failed query. |
+| **Library (RAG)** | Geek-Crawler-Rag | Index crawls; `/v1/query` / pages; verify quotes against the shared block→text projection. Fail closed on empty/Failed query. |
 | **Writer (Create)** | GeekAPI | `gcc-create-library.v1` — drafts PLAN/WRITE/VALIDATE from library excerpts. Provenance must say Create library, not RAG generate. |
 
 **Naming debt (do not treat as product definition):** historical strings `rag-generate.v2` / `rag-generate.v3` and former Geek-Crawler-Rag `POST /v1/generate` are **removed** from the live Create/GeekAPI/Rag product path. Prefer **library query** vs **Create library writer**. Do not revive generate.
+
+**Corpus format debt — Markdown is forbidden.** The verification target is the shared block→text
+projection (`block_text.derive_plaintext_from_blocks`), never Markdown. Historical strings
+`MarkdownReadyAt`, `MarkdownBackfillSkip`, `no_markdown` and `parserId: "crawler-markdown"` are
+legacy, not contract: run readiness is **`ContentReadyAt`**. No hop — crawl, ingest, index,
+extraction, prompt assembly — may convert HTML to Markdown. See `AGENTS.md` § *Markdown is
+forbidden*.
 
 Honesty (master-plan P0):
 

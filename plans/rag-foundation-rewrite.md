@@ -40,13 +40,18 @@ reproduces it. Two further reasons patching cannot reach this:
 them repeats the same mistake in the opposite direction:
 `GccV2CompetitorTypePlanRouting` (direct/content split), `GccV2PartnerMentionGate` +
 `GccV2PartnerCitableBridge`, the knowledge-asset lifecycle and `IsIndexed` approval gate, and the
-quote↔Markdown verify layer. These are the regression bar in Verification.
+quote↔block-text verify layer. These are the regression bar in Verification.
 
 ## §0.0 Hard constraint — RAG does not generate
 
 **RAG is retrieval and verification only. It is never used to generate content, in any workstream
-below.** The Library half ingests crawls, serves chunks/pages, and verifies quotes against source
-Markdown. That is its entire role.
+below.** The Library half ingests crawls, serves chunks/pages, and verifies quotes against the shared
+block→text projection. That is its entire role.
+
+**Markdown is forbidden** as corpus, verification target, or interchange format — the body is typed
+`blocks`, the string is `block_text.derive_plaintext_from_blocks`, readiness is `ContentReadyAt`.
+Every "Markdown" below that names a live identifier (`MarkdownVerified`, `MarkdownReadyAt`) is a
+legacy name to be renamed, not a format to honour. See `AGENTS.md` § *Markdown is forbidden*.
 
 The live code already agrees: `RagLibraryStatus.generateEnabled` is documented *"Always false — RAG
 generate is removed"* (`src/app/creates/rag-client/types.ts:29–30`), and the client header reads
@@ -54,7 +59,7 @@ generate is removed"* (`src/app/creates/rag-client/types.ts:29–30`), and the c
 
 **This matters for W2.** Replacing regex extraction with schema-constrained extraction routes through
 `IGccV2SchemaConstrainedGenerator` → `IContentGenerationProvider` — **GeekAPI-side generation against
-Markdown that RAG returned**. It does not call, restore, or depend on any RAG generate endpoint. RAG's
+the block text that RAG returned**. It does not call, restore, or depend on any RAG generate endpoint. RAG's
 only involvement stays what it is today: serving the pages and verifying the quotes.
 
 ### The docs are why this keeps coming back — W0, do this first
@@ -202,7 +207,7 @@ alongside the other context connectors (`Drive`, `Gsc`, `Url`, `SharePoint`) beh
 |---|---|---|
 | **Clean text extraction** — strip boilerplate, keep main content | Implemented | resource kinds `original` and `normalized_text`; `Hierarchy/GccV2TextExtractor`; 2,000,000-character normalization cap |
 | **Metadata tagging** — URL, run, dates, category, for citation and recency | Implemented | `SourceDescriptorJson` carries the source run id; provenance carries `RunId`, `PageId`, `SectionTitle`, `TemporalAnchorUtc`, `SourceDigest`, `SourceRights` |
-| **Grounding / no hallucination** — generate only from the crawled set | Implemented | quote↔Markdown verify (`MarkdownVerified`), `GccV2CitationEvidenceGuard`, `GccV2SourceRightsGate`, VALIDATE gates |
+| **Grounding / no hallucination** — generate only from the crawled set | Implemented | quote↔block-text verify (flag still named `MarkdownVerified` — misnomer, rename pending), `GccV2CitationEvidenceGuard`, `GccV2SourceRightsGate`, VALIDATE gates |
 | **Brand voice from our own archive** | Implemented | `BrandKit/GccV2BrandKitBuilder.BuildVoiceSamples(pages, website, section)` derives voice samples from crawled own-site pages |
 | **Continuous / scheduled refresh** | **Gap** | no scheduled re-crawl exists; `forceRecrawl` is manual per create. Context connectors have a `CanRefresh` concept (`GccV2DriveContextConnector:19`) that project-site does not implement |
 
@@ -336,11 +341,11 @@ Replace it with the seam already in the tree and unused: `IGccV2SchemaConstraine
 free-text prompts; the regex extractor's doc comment already claims it was superseded by
 schema-constrained extraction that was never built. **No new regex in either extractor.**
 
-Per §0.0 this is GeekAPI-side generation over RAG-served Markdown — it does not restore or call any
+Per §0.0 this is GeekAPI-side generation over RAG-served block text — it does not restore or call any
 RAG generate path.
 
 Non-negotiable: keep `GccV2PartnerExtractionVerify` / `GccV2CompetitorExtractionVerify` strict. The
-quote↔Markdown verify is what makes this safe — without it we trade unreadable-but-deterministic for
+quote↔block-text verify is what makes this safe — without it we trade unreadable-but-deterministic for
 readable-but-hallucinating. Per the repo's silent-failure rule, a page yielding no verifiable signal
 returns an empty document; never a fabricated or partner-shaped fallback.
 

@@ -428,10 +428,10 @@ function StepRow({
   );
 }
 
-function MarkdownBody({ markdown, className }: { markdown: string; className?: string }) {
-  // `markdown` is a misnomer here — the backend now renders real HTML (Section tree -> tags),
-  // never Markdown, so this is a direct render, not a markdown parse.
-  return <div className={className} dangerouslySetInnerHTML={{ __html: markdown }} />;
+function HtmlBody({ html, className }: { html: string; className?: string }) {
+  // The backend renders real HTML (Section tree -> tags), so this is a direct render with no
+  // parse step of any kind.
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function ArticleView({
@@ -514,8 +514,8 @@ function ArticleView({
       )}
 
       {bodyHtml && (
-        <MarkdownBody
-          markdown={bodyHtml}
+        <HtmlBody
+          html={bodyHtml}
           className="rendered-content mt-5 rounded-lg border border-border bg-background p-4"
         />
       )}
@@ -680,8 +680,8 @@ function ToolPostCard({ tool }: { tool: ToolPostDraft }) {
         {tool.toolUrl}
       </a>
 
-      <MarkdownBody
-        markdown={tool.bodyHtml}
+      <HtmlBody
+        html={tool.bodyHtml}
         className="rendered-content mt-4 rounded-lg border border-border bg-surface p-4"
       />
 
