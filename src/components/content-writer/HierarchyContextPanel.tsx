@@ -122,7 +122,7 @@ export default function HierarchyContextPanel({
     async function run() {
       if (!siteAnalysisProfileId) {
         setLoadError(
-          "No site_analysis_profiles.Id on this project. Select a crawl in Site Analyzer, then create the project again, or acknowledge an out-of-scope keyword.",
+          "No Run ID on this project. Confirm a project site has crawl evidence, create the project again, or acknowledge an out-of-scope keyword.",
         );
         setMatches([]);
         setSelected(null);
@@ -133,8 +133,11 @@ export default function HierarchyContextPanel({
       setLoading(true);
       setLoadError(null);
       try {
+        // siteAnalysisProfileId carries a Geek-Crawler run id (since 4f7d540); the param name is
+        // legacy. The old site-analyzer route it used to call is retired and 404s — Site Analyzer is
+        // Geek-SEO's. This reads the hierarchy derived from the crawl Geek-Crawler already performed.
         const res = await fetch(
-          `/api/site-analyzer/profiles/${encodeURIComponent(siteAnalysisProfileId)}/hierarchy-match?keyword=${encodeURIComponent(targetKeyword)}`,
+          `/api/cw/api/geek-content-creator/project-site/runs/${encodeURIComponent(siteAnalysisProfileId)}/hierarchy-match?keyword=${encodeURIComponent(targetKeyword)}`,
           { cache: "no-store" },
         );
         const body = await res.json().catch(() => ({}));
@@ -142,7 +145,7 @@ export default function HierarchyContextPanel({
           throw new Error(
             typeof body.error === "string"
               ? body.error
-              : "Could not load Site Analyzer hierarchy match.",
+              : "Could not load the site hierarchy for this crawl.",
           );
         }
 
