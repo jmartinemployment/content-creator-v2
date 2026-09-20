@@ -123,8 +123,8 @@ export function createProject(input: {
   department: string;
   preferredProvider: LlmProviderType;
   useExactKeywordAsTitle?: boolean;
-  /** A Geek-Crawler-v2 run id since 4f7d540; the field name is legacy. */
-  siteAnalysisProfileId?: string | null;
+  /** The Geek-Crawler-v2 crawl to ground on. */
+  projectSiteRunId?: string | null;
   /** Sites this client sells or recommends, as declared. */
   partnerUrls?: string[];
   /** Rivals writing on the same topics, as declared. */
@@ -140,7 +140,7 @@ export function createProject(input: {
       department: input.department,
       preferredProvider: input.preferredProvider,
       useExactKeywordAsTitle: input.useExactKeywordAsTitle ?? false,
-      siteAnalysisProfileId: input.siteAnalysisProfileId ?? null,
+      projectSiteRunId: input.projectSiteRunId ?? null,
       partnerUrls: input.partnerUrls ?? [],
       competitorUrls: input.competitorUrls ?? [],
     }),

@@ -243,8 +243,13 @@ export interface ProjectSummary {
   preferredProvider: LlmProviderType;
   useExactKeywordAsTitle: boolean;
   createdAtUtc: string;
-  /** geek_seo.site_analysis_profiles.Id — hierarchy SQL match key (not a generic "Profile Id"). */
-  siteAnalysisProfileId?: string | null;
+  /**
+   * The Geek-Crawler-v2 crawl this project is grounded on — what the hierarchy match is keyed on.
+   *
+   * Was siteAnalysisProfileId, and on the entity was two fields with two names holding one value.
+   * Site Analyzer, which both were named for, is retired.
+   */
+  projectSiteRunId?: string | null;
 }
 
 export interface CrawlSummary {

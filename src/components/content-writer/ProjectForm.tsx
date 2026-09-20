@@ -154,7 +154,7 @@ export default function ProjectForm({
         // imply a decision the operator cannot actually make here.
         preferredProvider: defaultLlmProvider(),
         useExactKeywordAsTitle,
-        siteAnalysisProfileId: projectRunId,
+        projectSiteRunId: projectRunId,
         partnerUrls,
         competitorUrls,
       });

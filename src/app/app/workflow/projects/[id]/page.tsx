@@ -93,7 +93,7 @@ export default function WorkflowProjectPage() {
   // The project's own Run ID. It was resolved when the project was created and stored with it;
   // there is no session state to fall back on, and a fallback would only mask a project saved
   // without one.
-  const siteAnalysisProfileId = project.siteAnalysisProfileId ?? null;
+  const projectSiteRunId = project.projectSiteRunId ?? null;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -115,7 +115,7 @@ export default function WorkflowProjectPage() {
         <HierarchyContextPanel
           projectId={project.id}
           targetKeyword={project.targetKeyword}
-          siteAnalysisProfileId={siteAnalysisProfileId}
+          siteAnalysisProfileId={projectSiteRunId}
           initialPath={project.hierarchyPath ?? null}
           initialChildren={project.hierarchyChildHeadings ?? []}
           initialSourcePageUrl={project.hierarchySourcePageUrl ?? null}
@@ -126,7 +126,7 @@ export default function WorkflowProjectPage() {
 
         <ContentBriefPanel
           clientId={project.clientId}
-          siteAnalysisProfileId={siteAnalysisProfileId ?? undefined}
+          siteAnalysisProfileId={projectSiteRunId ?? undefined}
           targetKeyword={project.targetKeyword}
           createId={project.linkedCreateId ?? undefined}
           projectId={project.id}
