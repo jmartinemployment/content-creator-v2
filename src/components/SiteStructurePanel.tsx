@@ -100,6 +100,19 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
                             H{node.level} {node.headingText || "(no heading text)"}
                           </span>
 
+                          {/* The prose under this heading, as the crawler extracted it. Long
+                              paragraphs are clipped by CSS rather than truncated in JS, so nothing
+                              is silently shortened — the text is all there, the box just scrolls. */}
+                          {node.paragraphs.length > 0 ? (
+                            <ul className="mt-0.5 max-h-24 overflow-y-auto pl-4">
+                              {node.paragraphs.map((text, i) => (
+                                <li key={`${key}-p-${i}`} className="text-[var(--gcc-slate)]">
+                                  {text}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+
                           {/* The anchors themselves, not just a count. They are what the heading
                               actually links to, and the reason structure is read from blocks —
                               the flat text projection cannot carry them. */}
