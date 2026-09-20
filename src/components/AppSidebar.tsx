@@ -10,7 +10,7 @@ const nav: {
   match: "exact" | "prefix";
   requiresWorkflow?: boolean;
 }[] = [
-  { href: "/app/crawl", label: "Crawl", match: "prefix" },
+  { href: "/app/crawl", label: "Wizard", match: "prefix" },
   { href: "/app/workflow", label: "Workflow", match: "prefix", requiresWorkflow: true },
 ];
 

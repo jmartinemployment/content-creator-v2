@@ -128,15 +128,25 @@ export function SiteAnalyzerClient() {
             {/* TEMPORARY — shown on this step so the crawl can be judged before anything is
                 grounded on it. Placement is revisited once the wizard settles. */}
             <SiteStructurePanel key={projectRunId} runId={projectRunId} />
-            <p className="text-xs">
+
+            {/* The step is finished once a run answers for this URL, so say so and move on.
+                Run ID stays visible: it is what the next step is keyed on. */}
+            <div className="flex flex-col gap-2 rounded-md border border-[var(--gcc-line)] bg-[var(--gcc-paper)] p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs">
+                <p className="font-medium text-[var(--gcc-ink)]">
+                  Step 1 complete — this site has crawl evidence.
+                </p>
+                <p className="mt-0.5 break-all text-[var(--gcc-muted)]">
+                  Run <span className="font-mono">{projectRunId}</span>
+                </p>
+              </div>
               <Link
                 href={workflowHref(projectRunId)}
-                className="font-medium text-[var(--gcc-accent-deep)] hover:underline"
+                className="shrink-0 rounded-md bg-[var(--gcc-accent)] px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-[var(--gcc-accent-deep)]"
               >
-                Continue to Workflow →
-              </Link>{" "}
-              <span className="font-mono text-[var(--gcc-muted)]">Run {projectRunId}</span>
-            </p>
+                Next: Content &rarr;
+              </Link>
+            </div>
           </>
         ) : null}
 

@@ -52,10 +52,10 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
     };
   }, [runId]);
 
-  // Open by default: the point of this panel is to be read, and a collapsed row reads as
-  // "nothing here". The per-page trees below stay collapsed — a run can be many pages.
+  // Collapsed. It was open while proving the crawl comes back readable; that is established, and
+  // on the wizard's first step the subject is the URL, not the tree. Still one click away.
   return (
-    <details open className="rounded-md border border-[var(--gcc-line)] bg-white p-3 text-xs">
+    <details className="rounded-md border border-[var(--gcc-line)] bg-white p-3 text-xs">
       <summary className="cursor-pointer font-medium text-[var(--gcc-ink)]">
         Site structure
       </summary>
