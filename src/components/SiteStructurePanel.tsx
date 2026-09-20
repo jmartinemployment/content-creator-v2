@@ -95,17 +95,27 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
                     </summary>
                     <ul className="mt-1">
                       {hierarchyRows(page.roots, 0).map(({ key, depth, node }) => (
-                        <li
-                          key={key}
-                          className="text-[var(--gcc-muted)]"
-                          style={{ paddingLeft: `${depth * 0.75}rem` }}
-                        >
-                          H{node.level} {node.headingText || "(no heading text)"}
+                        <li key={key} style={{ paddingLeft: `${depth * 0.75}rem` }}>
+                          <span className="text-[var(--gcc-muted)]">
+                            H{node.level} {node.headingText || "(no heading text)"}
+                          </span>
+
+                          {/* The anchors themselves, not just a count. They are what the heading
+                              actually links to, and the reason structure is read from blocks —
+                              the flat text projection cannot carry them. */}
                           {node.links.length > 0 ? (
-                            <span className="text-[var(--gcc-accent-deep)]">
-                              {" "}
-                              · {node.links.length} link{node.links.length === 1 ? "" : "s"}
-                            </span>
+                            <ul className="mt-0.5 mb-1 pl-4">
+                              {node.links.map((link, i) => (
+                                <li
+                                  key={`${key}-link-${i}-${link.href}`}
+                                  className="break-all text-[var(--gcc-muted)]"
+                                >
+                                  <span className="text-[var(--gcc-accent-deep)]">↳</span>{" "}
+                                  {link.text || "(no link text)"}{" "}
+                                  <span className="font-mono">{link.href}</span>
+                                </li>
+                              ))}
+                            </ul>
                           ) : null}
                         </li>
                       ))}
