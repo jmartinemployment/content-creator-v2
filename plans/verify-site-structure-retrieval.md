@@ -1,5 +1,9 @@
 # Retrieve the project site structure by Run ID
 
+**Status 2026-09-20 — code shipped, not yet verified.** All three changes landed in `1eddaea`, and
+the Run ID handoff that makes them reachable landed in `aa56c58`. **Nothing has been run against a
+live Run ID**, which is the whole point of the plan — see § *Verification*, 1 of 7 steps done.
+
 ## Context
 
 The project site is crawled by Geek-Crawler-v2 and addressed by **Run ID**. Nothing in this repo has
@@ -9,10 +13,9 @@ levels and anchors.
 Jeff's ask (2026-09-20): **prove retrieval works.** The routes are the deliverable — the display is
 a throwaway dump to eyeball the result, not a component to design.
 
-The working tree has a first attempt: `getProjectSiteHierarchyTest` (`src/services/gcc-api.ts:805`)
-typed `Promise<unknown>`, rendered as `JSON.stringify` in `ProjectForm.tsx:149-165`. Untyped means
-nothing verifies the wire shape, and a raw blob of a 47-page tree is unreadable. This plan types both
-routes properly.
+The starting point was a first attempt in the working tree: `getProjectSiteHierarchyTest` typed
+`Promise<unknown>`, rendered as `JSON.stringify`. Untyped meant nothing verified the wire shape, and
+a raw blob of a 47-page tree is unreadable. Both routes are now typed — see § *Changes*.
 
 ### Why not Geek-Crawler-Rag
 
@@ -143,29 +146,34 @@ and is already listed for deletion in `plans/remove-site-analyzer.md`.
 
 ### Files
 
-| File | Change |
-|---|---|
-| `src/services/gcc-api.ts` | Type route 1; add route 2 (~795-820) |
-| `src/components/content-writer/ProjectForm.tsx` | Second fetch; replace the JSON dump |
-| `STATUS.md` | One line under "Not committed" so scaffolding is not mistaken for a feature |
+| File | Change | State |
+|---|---|---|
+| `src/services/gcc-api.ts` | `getProjectSiteHierarchy` + `listCrawlRunPages`, both typed | ✅ `1eddaea` |
+| `src/components/content-writer/ProjectForm.tsx` | Two `[TEST]` blocks replacing the JSON dump | ✅ `1eddaea` |
+| `STATUS.md` | Entry under "Not committed" marking it scaffolding | ✅ `1eddaea` |
+
+**Landed after this plan was drafted, and required to reach the display:**
+`src/app/app/crawl/crawl-client.tsx` now carries the Run ID from the index check into the workflow
+gate and renders a **Continue to Workflow →** link (`aa56c58`). Before that, `unlockWorkflow` had
+zero callers, so `ProjectForm` was unreachable and this display could not be opened at all.
 
 ## Verification
 
-The proof is the live endpoints with a real Run ID, not a green build.
+The proof is the live endpoints with a real Run ID, not a green build. **1 of 7 done.**
 
-1. `npx tsc --noEmit` — clean before this work, must stay clean
-2. `npm run dev`, then sign in — `/api/cw` returns 401 without the `gcc_access` cookie
+1. ✅ `npx tsc --noEmit` — clean before this work, clean after
+2. ❌ `npm run dev`, then sign in — `/api/cw` returns 401 without the `gcc_access` cookie
    (`route.ts:19-24`)
-3. On `/app/crawl`, type the project URL and leave the field. The index check already returns the
+3. ❌ On `/app/crawl`, type the project URL and leave the field. The index check already returns the
    Run ID — `checkIndex` stores the whole `HostIndexed` row, and `indexed[url].runId` is it. There is
    nothing to look up, no readiness call and no crawl list
-4. Click **Continue to Workflow →** (it appears under the project field once the row comes back
+4. ❌ Click **Continue to Workflow →** (it appears under the project field once the row comes back
    indexed with a run), then open the `[TEST]` blocks on the New Project form
-5. **Route 1 passes if:** homepage URL matches the project URL, `builtAtUtc` is the expected crawl,
+5. ❌ **Route 1 passes if:** homepage URL matches the project URL, `builtAtUtc` is the expected crawl,
    headings nest by level, at least one node shows a link count
-6. **Route 2 passes if:** pages come back with non-empty `blocks`, heading blocks carry `level`, and
+6. ❌ **Route 2 passes if:** pages come back with non-empty `blocks`, heading blocks carry `level`, and
    the anchor total is non-zero
-7. Network tab: both calls `200`, non-empty bodies
+7. ❌ Network tab: both calls `200`, non-empty bodies
 
 A `404` on either means the Run ID is not a run owned by this user
 (`GccV2ProjectSiteController.cs:190-192`, `GeekCrawlerController.cs:233`) — a wrong-run-id result,
