@@ -16,7 +16,7 @@ import {
 } from "@/services/gcc-api";
 import { useWorkflowGate } from "@/components/WorkflowGate";
 
-/** TEMPORARY TEST — flatten a heading tree into indented rows for eyeballing. */
+/** Flatten a heading tree into indented rows. Depth carries the nesting; `level` is the page's. */
 function hierarchyRows(
   nodes: readonly SiteHierarchyNode[],
   depth: number,
@@ -61,7 +61,6 @@ export default function ProjectForm({
   const [error, setError] = useState<string | null>(null);
   const [siteAnalysisProfileId, setSiteAnalysisProfileId] = useState<string | null>(null);
   const { siteAnalysisProfileId: gateProfileId, domain: gateDomain } = useWorkflowGate();
-  // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
   const [siteHierarchy, setSiteHierarchy] = useState<ProjectSiteHierarchyResponse | null>(null);
   const [siteHierarchyError, setSiteHierarchyError] = useState<string | null>(null);
 
@@ -79,7 +78,8 @@ export default function ProjectForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
+  // The structure of the crawl this project is grounded on. Keyed on the Run ID, so it reloads
+  // when a different run is carried in, and clears rather than going stale when there is none.
   useEffect(() => {
     if (!siteAnalysisProfileId) {
       setSiteHierarchy(null);
@@ -168,12 +168,11 @@ export default function ProjectForm({
         </p>
       )}
 
-      {/* TEMPORARY TEST — remove once the wizard's real site-structure display lands. */}
       {siteAnalysisProfileId ? (
-        <div className="mt-2 space-y-2">
-          <details className="rounded-md border border-dashed border-amber-400 bg-amber-50 p-2 text-xs">
-            <summary className="cursor-pointer font-semibold text-amber-800">
-              [TEST] Site Structure — assembled tree
+        <div className="mt-3">
+          <details className="rounded-md border border-border bg-surface-muted p-3 text-xs">
+            <summary className="cursor-pointer font-medium text-foreground">
+              Site structure
             </summary>
             {siteHierarchyError ? (
               <p className="mt-1 text-red-600">{siteHierarchyError}</p>
@@ -188,7 +187,7 @@ export default function ProjectForm({
               <p className="mt-1 text-red-600">No page survived the homepage/hub filter.</p>
             ) : (
               <div className="mt-1">
-                <p className="break-all text-amber-900">
+                <p className="break-all text-foreground">
                   {siteHierarchy.siteHierarchy.homepageUrl} ·{" "}
                   {siteHierarchy.siteHierarchy.pages.length} page
                   {siteHierarchy.siteHierarchy.pages.length === 1 ? "" : "s"} ·{" "}
@@ -218,7 +217,7 @@ export default function ProjectForm({
                             >
                               H{node.level} {node.headingText || "(no heading text)"}
                               {node.links.length > 0 ? (
-                                <span className="text-amber-800">
+                                <span className="text-brand">
                                   {" "}
                                   · {node.links.length} link{node.links.length === 1 ? "" : "s"}
                                 </span>

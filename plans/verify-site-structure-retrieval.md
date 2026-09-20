@@ -1,10 +1,17 @@
 # Prove a Run ID returns the project site's structure
 
-**Code is done. Verification is not.**
+**Code is done and now permanent. Verification is not.**
+
+> Scope narrowed 2026-09-20 by `Geek-Crawler-v2/plans/move-crawl-reads-to-geekapi.md`. The second
+> panel — crawl pages and their typed blocks — was removed: crawl data is Geek-Crawler's and this
+> app must not call `api/geek-crawler/*`. What remains is the site-hierarchy read, now a permanent
+> display rather than a `[TEST]` block. The server side moves to
+> `api/geek-crawler/crawls/{runId}/site-structure` built from typed `blocks`, with the route this
+> app calls delegating to it — same response models, no change here.
 
 | | |
 |---|---|
-| Shipped | `1eddaea` — route typed, `[TEST]` block renders |
+| Shipped | `1eddaea` — route typed; made permanent and restyled after `07a7696` |
 | Shipped | `aa56c58` — Run ID handoff, without which the display is unreachable |
 | Outstanding | **Open it against a real Run ID.** Nothing has. |
 
@@ -13,7 +20,7 @@
 1. `npm run dev`, sign in
 2. `/app/crawl` — type the project URL, leave the field
 3. Click **Continue to Workflow →**
-4. Open the `[TEST] Site Structure` block on the New Project form
+4. Expand **Site structure** on the New Project form
 
 Passes if the homepage matches the project URL, headings nest by level, and at least one node shows
 a link count.
@@ -55,4 +62,4 @@ facade — two repos, and out of scope.
 | `src/components/content-writer/ProjectForm.tsx` | The `[TEST]` block |
 | `src/app/app/crawl/crawl-client.tsx` | Run ID → workflow gate + link |
 
-Scaffolding. Remove the `[TEST]` block once verified.
+Permanent. What is left is opening it against a live run.

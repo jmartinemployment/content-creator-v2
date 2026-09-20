@@ -795,16 +795,17 @@ export function checkProjectSiteReadiness(
 }
 
 /**
- * TEMPORARY TEST — the project site's structure for a Run ID.
+ * The project site's structure for a Run ID.
  *
  * A pure read: it returns what Geek-Crawler-v2 already crawled, and generates nothing. That is why
  * the -v2 surface is in bounds — generation is the reason that surface is otherwise avoided, and a
  * read is not generation.
  *
- * Served by GeekAPI's Content Creator surface, behind the /api/cw proxy. This app does not call
- * `api/geek-crawler/*`: crawl data is Geek-Crawler's, and inspecting a crawl belongs in its own UI.
- *
- * Remove once the real site-structure display lands.
+ * Called on GeekAPI's Content Creator surface, behind the /api/cw proxy. This app does not call
+ * `api/geek-crawler/*` — crawl data is Geek-Crawler's. The server side is being moved onto
+ * `api/geek-crawler/crawls/{runId}/site-structure`, assembled from the crawler's typed `blocks`
+ * rather than re-parsed out of raw HTML, with this route delegating to it and keeping its own page
+ * filter. The response models below are that endpoint's, so nothing here changes when it lands.
  */
 
 /** One anchor under a heading. `rel` is "" when the crawler recorded none. */

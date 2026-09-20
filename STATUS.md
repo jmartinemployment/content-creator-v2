@@ -27,11 +27,6 @@ I am implementing Content Creator version one.
 
 ## Not committed
 
-**Site Structure retrieval check** (2026-09-20) — `[TEST]` blocks in `ProjectForm.tsx` plus typed
-`getProjectSiteHierarchy` / `listCrawlRunPages` in `gcc-api.ts`. Scaffolding, not a feature: it
-proves a Run ID returns real headings, levels and anchors, and that both GeekAPI routes already
-exist. Remove once verified. Plan: `plans/verify-site-structure-retrieval.md`. Typechecks.
-
 Per-URL seed validation (`src/lib/crawl-seeds.ts` + wiring). Typechecks. Not pushed.
 
 **Why it exists:** the server rejects the whole batch on the *first* bad URL
@@ -41,6 +36,19 @@ problems = three submits. This checks every line locally and names each one.
 **Risk:** it is a *copy* of the server's rules in TypeScript. If they drift, the page
 accepts what the server rejects, or silently drops what it would take. A validation
 endpoint would remove the duplication; that is a backend change.
+
+## Site structure
+
+`ProjectForm` shows the structure of the crawl a project is grounded on, read by Run ID through
+`getProjectSiteHierarchy` (`gcc-api.ts`) →
+`api/geek-content-creator-v2/project-site/runs/{runId}/site-hierarchy`. Permanent, not scaffolding.
+
+The server side is moving: `Geek-Crawler-v2/plans/move-crawl-reads-to-geekapi.md` puts the tree on
+`api/geek-crawler/crawls/{runId}/site-structure`, assembled from the crawler's typed `blocks`
+instead of re-parsed out of raw HTML, with the route above delegating to it. The response models are
+that endpoint's already, so nothing in this repo changes when it lands.
+
+**Not yet opened against a live run.**
 
 ## Still broken
 
