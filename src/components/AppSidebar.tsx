@@ -16,7 +16,7 @@ export function AppSidebar() {
 
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-[var(--gcc-line)] bg-[var(--gcc-slate)] px-3 py-5 text-white">
-      <Link href="/app/crawl" className="mb-8 px-2">
+      <Link href="/app/workflow" className="mb-8 px-2">
         <span className="font-display text-lg font-semibold leading-tight">
           Geek Content Creator
         </span>
