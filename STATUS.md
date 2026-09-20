@@ -37,6 +37,26 @@ problems = three submits. This checks every line locally and names each one.
 accepts what the server rejects, or silently drops what it would take. A validation
 endpoint would remove the duplication; that is a backend change.
 
+## One form, no gate
+
+`/app/crawl` is gone. Everything it collected — project URL, partner URLs, competitor URLs, and the
+index check behind them — is on **New Project** (`/app/workflow`), which is now the only destination
+in the sidebar.
+
+Page one existed to produce one value, the Run ID, and a whole mechanism existed to carry it to page
+two: `WorkflowGate`, `unlockWorkflow`, `workflowHref`, the `?siteAnalysisProfileId=` query param and
+the "Workflow is disabled" state. That mechanism was broken until 2026-09-20 — `unlockWorkflow` had
+zero callers, so the gate never opened and page two was unreachable. All of it is deleted.
+
+The gate is stronger for being inline: **Create Project is disabled until the URL resolves to a Run
+ID**, with the reason beside the button. Refusal at the point of action, not on a screen the
+operator has already walked past.
+
+**Still not persisted:** partner and competitor URLs. `createProject` has no parameter for them and
+the Project entity has no column. They are index-checked and discarded, exactly as before — moving
+them did not fix that, and nothing reads a declared partner list yet: generation queries the partner
+corpus by topic (`GccV2CreateLibraryWriter:152-180`).
+
 ## Site structure
 
 `GET api/geek-crawler/crawls/{runId}/site-structure` (GeekBackend) returns a run's heading tree

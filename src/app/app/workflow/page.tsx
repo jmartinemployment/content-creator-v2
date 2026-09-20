@@ -1,34 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectList from "@/components/content-writer/ProjectList";
-import { useWorkflowGate } from "@/components/WorkflowGate";
 import { getClients, getRecentProjects } from "@/services/content-writer-api";
 import type { Client, ProjectSummary } from "@/lib/types";
 
 export default function WorkflowPage() {
   const router = useRouter();
-  const { workflowUnlocked, clientId: gateClientId } = useWorkflowGate();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!workflowUnlocked) return;
     let cancelled = false;
     Promise.all([getClients(), getRecentProjects()])
       .then(([clientList, projectList]) => {
         if (cancelled) return;
         setClients(clientList);
         setProjects(projectList);
-        if (gateClientId && clientList.some((c) => c.id === gateClientId)) {
-          setSelectedClientId(gateClientId);
-        } else if (clientList.length > 0) {
+        if (clientList.length > 0) {
           setSelectedClientId(clientList[0].id);
         }
       })
@@ -43,20 +37,7 @@ export default function WorkflowPage() {
     return () => {
       cancelled = true;
     };
-  }, [workflowUnlocked, gateClientId]);
-
-  if (!workflowUnlocked) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-sm text-muted">
-          Workflow is disabled. Confirm a project site has usable crawl evidence to unlock it.{" "}
-          <Link href="/app/crawl" className="text-brand hover:underline">
-            Go to Project site
-          </Link>
-        </p>
-      </div>
-    );
-  }
+  }, []);
 
   function handleClientCreated(client: Client) {
     setClients((prev) => [...prev, client]);

@@ -10,7 +10,6 @@ import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import ContentResults from "@/components/content-writer/ContentResults";
 import ToolsFromNamesPanel from "@/components/content-writer/ToolsFromNamesPanel";
 import ReviewPublishPanel from "@/components/content-writer/ReviewPublishPanel";
-import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 import { getProject } from "@/services/content-writer-api";
 import { isContentBriefComplete, migrateBrief } from "@/lib/content-creator/brief-catalog";
 import type {
@@ -22,7 +21,6 @@ import type {
 export default function WorkflowProjectPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
-  const { workflowUnlocked, siteAnalysisProfileId: gateProfileId } = useWorkflowGate();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [keywordSources, setKeywordSources] = useState<KeywordSourceResponse[]>([]);
@@ -63,26 +61,12 @@ export default function WorkflowProjectPage() {
   }, [projectId]);
 
   useEffect(() => {
-    if (!workflowUnlocked) return;
     void load();
-  }, [load, workflowUnlocked]);
+  }, [load]);
 
   const handleProjectUpdated = useCallback((next: ProjectDetail) => {
     setProject(next);
   }, []);
-
-  if (!workflowUnlocked) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-sm text-muted">
-          Workflow is disabled. Run Site Analyzer first to unlock it.{" "}
-          <Link href="/app/crawl" className="text-brand hover:underline">
-            Go to Site Analyzer
-          </Link>
-        </p>
-      </div>
-    );
-  }
 
   if (loadError) {
     return (
@@ -106,12 +90,14 @@ export default function WorkflowProjectPage() {
     );
   }
 
-  const siteAnalysisProfileId =
-    project.siteAnalysisProfileId ?? gateProfileId ?? null;
+  // The project's own Run ID. It was resolved when the project was created and stored with it;
+  // there is no session state to fall back on, and a fallback would only mask a project saved
+  // without one.
+  const siteAnalysisProfileId = project.siteAnalysisProfileId ?? null;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <Link href={workflowHref(siteAnalysisProfileId)} className="text-sm text-brand hover:underline">
+      <Link href="/app/workflow" className="text-sm text-brand hover:underline">
         &larr; Back to Workflow
       </Link>
 
