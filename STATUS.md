@@ -48,7 +48,8 @@ The server side is moving: `Geek-Crawler-v2/plans/move-crawl-reads-to-geekapi.md
 instead of re-parsed out of raw HTML, with the route above delegating to it. The response models are
 that endpoint's already, so nothing in this repo changes when it lands.
 
-**Not yet opened against a live run.**
+Not yet opened against a live run — the only step the plan had left, so the plan is gone rather
+than kept open for it.
 
 ## Still broken
 
