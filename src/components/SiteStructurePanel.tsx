@@ -6,7 +6,6 @@ import {
   type SiteStructure,
   type SiteStructureNode,
 } from "@/services/gcc-api";
-import { buildCrossReference } from "@/lib/site-cross-reference";
 
 /** Flatten a heading tree into indented rows. Depth carries the nesting; `level` is the page's. */
 function hierarchyRows(
@@ -27,12 +26,12 @@ function hierarchyRows(
 /**
  * Which outside parties this site reaches, and from where.
  *
- * Computed in the browser from the structure response — the backend has no cross-reference. That
- * means it can be read but not grounded on: generation runs server-side and never sees this. If it
- * earns its place, the logic moves into GeekCrawlerSiteStructure unchanged.
+ * Comes off the response. It is derived server-side in the same pass that builds the tree, so
+ * generation can ground on the same index this panel displays — there is no browser-only copy to
+ * disagree with it.
  */
 function CrossReference({ structure }: { structure: SiteStructure }) {
-  const { hosts, unresolvedAnchors } = buildCrossReference(structure);
+  const { hosts, unresolvedAnchors } = structure.crossReference;
 
   if (hosts.length === 0) {
     return (

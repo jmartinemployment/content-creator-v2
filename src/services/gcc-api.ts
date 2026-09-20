@@ -833,6 +833,29 @@ export interface SiteStructurePage {
   roots: SiteStructureNode[];
 }
 
+export interface SiteHostReference {
+  sectionPath: string[];
+  pageUrl: string;
+  label: string;
+  /**
+   * The on-site page this reference passes through, or null when the section links the host
+   * directly. A value is the hop that makes a tool page's partner visible.
+   */
+  viaPageUrl: string | null;
+}
+
+export interface SiteCrossReferencedHost {
+  host: string;
+  references: SiteHostReference[];
+}
+
+export interface SiteCrossReference {
+  /** Hosts the site reaches, most-referenced first. */
+  hosts: SiteCrossReferencedHost[];
+  /** Anchors whose href would not resolve. Counted, not dropped. */
+  unresolvedAnchors: number;
+}
+
 export interface SiteStructure {
   runId: string;
   builtAtUtc: string;
@@ -846,6 +869,14 @@ export interface SiteStructure {
    */
   pagesWithoutBlocks: number;
   pages: SiteStructurePage[];
+  /**
+   * Which outside hosts this site reaches, and from where.
+   *
+   * Derived server-side in the same pass that builds the tree, not stored. A stored copy could only
+   * drift: a re-crawl reuses the run id and refills its pages in place, so anything keyed on that id
+   * would keep describing a corpus that no longer exists.
+   */
+  crossReference: SiteCrossReference;
 }
 
 export function getProjectSiteStructure(runId: string): Promise<SiteStructure> {
