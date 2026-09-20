@@ -100,11 +100,11 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
                             H{node.level} {node.headingText || "(no heading text)"}
                           </span>
 
-                          {/* The prose under this heading, as the crawler extracted it. Long
-                              paragraphs are clipped by CSS rather than truncated in JS, so nothing
-                              is silently shortened — the text is all there, the box just scrolls. */}
+                          {/* The prose under this heading, in full and unclipped. The meaning is
+                              the point — a scroll box or an ellipsis would make this a preview of
+                              the crawl rather than the crawl, and you could not tell which. */}
                           {node.paragraphs.length > 0 ? (
-                            <ul className="mt-0.5 max-h-24 overflow-y-auto pl-4">
+                            <ul className="mt-0.5 pl-4">
                               {node.paragraphs.map((text, i) => (
                                 <li key={`${key}-p-${i}`} className="text-[var(--gcc-slate)]">
                                   {text}
