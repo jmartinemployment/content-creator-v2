@@ -124,8 +124,16 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
                                   className="break-all text-[var(--gcc-muted)]"
                                 >
                                   <span className="text-[var(--gcc-accent-deep)]">↳</span>{" "}
-                                  {link.text || "(no link text)"}{" "}
+                                  <span className="font-medium text-[var(--gcc-ink)]">
+                                    {link.label || "(no link text)"}
+                                  </span>{" "}
                                   <span className="font-mono">{link.href}</span>
+                                  {/* What the link is about. A label alone can be "Learn more". */}
+                                  {link.context ? (
+                                    <span className="block pl-4 text-[var(--gcc-slate)]">
+                                      {link.context}
+                                    </span>
+                                  ) : null}
                                 </li>
                               ))}
                             </ul>

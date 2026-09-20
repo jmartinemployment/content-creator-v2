@@ -804,11 +804,20 @@ export function checkProjectSiteReadiness(
  * it returns what Geek-Crawler-v2 already crawled and generates nothing.
  */
 
-/** One anchor under a heading. `rel` is "" when the page recorded none. */
+/**
+ * One anchor, with the prose it sits inside.
+ *
+ * The crawler records an anchor as `{ label, href }` and nothing else — no rel, no title, no
+ * target. `context` is not part of the anchor: it is the text of the block the anchor appeared in,
+ * which is the only thing that says what the link is about. A bare "Learn more" means nothing
+ * without the sentence around it.
+ */
 export interface SiteStructureLink {
-  text: string;
+  label: string;
   href: string;
-  rel: string;
+  context: string;
+  /** The containing block's kind: paragraph, listItem, heading, row, and so on. */
+  contextKind: string;
 }
 
 export interface SiteStructureNode {
