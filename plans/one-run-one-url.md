@@ -44,44 +44,30 @@ creation at all.)
 
 ## Approach
 
-### Code fix — **all five items are in `GeekBackend`. None are done.**
+**Code fix** — move `StartCrawlAsync`'s contract from "one seed list → one run" to "one seed → one
+run," while preserving `AdmitSeeds`' existing partial-success semantics per URL:
 
-Nothing in this section touches `content-creator-v2`. Every path below is relative to
-`/Users/jeffmartin/development/GeekBackend`.
-
-| # | File | Change | State |
-|---|---|---|---|
-| 1 | `GeekAPI/Controllers/GeekCrawler/GeekCrawlerController.cs` | Loop `StartCrawlAsync` once per seed | ❌ |
-| 2 | same | Response `{ run, seedsAccepted }` → `{ runs[], rejected[] }` | ❌ |
-| 3 | `GeekApplication/Models/GeekCrawler/GeekCrawlerSeedNormalizer.cs` | Collapse seed-key helpers to the single-seed case | ❌ |
-| 4 | `GeekAPI/Services/GeekCrawler/GeekCrawlerService.cs` | Decide the `GetLatestRunContainingSeedAsync` legacy fallback | ❌ undecided |
-| 5 | `GeekBackend.Tests/GeekCrawler/GeekCrawlerTests.cs`, `GeekBackend.Tests/ContentCreatorV2/MongoGeekCrawlerPartnerCompetitorReadTests.cs` | Assert one-seed-per-run instead of batch | ❌ |
-
-The contract moves from "one seed list → one run" to "one seed → one run," preserving `AdmitSeeds`'
-existing partial-success semantics per URL. Detail:
-
-1. **Loop per seed.** In `GeekCrawlerController.StartCrawl`, after `AdmitSeeds` produces the accepted
-   list, call `StartCrawlAsync` once per seed (each a single-element list), collecting one
-   `GeekCrawlerRunDto` each. Respect `MaxConcurrentCrawlsPerOwner` per attempt — a seed that cannot
-   start because the cap is hit is reported back like a rejected seed, not silently dropped and not
-   made to fail the whole request. This mirrors "one bad URL doesn't spoil the batch" (`e6b64a1`),
-   extended to "one capacity failure doesn't spoil the batch."
-2. **Response shape.** `{ run, seedsAccepted, rejected }` → `{ runs: [...], rejected: [...] }`, each
-   run tagged with its seed. Breaking change to `StartCrawlResult` — and `startGeekCrawl` still has
-   **zero frontend call sites**, so there is no live caller to migrate. That is what makes now the
-   right time, before one exists.
-3. **Seed-key helpers.** `ComputeSeedKey` / `SerializeSeeds` / `SeedUrlsMatch` collapse to the
-   single-seed case structurally (a one-element list) rather than growing a parallel single-seed code
-   path — minimal surface change.
-4. **Legacy fallback — decide, do not guess.** Whether `GetLatestRunContainingSeedAsync`'s
-   multi-seed-batch fallback is kept permanently for resolving pre-existing legacy runs (mirroring
-   Geek-Crawler-v2's own "legacy multi-seed runs matched by any seed" precedent) or scheduled for
-   removal once no multi-seed runs remain in Mongo. Keeping it costs nothing and matches the
-   precedent; removing it requires confirming zero legacy multi-seed runs remain.
-5. **Tests.** Update the multi-seed-per-run assertions to the new contract, keeping one
-   legacy-compatibility test for the containing-seed fallback per (4).
-
-### Doc fix
+1. In `GeekCrawlerController.StartCrawl`, after `AdmitSeeds` produces the accepted list, loop and
+   call `StartCrawlAsync` once **per seed** (each with a single-element list), collecting one
+   `GeekCrawlerRunDto` per seed. Respect `MaxConcurrentCrawlsPerOwner` per attempt — a seed that
+   can't start because the cap is already hit is reported back like a rejected seed, not silently
+   dropped or made to fail the whole request (mirrors the existing "one bad URL doesn't spoil the
+   batch" philosophy from `e6b64a1`, extended to "one capacity failure doesn't spoil the batch").
+2. Response shape changes from `{ run, seedsAccepted, rejected }` (one run) to `{ runs: [...],
+   rejected: [...] }` (one run per accepted seed, each tagged with its seed). This is a breaking
+   change to `StartCrawlResult` — since `startGeekCrawl` currently has zero frontend call sites
+   (confirmed), there is no live caller to migrate today, which makes this the right time to change
+   the contract before one exists.
+3. `ComputeSeedKey`/`SerializeSeeds`/`SeedUrlsMatch` collapse to the single-seed case structurally
+   (a one-element list) rather than needing a parallel single-seed code path — minimal surface change.
+4. Decide (flag for review, don't guess): whether `GetLatestRunContainingSeedAsync`'s multi-seed-batch
+   fallback is kept permanently for resolving pre-existing legacy runs (mirroring Geek-Crawler-v2's own
+   "legacy multi-seed runs matched by any seed" precedent) or scheduled for removal once no multi-seed
+   runs remain in Mongo. Keeping it costs nothing and matches the precedent already set; removing it
+   requires confirming zero legacy multi-seed runs remain.
+5. Update the multi-seed-per-run tests in `MongoGeekCrawlerPartnerCompetitorReadTests.cs` and
+   `GeekCrawlerTests.cs` to assert the new one-seed-per-run contract instead of the batch behavior,
+   keeping a legacy-compatibility test for the containing-seed fallback per (4).
 
 **Doc fix** — add the same explicit statement Geek-Crawler-v2 already uses ("one seed URL = one run
 id") to the repos that are still maintained:
