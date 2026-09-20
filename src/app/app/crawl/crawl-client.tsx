@@ -37,14 +37,23 @@ function IndexReport({
   if (seen.length === 0) return null;
 
   return (
-    <div className="space-y-1 text-xs">
+    <div className="space-y-2 text-xs">
       {seen.map((u) => {
         const r = results[u];
+        // Indexed says a crawl exists. It does not say the crawl captured anything usable, and
+        // those are different answers — the structure below is what settles it.
+        const runId = r.indexed ? r.runId : null;
         return (
-          <p key={u} className={r.indexed ? "text-green-700" : "text-red-600"}>
-            <span className="font-mono">{u}</span> —{" "}
-            {r.indexed ? "indexed" : "no index — crawl it first"}
-          </p>
+          <div key={u} className="space-y-1">
+            <p className={r.indexed ? "text-green-700" : "text-red-600"}>
+              <span className="font-mono">{u}</span> —{" "}
+              {r.indexed ? "indexed" : "no index — crawl it first"}
+              {r.indexed && !runId ? (
+                <span className="text-red-600"> · no run id — nothing to read</span>
+              ) : null}
+            </p>
+            {runId ? <SiteStructurePanel key={runId} runId={runId} /> : null}
+          </div>
         );
       })}
     </div>
@@ -127,8 +136,6 @@ export function SiteAnalyzerClient() {
           <>
             {/* TEMPORARY — shown on this step so the crawl can be judged before anything is
                 grounded on it. Placement is revisited once the wizard settles. */}
-            <SiteStructurePanel key={projectRunId} runId={projectRunId} />
-
             {/* The step is finished once a run answers for this URL, so say so and move on.
                 Run ID stays visible: it is what the next step is keyed on. */}
             <div className="flex flex-col gap-2 rounded-md border border-[var(--gcc-line)] bg-[var(--gcc-paper)] p-3 sm:flex-row sm:items-center sm:justify-between">
