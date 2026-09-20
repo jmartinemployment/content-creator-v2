@@ -215,6 +215,32 @@ export default function HierarchyContextPanel({
         its child headings). Tone &amp; Focus stay omitted this phase.
       </p>
 
+      {/* The acknowledgement is also the only way past `hierarchyOk`, so it has to render when the
+          hierarchy could not be loaded at all — not just when it loaded and matched nothing.
+          Hiding it on loadError left Generate permanently blocked with no path through the UI.
+          Still fail-closed: the operator says so explicitly, nothing is assumed on their behalf. */}
+      {!loading && matches.length === 0 ? (
+        <div className="mt-4 space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-800">
+            {loadError
+              ? `Hierarchy context is unavailable, so it will be omitted for “${targetKeyword}”.`
+              : `No hierarchy match for “${targetKeyword}” — page/site hierarchy context will be omitted.`}{" "}
+            Generate stays blocked until you acknowledge the keyword is outside site scope.
+          </p>
+          <label className="flex items-start gap-2 text-sm font-medium text-foreground">
+            <input
+              type="checkbox"
+              checked={allowOutside}
+              onChange={(e) => void handleAllowOutsideChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+            />
+            <span>
+              Keyword is outside site scope — generate without hierarchy context
+            </span>
+          </label>
+        </div>
+      ) : null}
+
       {loading ? <p className="mt-4 text-sm text-muted">Loading hierarchy…</p> : null}
 
       {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
@@ -321,32 +347,6 @@ export default function HierarchyContextPanel({
               </div>
             </>
           ) : null}
-        </div>
-      ) : null}
-
-      {/* The acknowledgement is also the only way past `hierarchyOk`, so it has to render when the
-          hierarchy could not be loaded at all — not just when it loaded and matched nothing.
-          Hiding it on loadError left Generate permanently blocked with no path through the UI.
-          Still fail-closed: the operator says so explicitly, nothing is assumed on their behalf. */}
-      {!loading && matches.length === 0 ? (
-        <div className="mt-4 space-y-3">
-          <p className="text-sm text-amber-800">
-            {loadError
-              ? `Hierarchy context is unavailable, so it will be omitted for “${targetKeyword}”.`
-              : `No hierarchy match for “${targetKeyword}” — page/site hierarchy context will be omitted.`}{" "}
-            Generate stays blocked until you acknowledge the keyword is outside site scope.
-          </p>
-          <label className="flex items-start gap-2 text-sm font-medium text-foreground">
-            <input
-              type="checkbox"
-              checked={allowOutside}
-              onChange={(e) => void handleAllowOutsideChange(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
-            />
-            <span>
-              Keyword is outside site scope — generate without hierarchy context
-            </span>
-          </label>
         </div>
       ) : null}
 

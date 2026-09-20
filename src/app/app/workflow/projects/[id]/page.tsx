@@ -101,12 +101,14 @@ export default function WorkflowProjectPage() {
         &larr; Back to Workflow
       </Link>
 
+      {/* The keyword leads: it is what the piece is about and what the hierarchy match below keys
+          on. The project name is a label the operator chose and nothing derives from it, so it
+          sits underneath rather than as the page's title. */}
       <div className="mb-8 mt-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">
-          {project.targetKeyword}
+        <h1 className="text-3xl font-bold text-foreground">{project.targetKeyword}</h1>
+        <p className="mt-1 text-sm text-muted">
+          {project.name} · <span className="break-all">{project.projectUrl}</span>
         </p>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">{project.name}</h1>
-        <p className="mt-2 text-sm text-muted">{project.projectUrl}</p>
       </div>
 
       <div className="flex flex-col gap-6">
