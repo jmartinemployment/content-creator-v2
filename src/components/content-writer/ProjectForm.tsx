@@ -11,16 +11,10 @@ import {
 } from "@/services/content-writer-api";
 import {
   getProjectSiteHierarchy,
-  listCrawlRunPages,
-  type CrawlPageBlock,
-  type CrawlRunPage,
   type ProjectSiteHierarchyResponse,
   type SiteHierarchyNode,
 } from "@/services/gcc-api";
 import { useWorkflowGate } from "@/components/WorkflowGate";
-
-/** TEMPORARY TEST — one bounded page of the run. A retrieval check, never an export. */
-const TEST_PAGE_LIMIT = 25;
 
 /** TEMPORARY TEST — flatten a heading tree into indented rows for eyeballing. */
 function hierarchyRows(
@@ -36,34 +30,6 @@ function hierarchyRows(
     }
   });
   return rows;
-}
-
-/** TEMPORARY TEST — block kinds for one page, e.g. "14 heading · 31 paragraph". */
-function blockKindSummary(blocks: readonly CrawlPageBlock[]): string {
-  const counts = new Map<string, number>();
-  for (const block of blocks) {
-    const kind = block.kind?.trim() || "(no kind)";
-    counts.set(kind, (counts.get(kind) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([kind, count]) => `${count} ${kind}`)
-    .join(" · ");
-}
-
-/** TEMPORARY TEST — anchors are the thing the RAG text projection cannot carry. */
-function anchorCount(blocks: readonly CrawlPageBlock[]): number {
-  return blocks.reduce((sum, block) => sum + (block.anchors?.length ?? 0), 0);
-}
-
-/** TEMPORARY TEST — heading levels present, the other thing the projection discards. */
-function headingLevels(blocks: readonly CrawlPageBlock[]): string {
-  const levels = new Set<number>();
-  for (const block of blocks) {
-    if (block.kind === "heading" && typeof block.level === "number") levels.add(block.level);
-  }
-  if (levels.size === 0) return "none";
-  return [...levels].sort((a, b) => a - b).map((level) => `H${level}`).join(" ");
 }
 
 function qsSiteAnalysisProfileId(): string | null {
@@ -98,8 +64,6 @@ export default function ProjectForm({
   // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
   const [siteHierarchy, setSiteHierarchy] = useState<ProjectSiteHierarchyResponse | null>(null);
   const [siteHierarchyError, setSiteHierarchyError] = useState<string | null>(null);
-  const [crawlPages, setCrawlPages] = useState<CrawlRunPage[] | null>(null);
-  const [crawlPagesError, setCrawlPagesError] = useState<string | null>(null);
 
   useEffect(() => {
     const fromQs = qsSiteAnalysisProfileId();
@@ -116,14 +80,10 @@ export default function ProjectForm({
   }, []);
 
   // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
-  // Two independent reads: the assembled tree, and the raw typed blocks behind it. One failing
-  // says nothing about the other, so they carry separate errors and neither falls back to the other.
   useEffect(() => {
     if (!siteAnalysisProfileId) {
       setSiteHierarchy(null);
       setSiteHierarchyError(null);
-      setCrawlPages(null);
-      setCrawlPagesError(null);
       return;
     }
     let cancelled = false;
@@ -136,18 +96,6 @@ export default function ProjectForm({
         if (!cancelled) {
           setSiteHierarchyError(
             e instanceof Error ? e.message : "Could not load the site structure.",
-          );
-        }
-      });
-
-    listCrawlRunPages(siteAnalysisProfileId, TEST_PAGE_LIMIT, 0)
-      .then((pages) => {
-        if (!cancelled) setCrawlPages(pages);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setCrawlPagesError(
-            e instanceof Error ? e.message : "Could not load the crawl pages.",
           );
         }
       });
@@ -281,48 +229,6 @@ export default function ProjectForm({
                       </details>
                     </li>
                   ))}
-                </ul>
-              </div>
-            )}
-          </details>
-
-          <details className="rounded-md border border-dashed border-amber-400 bg-amber-50 p-2 text-xs">
-            <summary className="cursor-pointer font-semibold text-amber-800">
-              [TEST] Crawl pages — typed blocks
-            </summary>
-            {crawlPagesError ? (
-              <p className="mt-1 text-red-600">{crawlPagesError}</p>
-            ) : crawlPages === null ? (
-              <p className="mt-1 text-muted">Loading…</p>
-            ) : crawlPages.length === 0 ? (
-              <p className="mt-1 text-red-600">This run has no pages.</p>
-            ) : (
-              <div className="mt-1">
-                <p className="text-muted">
-                  First {crawlPages.length} page{crawlPages.length === 1 ? "" : "s"} of the run
-                  (limit {TEST_PAGE_LIMIT}) — a retrieval check, not an export. Heading levels and
-                  anchors below are what the RAG text projection cannot carry.
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {crawlPages.map((page) => {
-                    const blocks = page.blocks ?? [];
-                    return (
-                      <li key={page.id}>
-                        <p className="break-all font-medium text-foreground">
-                          {page.finalUrl || page.url}{" "}
-                          <span className="font-normal text-muted">— {page.statusCode}</span>
-                        </p>
-                        {blocks.length === 0 ? (
-                          <p className="text-red-600">no blocks on this page</p>
-                        ) : (
-                          <p className="text-muted">
-                            {blockKindSummary(blocks)} · {anchorCount(blocks)} anchors · levels{" "}
-                            {headingLevels(blocks)}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
                 </ul>
               </div>
             )}

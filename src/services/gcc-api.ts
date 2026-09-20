@@ -795,16 +795,16 @@ export function checkProjectSiteReadiness(
 }
 
 /**
- * TEMPORARY TEST — the project site's structure for a Run ID, read two ways.
+ * TEMPORARY TEST — the project site's structure for a Run ID.
  *
- * Both are pure reads: they return what Geek-Crawler-v2 already crawled, and neither generates or
- * drafts anything. That is why the -v2 surface is in bounds for the first of them — generation is
- * the reason that surface is otherwise avoided, and a read is not generation.
+ * A pure read: it returns what Geek-Crawler-v2 already crawled, and generates nothing. That is why
+ * the -v2 surface is in bounds — generation is the reason that surface is otherwise avoided, and a
+ * read is not generation.
  *
- * Both are GeekAPI routes behind the /api/cw proxy. Neither reaches Mongo or Qdrant directly; going
- * through GeekAPI is the only way this app is permitted to reach data at all.
+ * Served by GeekAPI's Content Creator surface, behind the /api/cw proxy. This app does not call
+ * `api/geek-crawler/*`: crawl data is Geek-Crawler's, and inspecting a crawl belongs in its own UI.
  *
- * Remove both once the real site-structure display lands.
+ * Remove once the real site-structure display lands.
  */
 
 /** One anchor under a heading. `rel` is "" when the crawler recorded none. */
@@ -856,47 +856,3 @@ export function getProjectSiteHierarchy(
   );
 }
 
-/**
- * A typed block exactly as the crawler emitted it.
- *
- * Every field is optional on purpose. GeekAPI carries blocks through as opaque JSON, so a stricter
- * type here would assert a contract no hop on the path actually enforces.
- */
-export interface CrawlPageBlock {
-  kind?: string;
-  level?: number;
-  text?: string;
-  cells?: string[];
-  html?: string;
-  anchors?: Array<{ text?: string; href?: string }>;
-}
-
-export interface CrawlRunPage {
-  id: string;
-  runId: string;
-  url: string;
-  finalUrl: string;
-  statusCode: number;
-  title: string | null;
-  excerpt: string | null;
-  contentHtml: string | null;
-  blocks: CrawlPageBlock[] | null;
-}
-
-/**
- * Pages of a crawl run, typed blocks included — heading levels and per-block anchors survive here,
- * where the RAG text projection discards them.
- *
- * Server-paged, `limit` clamped to 1..500. Page HTML is the bulk of the corpus, so callers ask for
- * one bounded page: this is a retrieval check, never an export.
- */
-export function listCrawlRunPages(
-  runId: string,
-  limit: number,
-  offset: number,
-): Promise<CrawlRunPage[]> {
-  const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  return gccRequest<CrawlRunPage[]>(
-    `/api/geek-crawler/crawls/${encodeURIComponent(runId)}/pages?${q.toString()}`,
-  );
-}
