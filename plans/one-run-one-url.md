@@ -2,6 +2,10 @@
 
 Secondary — not blocking [project-url-run-id.md](./project-url-run-id.md).
 
+**Status 2026-09-20 — 1 of 8 items done.** The `content-creator-v2` doc fix landed; one task was
+dropped as obsolete; **the whole code fix and every other doc target are untouched.** Do not read
+this plan as executed.
+
 ## Context
 
 Jeff instructed on 2026-09-17 that a crawl Run ID must cover exactly one URL, never a batch of seed
@@ -29,7 +33,7 @@ future caller (including a Partner/Competitor "crawl now" feature) would inherit
 | Repo | State |
 |---|---|
 | **Geek-Crawler-v2** | ✅ States it explicitly: `README.md:81` "One seed URL = one `runId`"; `README.md:279` "One seed URL = one `runId` going forward," with legacy multi-seed runs explicitly called out as matched-by-any-seed for compatibility. |
-| **Geek-Crawler** (older repo) | ❌ Actively documents the *opposite* — `architecture.md:274` "One run row per user + crawl type + **seed set**"; `plans/replace-on-start.md` titles itself "one run per **seed slot**" and defines `SeedKey` as a hash of sorted **seeds** (plural). |
+| **Geek-Crawler** (older repo) | ~~❌ Actively documents the opposite~~ — **no longer a target.** Confirmed dead 2026-09-20: nothing deploys from it, git-history source only. Its `architecture.md:274` ("one run row per user + crawl type + **seed set**") and `plans/replace-on-start.md` still contradict the invariant and are now simply history. |
 | **GeekBackend** | Silent — `AGENTS.md`/`CLAUDE.md` (root, `GeekAPI/`, `GeekRepository/`) have no seed-cardinality language at all. |
 | **content-creator-v2** | ✅ Since 2026-09-20 — `AGENTS.md` § *One project URL, one run* states the invariant and records that the slot's run id is stable across re-crawl. (Before that it was silent on seed count, and asserted a discarded per-crawl-run design as fact.) |
 | **Geek-Crawler-Rag** | Silent — no file ties run scope to seed count. |
@@ -66,15 +70,39 @@ run," while preserving `AdmitSeeds`' existing partial-success semantics per URL:
    keeping a legacy-compatibility test for the containing-seed fallback per (4).
 
 **Doc fix** — add the same explicit statement Geek-Crawler-v2 already uses ("one seed URL = one run
-id") to: `content-creator-v2/AGENTS.md` (done 2026-09-20 — § *One project URL, one run*), `GeekBackend/AGENTS.md`
-and/or `GeekAPI/CLAUDE.md`, `Geek-Crawler-Rag/architecture.md`. Correct `Geek-Crawler/architecture.md`
-and `Geek-Crawler/plans/replace-on-start.md` to mark the "one run per seed set" model as superseded,
-pointing at Geek-Crawler-v2's model and the code fix above, rather than leaving it as live-contradicting
-documentation.
+id") to the repos that are still maintained:
+
+- ✅ **`content-creator-v2/AGENTS.md`** — done 2026-09-20, § *One project URL, one run*. States the
+  invariant, records that a slot's run id is stable across re-crawl, and adds § *The client owns the
+  runs* deriving it from `ComputeSeedKey` being `SHA256(sorted seed URLs)`.
+- ❌ **`GeekBackend/AGENTS.md`** and/or **`GeekAPI/CLAUDE.md`** — still silent, zero hits.
+- ❌ **`Geek-Crawler-Rag/architecture.md`** — still silent, zero hits.
+- ~~`Geek-Crawler/architecture.md` and `plans/replace-on-start.md`~~ — **dropped 2026-09-20.** That
+  repo is dead (nothing deploys from it), so its docs are history, not live-contradicting
+  documentation. Same exclusion already applied to `GeekContentCreator` above.
 
 ## Verify
+
+**None of this has been run** — the code fix it verifies does not exist yet.
 
 `dotnet test` (GeekBackend) covering the updated seed-normalizer and crawler-service tests; manually
 start a crawl with 3 seeds and confirm 3 distinct `runId`s are returned, each independently
 resolvable via `crawls/latest?seeds=<one>`. Grep all five repos afterward for the corrected phrase to
 confirm no contradicting doc remains.
+
+## What 2026-09-20 confirmed
+
+Read directly, not inferred:
+
+- **The premise holds.** `GeekCrawlerSeedNormalizer.ComputeSeedKey` is `SHA256(sorted seed URLs)`, so
+  a run's identity *is* its URL set. One URL is the only thing a run can honestly name.
+- **The code fix is still untouched.** `GeekCrawlerCaps.MaxSeedsPerRequest = 25` stands, and
+  `GeekCrawlerController` still answers `seedsAccepted = seeds.Count` for a single run.
+- **A re-crawl reuses the run id** rather than creating a new one — `GetRunForSlotAsync` →
+  `RequeueExistingRunAsync`, with `complete`/`cancelled` clearing the pages and refilling in place.
+  That is intended: accumulating a fresh run per crawl is what made the corpus unmanageable before.
+  It also means the id is stable enough for a client record to store, which is the reason the
+  cardinality matters beyond tidiness.
+- **A client owns several URL→run pairs** — exactly one project site, many partners, many
+  competitors — so "one run per URL" is the invariant, never "one run per client." Recorded in
+  `AGENTS.md` § *The client owns the runs*, including why Client ID must not be renamed to Run ID.
