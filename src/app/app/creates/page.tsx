@@ -90,7 +90,7 @@ export default function CreatesListPage() {
                   <p className="text-xs text-muted">
                     {c.startingContentType ?? "no type yet"} · {c.status}
                     {c.briefJson ? " · brief" : " · brief missing"}
-                    {c.siteAnalysisProfileId ? " · Site Analyzer" : ""}
+                    {c.projectSiteRunId ? " · grounded on a crawl" : ""}
                   </p>
                 </div>
                 <span className="text-sm font-semibold text-brand">Open →</span>

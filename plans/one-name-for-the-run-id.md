@@ -90,3 +90,55 @@ check whether anything still reads the table.
    backward-compatible reads in the serialisers.
 4. `grep -rn "siteAnalysisProfileId" content-creator-v2/src` returns nothing.
 5. `dotnet test`, `tsc --noEmit`, `npm run build`.
+
+## Executed 2026-09-20
+
+`ProjectSiteRunId` / `projectSiteRunId` is now the name on `Project`, on `Create`, on both wire
+contracts and throughout the frontend. `dotnet build` clean, 773 unit tests pass, `tsc --noEmit`
+clean, `npm run build` clean.
+
+**The column was not renamed.** `GccCreate.ProjectSiteRunId` is pinned with
+`.HasColumnName("SiteAnalysisId")` in `ContentCreatorDbContext`, and the model snapshot records the
+pin — so this is property-only and no migration runs over live rows.
+
+**Old names still accepted, deliberately.** `CreateProjectRequest` and
+`UpdateHierarchyContextRequest` take `ProjectSiteRunId ?? SiteAnalysisProfileId ?? SiteAnalysisId`;
+`ProjectSnapshotSerializer` reads all three and writes only the new one; `parseSiteSectionJson` and
+`readSiteSectionHandoff` do the same on the frontend, because stored documents and sessionStorage
+outlive a deploy. The grep checks above return these reads, not nothing.
+
+### Two things the rename got wrong, and the reason
+
+A regex over "SiteAnalysis*" hit two fields that are **not** this value:
+
+- `GccSiteFinding.SiteAnalysisId` — a real FK to `gcc_site_analyses`
+  (`ContentCreatorDbContext:105,115`). Site Analyzer's own, and it belongs to
+  `remove-site-analyzer.md`.
+- `GccV2JobDto.SiteAnalysisProfileId` — a Geek-SEO profile id, which `GccV2PlanService:132`
+  documents as *"not a crawl run"*. V2's, and left alone per the standing instruction.
+
+Both reverted. The tell in each case was that the code around the field described it as something
+other than a run: a rename is only safe where the *value* is the run id, never where the name merely
+resembles the ones being retired.
+
+### A fourth name, and a live defect it was hiding
+
+`SiteSectionContextDto` binds the run id as **`projectSiteCrawlRunId`**
+(`GccV2SiteSection.cs:13`). The frontend was sending the section's run id as
+`siteAnalysisProfileId`, which that DTO binds to nothing — so every create made through the section
+handoff stored `Guid.Empty` as the section's run id. `siteSectionForApi` now sends
+`projectSiteCrawlRunId`, and `parseSiteSectionJson` reads back all four names.
+
+The DTO's own wire name is left as-is: it is V2's contract, and changing it would need a converter
+to keep reading the `siteSectionJson` rows already written under it.
+
+### Still carrying the retired name, on purpose
+
+Out of scope here, listed so they are not mistaken for misses:
+
+- `gcc_site_analyses` / `gcc_site_findings` and everything around them — `remove-site-analyzer.md`.
+- Geek-SEO's `SiteAnalysisProfile*` repositories and `HttpGeekSeoSiteAnalyzerClient` — a different
+  product's real API.
+- `GccController`'s three `_seo` call sites and the `stale_site_analysis` error discriminator —
+  named in `finish-the-v1-restore.md` as needing a replacement or removal.
+- `src/app/api/site-analyzer/*` proxy routes — they target GeekAPI routes that no longer exist.

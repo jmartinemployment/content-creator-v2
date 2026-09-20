@@ -172,7 +172,7 @@ export function updateProjectHierarchyContext(
     hierarchyChildHeadings: string[];
     hierarchySourcePageUrl: string | null;
     allowOutsideSiteScope: boolean;
-    siteAnalysisProfileId?: string | null;
+    projectSiteRunId?: string | null;
     hierarchyToolsByHeading?: Array<{ heading: string; tools: Array<{ name: string; href?: string }> }>;
   },
 ): Promise<ProjectDetail> {
@@ -183,7 +183,7 @@ export function updateProjectHierarchyContext(
       hierarchyChildHeadings: input.hierarchyChildHeadings,
       hierarchySourcePageUrl: input.hierarchySourcePageUrl,
       allowOutsideSiteScope: input.allowOutsideSiteScope,
-      siteAnalysisProfileId: input.siteAnalysisProfileId ?? null,
+      projectSiteRunId: input.projectSiteRunId ?? null,
       hierarchyToolsByHeading: input.hierarchyToolsByHeading ?? [],
     }),
   });

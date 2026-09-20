@@ -14,7 +14,8 @@ export type RelatedPage = {
 };
 
 export type SiteSectionContext = {
-  siteAnalysisProfileId: string;
+  /** The Geek-Crawler-v2 run this section was read out of. */
+  projectSiteRunId: string;
   gapTopic: string;
   gapSectionPath: string | null;
   relatedPages: RelatedPage[];
@@ -35,7 +36,8 @@ export type GccCreate = {
   startingContentType: string | null;
   topic: string;
   notes: string | null;
-  siteAnalysisProfileId: string | null;
+  /** The Geek-Crawler-v2 crawl this create is grounded on. */
+  projectSiteRunId: string | null;
   siteSectionJson: string | null;
   briefJson: string | null;
   researchJson: string | null;

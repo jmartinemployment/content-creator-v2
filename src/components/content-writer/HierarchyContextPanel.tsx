@@ -45,7 +45,7 @@ function pickInitial(
 export default function HierarchyContextPanel({
   projectId,
   targetKeyword,
-  siteAnalysisProfileId,
+  projectSiteRunId,
   initialPath,
   initialChildren: _initialChildren,
   initialSourcePageUrl,
@@ -56,7 +56,7 @@ export default function HierarchyContextPanel({
   projectId: string;
   targetKeyword: string;
   /** geek_seo.site_analysis_profiles.Id — required for SQL hierarchy match. */
-  siteAnalysisProfileId: string | null;
+  projectSiteRunId: string | null;
   initialPath: string | null;
   initialChildren: string[];
   initialSourcePageUrl: string | null;
@@ -95,7 +95,7 @@ export default function HierarchyContextPanel({
         hierarchyToolsByHeading: next?.toolsByHeading ?? [],
         hierarchySourcePageUrl: next?.sourcePageUrl ?? null,
         allowOutsideSiteScope: next ? false : outside,
-        siteAnalysisProfileId: siteAnalysisProfileId ?? undefined,
+        projectSiteRunId: projectSiteRunId ?? undefined,
       });
       if (next) setAllowOutside(false);
       onProjectUpdated(project);
@@ -120,7 +120,7 @@ export default function HierarchyContextPanel({
     let cancelled = false;
 
     async function run() {
-      if (!siteAnalysisProfileId) {
+      if (!projectSiteRunId) {
         setLoadError(
           "No Run ID on this project. Confirm a project site has crawl evidence, create the project again, or acknowledge an out-of-scope keyword.",
         );
@@ -133,11 +133,11 @@ export default function HierarchyContextPanel({
       setLoading(true);
       setLoadError(null);
       try {
-        // siteAnalysisProfileId carries a Geek-Crawler run id (since 4f7d540); the param name is
+        // projectSiteRunId names the Geek-Crawler-v2 run this project is grounded on; the param is
         // legacy. The old site-analyzer route it used to call is retired and 404s — Site Analyzer is
         // Geek-SEO's. This reads the hierarchy derived from the crawl Geek-Crawler already performed.
         const res = await fetch(
-          `/api/cw/api/geek-content-creator/project-site/runs/${encodeURIComponent(siteAnalysisProfileId)}/hierarchy-match?keyword=${encodeURIComponent(targetKeyword)}`,
+          `/api/cw/api/geek-content-creator/project-site/runs/${encodeURIComponent(projectSiteRunId)}/hierarchy-match?keyword=${encodeURIComponent(targetKeyword)}`,
           { cache: "no-store" },
         );
         const body = await res.json().catch(() => ({}));
@@ -178,7 +178,7 @@ export default function HierarchyContextPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial* only seeds selection
-  }, [projectId, siteAnalysisProfileId, targetKeyword]);
+  }, [projectId, projectSiteRunId, targetKeyword]);
 
   async function handleSelect(match: HierarchyMatch) {
     if (sameMatch(selected, match) || persisting) return;

@@ -115,7 +115,7 @@ export default function WorkflowProjectPage() {
         <HierarchyContextPanel
           projectId={project.id}
           targetKeyword={project.targetKeyword}
-          siteAnalysisProfileId={projectSiteRunId}
+          projectSiteRunId={projectSiteRunId}
           initialPath={project.hierarchyPath ?? null}
           initialChildren={project.hierarchyChildHeadings ?? []}
           initialSourcePageUrl={project.hierarchySourcePageUrl ?? null}
@@ -126,7 +126,7 @@ export default function WorkflowProjectPage() {
 
         <ContentBriefPanel
           clientId={project.clientId}
-          siteAnalysisProfileId={projectSiteRunId ?? undefined}
+          projectSiteRunId={projectSiteRunId ?? undefined}
           targetKeyword={project.targetKeyword}
           createId={project.linkedCreateId ?? undefined}
           projectId={project.id}

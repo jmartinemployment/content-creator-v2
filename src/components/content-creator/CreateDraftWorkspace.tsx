@@ -141,7 +141,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const canGenerate = briefFormComplete && briefReady;
   // Site Analyzer handoff creates require relatedPages; domain-only grounding does not.
   const saMissingPages =
-    !!detail.siteAnalysisProfileId &&
+    !!detail.projectSiteRunId &&
     !!siteSection &&
     !siteSection.relatedPages.length;
 
@@ -199,7 +199,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           Create {detail.id}
           {briefReady ? " · brief saved" : " · brief missing"}
           {researchReady ? " · research saved" : ""}
-          {detail.siteAnalysisProfileId ? " · Site Analyzer" : ""}
+          {detail.projectSiteRunId ? " · grounded on a crawl" : ""}
         </p>
       </div>
 
@@ -214,7 +214,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
 
         <ContentBriefPanel
           clientId={detail.clientId}
-          siteAnalysisProfileId={detail.siteAnalysisProfileId ?? undefined}
+          projectSiteRunId={detail.projectSiteRunId ?? undefined}
           targetKeyword={detail.topic}
           createId={createId}
           startingContentType={detail.startingContentType ?? undefined}
