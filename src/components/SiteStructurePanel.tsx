@@ -54,8 +54,10 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
 
   const hierarchy = data?.siteHierarchy ?? null;
 
+  // Open by default: the point of this panel is to be read, and a collapsed row reads as
+  // "nothing here". The per-page trees below stay collapsed — a run can be many pages.
   return (
-    <details className="rounded-md border border-[var(--gcc-line)] bg-white p-3 text-xs">
+    <details open className="rounded-md border border-[var(--gcc-line)] bg-white p-3 text-xs">
       <summary className="cursor-pointer font-medium text-[var(--gcc-ink)]">
         Site structure
       </summary>
