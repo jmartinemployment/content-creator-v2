@@ -64,7 +64,9 @@ export default function ContentBriefPanel({
 }) {
   const [brief, setBrief] = useState<ContentBrief>(() => emptyContentBrief());
   const [createId, setCreateId] = useState<string | null>(createIdProp ?? null);
-  const [keywordInput, setKeywordInput] = useState(targetKeyword || "");
+  // Read-only mirror of the project's keyword. Kept as state rather than used directly because
+  // it also keys brief storage and the create topic.
+  const [keywordInput] = useState(targetKeyword || "");
   const [hydrated, setHydrated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -309,17 +311,18 @@ export default function ContentBriefPanel({
         until required fields are saved.
       </p>
 
+      {/* The project's keyword, shown not asked. It was an editable field here, and editing it
+          changed almost nothing: the hierarchy match keys on the project's targetKeyword, while
+          this input fed a separate state used for a storage key and for the create topic - and the
+          latter only when no create existed yet. Two fields with one name, diverging in silence.
+          Changing the keyword means changing the project. */}
       <div className="mt-5">
-        <label className={labelClass}>
-          Target keyword{requiredMark(!!keywordInput)}
-          <input
-            type="text"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            placeholder="e.g., 'Best AI tools for content creation'"
-            className={fieldClass}
-          />
-        </label>
+        <p className={labelClass}>
+          Target keyword
+          <span className={`${fieldClass} block font-normal`}>
+            {keywordInput || "None set on this project."}
+          </span>
+        </p>
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
