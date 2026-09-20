@@ -7,7 +7,6 @@ import {
   getGeekBackendCategories,
   ApiError,
   defaultLlmProvider,
-  isProductionContentWriterApi,
 } from "@/services/content-writer-api";
 import { useWorkflowGate } from "@/components/WorkflowGate";
 
@@ -163,17 +162,15 @@ export default function ProjectForm({
           )}
         </label>
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
+        {/* Not editable. The Run ID above names a crawl of one specific URL; letting this be
+            retyped would let a project claim a site its own evidence does not cover, and nothing
+            would catch it. It is carried from the Project site step, not entered here. */}
+        <div className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
           Project URL
-          <input
-            required
-            type="url"
-            value={projectUrl}
-            onChange={(e) => setProjectUrl(e.target.value)}
-            placeholder="https://client-site.com"
-            className="rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-          />
-        </label>
+          <p className="break-all rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-normal text-muted">
+            {projectUrl || "None carried in — return to the Project site step."}
+          </p>
+        </div>
 
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
           LLM Provider
@@ -188,11 +185,7 @@ export default function ProjectForm({
               </option>
             ))}
           </select>
-          {isProductionContentWriterApi() && preferredProvider === "LmStudio" && (
-            <span className="text-xs text-amber-700">
-              LM Studio only works when the API runs on your machine. Use OpenAI or Anthropic on production.
-            </span>
-          )}
+
         </label>
 
         <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">

@@ -171,6 +171,11 @@ export type CwClient = BrandClient;
 
 // ContentWriterV3 types (merged from lib/content-writer/types.ts)
 
+/**
+ * LmStudio is retired — it was a local experiment and proved too slow. The value stays in the union
+ * because projects created earlier still carry it and would otherwise fail to type; it is not
+ * offered, see PROVIDER_OPTIONS.
+ */
 export type LlmProviderType = "LmStudio" | "OpenAi" | "Anthropic" | "Groq";
 
 export type ProjectStatus =
@@ -426,7 +431,6 @@ export const KEYWORD_SOURCE_CATEGORIES: { value: KeywordSourceCategory; label: s
 ];
 
 export const PROVIDER_OPTIONS: { value: LlmProviderType; label: string }[] = [
-  { value: "LmStudio", label: "LM Studio (local dev only)" },
   { value: "OpenAi", label: "OpenAI" },
   { value: "Anthropic", label: "Anthropic (Claude)" },
   { value: "Groq", label: "Groq (Llama)" },
