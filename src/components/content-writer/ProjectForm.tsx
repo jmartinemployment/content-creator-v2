@@ -86,9 +86,10 @@ export default function ProjectForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Partner and competitor sites are checked here and, for now, go no further: createProject has
-  // no parameter for them. The check still earns its place — it says whether evidence exists at
-  // all — but a declared list nothing stores is a known gap, not a finished feature.
+  // The index lookup below. Answers a question, saves nothing: createProject has no parameter for
+  // these and the Project entity has no column. They sit in their own fieldset for that reason —
+  // beside the saved fields they read as part of the project, which is how input gets collected
+  // and quietly thrown away.
   const [partnerSeeds, setPartnerSeeds] = useState("");
   const [competitorSeeds, setCompetitorSeeds] = useState("");
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
@@ -260,6 +261,30 @@ export default function ProjectForm({
           </select>
         </label>
 
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={useExactKeywordAsTitle}
+            onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+          />
+          Use exact keyword as title
+        </label>
+      </div>
+
+      {/* Deliberately outside the grid above. Everything in that grid is saved with the project;
+          nothing here is. Sitting them together implied these were part of the project, which is
+          how a field gets filled in and silently thrown away. */}
+      <fieldset className="mt-6 rounded-md border border-border p-4">
+        <legend className="px-1 text-sm font-medium text-foreground">
+          Index lookup — not saved
+        </legend>
+        <p className="mb-3 text-xs text-muted">
+          Check whether other sites have already been crawled. Answers now, stored nowhere: these
+          are not part of the project and are gone when you leave this page.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Partner URLs
           <span className="text-xs font-normal text-muted">Products you sell or recommend.</span>
@@ -297,17 +322,8 @@ export default function ProjectForm({
             error={indexError}
           />
         </label>
-
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={useExactKeywordAsTitle}
-            onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
-            className="h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
-          />
-          Use exact keyword as title
-        </label>
-      </div>
+        </div>
+      </fieldset>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
