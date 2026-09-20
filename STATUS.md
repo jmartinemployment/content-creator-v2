@@ -41,17 +41,17 @@ endpoint would remove the duplication; that is a backend change.
 
 **Temporarily on step 1** (`/app/crawl`, "Project site"), under the project URL and above the
 Continue to Workflow link — so the crawl can be judged before anything is grounded on it.
-`SiteStructurePanel` reads it by Run ID through
-`getProjectSiteHierarchy` (`gcc-api.ts`) →
-`api/geek-content-creator-v2/project-site/runs/{runId}/site-hierarchy`. Permanent, not scaffolding.
 
-The server side is moving: `Geek-Crawler-v2/plans/move-crawl-reads-to-geekapi.md` puts the tree on
-`api/geek-crawler/crawls/{runId}/site-structure`, assembled from the crawler's typed `blocks`
-instead of re-parsed out of raw HTML, with the route above delegating to it. The response models are
-that endpoint's already, so nothing in this repo changes when it lands.
+`SiteStructurePanel` reads it by Run ID through `getProjectSiteStructure` (`gcc-api.ts`) →
+`api/geek-crawler/crawls/{runId}/site-structure`, which GeekAPI assembles from the crawler's typed
+`blocks` in Mongo (GeekBackend `f693f87`). Nothing re-parses HTML, and pages whose extraction
+produced no blocks are excluded and counted so the panel can say so.
 
-Not yet opened against a live run — the only step the plan had left, so the plan is gone rather
-than kept open for it.
+This replaced `api/geek-content-creator-v2/project-site/runs/{runId}/site-hierarchy`, which returned
+**500**: it read the Postgres project-site store, which holds no crawl data, and re-derived the
+structure from raw HTML.
+
+**Not yet opened against a live run.**
 
 ## Still broken
 

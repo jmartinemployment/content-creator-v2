@@ -797,63 +797,51 @@ export function checkProjectSiteReadiness(
 /**
  * The project site's structure for a Run ID.
  *
- * A pure read: it returns what Geek-Crawler-v2 already crawled, and generates nothing. That is why
- * the -v2 surface is in bounds — generation is the reason that surface is otherwise avoided, and a
- * read is not generation.
+ * Served from the crawler's typed `blocks` — heading levels and per-block anchors survive there,
+ * where the flat text projection discards them. Nothing re-parses HTML.
  *
- * Called on GeekAPI's Content Creator surface, behind the /api/cw proxy. This app does not call
- * `api/geek-crawler/*` — crawl data is Geek-Crawler's. The server side is being moved onto
- * `api/geek-crawler/crawls/{runId}/site-structure`, assembled from the crawler's typed `blocks`
- * rather than re-parsed out of raw HTML, with this route delegating to it and keeping its own page
- * filter. The response models below are that endpoint's, so nothing here changes when it lands.
+ * On the geek-crawler surface because it is crawl data; this app is one consumer of it. A pure read:
+ * it returns what Geek-Crawler-v2 already crawled and generates nothing.
  */
 
-/** One anchor under a heading. `rel` is "" when the crawler recorded none. */
-export interface SiteHierarchyLink {
+/** One anchor under a heading. `rel` is "" when the page recorded none. */
+export interface SiteStructureLink {
   text: string;
   href: string;
   rel: string;
 }
 
-export interface SiteHierarchyNode {
+export interface SiteStructureNode {
   level: number;
   headingText: string;
   paragraphs: string[];
-  links: SiteHierarchyLink[];
-  children: SiteHierarchyNode[];
+  links: SiteStructureLink[];
+  children: SiteStructureNode[];
 }
 
-export interface SiteHierarchyPage {
+export interface SiteStructurePage {
   pageUrl: string;
-  roots: SiteHierarchyNode[];
+  roots: SiteStructureNode[];
 }
 
-export interface ProjectSiteHierarchy {
-  homepageUrl: string;
-  viewport: string;
+export interface SiteStructure {
+  runId: string;
   builtAtUtc: string;
-  pages: SiteHierarchyPage[];
+  /** Pages the run holds. */
+  pagesConsidered: number;
+  /**
+   * Pages left out because extraction produced no blocks.
+   *
+   * Non-zero is an extraction failure, not an empty site — the server reports it rather than
+   * quietly returning a shorter tree.
+   */
+  pagesWithoutBlocks: number;
+  pages: SiteStructurePage[];
 }
 
-/**
- * `siteHierarchy` is null when the server's Build found nothing usable — the seed URL would not
- * normalize, or every page was filtered out. That is a real state to show, not an error to hide.
- */
-export interface ProjectSiteHierarchyResponse {
-  siteHierarchy: ProjectSiteHierarchy | null;
-}
-
-/**
- * The assembled heading tree for a project-site run.
- *
- * The server keeps only the homepage, tool/use-case hubs, and pages carrying 2+ link groups, so a
- * short list off a large crawl is the filter working, not a broken crawl.
- */
-export function getProjectSiteHierarchy(
-  runId: string,
-): Promise<ProjectSiteHierarchyResponse> {
-  return gccRequest<ProjectSiteHierarchyResponse>(
-    `/api/geek-content-creator-v2/project-site/runs/${encodeURIComponent(runId)}/site-hierarchy`,
+export function getProjectSiteStructure(runId: string): Promise<SiteStructure> {
+  return gccRequest<SiteStructure>(
+    `/api/geek-crawler/crawls/${encodeURIComponent(runId)}/site-structure`,
   );
 }
 
