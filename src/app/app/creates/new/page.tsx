@@ -103,6 +103,10 @@ export default function NewCreatePage() {
             setClients((prev) => [...prev, client]);
             setSelectedClientId(client.id);
           }}
+                  onDeleted={(clientId) => {
+            setClients((prev) => prev.filter((c) => c.id !== clientId));
+            setSelectedClientId((prev) => (prev === clientId ? null : prev));
+          }}
         />
       </div>
 

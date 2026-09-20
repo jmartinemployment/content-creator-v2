@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROVIDER_OPTIONS, type CategoryOption, type LlmProviderType, type ProjectSummary } from "@/lib/types";
+import { type CategoryOption, type ProjectSummary } from "@/lib/types";
 import {
   createProject,
   getGeekBackendCategories,
@@ -81,7 +81,6 @@ export default function ProjectForm({
   const [department, setDepartment] = useState("");
   const [categories, setCategories] = useState<CategoryOption[] | null>(null);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
-  const [preferredProvider, setPreferredProvider] = useState<LlmProviderType>(defaultLlmProvider);
   const [useExactKeywordAsTitle, setUseExactKeywordAsTitle] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +149,10 @@ export default function ProjectForm({
         projectUrl: projectUrls[0] ?? projectUrl,
         targetKeyword,
         department,
-        preferredProvider,
+        // Not a per-project choice. The backend has no model concept — ResolveModelName returns
+        // the provider name, and the model itself is server config — so offering a picker would
+        // imply a decision the operator cannot actually make here.
+        preferredProvider: defaultLlmProvider(),
         useExactKeywordAsTitle,
         siteAnalysisProfileId: projectRunId,
         partnerUrls,
@@ -260,21 +262,6 @@ export default function ProjectForm({
               ))}
             </select>
           )}
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-          LLM Provider
-          <select
-            value={preferredProvider}
-            onChange={(e) => setPreferredProvider(e.target.value as LlmProviderType)}
-            className={inputClass}
-          >
-            {PROVIDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
         </label>
 
       </div>

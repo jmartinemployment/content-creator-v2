@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient, ApiError } from "@/services/content-writer-api";
+import { createClient, deleteClient, ApiError } from "@/services/content-writer-api";
 import type { Client } from "@/lib/types";
 
 export default function ClientsPanel({
@@ -9,16 +9,33 @@ export default function ClientsPanel({
   selectedClientId,
   onSelect,
   onCreated,
+  onDeleted,
 }: {
   clients: Client[];
   selectedClientId: string | null;
   onSelect: (clientId: string) => void;
   onCreated: (client: Client) => void;
+  onDeleted: (clientId: string) => void;
 }) {
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(client: Client) {
+    setError(null);
+    setDeletingId(client.id);
+    try {
+      await deleteClient(client.id);
+      onDeleted(client.id);
+    } catch (err) {
+      // The 409 body explains what is in the way; show it rather than a generic failure.
+      setError(err instanceof ApiError ? err.message : `Could not delete “${client.name}”.`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,25 +91,40 @@ export default function ClientsPanel({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {clients.length === 0 && <p className="text-sm text-muted">No clients yet — create one to get started.</p>}
-        {clients.map((client) => (
-          <button
-            key={client.id}
-            type="button"
-            onClick={() => onSelect(client.id)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              selectedClientId === client.id
-                ? "bg-brand text-white"
-                : "bg-background text-foreground hover:bg-border/50"
-            }`}
-          >
-            {client.name}
-            {!client.publishTarget && (
-              <span className="ml-1.5 text-xs opacity-70" title="No PublishTarget configured — publish will fail">
-                ⚠
-              </span>
-            )}
-          </button>
-        ))}
+        {clients.map((client) => {
+          const selected = selectedClientId === client.id;
+          return (
+            <span
+              key={client.id}
+              className={`inline-flex items-center gap-1 rounded-full pl-3 pr-1.5 py-1.5 text-sm font-medium transition-colors ${
+                selected ? "bg-brand text-white" : "bg-background text-foreground hover:bg-border/50"
+              }`}
+            >
+              <button type="button" onClick={() => onSelect(client.id)} className="font-medium">
+                {client.name}
+                {!client.publishTarget && (
+                  <span className="ml-1.5 text-xs opacity-70" title="No PublishTarget configured — publish will fail">
+                    ⚠
+                  </span>
+                )}
+              </button>
+              {/* No confirm dialog: the server refuses while the client has projects, so the
+                  destructive case cannot be reached by a stray click. An empty client is a name. */}
+              <button
+                type="button"
+                onClick={() => void handleDelete(client)}
+                disabled={deletingId === client.id}
+                aria-label={`Delete ${client.name}`}
+                title={`Delete ${client.name}`}
+                className={`rounded-full px-1.5 text-xs leading-none opacity-60 hover:opacity-100 disabled:opacity-30 ${
+                  selected ? "hover:bg-white/20" : "hover:bg-border"
+                }`}
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
       </div>
     </div>
   );

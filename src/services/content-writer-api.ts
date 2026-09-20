@@ -104,6 +104,16 @@ export function setPublishTarget(
   });
 }
 
+/**
+ * Delete a client. Refused with 409 while it still has projects.
+ *
+ * The server does not cascade: a client with work under it stays, and the message says how many
+ * projects are in the way.
+ */
+export function deleteClient(clientId: string): Promise<void> {
+  return request<void>(`/api/clients/${encodeURIComponent(clientId)}`, { method: "DELETE" });
+}
+
 export function createProject(input: {
   clientId: string;
   name: string;

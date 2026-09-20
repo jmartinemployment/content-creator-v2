@@ -72,6 +72,10 @@ export default function WorkflowPage() {
           selectedClientId={selectedClientId}
           onSelect={setSelectedClientId}
           onCreated={handleClientCreated}
+                  onDeleted={(clientId) => {
+            setClients((prev) => prev.filter((c) => c.id !== clientId));
+            setSelectedClientId((prev) => (prev === clientId ? null : prev));
+          }}
         />
 
         {selectedClientId ? (
