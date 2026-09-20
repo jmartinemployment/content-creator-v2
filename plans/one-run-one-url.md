@@ -31,7 +31,7 @@ future caller (including a Partner/Competitor "crawl now" feature) would inherit
 | **Geek-Crawler-v2** | ✅ States it explicitly: `README.md:81` "One seed URL = one `runId`"; `README.md:279` "One seed URL = one `runId` going forward," with legacy multi-seed runs explicitly called out as matched-by-any-seed for compatibility. |
 | **Geek-Crawler** (older repo) | ❌ Actively documents the *opposite* — `architecture.md:274` "One run row per user + crawl type + **seed set**"; `plans/replace-on-start.md` titles itself "one run per **seed slot**" and defines `SeedKey` as a hash of sorted **seeds** (plural). |
 | **GeekBackend** | Silent — `AGENTS.md`/`CLAUDE.md` (root, `GeekAPI/`, `GeekRepository/`) have no seed-cardinality language at all. |
-| **content-creator-v2** | Silent — `AGENTS.md`'s "Crawl types" and "Crawls are atomic" sections describe slot/publish atomicity but never seed count; uses singular `seedKey` without ever stating "one URL." |
+| **content-creator-v2** | ✅ Since 2026-09-20 — `AGENTS.md` § *One project URL, one run* states the invariant and records that the slot's run id is stable across re-crawl. (Before that it was silent on seed count, and asserted a discarded per-crawl-run design as fact.) |
 | **Geek-Crawler-Rag** | Silent — no file ties run scope to seed count. |
 
 (GeekContentCreator and Geek-SEO excluded: the former is a frozen historical snapshot used only as a
@@ -66,7 +66,7 @@ run," while preserving `AdmitSeeds`' existing partial-success semantics per URL:
    keeping a legacy-compatibility test for the containing-seed fallback per (4).
 
 **Doc fix** — add the same explicit statement Geek-Crawler-v2 already uses ("one seed URL = one run
-id") to: `content-creator-v2/AGENTS.md` (Crawl types / Crawls are atomic section), `GeekBackend/AGENTS.md`
+id") to: `content-creator-v2/AGENTS.md` (done 2026-09-20 — § *One project URL, one run*), `GeekBackend/AGENTS.md`
 and/or `GeekAPI/CLAUDE.md`, `Geek-Crawler-Rag/architecture.md`. Correct `Geek-Crawler/architecture.md`
 and `Geek-Crawler/plans/replace-on-start.md` to mark the "one run per seed set" model as superseded,
 pointing at Geek-Crawler-v2's model and the code fix above, rather than leaving it as live-contradicting

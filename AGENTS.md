@@ -144,25 +144,88 @@ This does **not** apply to partner/competitor pages, whose HTML is still read at
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
 space until extraction moves to `blocks`.
 
-## Crawls are atomic. A run is binary or it is not a run.
+## One project URL, one run. Re-crawl refills it in place.
 
 A crawl cannot run inside a database transaction — it takes minutes to hours, Mongo's
 multi-document transactions default to a 60-second lifetime, and crawl documents carry multi-MB HTML.
-The commit is therefore placed on a boundary that is atomic on its own: **a single-document status
-flip**. Batch-publish semantics, not 2PC.
+So the run row is the unit of bookkeeping, and its **id is stable for the life of the URL**.
 
-| Phase | Rule |
+**A slot `(ownerUserId, crawlType, seedKey)` owns exactly one run, and re-crawl reuses it.**
+`StartCrawlAsync` computes `seedKey`, resolves the slot with
+`GetRunForSlotAsync(owner, type, seedKey, publishedOnly: false)`, and hands any hit to
+`RequeueExistingRunAsync`, which patches **the same run id** back to `pending`. A new run row is
+created only when the slot is empty. (Verified 2026-09-20, GeekBackend `f675e22`,
+`GeekCrawlerService.cs`.)
+
+| Status in slot | What re-crawl does |
 |---|---|
-| **create** | A crawl always gets its **own** run. The run currently published for the slot is never touched. Abandoned staging in the slot is reclaimed first — it never published, so nothing read it |
-| **publish** | A slot `(ownerUserId, crawlType, seedKey)` resolves to its newest **`complete`** run. A crawl in flight is invisible **by construction**, not because a caller remembered to check |
-| **commit** | `PatchRun → complete`. One document, one write. Before it readers see the old corpus whole; after it, the new corpus whole |
-| **retire** | The superseded run is deleted **after** the commit. Failing here costs disk, never correctness — two complete runs resolve to the newer by `CreatedAtUtc` |
-| **abort** | `failed`/`cancelled` purges vectors and pages. The run **document** survives carrying `ErrorSummary`; it stays uncommitted and therefore unreadable |
+| `pending` / `running` | Cancelled, `TryRecoverOrphanAsync`, re-woken — same id |
+| `external` | Forced to `pending` so the .NET worker takes over — same id |
+| `failed` | Resumed, **saved pages kept** — a failed run is partial, not wrong |
+| `complete` / `cancelled` | `ClearRunCrawlDataAsync(existing.Id)`, then the crawl refills the same id |
 
-**Never purge before the replacement exists.** The original replace-on-recrawl purged the old run and
-re-used its id *before* the new crawl ran, so a crawl dying at page 3 of 2,500 destroyed the good
-corpus with nothing to roll back to. Peak cost of doing it correctly is 2x for one site during its own
-re-crawl; only one copy is ever visible.
+**Clearing a complete run's pages and re-crawling into the same id is correct, not a bug.** The
+alternative — a fresh run per crawl, the old one retired afterwards — is what was tried before, and
+it accumulated runs until the corpus was unmanageable. A site has one current crawl; the id that
+names it should not churn every time it is refreshed.
+
+That is what makes the **client record** the right home for a Run ID. The value is stable, so it is
+stored once when the operator confirms the site, not re-resolved per request and not copied onto
+every project.
+
+**The consequence to respect: a Run ID is not evidence.** Between the clear and the next commit the
+run exists and its corpus does not. So readers gate on **status**, never on the id resolving —
+`publishedOnly` is the mechanism, and a run mid-refill must read as not-ready rather than as an empty
+success. This is the same fail-closed rule as everywhere else, applied to the window a re-crawl opens
+on purpose.
+
+## The client owns the runs. A Run ID names one URL, never a client.
+
+**Run ID = one URL.** `ComputeSeedKey` is `SHA256(sorted seed URLs)`, so the slot key is derived
+entirely from the URL. That is the whole identity: a run names a crawl of one URL, and nothing else.
+
+**A client owns several of those pairs** — which is why the crawl page has three fields and only the
+first is singular:
+
+| On the client | Cardinality |
+|---|---|
+| `projectUrl` → `projectSiteRunId` | **exactly one** — the client's own site |
+| partner URLs → run ids | many |
+| competitor URLs → run ids | many |
+
+**Do not make Client ID the Run ID.** It was considered on 2026-09-20 and rejected for reasons worth
+keeping:
+
+- The run id is stable per **URL**, not per client. A rebrand, a domain migration, even a
+  www→apex normalization change produces a different `seedKey`, a different slot and a **new run id**.
+  If the client's key were the run id, its key would change with its domain, breaking every project,
+  create, version and approval pointing at it.
+- A client has partner and competitor runs too, so the 1:1 breaks as soon as those persist.
+- Client identity lives in `content_creator_v2` (Postgres); runs live in the crawl store (Mongo
+  `crawl_runs`). Content Creator's job is to **pass** a Run ID, not to own crawl identity.
+- A rename enforces nothing anyway — see below.
+
+**What enforces the invariant is removing the copies, not renaming anything.** Today
+`ProjectSummary` carries its own `projectUrl` **and** its own `siteAnalysisProfileId`, and
+`ProjectForm` collects the URL per project. One client with ten projects is ten copies of the site
+URL and ten independently-resolved run ids, free to disagree — different crawls, different ages, some
+naming slots that no longer exist. That is the accumulation that made this a mess before, and it is
+still open.
+
+The shape to move to: the client holds `projectUrl` and `projectSiteRunId`, set once when the
+operator confirms the site (`indexed[url].runId` is already in hand at that moment); projects inherit
+and carry neither. A URL change then updates one field on one row.
+
+**Rename pending: `siteAnalysisProfileId` → `projectSiteRunId`.** The field holds a Geek-Crawler-v2
+run id and has since `4f7d540`, while its doc comment still claims `geek_seo.site_analysis_profiles.Id`.
+It is load-bearing — `ProjectForm` → `createProject` → `project.siteAnalysisProfileId` →
+`HierarchyContextPanel` — so the rename is a coordinated change across `WorkflowGate`, `workflowHref`,
+`ProjectForm`, `content-writer-api`, `gcc-api` and GeekAPI's request contract. Never delete the field
+on a Site Analyzer sweep: the name is legacy, the value is not.
+
+**Correction, 2026-09-20.** This section used to assert the discarded design as fact — "a crawl always
+gets its own run", "never purge before the replacement exists", plus create/publish/commit/retire/abort
+phases. None of that is the code, and none of it is the intent.
 
 **`publishedOnly` is explicit at every call site.** Partner and competitor evidence resolution passes
 it too: citing a partner site mid-crawl is the same defect as grounding on a partial project-site

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
+import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
 
 /**
  * Whether an index exists for each entered URL. Green yes, red no.
@@ -57,11 +59,12 @@ export function SiteAnalyzerClient() {
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
   const [checkingIndex, setCheckingIndex] = useState(false);
   const [indexError, setIndexError] = useState<string | null>(null);
+  const { unlockWorkflow } = useWorkflowGate();
 
   const partnerUrls = parseLines(partnerSeeds);
   const competitorUrls = parseLines(competitorSeeds);
 
-  async function checkIndex(urls: string[]) {
+  async function checkIndex(urls: string[], unlockUrl?: string) {
     const pending = urls.filter((u) => indexed[u] === undefined);
     if (pending.length === 0) return;
     setCheckingIndex(true);
@@ -73,6 +76,19 @@ export function SiteAnalyzerClient() {
         for (const r of rows) next[r.url] = r;
         return next;
       });
+      // The Run ID has always been on this row; it was simply never read. Carrying it to the gate
+      // is the whole handoff — Workflow is keyed on a Run ID and has no other source for one.
+      //
+      // Only the project URL unlocks. Partner and competitor rows carry run ids too, but they name
+      // someone else's site: grounding Workflow on one would be the same defect as citing a partner
+      // crawl as the client's own.
+      if (unlockUrl) {
+        const row = rows.find((r) => r.url === unlockUrl);
+        // Indexed without a Run ID is not a usable answer — no partial unlock.
+        if (row?.indexed && row.runId) {
+          unlockWorkflow({ siteAnalysisProfileId: row.runId, domain: row.url });
+        }
+      }
     } catch (e) {
       // The check failing is not a verdict on the URL. Leave it unmarked rather than red.
       setIndexError(e instanceof Error ? e.message : "Could not reach the index.");
@@ -83,6 +99,10 @@ export function SiteAnalyzerClient() {
 
   const [domain, setDomain] = useState("");
   const domainUrls = parseLines(domain);
+  // The project site's run, once the index check has answered for it. Workflow is unreachable
+  // without it, so it is also the gate's only key.
+  const projectRow = domainUrls[0] ? indexed[domainUrls[0]] : undefined;
+  const projectRunId = projectRow?.indexed ? projectRow.runId : null;
 
   return (
     <div className="mt-8 space-y-6">
@@ -93,7 +113,7 @@ export function SiteAnalyzerClient() {
             onChange={(e) => setDomain(e.target.value)}
             placeholder="geekatyourspot.com"
             className="flex-1 rounded-md border border-[var(--gcc-line)] bg-white px-3 py-2 text-sm"
-            onBlur={() => void checkIndex(domainUrls)}
+            onBlur={() => void checkIndex(domainUrls, domainUrls[0])}
           />
         </div>
         <IndexReport
@@ -102,6 +122,17 @@ export function SiteAnalyzerClient() {
           checking={checkingIndex}
           error={indexError}
         />
+        {projectRunId ? (
+          <p className="text-xs">
+            <Link
+              href={workflowHref(projectRunId)}
+              className="font-medium text-[var(--gcc-accent-deep)] hover:underline"
+            >
+              Continue to Workflow →
+            </Link>{" "}
+            <span className="font-mono text-[var(--gcc-muted)]">Run {projectRunId}</span>
+          </p>
+        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
