@@ -23,14 +23,35 @@ I am implementing Content Creator version one.
 
 | Service | Owns | Must not |
 |---|---|---|
-| **Geek-Crawler** | ALL crawling: `partner`, `competitors`, `geo`, `project-site`, future types | — |
+| **Geek-Crawler-v2** | ALL crawling: `partner`, `competitors`, `geo`, `project-site`, future types | — |
 | **Geek-Crawler-Rag** | Retrieval + verification over what was crawled | **Never generates** |
 | **GeekAPI** | Service layer / BLL. Generation, grounded on verified block text | **No crawler, no browser** |
-| **Geek-SEO** | Site + gap analysis (owns Site Analyzer) | — |
+| **Geek-SEO** | Site + gap analysis | **Site Analyzer is obsolete — never call it** |
 | **Content Creator** (this repo) | Passes a **Run ID** → GeekAPI → displays results | **No crawler, no browser** |
 
-Do not re-expose Site Analyzer through Content Creator. Gap analysis is Geek-SEO's and reaches
-Create via RAG. It was retired from the v2 path deliberately (`5072820`).
+**`Geek-Crawler` (the original repo) is dead. Nothing deploys from it.** `Geek-Crawler-v2` replaced
+it — confirmed by Jeff 2026-09-20. All crawling is Geek-Crawler-v2's: it is where `project-site`
+scope and reject reasons are still being fixed (`f3addce`, `02469bd`, both 2026-09-19), while the old
+repo stopped at 2026-09-05.
+
+It is a git-history source, nothing more — the same standing as `GeekContentCreator`. Do not call it,
+deploy it, cite its contents as current behaviour, or read a defect there as a live defect. A
+"Geek-Crawler" in older text means the v2 repo unless it is explicitly naming history.
+
+**Site Analyzer is obsolete. Geek-Crawler-v2 replaced it.** Site structure — headings, heading
+levels, anchors under a heading, related pages — now comes from a Geek-Crawler-v2 `project-site`
+crawl run and is read back by **Run ID**:
+`GET api/geek-content-creator/project-site/runs/{runId}/hierarchy-match`, derived from the crawl by
+`GccV2SiteHierarchyFromCrawl.Build`. Nothing crawls at read time.
+
+Do not call a `site-analyzer` route, restore one, or treat a Site Analyzer profile id as grounding.
+It was retired from the v2 path deliberately (`5072820`) and GeekAPI's v1 route was deleted by
+`582a171`. Gap analysis remains Geek-SEO's and reaches Create via RAG.
+
+**The live trap:** `siteAnalysisProfileId` carries a **Geek-Crawler-v2 run id** since `4f7d540` — the
+name is legacy, the value is not. It is load-bearing: `ProjectForm` → `createProject` →
+`project.siteAnalysisProfileId` → `HierarchyContextPanel`. Deleting the field during a Site Analyzer
+sweep cuts grounding with no error. Rename it only as a coordinated change with GeekAPI's contract.
 
 RAG is **Library-only — retrieval and verification**. `/v1/generate` and `rag-generate.*` were
 removed and must never be revived. See `.cursor/rules/geek-crawler-rag.mdc`.
@@ -181,11 +202,15 @@ correct when the direction is v1.
 - **The "~15 dead endpoints" claim was true and is now false.** Verified 2026-09-18 by diffing every
   frontend call against the live route table: **all 26** `api/geek-content-creator/*` endpoints the
   frontend calls exist. Do not re-copy that number out of an older doc.
-- **Exactly three frontend calls still 404, all Site Analyzer:** `CreateStartForm.tsx:145`
-  (`POST .../site-analyzer/analyze`), `CreateStartForm.tsx:161` (polls `GET .../site-analyzer/{id}`),
-  `HierarchyContextPanel.tsx:137` (`GET .../site-analyzer/profiles/{id}/hierarchy-match`). There is
-  **no `site-analyzer` route anywhere in GeekAPI** — `582a171` deleted v1's; `5072820` removed the
-  three v2 replacements it had added.
+- **No Site Analyzer call remains in this repo** — verified 2026-09-20. The claim that stood here,
+  "exactly three frontend calls still 404" at `CreateStartForm.tsx:145,161` and
+  `HierarchyContextPanel.tsx:137`, is **false**: `CreateStartForm.tsx` no longer exists, and
+  `e6b3701` repointed `HierarchyContextPanel` at the v1 run-id route
+  `project-site/runs/{runId}/hierarchy-match`. There is still **no `site-analyzer` route anywhere in
+  GeekAPI** (`582a171` deleted v1's, `5072820` removed the three v2 replacements) and none is wanted
+  — **Geek-Crawler-v2 supplies the structure now.** What survives is unreachable client-side
+  scaffolding: nine proxy routes under `src/app/api/site-analyzer/**` with **zero callers**, plus the
+  matcher at `src/proxy.ts:73`. Removal plan: `plans/remove-site-analyzer.md`.
 - **Drafting is OFF by default** — `ContentCreatorV2:DraftingEnabled=false` stops every create before
   the first paid model call, after the free evidence gates. Model default is `gpt-4o-mini`.
 - **`GET /api/geek-content-creator/creates` returns 500** — the route exists; the throw is inside

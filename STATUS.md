@@ -27,6 +27,11 @@ I am implementing Content Creator version one.
 
 ## Not committed
 
+**Site Structure retrieval check** (2026-09-20) — `[TEST]` blocks in `ProjectForm.tsx` plus typed
+`getProjectSiteHierarchy` / `listCrawlRunPages` in `gcc-api.ts`. Scaffolding, not a feature: it
+proves a Run ID returns real headings, levels and anchors, and that both GeekAPI routes already
+exist. Remove once verified. Plan: `plans/verify-site-structure-retrieval.md`. Typechecks.
+
 Per-URL seed validation (`src/lib/crawl-seeds.ts` + wiring). Typechecks. Not pushed.
 
 **Why it exists:** the server rejects the whole batch on the *first* bad URL
@@ -41,10 +46,13 @@ endpoint would remove the duplication; that is a backend change.
 
 1. **`GET /api/geek-content-creator/creates` returns 500.** The live bug. The page the
    sidebar points at. Handler is 3 lines, so the exception is inside `ListCreatesAsync`.
-2. **Three frontend calls 404, all Site Analyzer** — `CreateStartForm.tsx:145,161` and
-   `HierarchyContextPanel.tsx:137`. There is no `site-analyzer` route anywhere in GeekAPI.
-   (Corrected 2026-09-18: `CreateDraftWorkspace` no longer calls them.)
-3. `src/proxy.ts` still matches `/api/site-analyzer/:path*`.
+2. ~~Three frontend calls 404, all Site Analyzer~~ — **resolved, verified 2026-09-20.**
+   `CreateStartForm.tsx` no longer exists and `e6b3701` repointed `HierarchyContextPanel` at the v1
+   run-id route. **Site Analyzer is obsolete; Geek-Crawler-v2 replaced it** — site structure comes
+   from a `project-site` crawl run, read back by Run ID. No Site Analyzer call remains in this repo.
+3. `src/proxy.ts:73` still matches `/api/site-analyzer/:path*`, and nine now-unreachable proxy routes
+   remain under `src/app/api/site-analyzer/**` (344 lines, zero callers). Dead scaffolding, not a
+   broken feature — removal plan: `plans/remove-site-analyzer.md`.
 4. **`DraftingEnabled` is still `false`** — creates stop before the first paid model call.
    Nothing has tested whether v1 actually produces content again.
 

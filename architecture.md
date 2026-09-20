@@ -51,7 +51,7 @@ Browser (phi)
   → Next BFF (/api/gcc-v2/*, /api/rag/*)
   → GeekAPI (ContentCreatorV2 + Rag facade)
        → GeekRepository (content_creator_v2)
-       → Geek-Crawler / Mongo (partner & competitor corpus)
+       → Geek-Crawler-v2 / Mongo (partner & competitor corpus)
        → Geek-Crawler-Rag / Qdrant (query + page block text)
 ```
 
@@ -61,7 +61,7 @@ Browser (phi)
 | HTTP API | **GeekAPI** | Create jobs, VALIDATE, Create writer, RAG **library** facade (query/pages) |
 | Data | **GeekRepository** | Creates, versions, approvals under `content_creator_v2` |
 | Project site | **ContentCreatorV2 ProjectSite** | Owned crawl / BrandKit / site section context |
-| Partner / competitor | **Geek-Crawler** (read via GeekAPI) | Indexed HTML → RAG library; never treat competitor as partner |
+| Partner / competitor | **Geek-Crawler-v2** (read via GeekAPI) | Indexed HTML → RAG library; never treat competitor as partner |
 | Evidence library | **Geek-Crawler-Rag** | `/v1/query` + page block-text quote verify only for Create |
 | Create writer | **GeekAPI** (`gcc-create-library.v1`) | Drafts PLAN/WRITE/VALIDATE grounded on library excerpts |
 | Realtime | **SignalR** `/hubs/gcc-v2-realtime` | Job + crawl progress only (no timer polling) |
@@ -162,14 +162,17 @@ Live progress: **SignalR** `JobEvent` on `/hubs/gcc-v2-realtime`. REST is for st
 | `/app/creates/[id]` | Draft workspace |
 | `/app/creates/[id]/repurpose` | Repurpose |
 | `/app/workflow`, `/app/workflow/projects/[id]` | Workflow surfaces |
-| `/app/site-analyzer` | **Broken and deprecated** — its endpoints were retired; gap analysis is Geek-SEO's, arriving via RAG |
 | `/api/cw/[...path]` | BFF passthrough → GeekAPI |
 | `/api/auth/*` | PKCE start / token / logout / hub-token |
 
-**Known broken (corrected 2026-09-18):** this said "~15 `api/geek-content-creator/*` calls target v1
-endpoints deleted in `582a171`." That was true when written and is now false — `GccController` was
-restored by `714ef8d` + `998f5ad`, and **all 26** v1 endpoints the frontend calls exist. Exactly
-**three** calls still 404, all Site Analyzer. See AGENTS.md § Current state.
+**Known broken (corrected 2026-09-18, re-checked 2026-09-20):** this said "~15
+`api/geek-content-creator/*` calls target v1 endpoints deleted in `582a171`." That was true when
+written and is now false — `GccController` was restored by `714ef8d` + `998f5ad`, and **all 26** v1
+endpoints the frontend calls exist. The follow-on claim that **three** calls still 404, all Site
+Analyzer, is false as well: `CreateStartForm.tsx` is gone and `e6b3701` repointed
+`HierarchyContextPanel` at the v1 run-id route. **Site Analyzer is obsolete — Geek-Crawler-v2
+replaced it**, and structure is read from a `project-site` run by Run ID. See AGENTS.md § Current
+state.
 
 Foreign `runId` → **safe-fail only** (no cross-tenant corpus adoption).
 
@@ -246,9 +249,10 @@ Full predicate: master-plan **Appendix B**. Release decision: master-plan **P3**
 |------|------|
 | `content-creator-v2` | This UI (phi) |
 | `GeekBackend` / GeekAPI | Create orchestration, RAG facade, hubs |
-| `Geek-Crawler` | **All crawling** — partner / competitors / geo / project-site / future |
+| `Geek-Crawler-v2` | **All crawling** — partner / competitors / geo / project-site / future |
+| `Geek-Crawler` | **Dead — nothing deploys from it** (confirmed 2026-09-20). Superseded by `Geek-Crawler-v2`; last commit 2026-09-05. Git-history source only |
 | `Geek-Crawler-Rag` | Query / pages. **Retrieval + verification only — never generates** |
-| `Geek-SEO` | Site + gap analysis (owns Site Analyzer) |
+| `Geek-SEO` | Site + gap analysis. **Site Analyzer is obsolete — Geek-Crawler-v2 replaced it** |
 | `GeekContentCreator` | v1 UI — **source of the frontend now running in this repo** |
 | `GeekContentWorkflow` | Pattern reference only — not the product shell |
 

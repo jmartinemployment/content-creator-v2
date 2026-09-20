@@ -9,7 +9,62 @@ import {
   defaultLlmProvider,
   isProductionContentWriterApi,
 } from "@/services/content-writer-api";
+import {
+  getProjectSiteHierarchy,
+  listCrawlRunPages,
+  type CrawlPageBlock,
+  type CrawlRunPage,
+  type ProjectSiteHierarchyResponse,
+  type SiteHierarchyNode,
+} from "@/services/gcc-api";
 import { useWorkflowGate } from "@/components/WorkflowGate";
+
+/** TEMPORARY TEST — one bounded page of the run. A retrieval check, never an export. */
+const TEST_PAGE_LIMIT = 25;
+
+/** TEMPORARY TEST — flatten a heading tree into indented rows for eyeballing. */
+function hierarchyRows(
+  nodes: readonly SiteHierarchyNode[],
+  depth: number,
+): Array<{ key: string; depth: number; node: SiteHierarchyNode }> {
+  const rows: Array<{ key: string; depth: number; node: SiteHierarchyNode }> = [];
+  nodes.forEach((node, index) => {
+    const key = `${depth}-${index}-${node.level}-${node.headingText}`;
+    rows.push({ key, depth, node });
+    for (const child of hierarchyRows(node.children ?? [], depth + 1)) {
+      rows.push({ ...child, key: `${key}/${child.key}` });
+    }
+  });
+  return rows;
+}
+
+/** TEMPORARY TEST — block kinds for one page, e.g. "14 heading · 31 paragraph". */
+function blockKindSummary(blocks: readonly CrawlPageBlock[]): string {
+  const counts = new Map<string, number>();
+  for (const block of blocks) {
+    const kind = block.kind?.trim() || "(no kind)";
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([kind, count]) => `${count} ${kind}`)
+    .join(" · ");
+}
+
+/** TEMPORARY TEST — anchors are the thing the RAG text projection cannot carry. */
+function anchorCount(blocks: readonly CrawlPageBlock[]): number {
+  return blocks.reduce((sum, block) => sum + (block.anchors?.length ?? 0), 0);
+}
+
+/** TEMPORARY TEST — heading levels present, the other thing the projection discards. */
+function headingLevels(blocks: readonly CrawlPageBlock[]): string {
+  const levels = new Set<number>();
+  for (const block of blocks) {
+    if (block.kind === "heading" && typeof block.level === "number") levels.add(block.level);
+  }
+  if (levels.size === 0) return "none";
+  return [...levels].sort((a, b) => a - b).map((level) => `H${level}`).join(" ");
+}
 
 function qsSiteAnalysisProfileId(): string | null {
   if (typeof window === "undefined") return null;
@@ -40,6 +95,11 @@ export default function ProjectForm({
   const [error, setError] = useState<string | null>(null);
   const [siteAnalysisProfileId, setSiteAnalysisProfileId] = useState<string | null>(null);
   const { siteAnalysisProfileId: gateProfileId, domain: gateDomain } = useWorkflowGate();
+  // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
+  const [siteHierarchy, setSiteHierarchy] = useState<ProjectSiteHierarchyResponse | null>(null);
+  const [siteHierarchyError, setSiteHierarchyError] = useState<string | null>(null);
+  const [crawlPages, setCrawlPages] = useState<CrawlRunPage[] | null>(null);
+  const [crawlPagesError, setCrawlPagesError] = useState<string | null>(null);
 
   useEffect(() => {
     const fromQs = qsSiteAnalysisProfileId();
@@ -54,6 +114,48 @@ export default function ProjectForm({
     // seed once from query string (sidebar) or in-memory gate
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // TEMPORARY TEST — remove once the wizard's real site-structure display lands.
+  // Two independent reads: the assembled tree, and the raw typed blocks behind it. One failing
+  // says nothing about the other, so they carry separate errors and neither falls back to the other.
+  useEffect(() => {
+    if (!siteAnalysisProfileId) {
+      setSiteHierarchy(null);
+      setSiteHierarchyError(null);
+      setCrawlPages(null);
+      setCrawlPagesError(null);
+      return;
+    }
+    let cancelled = false;
+
+    getProjectSiteHierarchy(siteAnalysisProfileId)
+      .then((data) => {
+        if (!cancelled) setSiteHierarchy(data);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSiteHierarchyError(
+            e instanceof Error ? e.message : "Could not load the site structure.",
+          );
+        }
+      });
+
+    listCrawlRunPages(siteAnalysisProfileId, TEST_PAGE_LIMIT, 0)
+      .then((pages) => {
+        if (!cancelled) setCrawlPages(pages);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setCrawlPagesError(
+            e instanceof Error ? e.message : "Could not load the crawl pages.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [siteAnalysisProfileId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +219,116 @@ export default function ProjectForm({
           No Run ID yet — confirm a project site has crawl evidence, then return here.
         </p>
       )}
+
+      {/* TEMPORARY TEST — remove once the wizard's real site-structure display lands. */}
+      {siteAnalysisProfileId ? (
+        <div className="mt-2 space-y-2">
+          <details className="rounded-md border border-dashed border-amber-400 bg-amber-50 p-2 text-xs">
+            <summary className="cursor-pointer font-semibold text-amber-800">
+              [TEST] Site Structure — assembled tree
+            </summary>
+            {siteHierarchyError ? (
+              <p className="mt-1 text-red-600">{siteHierarchyError}</p>
+            ) : siteHierarchy === null ? (
+              <p className="mt-1 text-muted">Loading…</p>
+            ) : siteHierarchy.siteHierarchy === null ? (
+              <p className="mt-1 text-red-600">
+                No hierarchy was built for this run — either the seed URL would not normalize, or
+                every crawled page was filtered out.
+              </p>
+            ) : siteHierarchy.siteHierarchy.pages.length === 0 ? (
+              <p className="mt-1 text-red-600">No page survived the homepage/hub filter.</p>
+            ) : (
+              <div className="mt-1">
+                <p className="break-all text-amber-900">
+                  {siteHierarchy.siteHierarchy.homepageUrl} ·{" "}
+                  {siteHierarchy.siteHierarchy.pages.length} page
+                  {siteHierarchy.siteHierarchy.pages.length === 1 ? "" : "s"} ·{" "}
+                  {siteHierarchy.siteHierarchy.viewport} · built{" "}
+                  {siteHierarchy.siteHierarchy.builtAtUtc}
+                </p>
+                <p className="mt-0.5 text-muted">
+                  Filtered server-side to the homepage, tool/use-case hubs, and pages with 2+ link
+                  groups — a short list off a large crawl is the filter working, not a broken crawl.
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {siteHierarchy.siteHierarchy.pages.map((page) => (
+                    <li key={page.pageUrl}>
+                      <details>
+                        <summary className="cursor-pointer break-all font-medium text-foreground">
+                          {page.pageUrl}{" "}
+                          <span className="font-normal text-muted">
+                            — {page.roots.length} root{page.roots.length === 1 ? "" : "s"}
+                          </span>
+                        </summary>
+                        <ul className="mt-1">
+                          {hierarchyRows(page.roots, 0).map(({ key, depth, node }) => (
+                            <li
+                              key={key}
+                              className="text-muted"
+                              style={{ paddingLeft: `${depth * 0.75}rem` }}
+                            >
+                              H{node.level} {node.headingText || "(no heading text)"}
+                              {node.links.length > 0 ? (
+                                <span className="text-amber-800">
+                                  {" "}
+                                  · {node.links.length} link{node.links.length === 1 ? "" : "s"}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </details>
+
+          <details className="rounded-md border border-dashed border-amber-400 bg-amber-50 p-2 text-xs">
+            <summary className="cursor-pointer font-semibold text-amber-800">
+              [TEST] Crawl pages — typed blocks
+            </summary>
+            {crawlPagesError ? (
+              <p className="mt-1 text-red-600">{crawlPagesError}</p>
+            ) : crawlPages === null ? (
+              <p className="mt-1 text-muted">Loading…</p>
+            ) : crawlPages.length === 0 ? (
+              <p className="mt-1 text-red-600">This run has no pages.</p>
+            ) : (
+              <div className="mt-1">
+                <p className="text-muted">
+                  First {crawlPages.length} page{crawlPages.length === 1 ? "" : "s"} of the run
+                  (limit {TEST_PAGE_LIMIT}) — a retrieval check, not an export. Heading levels and
+                  anchors below are what the RAG text projection cannot carry.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {crawlPages.map((page) => {
+                    const blocks = page.blocks ?? [];
+                    return (
+                      <li key={page.id}>
+                        <p className="break-all font-medium text-foreground">
+                          {page.finalUrl || page.url}{" "}
+                          <span className="font-normal text-muted">— {page.statusCode}</span>
+                        </p>
+                        {blocks.length === 0 ? (
+                          <p className="text-red-600">no blocks on this page</p>
+                        ) : (
+                          <p className="text-muted">
+                            {blockKindSummary(blocks)} · {anchorCount(blocks)} anchors · levels{" "}
+                            {headingLevels(blocks)}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </details>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
