@@ -6,6 +6,7 @@ import {
   type SiteStructure,
   type SiteStructureNode,
 } from "@/services/gcc-api";
+import { buildCrossReference } from "@/lib/site-cross-reference";
 
 /** Flatten a heading tree into indented rows. Depth carries the nesting; `level` is the page's. */
 function hierarchyRows(
@@ -21,6 +22,72 @@ function hierarchyRows(
     }
   });
   return rows;
+}
+
+/**
+ * Which outside parties this site reaches, and from where.
+ *
+ * Computed in the browser from the structure response — the backend has no cross-reference. That
+ * means it can be read but not grounded on: generation runs server-side and never sees this. If it
+ * earns its place, the logic moves into GeekCrawlerSiteStructure unchanged.
+ */
+function CrossReference({ structure }: { structure: SiteStructure }) {
+  const { hosts, unresolvedAnchors } = buildCrossReference(structure);
+
+  if (hosts.length === 0) {
+    return (
+      <p className="mt-1 text-[var(--gcc-muted)]">
+        This site links to no outside host in the crawled pages.
+      </p>
+    );
+  }
+
+  return (
+    <details className="mt-2 rounded border border-[var(--gcc-line)] p-2">
+      <summary className="cursor-pointer font-medium text-[var(--gcc-ink)]">
+        Cross-reference — {hosts.length} outside host{hosts.length === 1 ? "" : "s"}
+      </summary>
+
+      {unresolvedAnchors > 0 ? (
+        <p className="mt-1 text-red-600">
+          {unresolvedAnchors} anchor{unresolvedAnchors === 1 ? "" : "s"} could not be resolved to a
+          URL and {unresolvedAnchors === 1 ? "is" : "are"} not counted below.
+        </p>
+      ) : null}
+
+      <ul className="mt-2 space-y-2">
+        {hosts.map((entry) => (
+          <li key={entry.host}>
+            <p className="font-medium text-[var(--gcc-ink)]">
+              {entry.host}{" "}
+              <span className="font-normal text-[var(--gcc-muted)]">
+                — {entry.references.length} reference
+                {entry.references.length === 1 ? "" : "s"}
+              </span>
+            </p>
+            <ul className="pl-4">
+              {entry.references.map((ref, i) => (
+                <li key={`${entry.host}-${i}`} className="break-all text-[var(--gcc-muted)]">
+                  {ref.sectionPath.join(" › ") || "(no section)"}
+                  {ref.viaPageUrl ? (
+                    // The hop is the point: the section links an on-site page, and that page is
+                    // what names the outside party.
+                    <span className="text-[var(--gcc-slate)]">
+                      {" "}
+                      · via <span className="font-mono">{ref.viaPageUrl}</span>
+                    </span>
+                  ) : null}
+                  {ref.label ? (
+                    <span className="text-[var(--gcc-slate)]"> · “{ref.label}”</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 /**
@@ -70,6 +137,8 @@ export function SiteStructurePanel({ runId }: { runId: string }) {
             {data.pagesConsidered} page{data.pagesConsidered === 1 ? "" : "s"} crawled ·{" "}
             {data.pages.length} with structure · built {data.builtAtUtc}
           </p>
+
+          <CrossReference structure={data} />
 
           {/* An extraction failure, not an empty site — said plainly rather than shown as a short tree. */}
           {data.pagesWithoutBlocks > 0 ? (
