@@ -52,10 +52,14 @@ The gate is stronger for being inline: **Create Project is disabled until the UR
 ID**, with the reason beside the button. Refusal at the point of action, not on a screen the
 operator has already walked past.
 
-**Still not persisted:** partner and competitor URLs. `createProject` has no parameter for them and
-the Project entity has no column. They are index-checked and discarded, exactly as before — moving
-them did not fix that, and nothing reads a declared partner list yet: generation queries the partner
-corpus by topic (`GccV2CreateLibraryWriter:152-180`).
+**Partners and competitors are stored** (GeekBackend `face566`) — `Project.PartnerUrls` /
+`CompetitorUrls`, on the create request, saved by the create endpoint. No migration:
+`PersistentProjectStore` serialises projects rather than mapping columns.
+
+Nothing reads them yet. Generation retrieves partner material from the crawl index by topic
+(`GccV2CreateLibraryWriter:152-180`), not from a declared list. Storing them is what makes the next
+thing possible: comparing what a client declares against what the site actually references — the
+cross-reference already answers the second half.
 
 ## Site structure
 

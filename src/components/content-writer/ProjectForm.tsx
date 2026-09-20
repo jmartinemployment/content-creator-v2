@@ -86,10 +86,10 @@ export default function ProjectForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The index lookup below. Answers a question, saves nothing: createProject has no parameter for
-  // these and the Project entity has no column. They sit in their own fieldset for that reason —
-  // beside the saved fields they read as part of the project, which is how input gets collected
-  // and quietly thrown away.
+  // Declared partners and competitors, saved with the project. The index check beside each one
+  // reports whether a crawl exists; it does not gate the declaration. A partner the client really
+  // has, with no crawl yet, is a fact worth recording — and the gap between what is declared and
+  // what is crawled is exactly the thing worth being able to see.
   const [partnerSeeds, setPartnerSeeds] = useState("");
   const [competitorSeeds, setCompetitorSeeds] = useState("");
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
@@ -153,11 +153,15 @@ export default function ProjectForm({
         preferredProvider,
         useExactKeywordAsTitle,
         siteAnalysisProfileId: projectRunId,
+        partnerUrls,
+        competitorUrls,
       });
       onCreated(project);
       setName("");
       setProjectUrl("");
       setTargetKeyword("");
+      setPartnerSeeds("");
+      setCompetitorSeeds("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create project. Is the API running?");
     } finally {
@@ -224,6 +228,18 @@ export default function ProjectForm({
           />
         </label>
 
+        {/* Beside the keyword, because it qualifies the keyword: it decides whether that exact
+            phrase becomes the title. Alone at the foot of the form it read as a project setting. */}
+        <label className="flex items-end gap-2 pb-2 text-sm font-medium text-foreground">
+          <input
+            type="checkbox"
+            checked={useExactKeywordAsTitle}
+            onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
+            className="mb-0.5 h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+          />
+          Use exact keyword as title
+        </label>
+
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Department
           {categoriesError ? (
@@ -261,27 +277,16 @@ export default function ProjectForm({
           </select>
         </label>
 
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={useExactKeywordAsTitle}
-            onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
-            className="h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
-          />
-          Use exact keyword as title
-        </label>
       </div>
 
-      {/* Deliberately outside the grid above. Everything in that grid is saved with the project;
-          nothing here is. Sitting them together implied these were part of the project, which is
-          how a field gets filled in and silently thrown away. */}
       <fieldset className="mt-6 rounded-md border border-border p-4">
         <legend className="px-1 text-sm font-medium text-foreground">
-          Index lookup — not saved
+          Partners &amp; competitors
         </legend>
         <p className="mb-3 text-xs text-muted">
-          Check whether other sites have already been crawled. Answers now, stored nowhere: these
-          are not part of the project and are gone when you leave this page.
+          Saved with the project. Each is checked against the index as you leave the field — a red
+          line means no crawl exists for it yet, which is worth knowing but does not stop you
+          declaring it.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">

@@ -112,8 +112,12 @@ export function createProject(input: {
   department: string;
   preferredProvider: LlmProviderType;
   useExactKeywordAsTitle?: boolean;
-  /** geek_seo.site_analysis_profiles.Id */
+  /** A Geek-Crawler-v2 run id since 4f7d540; the field name is legacy. */
   siteAnalysisProfileId?: string | null;
+  /** Sites this client sells or recommends, as declared. */
+  partnerUrls?: string[];
+  /** Rivals writing on the same topics, as declared. */
+  competitorUrls?: string[];
 }): Promise<ProjectSummary> {
   return request<ProjectSummary>("/api/projects", {
     method: "POST",
@@ -126,6 +130,8 @@ export function createProject(input: {
       preferredProvider: input.preferredProvider,
       useExactKeywordAsTitle: input.useExactKeywordAsTitle ?? false,
       siteAnalysisProfileId: input.siteAnalysisProfileId ?? null,
+      partnerUrls: input.partnerUrls ?? [],
+      competitorUrls: input.competitorUrls ?? [],
     }),
   });
 }
