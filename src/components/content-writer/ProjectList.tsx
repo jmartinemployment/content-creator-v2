@@ -26,7 +26,6 @@ export default function ProjectList({ projects }: { projects: ProjectSummary[] }
       <table className="w-full text-left text-sm">
         <thead className="border-b border-border bg-background text-xs uppercase tracking-wide text-muted">
           <tr>
-            <th className="px-4 py-3">Name</th>
             <th className="px-4 py-3">Target Keyword</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Created</th>
@@ -35,12 +34,13 @@ export default function ProjectList({ projects }: { projects: ProjectSummary[] }
         <tbody>
           {projects.map((project) => (
             <tr key={project.id} className="border-b border-border last:border-0 hover:bg-background/60">
+              {/* The keyword is what the project is about and the only column that helps pick
+                  one, so it is the link. */}
               <td className="px-4 py-3">
                 <Link href={`/app/workflow/projects/${project.id}`} className="font-medium text-brand hover:underline">
-                  {project.name}
+                  {project.targetKeyword}
                 </Link>
               </td>
-              <td className="px-4 py-3 text-muted">{project.targetKeyword}</td>
               <td className="px-4 py-3">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[project.status] ?? ""}`}>
                   {project.status}

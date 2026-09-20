@@ -75,7 +75,6 @@ export default function ProjectForm({
   clientId: string;
   onCreated: (project: ProjectSummary) => void;
 }) {
-  const [name, setName] = useState("");
   const [projectUrl, setProjectUrl] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
   const [department, setDepartment] = useState("");
@@ -145,7 +144,8 @@ export default function ProjectForm({
     try {
       const project = await createProject({
         clientId,
-        name,
+        // No name. The server uses the target keyword, which is what the project is about — a
+        // separate label is one more thing to invent and nothing reads it.
         projectUrl: projectUrls[0] ?? projectUrl,
         targetKeyword,
         department,
@@ -159,7 +159,6 @@ export default function ProjectForm({
         competitorUrls,
       });
       onCreated(project);
-      setName("");
       setProjectUrl("");
       setTargetKeyword("");
       setPartnerSeeds("");
@@ -206,17 +205,6 @@ export default function ProjectForm({
               grounded on.
             </span>
           ) : null}
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-          Project Name
-          <input
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Acme HVAC - AI Chatbot Launch"
-            className={inputClass}
-          />
         </label>
 
         {/* The checkbox lives inside this cell, directly under the input it qualifies. In its own

@@ -116,7 +116,8 @@ export function deleteClient(clientId: string): Promise<void> {
 
 export function createProject(input: {
   clientId: string;
-  name: string;
+  /** Optional. Omitted, the server uses the target keyword — nothing derives from the name. */
+  name?: string;
   projectUrl: string;
   targetKeyword: string;
   department: string;
@@ -133,7 +134,7 @@ export function createProject(input: {
     method: "POST",
     body: JSON.stringify({
       clientId: input.clientId,
-      name: input.name,
+      name: input.name ?? null,
       projectUrl: input.projectUrl,
       targetKeyword: input.targetKeyword,
       department: input.department,
