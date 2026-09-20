@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
 import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
-import { SiteStructurePanel } from "@/components/SiteStructurePanel";
 
 /**
  * Whether an index exists for each entered URL. Green yes, red no.
@@ -37,23 +36,20 @@ function IndexReport({
   if (seen.length === 0) return null;
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-1 text-xs">
       {seen.map((u) => {
         const r = results[u];
         // Indexed says a crawl exists. It does not say the crawl captured anything usable, and
         // those are different answers — the structure below is what settles it.
         const runId = r.indexed ? r.runId : null;
         return (
-          <div key={u} className="space-y-1">
-            <p className={r.indexed ? "text-green-700" : "text-red-600"}>
-              <span className="font-mono">{u}</span> —{" "}
-              {r.indexed ? "indexed" : "no index — crawl it first"}
-              {r.indexed && !runId ? (
-                <span className="text-red-600"> · no run id — nothing to read</span>
-              ) : null}
-            </p>
-            {runId ? <SiteStructurePanel key={runId} runId={runId} /> : null}
-          </div>
+          <p key={u} className={r.indexed ? "text-green-700" : "text-red-600"}>
+            <span className="font-mono">{u}</span> —{" "}
+            {r.indexed ? "indexed" : "no index — crawl it first"}
+            {r.indexed && !runId ? (
+              <span className="text-red-600"> · no run id — nothing to read</span>
+            ) : null}
+          </p>
         );
       })}
     </div>

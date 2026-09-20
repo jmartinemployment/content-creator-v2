@@ -39,19 +39,24 @@ endpoint would remove the duplication; that is a backend change.
 
 ## Site structure
 
-**Temporarily on step 1** (`/app/crawl`, "Project site"), under the project URL and above the
-Continue to Workflow link — so the crawl can be judged before anything is grounded on it.
+`GET api/geek-crawler/crawls/{runId}/site-structure` (GeekBackend) returns a run's heading tree
+built from the crawler's typed `blocks` — heading levels, the prose under each heading, and the
+anchors with their labels — plus a cross-reference of which outside hosts the site reaches and from
+which sections, following one hop through on-site pages. Derived per request, never stored.
 
-`SiteStructurePanel` reads it by Run ID through `getProjectSiteStructure` (`gcc-api.ts`) →
-`api/geek-crawler/crawls/{runId}/site-structure`, which GeekAPI assembles from the crawler's typed
-`blocks` in Mongo (GeekBackend `f693f87`). Nothing re-parses HTML, and pages whose extraction
-produced no blocks are excluded and counted so the panel can say so.
+Proven against live crawls on 2026-09-20 for the project site, and the same read works unchanged for
+partner and competitor runs: ingest is one path and every crawl type carries `blocks`.
 
-This replaced `api/geek-content-creator-v2/project-site/runs/{runId}/site-hierarchy`, which returned
-**500**: it read the Postgres project-site store, which holds no crawl data, and re-derived the
-structure from raw HTML.
+**The display was scaffolding and is gone.** `SiteStructurePanel` and its call site on `/app/crawl`
+were removed once the data was confirmed. `getProjectSiteStructure` remains in `gcc-api.ts` with no
+caller — the typed client for a live endpoint, kept for whatever consumes structure next. Git has
+the panel if it is wanted back.
 
-**Not yet opened against a live run.**
+**Still reading HTML, not blocks:** partner and competitor extraction
+(`GccV2GeekCrawlerResearchResolver:394,607`) re-parses `page.Html` with `GccV2ArticleHtmlExtractor`
+to recover prose the crawler already parsed into blocks. A second derivation of the same content
+from a different representation — the drift class that emptied the corpus before, and the one
+removed from the project-site path today.
 
 ## Still broken
 
