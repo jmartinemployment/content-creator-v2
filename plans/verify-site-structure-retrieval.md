@@ -156,10 +156,11 @@ The proof is the live endpoints with a real Run ID, not a green build.
 1. `npx tsc --noEmit` — clean before this work, must stay clean
 2. `npm run dev`, then sign in — `/api/cw` returns 401 without the `gcc_access` cookie
    (`route.ts:19-24`)
-3. Get a project-site Run ID from a route — `checkProjectSiteReadiness` (`gcc-api.ts:791`) via the
-   project URL field, or `POST /api/rag/hosts-indexed`, which returns `runId` per host. Not from
-   Mongo: reaching past the routes is exactly what this check is meant to prove unnecessary
-4. Load `/app/workflow?siteAnalysisProfileId=<runId>` and open the `[TEST]` block
+3. On `/app/crawl`, type the project URL and leave the field. The index check already returns the
+   Run ID — `checkIndex` stores the whole `HostIndexed` row, and `indexed[url].runId` is it. There is
+   nothing to look up, no readiness call and no crawl list
+4. Click **Continue to Workflow →** (it appears under the project field once the row comes back
+   indexed with a run), then open the `[TEST]` blocks on the New Project form
 5. **Route 1 passes if:** homepage URL matches the project URL, `builtAtUtc` is the expected crawl,
    headings nest by level, at least one node shows a link count
 6. **Route 2 passes if:** pages come back with non-empty `blocks`, heading blocks carry `level`, and
