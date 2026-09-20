@@ -219,28 +219,29 @@ export default function ProjectForm({
           />
         </label>
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-          Target Keyword
-          <input
-            required
-            value={targetKeyword}
-            onChange={(e) => setTargetKeyword(e.target.value)}
-            placeholder="ai chatbot implementation cost"
-            className={inputClass}
-          />
-        </label>
-
-        {/* Beside the keyword, because it qualifies the keyword: it decides whether that exact
-            phrase becomes the title. Alone at the foot of the form it read as a project setting. */}
-        <label className="flex items-end gap-2 pb-2 text-sm font-medium text-foreground">
-          <input
-            type="checkbox"
-            checked={useExactKeywordAsTitle}
-            onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
-            className="mb-0.5 h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
-          />
-          Use exact keyword as title
-        </label>
+        {/* The checkbox lives inside this cell, directly under the input it qualifies. In its own
+            grid cell it landed beneath Project Name instead — the field it says nothing about. */}
+        <div className="flex flex-col gap-1.5">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+            Target Keyword
+            <input
+              required
+              value={targetKeyword}
+              onChange={(e) => setTargetKeyword(e.target.value)}
+              placeholder="ai chatbot implementation cost"
+              className={inputClass}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-normal text-foreground">
+            <input
+              type="checkbox"
+              checked={useExactKeywordAsTitle}
+              onChange={(e) => setUseExactKeywordAsTitle(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+            />
+            Use exact keyword as title
+          </label>
+        </div>
 
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Department
