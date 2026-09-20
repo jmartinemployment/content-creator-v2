@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
 import { useWorkflowGate, workflowHref } from "@/components/WorkflowGate";
+import { SiteStructurePanel } from "@/components/SiteStructurePanel";
 
 /**
  * Whether an index exists for each entered URL. Green yes, red no.
@@ -123,15 +124,20 @@ export function SiteAnalyzerClient() {
           error={indexError}
         />
         {projectRunId ? (
-          <p className="text-xs">
-            <Link
-              href={workflowHref(projectRunId)}
-              className="font-medium text-[var(--gcc-accent-deep)] hover:underline"
-            >
-              Continue to Workflow →
-            </Link>{" "}
-            <span className="font-mono text-[var(--gcc-muted)]">Run {projectRunId}</span>
-          </p>
+          <>
+            {/* TEMPORARY — shown on this step so the crawl can be judged before anything is
+                grounded on it. Placement is revisited once the wizard settles. */}
+            <SiteStructurePanel key={projectRunId} runId={projectRunId} />
+            <p className="text-xs">
+              <Link
+                href={workflowHref(projectRunId)}
+                className="font-medium text-[var(--gcc-accent-deep)] hover:underline"
+              >
+                Continue to Workflow →
+              </Link>{" "}
+              <span className="font-mono text-[var(--gcc-muted)]">Run {projectRunId}</span>
+            </p>
+          </>
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">

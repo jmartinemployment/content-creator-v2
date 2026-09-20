@@ -39,7 +39,9 @@ endpoint would remove the duplication; that is a backend change.
 
 ## Site structure
 
-`ProjectForm` shows the structure of the crawl a project is grounded on, read by Run ID through
+**Temporarily on step 1** (`/app/crawl`, "Project site"), under the project URL and above the
+Continue to Workflow link — so the crawl can be judged before anything is grounded on it.
+`SiteStructurePanel` reads it by Run ID through
 `getProjectSiteHierarchy` (`gcc-api.ts`) →
 `api/geek-content-creator-v2/project-site/runs/{runId}/site-hierarchy`. Permanent, not scaffolding.
 
