@@ -332,12 +332,43 @@ it never declared one.
    so the existing quoteable prompt block carries them, appending to operator uploads rather than
    replacing them. 800 tests pass; 16 new ones assert the declared policy.
 
-   **Testability gap, stated rather than hidden:** `HttpGccRepository` is a concrete class with no
-   interface, so `ResolveAsync` itself has no unit coverage — only the policy table, `BuildNeed` and
-   the outcome shape. An interface would close it.
+   **Closed 2026-09-21.** `IGccProjectReader` — a narrow interface over the one method grounding
+   needs, rather than mirroring `HttpGccRepository`'s 43. Every refusal path is now proven: no
+   project, no partner URLs, no indexed crawl, null client result, `Failed` never read as success,
+   and a successful-but-empty query still refusing.
 
-4. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
-   model-authored HTML, and not via the flat text projection — that projection discards hrefs, tags
+   **The gate changed on the orchestrator path too.** `293040a`/`293da90`'s "optional enrichment,
+   not a generation gate" is reversed for the four types that cite partners — pillar plan, pillar
+   body, tool pages, blog — which now refuse when no partner URLs are declared. Social, cold
+   outreach and image prompts declare no requirement, the same split as `RequiredFor`.
+   `AllowOutsideSiteScope` still overrides, matching the site-analysis and hierarchy gates beside it.
+
+   **Attribution is now required in the prompt.** The quoteable block carried each URL but only
+   said "quote/paraphrase; do not invent". It now states four rules — claims must come from a
+   passage, must name the source and carry its URL, must not extrapolate a capability/price/
+   integration/limitation no passage states, and must omit what the evidence does not cover — and
+   labels each passage *retrieved from the crawl index* or *operator-supplied*.
+
+4. **Map RAG's typed blocks → `ContentDocument`. BLOCKED at the RAG boundary — found 2026-09-21.**
+   Retrieval does not deliver typed blocks. `HttpGeekCrawlerRagClient.MapChunksToQuoteable`
+   (`:761`) builds each `GccQuoteablePage` from `ChunkDto.Text` and sets **`Headings: []`** — flat
+   strings from RAG's `derive_plaintext_from_blocks` projection, which discards every href, tag and
+   heading marker by design (`AGENTS.md`). So `QuoteParagraph`, `CodeParagraph` and
+   `DefinitionParagraph` cannot be populated from retrieval as it stands, and a retrieved glossary
+   or code sample arrives as undifferentiated prose.
+
+   `AGENTS.md` already names the fix as the migration target: structure is recoverable from
+   `blocks` (`heading.level`, per-block `html`, per-block `anchors`) even though it is not
+   recoverable from the projection. Two ways to get them: RAG returns block-typed chunks, or
+   GeekAPI reads `crawl_pages.Blocks` for the `PageId` each chunk already carries and slices them.
+   The second needs no change to Geek-Crawler-Rag.
+
+   **Attribution did not need this and shipped first** — a chunk plus its URL is already a citable
+   quote. Typed blocks preserve *shape* (code as code, a glossary as a glossary), which is
+   secondary to citing at all.
+
+   Original intent, unchanged: block kind to node type. No Markdown, no model-authored HTML, and
+   not via the flat text projection — that projection discards hrefs, tags
    and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
 5. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
    today (`GccController.cs:667`, `:674` — `bodyJson`), which is the deviation recorded below.
