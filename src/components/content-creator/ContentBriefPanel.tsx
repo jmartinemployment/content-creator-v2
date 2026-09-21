@@ -520,7 +520,9 @@ export default function ContentBriefPanel({
       </div>
 
       <label className={`${labelClass} mt-5`}>
-        Writing notes (optional)
+        Writing Note for Image Prompt (optional)
+        {/* Renamed to say what it actually does (2026-09-21 audit): read only by
+            WriteImagePromptAsync — every other content type ignores this field entirely. */}
         <textarea
           value={brief.writingNotes}
           onChange={(e) => patch({ writingNotes: e.target.value })}
