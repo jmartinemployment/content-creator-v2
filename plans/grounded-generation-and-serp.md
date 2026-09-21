@@ -269,11 +269,26 @@ mostly not articles.
 `MarkdownToSection` trimming `-`/`*` into prose and `:764`'s hand-rolled `[text](href)` scanner were
 flattening and then reconstructing structure the target model holds natively.
 
+**The gate's granularity — decided 2026-09-21.** Each content type declares the evidence it
+requires; a draft whose required evidence is absent is **refused with a named reason**, never
+silently degraded. Refusal is at the draft, not per-section: a half-grounded article is the middle
+state the repo already bans. A social post does not get refused for want of a partner crawl, because
+it never declared one.
+
 **The work, in order:**
 
-1. **Extend `ContentDocument`** with `QuoteParagraph`, `CodeParagraph`, `DefinitionParagraph` and
-   their `SectionHtmlRenderer` branches. Additive — `Paragraph` is already an abstract record with
-   two implementations, and the renderer stays the only tag producer.
+1. **Extend `ContentDocument`** — **DONE 2026-09-21.** `QuoteParagraph(Runs, Cite)`,
+   `CodeParagraph(Code, Language)`, `DefinitionParagraph(Items)` / `DefinitionItem(Term,
+   Definition)`. Every match site updated, since an unhandled subtype vanishes silently:
+   `SectionHtmlRenderer` (`blockquote[cite]`, `pre>code`, `dl>dt+dd`), `ContentDocumentText`
+   (the one shared projection), `ContentGuardrail` (quotes and code pass through uncleaned —
+   cliché-stripping a quote produces a misquote). The checklist for an eighth kind lives on
+   `Paragraph` itself and names the dormant v2 sites. 784 tests pass.
+
+   *Found and removed on the way:* `GccGenerateService.FlattenDocument` was a **second**
+   implementation of `ContentDocumentText.Flatten` that emitted `"- "` bullets into a prompt
+   (`:1152`) — Markdown at prompt assembly, via exactly the duplicate projection `CLAUDE.md` warns
+   caused the corpus drift.
 2. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
    model-authored HTML, and not via the flat text projection — that projection discards hrefs, tags
    and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
