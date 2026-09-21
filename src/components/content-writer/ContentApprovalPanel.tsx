@@ -26,6 +26,16 @@ export default function ContentApprovalPanel({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Resets to "loading" the moment projectId changes, during render rather than in the effect
+  // below — an effect resetting it would paint one frame of the previous project's approval state
+  // under the new project's id first. The effect only needs to run the fetch and record its result.
+  const [loadedForProjectId, setLoadedForProjectId] = useState(projectId);
+  if (projectId !== loadedForProjectId) {
+    setLoadedForProjectId(projectId);
+    setLoadState("loading");
+    setError(null);
+  }
+
   const hasDraft =
     (result?.article?.wordCount ?? 0) > 0 ||
     result?.blog != null ||
@@ -33,8 +43,6 @@ export default function ContentApprovalPanel({
 
   useEffect(() => {
     let cancelled = false;
-    setLoadState("loading");
-    setError(null);
     getProjectContentApproval(projectId)
       .then((res) => {
         if (cancelled) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   reviseProjectContent,
   listImagePromptRows,
@@ -42,31 +42,47 @@ export default function DraftRevisePanel({
   >([]);
   const [imageSlug, setImageSlug] = useState("");
 
-  const tools = result?.toolPosts ?? [];
+  // Memoized so effects/renders keyed on tools' identity do not re-fire every render just
+  // because `result?.toolPosts ?? []` makes a fresh empty array when there are no tool posts.
+  const tools = useMemo(() => result?.toolPosts ?? [], [result?.toolPosts]);
   const hasArticle = (result?.article?.wordCount ?? 0) > 0;
   const hasBlog = result?.blog != null;
   const hasTools = tools.length > 0;
   const hasImages = imageRows.length > 0;
   const hasAny = hasArticle || hasBlog || hasTools || hasImages;
 
-  useEffect(() => {
-    if (!seedFeedback) return;
+  // Consumes a new seedFeedback value once, during render rather than in an effect: this is
+  // populating local editable state from a one-shot signal, not synchronizing with an external
+  // system, so the setState calls belong here. consumedSeedFeedback is purely bookkeeping — "have
+  // I already applied this exact value" — state rather than a ref because refs cannot be read or
+  // written during render.
+  const [consumedSeedFeedback, setConsumedSeedFeedback] = useState<string | null | undefined>(
+    null,
+  );
+  if (seedFeedback && seedFeedback !== consumedSeedFeedback) {
+    setConsumedSeedFeedback(seedFeedback);
     setFeedback(seedFeedback);
     if (seedContentType) setTarget(seedContentType);
     setScope("full");
     onSeedConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedFeedback, seedContentType]);
+  }
 
-  useEffect(() => {
+  // Keeps the selected tool valid as the tools list changes, without clobbering a selection the
+  // operator already made — also during render, keyed on tools' identity (stable via the useMemo
+  // above), so this only actually runs when the list itself changes, not on every render.
+  // Sentinel (not `tools`) as the initial value: the seed must still run on the very first render
+  // too, exactly like the effect it replaces ran unconditionally on mount.
+  const [toolsSeenAs, setToolsSeenAs] = useState<typeof tools | undefined>(undefined);
+  if (toolsSeenAs !== tools) {
+    setToolsSeenAs(tools);
     if (tools.length === 0) {
       setToolSlug("");
-      return;
+    } else {
+      setToolSlug((prev) =>
+        prev && tools.some((t) => t.slug === prev) ? prev : tools[0].slug,
+      );
     }
-    setToolSlug((prev) =>
-      prev && tools.some((t) => t.slug === prev) ? prev : tools[0].slug,
-    );
-  }, [tools]);
+  }
 
   useEffect(() => {
     let cancelled = false;

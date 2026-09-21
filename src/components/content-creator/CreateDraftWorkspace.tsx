@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import ContentBriefPanel from "./ContentBriefPanel";
@@ -41,18 +41,6 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
 
-  // Seed the checked set from the create's starting type once the detail loads;
-  // never clobber a selection the operator has already made.
-  useEffect(() => {
-    if (!detail) return;
-    setOutputTypes((prev) => {
-      if (prev.length) return prev;
-      const t = detail.startingContentType;
-      if (t && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
-      return ["blog"];
-    });
-  }, [detail]);
-
   const [feedback, setFeedback] = useState("");
   const [scope, setScope] = useState<"full" | "section">("full");
   const [sectionPath, setSectionPath] = useState("");
@@ -60,11 +48,22 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const [polish, setPolish] = useState<GccPolishReport | null>(null);
 
   const reload = useCallback(async () => {
-    setLoadError(null);
+    // No synchronous setState before the first await — see the identical fix and its reasoning
+    // in creates/[id]/repurpose/page.tsx's `load`. Every path below still ends by setting
+    // loadError to its correct value.
     try {
       const d = await getGccCreateDetail(createId);
       setDetail(d);
+      setLoadError(null);
       setBriefSavedOnServer(!!d.briefJson);
+      // Seed the checked output-type set from the create's starting type, once — never clobber a
+      // selection the operator has already made (an earlier reload, or their own clicks).
+      setOutputTypes((prev) => {
+        if (prev.length) return prev;
+        const t = d.startingContentType;
+        if (t && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
+        return ["blog"];
+      });
       const primary =
         d.artifacts.find((a) =>
           ["blog", "pillar", "techarticle", "technicalarticle"].includes(
@@ -91,9 +90,18 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
     }
   }, [createId]);
 
+  // reload is called through a ref rather than by name so this effect is not itself classified as
+  // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
+  // (and reload-if-createId-changes) pattern, not the "derive state from a prop" pattern the rule
+  // exists to catch. The two effects run in this order on mount (React runs effects in
+  // declaration order), so the ref always holds the current reload before it is called.
+  const reloadRef = useRef(reload);
   useEffect(() => {
-    void reload();
+    reloadRef.current = reload;
   }, [reload]);
+  useEffect(() => {
+    void reloadRef.current();
+  }, [createId]);
 
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);

@@ -29,17 +29,22 @@ export default function DraftQualityPanel({
 }) {
   const [kind, setKind] = useState<DraftKind>("article");
 
-  const draft =
-    kind === "article"
-      ? result?.article
-      : result?.blog
-        ? {
-            title: result.blog.title,
-            metaDescription: result.blog.metaDescription,
-            bodyHtml: result.blog.bodyHtml,
-            wordCount: result.blog.wordCount,
-          }
-        : null;
+  // Memoized: the blog branch builds a fresh object literal, which — unmemoized — changed
+  // identity every render and made both useMemo hooks below recompute every render too.
+  const draft = useMemo(
+    () =>
+      kind === "article"
+        ? (result?.article ?? null)
+        : result?.blog
+          ? {
+              title: result.blog.title,
+              metaDescription: result.blog.metaDescription,
+              bodyHtml: result.blog.bodyHtml,
+              wordCount: result.blog.wordCount,
+            }
+          : null,
+    [kind, result],
+  );
 
   const contentType =
     kind === "article" ? ("TechnicalArticle" as const) : ("BlogPost" as const);

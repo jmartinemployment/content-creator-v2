@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   commitHtmlExportToGitHub,
   downloadHtmlExport,
@@ -24,7 +24,9 @@ export default function ReviewPublishPanel({
   result: GeneratedContentSet | null;
   onGenerated: (result: GeneratedContentSet) => void;
 }) {
-  const toolPosts = result?.toolPosts ?? [];
+  // Memoized so the render-time reset below only fires when the list itself actually changes, not
+  // on every render just because `result?.toolPosts ?? []` makes a fresh empty array otherwise.
+  const toolPosts = useMemo(() => result?.toolPosts ?? [], [result?.toolPosts]);
   const [verdicts, setVerdicts] = useState<ReviewVerdict[] | null>(null);
   const [rewritingId, setRewritingId] = useState<string | null>(null);
   const [rewriteError, setRewriteError] = useState<string | null>(null);
@@ -47,30 +49,42 @@ export default function ReviewPublishPanel({
     result?.blog != null ||
     (result?.toolPosts?.length ?? 0) > 0;
 
-  useEffect(() => {
+  // Keeps the selected tool valid as the list changes, without clobbering a selection the operator
+  // already made. During render, not in an effect — keyed on toolPosts' identity (stable via the
+  // useMemo above), and toolPostsSeenAs starts undefined (not `toolPosts`) so this still runs on
+  // the very first render too, matching the effect it replaces running unconditionally on mount.
+  const [toolPostsSeenAs, setToolPostsSeenAs] = useState<typeof toolPosts | undefined>(undefined);
+  if (toolPostsSeenAs !== toolPosts) {
+    setToolPostsSeenAs(toolPosts);
     if (toolPosts.length === 0) {
       setSelectedToolSlug("");
-      return;
+    } else {
+      setSelectedToolSlug((prev) =>
+        prev && toolPosts.some((t) => t.slug === prev) ? prev : toolPosts[0].slug,
+      );
     }
-    setSelectedToolSlug((prev) =>
-      prev && toolPosts.some((t) => t.slug === prev) ? prev : toolPosts[0].slug,
-    );
-  }, [toolPosts]);
+  }
 
   const rewriteCandidates = useMemo(
     () => (verdicts ?? []).filter((v) => canRewriteVerdict(v)),
     [verdicts],
   );
 
-  useEffect(() => {
+  // Same pattern: rewriteCandidates is already stable (derived via useMemo above), so this only
+  // runs when it actually changes.
+  const [candidatesSeenAs, setCandidatesSeenAs] = useState<typeof rewriteCandidates | undefined>(
+    undefined,
+  );
+  if (candidatesSeenAs !== rewriteCandidates) {
+    setCandidatesSeenAs(rewriteCandidates);
     if (rewriteCandidates.length === 0) {
       setSelectedRewriteVerdictId("");
-      return;
+    } else {
+      setSelectedRewriteVerdictId((prev) =>
+        prev && rewriteCandidates.some((v) => v.id === prev) ? prev : rewriteCandidates[0].id,
+      );
     }
-    setSelectedRewriteVerdictId((prev) =>
-      prev && rewriteCandidates.some((v) => v.id === prev) ? prev : rewriteCandidates[0].id,
-    );
-  }, [rewriteCandidates]);
+  }
 
   async function handleReview() {
     setReviewError(null);

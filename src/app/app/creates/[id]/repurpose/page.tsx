@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError } from "@/services/content-writer-api";
@@ -40,42 +40,52 @@ export default function CreateRepurposePage() {
   const [toolNames, setToolNames] = useState("");
   const [toolBrief, setToolBrief] = useState("");
 
-  const load = useCallback(async () => {
-    setLoadError(null);
-    try {
-      const detail = await getGccCreateDetail(createId);
-      const primary = detail.artifacts[0] ?? null;
-      if (!primary) {
-        setLoadError("No artifact to repurpose — generate and approve first.");
-        return;
-      }
-      if (primary.status.toLowerCase() !== "approved") {
-        setLoadError("Content approval required before Repurpose.");
-        return;
-      }
-      const versions = await listGccVersions(primary.id);
-      const latest =
-        [...versions].sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null;
-      if (!latest) {
-        setLoadError("Approved artifact has no versions.");
-        return;
-      }
-      setArtifact(primary);
-      setVersion(latest);
-    } catch (err) {
-      setLoadError(
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Could not load create.",
-      );
-    }
-  }, [createId]);
-
+  // Inlined directly in the effect (not a named useCallback called from it) — not reused anywhere
+  // else, and this is what a mount-triggered load looks like: real async work ending in setState,
+  // not state derived synchronously from a prop. No setState before the first await either way — a
+  // retry after a failed load must not flash the stale error away before the new attempt actually
+  // has something to report. Every path still ends by setting loadError to its correct value.
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getGccCreateDetail(createId);
+        if (cancelled) return;
+        const primary = detail.artifacts[0] ?? null;
+        if (!primary) {
+          setLoadError("No artifact to repurpose — generate and approve first.");
+          return;
+        }
+        if (primary.status.toLowerCase() !== "approved") {
+          setLoadError("Content approval required before Repurpose.");
+          return;
+        }
+        const versions = await listGccVersions(primary.id);
+        if (cancelled) return;
+        const latest =
+          [...versions].sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null;
+        if (!latest) {
+          setLoadError("Approved artifact has no versions.");
+          return;
+        }
+        setArtifact(primary);
+        setVersion(latest);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not load create.",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createId]);
 
   function run() {
     if (!version) return;

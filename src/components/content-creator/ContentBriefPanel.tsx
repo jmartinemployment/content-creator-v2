@@ -35,6 +35,58 @@ import {
   readSiteSectionHandoff,
 } from "@/lib/site-section-storage";
 
+/**
+ * What's saved locally for this keyword, seeded once from a Site Analyzer handoff (gap reason +
+ * curated SERP, only into empty fields). Reading the handoff does not consume it — ensureCreateId
+ * clears it once a create actually uses it — so this is safe to call more than once.
+ */
+function computeLocalBrief(targetKeyword: string): ContentBrief {
+  const stored = loadBriefFromStorage(targetKeyword || "draft");
+  const fromKw = loadBriefFromStorage(`kw:${targetKeyword}`);
+  let localBrief = fromKw ?? stored ?? emptyContentBrief();
+
+  try {
+    const handoff = readSiteSectionHandoff();
+    if (handoff) {
+      const seedNotes: string[] = [];
+      if (handoff.gapReason?.trim()) {
+        seedNotes.push(`Gap reason: ${handoff.gapReason.trim()}`);
+      }
+      if (handoff.gapSectionPath?.trim()) {
+        seedNotes.push(`Section path: ${handoff.gapSectionPath.trim()}`);
+      }
+      if (handoff.curatedSerp?.shapeGuidance?.trim()) {
+        seedNotes.push(`SERP shape: ${handoff.curatedSerp.shapeGuidance.trim()}`);
+      }
+      if (handoff.curatedSerp?.informationGainSummary?.trim()) {
+        seedNotes.push(
+          `Information Gain: ${handoff.curatedSerp.informationGainSummary.trim()}`,
+        );
+      }
+      if (seedNotes.length && !localBrief.writingNotes.trim()) {
+        localBrief = {
+          ...localBrief,
+          writingNotes: seedNotes.join("\n"),
+        };
+      }
+      const serp = handoff.curatedSerp;
+      if (serp) {
+        localBrief = {
+          ...localBrief,
+          serpTitles: localBrief.serpTitles.trim() || serp.serpTitles,
+          serpUrls: localBrief.serpUrls.trim() || serp.serpUrls,
+          paaQuestions: localBrief.paaQuestions.trim() || serp.paaQuestions,
+          relatedSearches:
+            localBrief.relatedSearches.trim() || serp.relatedSearches,
+        };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return localBrief;
+}
+
 export default function ContentBriefPanel({
   clientId,
   projectSiteRunId,
@@ -54,8 +106,17 @@ export default function ContentBriefPanel({
   onBriefSaved: (createId: string, complete: boolean) => void;
   onBriefValidityChange: (complete: boolean) => void;
 }) {
-  const [brief, setBrief] = useState<ContentBrief>(() => emptyContentBrief());
-  const [createId, setCreateId] = useState<string | null>(createIdProp ?? null);
+  // Identifies "which keyword/create this component is currently hydrated for". A \0 separator
+  // keeps ("ab", "") distinct from ("a", "b") — the two pieces are never ambiguous once joined.
+  const hydrationKey = `${targetKeyword}\0${createIdProp ?? ""}`;
+
+  const [brief, setBrief] = useState<ContentBrief>(() => computeLocalBrief(targetKeyword));
+  // The prop always wins when given; internalCreateId is what a fresh create's id (minted by
+  // ensureCreateId, or resolved from localStorage during hydration) lives in when there is no
+  // prop yet. createId itself is derived below, not stored — an effect syncing the prop into
+  // state would add a render just to catch up to a value already available this render.
+  const [internalCreateId, setInternalCreateId] = useState<string | null>(null);
+  const createId = createIdProp ?? internalCreateId;
   // What this create is about. Used to be a read-only mirror of the project's own target keyword —
   // that field is gone (a project is an engagement now, not one article; see ProjectForm), so this
   // was left permanently empty with nothing able to set it, and every create silently got the
@@ -67,59 +128,23 @@ export default function ContentBriefPanel({
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (createIdProp) setCreateId(createIdProp);
-  }, [createIdProp]);
+  // Re-seeds the local brief when targetKeyword/createIdProp actually change after mount. This
+  // runs during render — React's own pattern for "adjusting state when a prop changes" — rather
+  // than in an effect: an effect firing setBrief only after the fact would paint one frame of the
+  // previous keyword's brief first. The useState initializer above already covers the first render,
+  // so this only ever fires on a genuine later change, matching what the effect below used to do
+  // unconditionally on every one of its own re-runs.
+  const [hydratedForKey, setHydratedForKey] = useState(hydrationKey);
+  if (hydrationKey !== hydratedForKey) {
+    setHydratedForKey(hydrationKey);
+    const recomputed = computeLocalBrief(targetKeyword);
+    setBrief(recomputed);
+    saveBriefToStorage(`kw:${targetKeyword}`, recomputed);
+  }
 
   useEffect(() => {
     let cancelled = false;
-    const stored = loadBriefFromStorage(targetKeyword || "draft");
-    const fromKw = loadBriefFromStorage(`kw:${targetKeyword}`);
-    let localBrief = fromKw ?? stored ?? emptyContentBrief();
-
-    // Seed from Site Analyzer handoff (gap reason + curated SERP) once — only fill empty fields.
-    try {
-      const handoff = readSiteSectionHandoff();
-      if (handoff) {
-        const seedNotes: string[] = [];
-        if (handoff.gapReason?.trim()) {
-          seedNotes.push(`Gap reason: ${handoff.gapReason.trim()}`);
-        }
-        if (handoff.gapSectionPath?.trim()) {
-          seedNotes.push(`Section path: ${handoff.gapSectionPath.trim()}`);
-        }
-        if (handoff.curatedSerp?.shapeGuidance?.trim()) {
-          seedNotes.push(`SERP shape: ${handoff.curatedSerp.shapeGuidance.trim()}`);
-        }
-        if (handoff.curatedSerp?.informationGainSummary?.trim()) {
-          seedNotes.push(
-            `Information Gain: ${handoff.curatedSerp.informationGainSummary.trim()}`,
-          );
-        }
-        if (seedNotes.length && !localBrief.writingNotes.trim()) {
-          localBrief = {
-            ...localBrief,
-            writingNotes: seedNotes.join("\n"),
-          };
-        }
-        const serp = handoff.curatedSerp;
-        if (serp) {
-          localBrief = {
-            ...localBrief,
-            serpTitles: localBrief.serpTitles.trim() || serp.serpTitles,
-            serpUrls: localBrief.serpUrls.trim() || serp.serpUrls,
-            paaQuestions: localBrief.paaQuestions.trim() || serp.paaQuestions,
-            relatedSearches:
-              localBrief.relatedSearches.trim() || serp.relatedSearches,
-          };
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-
-    setBrief(localBrief);
-    saveBriefToStorage(`kw:${targetKeyword}`, localBrief);
+    const localBrief = computeLocalBrief(targetKeyword);
 
     (async () => {
       let cid: string | null = createIdProp ?? null;
@@ -131,7 +156,7 @@ export default function ContentBriefPanel({
         }
       }
       if (cid) {
-        setCreateId(cid);
+        setInternalCreateId(cid);
         try {
           const create = await getGccCreate(cid);
           if (cancelled) return;
@@ -244,7 +269,7 @@ export default function ContentBriefPanel({
       siteSection: handoff?.section ?? null,
     });
     if (handoff) clearSiteSectionHandoff();
-    setCreateId(created.id);
+    setInternalCreateId(created.id);
     try {
       localStorage.setItem(GCC_CREATE_STORAGE_PREFIX + keywordInput, created.id);
     } catch {
