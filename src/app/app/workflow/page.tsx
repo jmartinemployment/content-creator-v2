@@ -199,15 +199,6 @@ export default function WorkflowPage() {
 
         {project ? (
           <>
-            {/* The keyword leads: it is what the piece is about. The project name is a label the
-                operator chose and nothing derives from it, so it sits underneath. */}
-            <div className="border-t border-border pt-6">
-              <h2 className="text-2xl font-bold text-foreground">{project.targetKeyword}</h2>
-              <p className="mt-1 text-sm text-muted">
-                {project.name} · <span className="break-all">{project.projectUrl}</span>
-              </p>
-            </div>
-
             {/* Generate is Content Creator's. The workspace brings its own Content Brief, so the
                 standalone brief below is only the way in for a project that has no create yet —
                 saving it mints one, and the workspace takes over from there. */}
