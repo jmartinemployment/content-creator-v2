@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AUDIENCE_DETAILS,
   AUDIENCE_SEGMENTS,
   BUYING_STAGES,
   CONTENT_ANGLES,
@@ -19,7 +18,6 @@ import {
   saveBriefToStorage,
   toneAllowed,
   LENGTH_BAND_OPTIONS,
-  type AudienceDetail,
   type ContentBrief,
   type EeatSignal,
   type LengthBandKey,
@@ -194,19 +192,6 @@ export default function ContentBriefPanel({
       ) {
         next = { ...next, toneOfVoice: "" };
       }
-      persistLocal(next);
-      return next;
-    });
-    setSavedMsg(null);
-  }
-
-  function toggleDetail(value: AudienceDetail) {
-    setBrief((prev) => {
-      const has = prev.audienceDetails.includes(value);
-      const audienceDetails = has
-        ? prev.audienceDetails.filter((m) => m !== value)
-        : [...prev.audienceDetails, value];
-      const next = { ...prev, audienceDetails };
       persistLocal(next);
       return next;
     });
@@ -400,28 +385,6 @@ export default function ContentBriefPanel({
           <span className="text-xs font-normal text-muted">Google Ads audience segments.</span>
         </label>
 
-        <div className="sm:col-span-2">
-          <p className="text-sm font-medium text-foreground">Audience details (optional)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {AUDIENCE_DETAILS.map((m) => {
-              const on = brief.audienceDetails.includes(m.value);
-              return (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => toggleDetail(m.value)}
-                  className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                    on
-                      ? "border-brand bg-brand/10 text-brand"
-                      : "border-border bg-white text-muted"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <label className={`${labelClass} sm:col-span-2`}>
           Audience notes{requiredMark(!!brief.audienceNotes.trim())}

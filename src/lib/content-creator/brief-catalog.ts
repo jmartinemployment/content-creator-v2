@@ -60,14 +60,6 @@ export const AUDIENCE_SEGMENTS = [
 export type AudienceSegment = (typeof AUDIENCE_SEGMENTS)[number]["value"];
 
 /** Optional multi-select chips describing how the segment is refined. */
-export const AUDIENCE_DETAILS = [
-  { value: "demographic_attributes", label: "Demographic Attributes" },
-  { value: "behavioral_triggers", label: "Behavioral Data Triggers" },
-  { value: "boolean_combination", label: "Boolean Combination Logic" },
-] as const;
-
-export type AudienceDetail = (typeof AUDIENCE_DETAILS)[number]["value"];
-
 /* ------------------------------------------------------------------ *
  * 1.D  Angle for SEO (internal editorial control — NOT a Google      *
  *      attribute; choose to match the dominant SERP intent/format)   *
@@ -198,7 +190,6 @@ export interface ContentBrief {
   secondaryIntent: SecondaryIntent | "";
   buyingStage: BuyingStage | "";
   audienceSegment: AudienceSegment | "";
-  audienceDetails: AudienceDetail[];
   audienceNotes: string;
   angle: ContentAngle | "";
   ctaType: CtaType | "";
@@ -224,7 +215,6 @@ export function emptyContentBrief(): ContentBrief {
     secondaryIntent: "",
     buyingStage: "",
     audienceSegment: "",
-    audienceDetails: [],
     audienceNotes: "",
     angle: "",
     ctaType: "",
@@ -273,17 +263,6 @@ const LEGACY_AUDIENCE_SEGMENT: Record<string, AudienceSegment> = {
   custom: "custom",
   account_based: "custom",
   local_geo: "custom",
-};
-
-const LEGACY_AUDIENCE_DETAIL: Record<string, AudienceDetail> = {
-  demographic_attributes: "demographic_attributes",
-  demographic: "demographic_attributes",
-  firmographic: "demographic_attributes",
-  behavioral_triggers: "behavioral_triggers",
-  list_match: "behavioral_triggers",
-  boolean_combination: "boolean_combination",
-  life_event: "boolean_combination",
-  buying_committee: "boolean_combination",
 };
 
 const LEGACY_ANGLE: Record<string, ContentAngle> = {
@@ -350,11 +329,6 @@ export function migrateBrief(raw: unknown): ContentBrief {
 
   const seg = str(p.audienceSegment) || str(p.audiencePrimary);
   base.audienceSegment = LEGACY_AUDIENCE_SEGMENT[seg] ?? "";
-
-  const detailsSource = arr(p.audienceDetails).length ? arr(p.audienceDetails) : arr(p.audienceModifiers);
-  base.audienceDetails = Array.from(
-    new Set(detailsSource.map((d) => LEGACY_AUDIENCE_DETAIL[d]).filter(Boolean) as AudienceDetail[]),
-  );
 
   // Notes: prefer new field; fold legacy detail + exclude in on load.
   const notes = str(p.audienceNotes) || str(p.audienceDetail);
@@ -429,10 +403,6 @@ export function isContentBriefComplete(brief: ContentBrief): boolean {
 
 /** Structured BRIEF block for prompts / research upload. */
 export function buildBriefBlock(brief: ContentBrief, targetKeyword: string): string {
-  const details =
-    brief.audienceDetails.length > 0
-      ? brief.audienceDetails.map((m) => labelFor(AUDIENCE_DETAILS, m)).join(", ")
-      : "(none)";
   const eeat =
     brief.eeatSignals.length > 0
       ? brief.eeatSignals.map((s) => labelFor(EEAT_SIGNALS, s)).join(", ")
@@ -449,7 +419,6 @@ export function buildBriefBlock(brief: ContentBrief, targetKeyword: string): str
   lines.push(
     `Buying stage (Full Funnel): ${labelFor(BUYING_STAGES, brief.buyingStage)}`,
     `Audience segment: ${labelFor(AUDIENCE_SEGMENTS, brief.audienceSegment)}`,
-    `Audience details: ${details}`,
     `Audience notes: ${brief.audienceNotes.trim()}`,
     "If notes conflict with segment, follow notes.",
     `Angle: ${labelFor(CONTENT_ANGLES, brief.angle)}`,
