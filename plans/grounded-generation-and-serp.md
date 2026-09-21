@@ -92,7 +92,7 @@ Urgent ────────────────────────�
 Stage 0 (naming) ───────────────────── independent
 Stage 7 (SERP upload) ──────────────── independent, parallel from day one
 Stage 9 (local/FAQ schema) ─────────── independent, parallel from day one
-Stage 1 ─── DECIDED (b): v1 writes, grounding moves to it. No spike.
+Stage 1 ─── Not a fork: v1 writes; RAG is the capability being added.
 Stage 2 (provenance) → Stage 3 (Brief) → Stage 4 (grounding onto v1) → Stage 5 (frontend)
                                                         Stage 6 (lede) — no longer time-critical
 Stage 8 (analyses) needs Stage 4 and Stage 7
@@ -109,54 +109,54 @@ Stage 8 (analyses) needs Stage 4 and Stage 7
   while `PAF` means *Primary Answer Feature* in Geek-SEO. One of them changes.
 - Commit the already-done prose correction first, so no stage points at working-tree state.
 
-## Stage 1 — DECIDED: (b) keep v1 as the writer, bring grounding to it
+## Stage 1 — Not a fork. v1 writes; RAG is the capability it lacks
 
-**Decided 2026-09-21. No spike; the run was dropped as not decision-relevant.** The proposed test
-would have found *where* v2 stops. It could not have returned a result that changes the direction,
-because a clean run is also a bad outcome — see the structure loss below. A test whose every
-outcome leads to the same decision is not worth running.
+**The (a)/(b) framing was wrong and is withdrawn.** It was mine, not Jeff's, and it forced a choice
+between two writers where no choice exists. Jeff, 2026-09-21:
 
-**The evidence, in the order it landed:**
+> *"This is not a binary or this or that decision, v1 worked beautifully produce html prose exactly
+> as requested, but had no concept of using RAG as the definition I supplied earlier. Versus v2
+> supposedly built for RAG, that never produced one html document."*
 
-1. **v2 has never produced a document.** Jeff: *"version 2 never produced one document, none,
-   nada."* Zero live callers; `DraftingEnabled` unset everywhere. So "v2 fabricates structure" has
-   no artifact behind it.
-2. **Markdown is v2's interchange format, not a format choice.** `ToStableMarkdown` → model →
-   `ParseSynthesizedMarkdown`, plus `MarkdownToSection` on every section write. Removing it is a
-   rebuild of the document model, not an edit.
-3. **v2 cannot preserve the structure it is grounded on — this is the decisive one.** The corpus
-   types seven block kinds (`extract-content.ts:418-425`): `heading(level)`, `paragraph`,
-   `listItem(ordered)`, `quote`, `code`, `term`, `definition`, each with `text`, `html`, `anchors`.
-   `MarkdownToSection` (`:1446`) returns **one** — `TextParagraph`:
+| | v1 | v2 |
+|---|---|---|
+| Produces HTML prose as requested | **Yes** | **Never — not one document** |
+| RAG as defined — retrieval + verification, never generation | **No concept of it** | Built for it, unproven |
 
-   | Step | Effect |
-   |---|---|
-   | `Split("\n\n")` | paragraph boundary re-inferred from whitespace — Markdown has no paragraph token |
-   | `.Where(line => !line.StartsWith('#'))` | headings silently discarded |
-   | `.TrimStart('-', '*', ' ')` | list markers stripped; a `listItem` becomes prose |
-   | `string.Join(" ", …)` | line structure flattened |
+**So the work is additive: give the working writer the capability it lacks.** There is no migration,
+no cutover, and no writer to select. v2 contributes **no code** — it never executed, so nothing in it
+is proven — but its *intent* is the specification for what to add.
 
-   Quotes, code, terms, definitions, anchors and heading levels have nowhere to land.
-4. **And it fails open.** `:1453` — when nothing parses, the raw Markdown is returned as a single
-   paragraph. A total parse failure yields a success-shaped section containing literal `##` and `-`.
-   Direct violation of the no-fallbacks rule, and invisible from outside.
+**What "no concept of RAG" means concretely.** v1 was built before the corpus existed, so it has no
+notion of:
 
-**The shape of both failures is the same, and it is the shape to avoid.** Readability guessed which
-node held the article and returned 9% / 44% / 175% of three live pages. Markdown guesses where a
-paragraph ended and returns one kind out of seven. The crawler fixed its half by keeping the
-boundary in the data (`101-103%` on the same pages). The writer still guesses.
+- retrieving passages from the indexed crawl for the topic at hand,
+- verifying a quote against the block text it came from,
+- refusing when neither is available.
 
-**So the loss was never in the corpus or in retrieval.** Site Structure working proves the blocks
-survive the crawl. The structure is thrown away by the writer on the way to the model.
+Everything else it needs, it already has — and that is the part worth not breaking.
 
-**What (b) means concretely:** v1 writes — it runs today, emits a cross-linked schema graph, and as
-of this session has no Markdown in it. What moves to v1 is v2's **grounding** — retrieval and
-verified quotes — never its writing. Stages 2, 3, 6, 8 retarget onto v1. Stage 4 inverts.
+**What v1 already has, and must keep.** `ContentGenerationOrchestrator` → `ContentDocument` →
+`SectionHtmlRenderer` is the single correct output path: structure in a document model, markup
+produced in exactly one place, HTML out. It emits a cross-linked schema graph (TechArticle /
+BlogPosting / SoftwareApplication with Person, Organization, WebPage, ImageObject) and fails closed
+on an empty builder. None of that is up for renegotiation while adding retrieval.
 
-**Open, and deliberately not decided here:** whether `GccV2WriteService` and the rest of the v2
-write path are deleted or left dormant. Jeff, 2026-09-21: *"You can throw everything away and start
-over."* That is a live option, not an instruction executed here. Nothing is deleted until it is
-asked for.
+**Why v2's code cannot be ported in, only its intent.** Its write loop uses Markdown as the
+interchange format between the document and the model. `MarkdownToSection` (`:1446`) takes the
+corpus's seven typed block kinds and returns **one** — headings removed by a `StartsWith('#')`
+filter, list markers trimmed into prose, lines joined on spaces — then **fails open** at `:1453`,
+returning raw Markdown as a single paragraph when nothing parses. `ListParagraph` and `Run.Href`
+already exist in `ContentDocument`, so that code flattened structure the target model holds
+natively and then rebuilt links with a hand-rolled `[text](href)` scanner (`:764`). Porting it would
+import the defect.
+
+**The open question is not which writer. It is how retrieval reaches the document model** — and the
+measured answer is Stage 4: `ContentDocument` represents four of the corpus's seven block kinds, so
+three node types are missing before a retrieved passage can arrive intact.
+
+**Still open, deliberately.** Whether the v2 write path is deleted or left dormant. Jeff: *"You can
+throw everything away and start over."* A live option, not an instruction executed here.
 
 ## Stage 2 — Define "invented structure" as heading provenance
 
@@ -194,7 +194,7 @@ carrying *"if audience notes conflict with segment, follow notes."*
 doing for immediate effect, but it is not "pays off regardless" — the v2 half cannot be verified
 until Stage 4 lands.
 
-## Stage 4 — Bring grounding to v1 *(inverted by Stage 1's decision)*
+## Stage 4 — Bring retrieval and verification to v1 *(the capability v1 lacks)*
 
 **The output contract, which decides this stage's shape.** The output must end up HTML, and there
 must be **one** solution that produces it. `SectionHtmlRenderer` already is that solution and says
@@ -254,8 +254,8 @@ one the frontend uses — still returns strings. Recorded here because a rule th
 enforce must never be written down as though it does (`CLAUDE.md` §2).
 
 
-**This stage used to say "switch the writer" — v1 → v2. Stage 1 decided (b), so it inverts.** v1
-stays the writer; retrieval and verified quotes move to it. Do not port v2's Markdown document
+**This stage used to say "switch the writer" — v1 → v2. There is no switch.** v1 is the writer
+and always was; this stage adds the retrieval and verification it has no concept of. Do not port v2's Markdown document
 model, its `ToStableMarkdown`/`ParseSynthesizedMarkdown` loop, or `MarkdownToSection`.
 
 - Feed `ContentGenerationOrchestrator` retrieved, verified corpus passages — typed `blocks`, never a
@@ -433,7 +433,7 @@ never on ours.
 |---|---|
 | `GccV2CreateLibraryWriter` | **Keep** — the writer |
 | `ContentPromptBuilder` | **Keep** — v2 depends on it for lede (6) and FAQ (8c); assign an owner |
-| `ContentGenerationOrchestrator` | **Keep — this is the writer.** Stage 1 decided (b) |
+| `ContentGenerationOrchestrator` | **Keep — this is the writer, and it works.** Add retrieval to it |
 | `GccGenerateService` | **Keep** — it runs, and as of this session carries no Markdown |
 | `GccV2WriteService` write path | Dormant. Deletion is open, not decided — nothing removed unasked |
 | `V1Restore/` | **Keep** — v1 routing, and Stage 6's live caller sits in it |
