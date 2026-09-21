@@ -166,6 +166,10 @@ export default function WorkflowPage() {
               projects={clientProjects}
               selectedProjectId={selectedProjectId}
               onSelect={selectProject}
+              onDeleted={(projectId) => {
+                setProjects((prev) => prev.filter((p) => p.id !== projectId));
+                if (selectedProjectId === projectId) selectProject(null);
+              }}
             />
           </>
         ) : null}

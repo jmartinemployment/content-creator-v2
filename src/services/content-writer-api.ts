@@ -114,6 +114,16 @@ export function deleteClient(clientId: string): Promise<void> {
   return request<void>(`/api/clients/${encodeURIComponent(clientId)}`, { method: "DELETE" });
 }
 
+/**
+ * Remove a project and everything it owns.
+ *
+ * Not refused the way client delete is: a project's crawl, keyword sources, generated content and
+ * verdicts are the project, not separate work beside it.
+ */
+export function deleteProject(projectId: string): Promise<void> {
+  return request<void>(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+}
+
 export function createProject(input: {
   clientId: string;
   /** Optional. Omitted, the server uses the target keyword — nothing derives from the name. */
