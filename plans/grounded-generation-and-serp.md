@@ -1,0 +1,397 @@
+# Grounded generation, a Brief that reaches it, and a real SERP
+
+> Revised after AI review. The review's central finding — that Stage 2 guarded the wrong failure —
+> was correct, and verifying it surfaced something worse (see **Urgent**). Every verification step
+> is now a binary assertion rather than an output comparison.
+
+## Terminology this plan holds to
+
+The model writes. **RAG retrieves and verifies** the corpus text the writing is grounded on — it
+never generates (`CLAUDE.md` §1, `architecture.md` §7). `GccV2CreateLibraryWriter` is the writer.
+"Grounded" means exactly that — never that RAG does the writing.
+
+**Verified 2026-09-21:** Geek-Crawler-Rag has no content-write capability to remove (24 routes:
+index / query / diagnostics / intelligence; `/v1/generate` gone; OpenAI use is
+`text-embedding-3-small` only; zero `generate`/`write`/`draft` functions in `src`). No residential-IP
+or proxy-based SERP scraper exists anywhere in these repos — one `PROXY_URL`, no vendor SDKs.
+
+---
+
+## Urgent — smaller than this plan, and it ships first
+
+Verifying the review's point about guard evidence produced a worse finding than the review assumed.
+**Commit `08651ab`'s guard narrative does not match the code.**
+
+| Guard | `GccGenerateService` (runs today) | `ContentGenerationOrchestrator` (what V1Restore routes to) |
+|---|---|---|
+| Consultant appendix / AI-filler ban | `:227` defined, called **once** at `:1087` | **absent** |
+| `UseExactKeywordAsTitle` | present | present |
+| Refusal outside site scope | no match | no match |
+
+Two consequences:
+
+1. The appendix is referenced by `V1Restore/GccV2V1PlanAdapter.cs:13` **in a doc comment only** —
+   the adapter routes to the orchestrator, which never calls it. The restore did not restore that
+   guard.
+2. The single appendix call sits inside `GenerateStartingContentAsync` (`:1040`), covering
+   techArticle / social / ads / imagePrompt / aiTool / multi-select. **`GeneratePillarBodyAsync`
+   (`:1982`) and `GenerateBlogBodyAsync` (`:2017`) reference neither the appendix nor the filler
+   ban.**
+
+So today, single-select **Pillar and Blog** — the highest-volume outputs — generate with no
+appendix, no filler ban, no Brief, and no retrieval. That is a one-method fix on the path that
+actually runs, and it depends on no question below. **Ship it before Stage 0.**
+
+---
+
+## Context
+
+**1. The grounded writer is built and fenced off.** `GccV2WriteService` / `GccV2CreateLibraryWriter`
+has **zero live callers**. `GccV2JobWorker:562-563` calls `V1Restore.GccV2V1WriteAdapter` instead,
+behind `ContentCreatorV2:DraftingEnabled` (`:336`) — **unset everywhere**. So only one path actually
+runs: `GccController.Generate` → `GccGenerateService`. The restored path has likely never executed
+in production either, which means "v1's guards work" rests on a path nobody has run.
+
+**Evidence quality, stated plainly.** "v2 fabricates structure" rests on one commit message
+(`08651ab`). It is not a reproduction, and the guard claim inside that same message is now shown
+inaccurate. Treat the premise as unverified.
+
+**2. The Brief barely reaches generation.** `CanonicalBrief` is attached to every draft request
+(`GccV2WriteService.cs:461`, `:1156`, `:1354`) and read once — into a provenance signature
+(`GccV2AgentExecutionFactory.cs:185`), never prompt text. On the live path, pillar/blog/email/social
+ignore `BriefJson`; only `GenerateStartingContentAsync` dumps it as raw JSON (`:160-219`).
+
+**3. SERP is manual-paste only and unreachable.** `GccSavedSerpParser.cs` parses a Google results
+page; `SerpIngestPanel.tsx` has zero importers; `PaaPafCluster` is never constructed.
+
+**Correction:** `BuildLedeTypeGuidance` is live today for pillar-family types via
+`ContentGenerationOrchestrator.cs:1424`. **It loses its only live caller the moment V1Restore is
+deleted (Stage 4)** — so Stage 6 must land with or before Stage 4, or the guidance goes dark.
+
+## Dependency graph
+
+```
+Urgent ─────────────────────────────── independent, ship now
+Stage 0 (naming) ───────────────────── independent
+Stage 7 (SERP upload) ──────────────── independent, parallel from day one
+Stage 9 (local/FAQ schema) ─────────── independent, parallel from day one
+Stage 1 (diagnosis) → Stage 2 (provenance) → Stage 3 (Brief) → Stage 4 (switch)
+                                                        Stage 4 → Stage 5 (frontend)
+                                                        Stage 4 ⇄ Stage 6 (lede — must not lag)
+Stage 8 (analyses) needs Stage 4 and Stage 7
+```
+
+---
+
+## Stage 0 — Finish the naming correction
+
+- Rename `GccV2WriteService.GenerateRagSectionAsync` and `WriteRagCompleteAsync` toward
+  *library*/*grounded*. Correct vocabulary already exists (`GccV2CreateLibraryWriter`,
+  `architecture.md:188`).
+- **Resolve the PAF collision while renaming:** `PaaPafCluster` means *People Also Ask/Found* in GCC
+  while `PAF` means *Primary Answer Feature* in Geek-SEO. One of them changes.
+- Commit the already-done prose correction first, so no stage points at working-tree state.
+
+## Stage 1 — Diagnosis spike *(timeboxed; ends in a decision, not a port)*
+
+The prior draft presupposed its answer by only considering "port v1's guards onto v2." The reverse —
+**port v2's retrieval and verification into the v1 orchestrator** — is at least as plausible, since
+v1 is the path that does not fabricate.
+
+Reproduce the fabrication against the grounded path, then decide, in writing, one of:
+
+- **(a)** harden v2 and switch to it, or
+- **(b)** keep v1 as the writer and bring retrieval + verification to it.
+
+Timebox it. If the fabrication cannot be reproduced, that is itself the finding — the premise behind
+V1Restore does not survive contact, which changes everything downstream.
+
+## Stage 2 — Define "invented structure" as heading provenance
+
+The three guards named in `08651ab` cover prose, scope and title. **None constrains outline
+structure**, which is what that commit says was fabricated. Structural fabrication comes from PLAN,
+and Stage 4 swaps in `GccV2PlanService.BuildOutlineAsync` at the same moment it swaps the writer —
+so the old guards could all pass while the outline builder that caused the problem ships.
+
+**The fourth guard, and the operational definition the prior draft lacked:** every H2/H3 in a
+persisted outline carries a pointer to what licensed it — a verified retrieval passage, a brief
+field, an uploaded PAA question, or a competitor heading. **An outline containing an unlicensed
+heading fails.** Binary, queryable against the row, aimed at the actual failure.
+
+## Stage 3 — The Brief reaches generation *(field-by-field, not wholesale)*
+
+`GccV2CreateLibraryWriter.BuildResearchUserPrompt` (`:749-768`) is `private static` with 3 call
+sites (`:391` outline, `:432` section, `:683` long-form).
+
+**Do not inject the whole brief at all three.** That multiplies tokens by section count and invites
+every section to re-cover the same themes — a repetition failure the filler ban does not catch.
+
+| Call | Gets |
+|---|---|
+| Outline (`:391`) | SERP organics, PAA clusters, angle, intent, buying stage |
+| Section (`:432`) | Audience, tone, notes — plus only the brief content relevant to that heading |
+| Long-form (`:683`) | As section, plus CTA |
+
+Render as labeled prose, never a raw JSON dump (v1's mistake at `GccGenerateService.cs:160-219`),
+carrying *"if audience notes conflict with segment, follow notes."*
+
+**Sequencing:** design the renderer **after** Stage 7 adds `serpTitles`/`serpUrls`/
+`relatedSearches`/`paaQuestions`, or it gets designed against a brief about to change shape.
+
+**Honest scope:** the v1 mirror of this block is a **bridge on code slated for deletion**. Worth
+doing for immediate effect, but it is not "pays off regardless" — the v2 half cannot be verified
+until Stage 4 lands.
+
+## Stage 4 — Switch the writer *(blocked on Stages 1–3)*
+
+Only if Stage 1 decided **(a)**.
+
+- `GccV2JobWorker.cs:562-563` → `writeService.WriteAsync`; PLAN → `GccV2PlanService.BuildOutlineAsync`.
+- Delete `GeekAPI/Services/ContentCreatorV2/V1Restore/`.
+- Remove the `DraftingEnabled` gate (`:336-341`).
+- **Tier decision, cheapest moment:** the job worker, controllers and V1Restore sit in GeekAPI, which
+  `architecture.md` defines as a gateway with no product logic. Either move it now, while V1Restore
+  is already being deleted, or record the exception explicitly. After Stage 5 the frontend is coupled
+  to GeekAPI routes and the moment is gone.
+
+**Presence, not fitness:** all 11 methods exist and compile (`GccV2WriteService.cs:380-405`); none is
+known to produce acceptable output.
+
+## Stage 5 — Frontend reaches the pipeline *(split)*
+
+**5a — routing and mapping.** Point `generateGccCreate` (`gcc-api.ts:244`) at
+`POST /api/geek-content-creator-v2/creates/{id}/generate` and poll `.../jobs/{id}`. The 11 UI values
+→ canonical mapping (`techArticle`→`tech-article`, `imagePrompt`→`image-prompt`, `aiTool`→`tool`,
+`metaAds`/`googleAds`→`ads`, `linkedIn`/`x`/`instagram`→`social`) **lives server-side as the single
+source of truth**, not in the client.
+
+**5b — platform mechanisms.** Per-job platform: a Create-level `socialPlatform`
+(`GccV2WriteService.cs:1636`) cannot express LinkedIn + X + Instagram checked together, and
+`WriteAdsAsync:1082` has no Meta/Google split at all. **Fan-out:** N checkboxes create N jobs while
+`CreateDraftWorkspace` polls one. Both are missing mechanisms, not unset fields.
+
+**Hidden dependency:** `ProjectSiteCrawlRunId` and non-empty `SiteSectionJson.RelatedPages` may
+depend on the own-site crawl, which touches out-of-scope Site Analyzer. Resolve before committing to
+5a.
+
+## Stage 6 — Lede guidance *(must land with or before Stage 4)*
+
+`BuildLedeTypeGuidance` (`ContentPromptBuilder.cs:230-286`) reads fields already present on
+`wc.BaseContext` (`GccV2WriteService.cs:111`).
+
+- Expose on `IContentPromptBuilder` as a `string`-returning method.
+- Call only at the lede sites — `WritePillarAsync:918-924`, `WriteBlogAsync:974-975` — distinct from
+  the body loops (`:938-945`, `:990-997`).
+- Fixes `blog`, which uses a hardcoded "prefer creative opening" today.
+
+**Ordering constraint:** deleting V1Restore (Stage 4) removes this method's only live caller. If
+Stage 6 lags, the guidance is dark in between.
+
+## Stage 7 — Keyword SERP by manual upload *(independent; start day one)*
+
+**Automated fetch is foreclosed, not merely risky.** `cheerio-runner.ts:221` sets
+`respectRobotsTxtFile: { userAgent: BOT.name }` unconditionally with an `onSkippedRequest` recording
+`robots_disallowed` (`:222-226`); Google disallows `/search`. The crawler refuses before reaching
+bot detection — correct, since `bot/identity.ts` declares the bot in headers (`From`, `X-Bot-Name`,
+`X-Bot-Url`). Alternatives rejected: bypassing robots, or an external crawl that persists.
+
+**Implement it as an `ISerpProvider`.** Geek-SEO already owns the SERP abstraction
+(`SeoProviderRegistration.cs`, `SerpController`, `SerpAnalysisService`). Manual upload is a natural
+implementation of it. Building on GCC's parallel `GccSavedSerpParser`/`GccSerpLensModels` without
+reconciling them leaves two SERP models forever — say which survives.
+
+Two input modes:
+
+1. *Keyword HTML upload* — `GccSavedSerpParser.cs` parses organic, PAA, related searches,
+   `InferShape`, `ScorePaaRelevance`.
+2. *Direct PAA entry* — **one question per line**, already the implemented contract
+   (`brief-catalog.ts:205`; `splitLines` at `:483-488`). The four fields exist with no input UI today.
+
+**Presence, not fitness — this caveat applies here too.** `SerpIngestPanel.tsx`, `serp-lens.ts`,
+`GccV2PartnerExtractionService` and `GccV2HeadingTreeBuilder` have all never been reachable. "Wiring,
+not building" describes the diff size, not the risk.
+
+Required behaviours:
+
+- **Zero organics parsed ⇒ fail.** Never merge an empty result. The `//a[@href][.//h3]` selector is
+  written against current Google markup and will rot.
+- **Merge mode:** `replace` clobbers operator edits; `fill-empty` skips conflicts silently. Surface
+  the conflict.
+- **Stamp provenance** in `briefJson`: keyword, capture date, locale. Otherwise nobody can tell a
+  fresh SERP from a six-month-old one.
+- **No-SERP is a gate, not a warning.** Pick one: SERP required, or SERP optional with 8b/8c
+  recorded as skipped for that create.
+
+## Stage 8 — The three analyses *(needs Stages 4 and 7)*
+
+| Analysis | Source | Persisted? |
+|---|---|---|
+| Competitor | `competitors` crawl pages | Already stored |
+| Partner | `partner` crawl pages | Already stored |
+| Keyword | Stage 7 upload | In `briefJson` — existing store |
+
+**Coverage gate — applies to all of Stage 8.** Feeding competitor headings and PAA clusters into
+outline selection produces headings the corpus may have nothing on, leaving the writer only invention
+or refusal. **A candidate heading enters the outline only if retrieval returns verified evidence for
+it; otherwise it is recorded as a content gap and not written.** Those gaps are the most valuable
+output of competitor analysis, and recording them is the fail-loud alternative to a thin section that
+reads fine.
+
+**8a. Competitor — from persisted `competitors` crawl.** Heading outlines via
+`GccV2HeadingTreeBuilder.Build(page.Html)` (generic over arbitrary HTML; the existing
+`GccV2ArticleHtmlExtractor` path flattens and discards nesting). Schema via the JSON-LD extractor in
+the legacy Workflow pipeline (`SiteCrawlerService.ExtractJsonLd` + `JsonLdParserService`), ported.
+*Content mix:* `InferShape` classifies from SERP **titles**, not page structure — it needs its own
+logic or an explicit scope cut.
+
+**8b. Partner — from persisted `partner` crawl.** `GccV2PartnerExtractionService` already extracts
+comparisons, alternatives, pricing, FAQs, case studies, battlecards, quote-verified.
+
+***Missing-brand-integration is not computable from its inputs.*** Organic results are title, URL and
+snippet; whether a partner tool appears in a "best X tools" listicle depends on that listicle's
+**body**, which is in no crawl unless the ranking page is a declared competitor. Fetching arbitrary
+ranking URLs is a new crawl path and, via the ingest controller, new persisted rows — both ruled out.
+**Choose:** rescope to *"partner domain absent from top N"* plus a weak title/snippet mention check,
+or explicitly permit a non-persisting fetch of ranking URLs and record it under Settled questions.
+
+**8c. Keyword intent.** Cluster PAA via `PaaPafCluster`. Feed `BuildArticleFaqSectionPrompt`
+(`ContentPromptBuilder.cs:934-961`) from uploaded SERP data.
+*Two checks:* it titles the section **"People Also Ask"** — Google's feature name, not reader-facing
+copy; and it emits `##` headings, so confirm that fits structured-JSON output rather than
+reintroducing markdown.
+
+---
+
+## Stage 9 — Emit local and FAQ schema *(independent; start day one)*
+
+**Premise, verified 2026-09-21 — v1 schema already works.** The live long-form writer
+`ContentGenerationOrchestrator` emits a properly cross-linked graph, and it fails closed
+(`GccGenerateService.cs:1399` throws on an empty builder result):
+
+| Content | Emitted | Where |
+|---|---|---|
+| Pillar | `TechArticle` + `Person` + `Organization` + `ImageObject` + `WebPage` + related `BlogPosting`, with the page's `SoftwareApplication` entries embedded | `:176`, `:299`, `:479`, `:538` |
+| Blog | `BlogPosting` + the same envelope + related `TechArticle` | `:532`, `:601` |
+| Tool | `SoftwareApplication` + the same envelope + `TechArticle` | `GccGenerateService.cs:1398` |
+
+Nothing here is broken and nothing in this stage replaces it. This stage adds the node types that
+are absent — confirmed by grep returning zero hits across all three live builders.
+
+**The input already exists.** `JsonLdParserService` is injected into the orchestrator
+(`ContentGenerationOrchestrator.cs:23`) and run over the client's own crawled markup
+(`:1132`, `Summarize(crawl.JsonLdBlocks)`). It already classifies `LocalBusiness`,
+`ProfessionalService`, `Organization`, `Corporation` and `Store` (`JsonLdParserService.cs:9`) and
+already extracts `areaServed` (`:89`, `:190`). The result reaches the model as
+`JsonLdStructuredSummary` (`:1160`). So geography is **harvested and already in the prompt** — it is
+simply never written back out. No new brief field, no new input, no invented geography.
+
+- **9a — `areaServed` on the `Organization` node**, in all three builders, sourced from the parsed
+  `JsonLdSiteSummary`. **Omit the property when the summary is empty; never emit `[]`.** An empty
+  array asserts "serves nowhere", which is worse than silence — and `GccV2BrandKitBuilder.cs:100`
+  already hardcodes exactly that mistake (`AreaServed = []`, with the property at `:379` never
+  populated by anything).
+- **9b — a `LocalBusiness` / `ProfessionalService` node** when the crawled site declares itself one.
+  **Mirror the declared type; do not infer it.** If the client's own markup says `Organization`,
+  emit `Organization`. Promoting a business to `LocalBusiness` because it has an address is the
+  fabrication failure in schema form.
+- **9c — `FAQPage` / `Question` / `Answer`.** Absent from v1; present only in
+  `GccV2JsonLdBuilder`, which is reachable solely through `GccV2CmsPublishService` and
+  `GccV2HtmlExportService`. Port it to the v1 builders, emitted only where the draft actually has
+  question-and-answer structure. See the rich-results note under *Out of scope* — the markup's value
+  here is machine consumption, not a blue-link rich result.
+- **9d — decide the tool-page drop.** `GccGenerateService` passes `JsonLdStructuredSummary: null`
+  at `:1344` and `:1461`, so tool pages get no site summary at all. Establish whether that is
+  deliberate scoping or an oversight before 9a touches the tool builder.
+
+**Consumer already waiting:** Geek-SEO extracts `areaServed` (`SchemaOrgExtractor.cs:413`) and
+reasons over it (`LocalGapGenerator.cs:60`). Today it can only ever find it on competitor sites,
+never on ours.
+
+---
+
+## End state — what survives
+
+| Component | Fate |
+|---|---|
+| `GccV2CreateLibraryWriter` | **Keep** — the writer |
+| `ContentPromptBuilder` | **Keep** — v2 depends on it for lede (6) and FAQ (8c); assign an owner |
+| `ContentGenerationOrchestrator` | Undecided — depends on Stage 1's (a)/(b) |
+| `GccGenerateService` | Retire after Stage 4 — but it holds the only appendix call today |
+| `V1Restore/` | Delete at Stage 4 |
+| `GccSavedSerpParser` / `GccSerpLensModels` | Keep, reconciled with `ISerpProvider` |
+| `TechnicalArticleSchemaBuilder` / `BlogPostingSchemaBuilder` / `SoftwareApplicationSchemaBuilder` | **Keep** — these are the working v1 schema path; Stage 9 extends them |
+| `JsonLdParserService` | **Keep** — already harvests `areaServed` and the business type; Stage 9 writes it back out |
+| `GccV2JsonLdBuilder` | Source for the 9c `FAQPage` port, then follows the v2 publish path's fate |
+
+## Verification — binary assertions only
+
+Output comparison proves nothing: two runs with identical inputs differ anyway.
+
+- **Urgent:** the rendered pillar and blog prompts contain the appendix string. Assert on the prompt,
+  not the article.
+- **Stage 2 / 8:** every H2/H3 in the persisted outline has a non-null provenance pointer. Query the
+  row.
+- **Stage 3:** a rendered-prompt snapshot contains each non-empty brief field, at the call type the
+  table assigns it to.
+- **Stage 4:** provenance on the persisted draft names `GccV2CreateLibraryWriter`; 11 of 11 job types
+  reach a terminal state other than `Unsupported`.
+- **Stage 5:** each of the 11 UI values produces a job whose stored `contentType` is the canonical
+  string; N checked boxes produce N job rows.
+- **Stage 6:** the chosen lede type is recorded on the draft. (If the model picks it rather than code,
+  that is itself worth knowing.)
+- **Stage 7:** a `briefJson` row query returns the uploaded organics, PAA, and the provenance stamp.
+- **Stage 9:** parse the persisted `JsonLdSchema`. For a client whose crawl summary carries a
+  non-empty `AreaServed`, the `Organization` node has a non-empty `areaServed`; for one whose
+  summary is empty, the property is **absent, not `[]`**. The emitted business `@type` equals the
+  type the crawled site declares. A draft with Q&A structure yields a `FAQPage` node; one without
+  yields none.
+- Build/lint/typecheck clean is **hygiene, not verification**.
+
+## Out of scope
+
+Paid SERP providers. Any new store. Rewriting `GccGenerateService` internals. The legacy
+`/app/workflow` UI and `content-writer-api.ts`. Site Analyzer. The `siteAnalysisProfileId` rename.
+**AI Overviews** — the parser does not capture them and they are arguably the most AEO-relevant block
+on a 2026 SERP; excluded deliberately. Extracting competitors' markup (8a) is analysis and stays in
+scope.
+
+**`FAQPage` emission is no longer deferred — it is Stage 9c.** It was deferred while its live
+status was unclear; it is now confirmed absent from the v1 builders and present only on the dead v2
+publish path. The rich-results history stands and is the reason to judge it on machine consumption
+rather than SERP appearance: the verifiable fact is that Google restricted FAQ **rich results** to authoritative government
+and health sites in **August 2023**, so for a site like this one they do not render. That is a
+rich-results fact, not a reason to skip the markup — its plausible present value is machine
+consumption (AI Overviews, LLM retrieval, entity understanding), which this plan does not evaluate.
+Stage 9c proceeds on that basis. *(An earlier draft asserted a May 2026 deprecation; that was
+carried over from review feedback unverified and is not supported here.)*
+
+## Audit — known weaknesses
+
+1. **Stage 1 is unestimated and gates 2–6.** Its premise rests on one commit message now shown
+   inaccurate on a related claim.
+2. **"All 11 types written" is presence, not fitness.** Same caveat now applied to Stage 7's
+   never-reachable components.
+3. **Stage 5's four preconditions are unverified**, one touching out-of-scope Site Analyzer.
+4. **Stage 7 trades infrastructure risk for adoption risk** — upload always works, but only if
+   someone does it.
+5. **8a's content-mix item uses a classifier built for different input.**
+6. **8b's headline join may be uncomputable** without a decision that contradicts a stated constraint.
+
+## Settled questions
+
+- **Persistence:** no new store. Uploaded SERP merges into `briefJson`. *Open sub-question:* 8b may
+  force a non-persisting fetch of ranking URLs.
+- **Keyword SERP acquisition:** manual upload. Automated fetch foreclosed by our own robots
+  compliance; bypass and external-crawl-with-persistence both rejected.
+- **RAG write methods:** none exist. Verified 2026-09-21.
+- **Residential-IP scraper:** none exists in these repos. Verified 2026-09-21.
+- **v1 schema emission:** **working, and not to be touched.** Pillar, blog and tool pages each emit a
+  cross-linked graph and fail closed on an empty builder. Verified 2026-09-21 by reading
+  `ContentGenerationOrchestrator` directly. *(Two earlier claims in this session that the types were
+  "never emitted" were wrong: both were drawn from `GccV2JsonLdBuilder` — the v2 publish path — and
+  from `GccGenerateService`, which only handles tool pages. Neither is the live long-form writer.
+  The live long-form writer is `ContentGenerationOrchestrator`, which this plan had already
+  identified as such at Stage 6.)*
+- **Local schema input:** already harvested. `JsonLdParserService` extracts `areaServed` and the
+  business type from the client's own crawled markup and puts it in the prompt. Stage 9 is emission
+  only — no new field, no inferred geography.
