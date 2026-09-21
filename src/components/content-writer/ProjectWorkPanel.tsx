@@ -197,6 +197,8 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
   const inputClass =
     "rounded-md border border-border bg-white px-3 py-2 text-sm font-normal outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
 
+  const hasTaskChoices = (tasks?.length ?? 0) > 0;
+
   /** Minutes per task, so a task row can show what it has cost so far. */
   const minutesByTask = new Map<string, number>();
   for (const entry of entries ?? []) {
@@ -292,7 +294,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
 
       <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Time</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Time not recorded</h3>
           {totals ? (
             <span className="flex flex-wrap items-baseline gap-3 text-sm">
               <span className="text-foreground">{duration(totals.totalMinutes)} total</span>
@@ -320,7 +322,9 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
             />
           </label>
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+          <label
+            className={`flex flex-col gap-1.5 text-sm font-medium text-foreground ${hasTaskChoices ? "" : "sm:col-span-2"}`}
+          >
             Hours
             <input
               type="number"
@@ -332,7 +336,9 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
             />
           </label>
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+          <label
+            className={`flex flex-col gap-1.5 text-sm font-medium text-foreground ${hasTaskChoices ? "" : "sm:col-span-2"}`}
+          >
             Minutes
             <input
               type="number"
@@ -345,21 +351,26 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
             />
           </label>
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
-            Against
-            <select
-              value={entryTaskId}
-              onChange={(e) => setEntryTaskId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">The project</option>
-              {(tasks ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Nothing to choose between until this project has a task: one option ("The project")
+              is not a choice, it is the only answer, so entryTaskId's default of "" already means
+              exactly that. The control only earns its place once a real second option exists. */}
+          {hasTaskChoices ? (
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
+              Against
+              <select
+                value={entryTaskId}
+                onChange={(e) => setEntryTaskId(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">The project</option>
+                {(tasks ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-4">
             Note
