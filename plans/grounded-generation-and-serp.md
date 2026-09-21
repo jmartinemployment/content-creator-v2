@@ -52,9 +52,26 @@ behind `ContentCreatorV2:DraftingEnabled` (`:336`) — **unset everywhere**. So 
 runs: `GccController.Generate` → `GccGenerateService`. The restored path has likely never executed
 in production either, which means "v1's guards work" rests on a path nobody has run.
 
-**Evidence quality, stated plainly.** "v2 fabricates structure" rests on one commit message
-(`08651ab`). It is not a reproduction, and the guard claim inside that same message is now shown
-inaccurate. Treat the premise as unverified.
+**Evidence quality — the premise has no artifact behind it.** Jeff, 2026-09-21: *"version 2 never
+produced one document, none, nada."* The code agrees and always did: `GccV2WriteService` has zero
+live callers and `ContentCreatorV2:DraftingEnabled` is unset everywhere, so the writer has never
+executed. **A claim about the quality of v2's output cannot be sourced from v2, because there is no
+v2 output.** "v2 fabricates structure" rests on one commit message (`08651ab`) whose guard claim is
+separately shown inaccurate in **Urgent** above. Treat the premise as not merely unverified but
+unsourceable from the artifact it describes.
+
+**And v2's Markdown is not a format choice — it is the writer's interchange format.**
+`ToStableMarkdown` (`:441`, `:586`) serializes the in-progress document to Markdown, the model
+answers in Markdown, `ParseSynthesizedMarkdown` (`:482`, `:602`) parses it back, and
+`MarkdownToSection` runs on every section write (`:1190`, `:1372`). `:764` is a hand-rolled
+`[text](href)` scanner — the exact construct the no-Markdown rule names. Removing Markdown from v2
+is not an edit to it; it is a rebuild of its document model, serializer, parser, list and link
+handling, and structure guard.
+
+**A candidate explanation for the zero, worth testing in Stage 1.** `ParseSynthesizedMarkdown`
+throws on *any* deviation — "Final synthesis changed document structure: expected N H2 headings,
+received M". A model returning `<h2>`, or drifting by one heading, aborts the run. Fail-closed on a
+brittle format would produce exactly the observed outcome: no document, ever.
 
 **2. The Brief barely reaches generation.** `CanonicalBrief` is attached to every draft request
 (`GccV2WriteService.cs:461`, `:1156`, `:1354`) and read once — into a provenance signature
@@ -94,17 +111,27 @@ Stage 8 (analyses) needs Stage 4 and Stage 7
 
 ## Stage 1 — Diagnosis spike *(timeboxed; ends in a decision, not a port)*
 
-The prior draft presupposed its answer by only considering "port v1's guards onto v2." The reverse —
-**port v2's retrieval and verification into the v1 orchestrator** — is at least as plausible, since
-v1 is the path that does not fabricate.
+**Restated 2026-09-21. The original spike asked the wrong question.** It said "reproduce the
+fabrication against the grounded path" — but v2 has never produced a document, so there is no
+fabrication to reproduce and no output to compare. The question is not *how badly does v2 write*;
+it is *why does v2 never emit anything, and is that cheaper to fix than to bring retrieval to v1*.
 
-Reproduce the fabrication against the grounded path, then decide, in writing, one of:
+Run v2's writer once, end to end, with `DraftingEnabled` on, and record where it stops. The
+Markdown structure guard (`ParseSynthesizedMarkdown`) is the first thing to check, per the
+hypothesis in **Context**.
 
-- **(a)** harden v2 and switch to it, or
+Then decide, in writing, one of:
+
+- **(a)** make v2 produce its first document, then remove Markdown from its write loop and switch, or
 - **(b)** keep v1 as the writer and bring retrieval + verification to it.
 
-Timebox it. If the fabrication cannot be reproduced, that is itself the finding — the premise behind
-V1Restore does not survive contact, which changes everything downstream.
+**The cost sides are not symmetric, and this should be said plainly.** (a) means getting a writer
+that has never emitted a page to emit one, and then rebuilding its document model to remove a format
+that must not be there. (b) starts from the path that runs today and, as of this session, has no
+Markdown in it. Nothing here forecloses (a) — but it must be chosen on evidence from an actual run,
+not on the `08651ab` narrative.
+
+Timebox it. If v2 cannot be made to emit a document inside the box, that is the finding.
 
 ## Stage 2 — Define "invented structure" as heading provenance
 
