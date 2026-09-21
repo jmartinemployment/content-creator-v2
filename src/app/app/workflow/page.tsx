@@ -192,6 +192,29 @@ export default function WorkflowPage() {
           <p className="text-sm text-muted">Loading...</p>
         ) : null}
 
+        {/* The page used to render nothing in every state but "a project is loaded": no client
+            selected, none chosen, one that failed to resolve. It ended after the form with no
+            explanation, which reads as broken rather than as empty. Each state now says what it
+            is and what to do about it. */}
+        {!selectedClientId ? (
+          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
+            Select a client above to start. Everything below is scoped to it.
+          </p>
+        ) : null}
+
+        {selectedClientId && !selectedProjectId && clientProjects.length > 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
+            Pick a project from the list above to open its brief and draft.
+          </p>
+        ) : null}
+
+        {selectedClientId && clientProjects.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
+            This client has no projects yet. Create one with the form above — the brief, generate
+            and review steps open here once it exists.
+          </p>
+        ) : null}
+
         {project ? (
           <>
             {/* The keyword leads: it is what the piece is about. The project name is a label the
