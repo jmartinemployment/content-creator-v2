@@ -5,8 +5,7 @@ import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectList from "@/components/content-writer/ProjectList";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
-import ContentResults from "@/components/content-writer/ContentResults";
-import ToolsFromNamesPanel from "@/components/content-writer/ToolsFromNamesPanel";
+import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import ReviewPublishPanel from "@/components/content-writer/ReviewPublishPanel";
 import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
 import { isContentBriefComplete, migrateBrief } from "@/lib/content-creator/brief-catalog";
@@ -48,9 +47,9 @@ export default function WorkflowPage() {
   const [projectError, setProjectError] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedContentSet | null>(null);
   const [briefComplete, setBriefComplete] = useState(false);
-
-  // The brief is the sole research input, so it is the whole of what Generate waits on.
-  const canGenerate = briefComplete;
+  // The Content Creator create the draft lives on. It comes off the project when one is already
+  // linked; a project that has never had a brief saved has none yet, and saving the brief mints it.
+  const [createId, setCreateId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +90,7 @@ export default function WorkflowPage() {
     setProjectError(null);
     setGenerated(null);
     setBriefComplete(false);
+    setCreateId(null);
   }
 
   // The cancelled flag is what keeps a slow response for a project the operator has already
@@ -104,6 +104,7 @@ export default function WorkflowPage() {
         if (cancelled) return;
         setProject(detail);
         setGenerated(detail.contentSet);
+        setCreateId(detail.linkedCreateId ?? null);
         if (detail.briefJson) {
           const brief = migrateBrief(JSON.parse(detail.briefJson));
           setBriefComplete(isContentBriefComplete(brief));
@@ -195,30 +196,32 @@ export default function WorkflowPage() {
               </p>
             </div>
 
-            <ContentBriefPanel
-              clientId={project.clientId}
-              projectSiteRunId={project.projectSiteRunId ?? undefined}
-              targetKeyword={project.targetKeyword}
-              createId={project.linkedCreateId ?? undefined}
-              projectId={project.id}
-              onBriefSaved={(_id, complete) => setBriefComplete(complete)}
-              onBriefValidityChange={setBriefComplete}
-            />
-            {briefComplete ? null : (
-              <p className="text-sm text-amber-700">
-                Content Brief incomplete — Generate will use the saved brief on the linked create;
-                complete the brief to ensure lede + body honor audience/angle/intent.
-              </p>
+            {/* Generate is Content Creator's. The workspace brings its own Content Brief, so the
+                standalone brief below is only the way in for a project that has no create yet —
+                saving it mints one, and the workspace takes over from there. */}
+            {createId ? (
+              <CreateDraftWorkspace createId={createId} />
+            ) : (
+              <>
+                <ContentBriefPanel
+                  clientId={project.clientId}
+                  projectSiteRunId={project.projectSiteRunId ?? undefined}
+                  targetKeyword={project.targetKeyword}
+                  projectId={project.id}
+                  onBriefSaved={(savedCreateId, complete) => {
+                    setBriefComplete(complete);
+                    if (savedCreateId) setCreateId(savedCreateId);
+                  }}
+                  onBriefValidityChange={setBriefComplete}
+                />
+                {briefComplete ? null : (
+                  <p className="text-sm text-amber-700">
+                    Content Brief incomplete — complete it to ensure lede + body honor
+                    audience/angle/intent.
+                  </p>
+                )}
+              </>
             )}
-
-            <ToolsFromNamesPanel projectId={project.id} onGenerated={setGenerated} />
-
-            <ContentResults
-              projectId={project.id}
-              canGenerate={canGenerate}
-              result={generated}
-              onGenerated={setGenerated}
-            />
 
             <ReviewPublishPanel
               projectId={project.id}

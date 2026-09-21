@@ -37,8 +37,6 @@ import {
   clearSiteSectionHandoff,
   readSiteSectionHandoff,
 } from "@/lib/site-section-storage";
-import { applyCuratedSerpToBrief } from "@/lib/content-creator/serp-lens";
-import { CreateKeywordUploadPanel } from "./CreateKeywordUploadPanel";
 
 export default function ContentBriefPanel({
   clientId,
@@ -561,78 +559,6 @@ export default function ContentBriefPanel({
         </div>
       </div>
 
-      <div className="mt-6 border-t border-border pt-5">
-        <p className="text-sm font-medium text-foreground">Research &amp; SERP index</p>
-        <p className="mt-1 text-xs text-muted">
-          Upload saved Keyword SERP / wiki pages — Generate reads ResearchJson. Use{" "}
-          <strong>Apply to brief SERP fields</strong> on a Keyword result to fill serpTitles /
-          serpUrls (and related) from parsed organics. PAA stays operator-curated.
-        </p>
-
-        <div className="mt-3">
-          <CreateKeywordUploadPanel
-            createId={createId}
-            ensureCreateId={ensureCreateId}
-            onAddToNotes={(text) => {
-              setBrief((prev) => {
-                if (prev.writingNotes.includes(text)) return prev;
-                const next: ContentBrief = {
-                  ...prev,
-                  writingNotes: [prev.writingNotes.trim(), text].filter(Boolean).join("\n"),
-                };
-                persistLocal(next);
-                return next;
-              });
-              setSavedMsg(null);
-            }}
-            onApplySerpSeed={(seed) => {
-              setBrief((prev) => {
-                const next = applyCuratedSerpToBrief(prev, seed, "replace");
-                persistLocal(next);
-                return next;
-              });
-              setSavedMsg("SERP fields updated from upload — save the brief to persist for Generate.");
-            }}
-          />
-        </div>
-
-        <label className={`${labelClass} mt-4`}>
-          Organic titles (one per line)
-          <textarea
-            value={brief.serpTitles}
-            onChange={(e) => patch({ serpTitles: e.target.value })}
-            rows={2}
-            className={fieldClass}
-          />
-        </label>
-        <label className={`${labelClass} mt-3`}>
-          Organic URLs (one per line, optional)
-          <textarea
-            value={brief.serpUrls}
-            onChange={(e) => patch({ serpUrls: e.target.value })}
-            rows={2}
-            className={fieldClass}
-          />
-        </label>
-        <label className={`${labelClass} mt-3`}>
-          People Also Ask (one per line)
-          <textarea
-            value={brief.paaQuestions}
-            onChange={(e) => patch({ paaQuestions: e.target.value })}
-            rows={2}
-            className={fieldClass}
-          />
-        </label>
-        <label className={`${labelClass} mt-3`}>
-          Related searches (one per line)
-          <textarea
-            value={brief.relatedSearches}
-            onChange={(e) => patch({ relatedSearches: e.target.value })}
-            rows={2}
-            className={fieldClass}
-          />
-        </label>
-      </div>
 
       <label className={`${labelClass} mt-5`}>
         Writing notes (optional)
