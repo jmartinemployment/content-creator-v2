@@ -121,7 +121,12 @@ export default function ClientsPanel({
               {/* This used to have no confirmation, because the server refused while the client
                   had projects — the destructive case was unreachable by a stray click. The server
                   now cascades: projects, their linked creates, and those creates' artifacts and
-                  versions all go. So the guard has to be here instead. */}
+                  versions all go. So the guard has to be here instead.
+
+                  The label names its scope. It read "Delete all?" first, which on a per-client
+                  chip reads as "delete all clients" — the opposite end of the blast radius from
+                  what it does. A confirm button that is ambiguous about what it destroys is worse
+                  than no confirm at all. */}
               {confirmingId === client.id ? (
                 <button
                   type="button"
@@ -129,7 +134,7 @@ export default function ClientsPanel({
                   disabled={deletingId === client.id}
                   className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                 >
-                  {deletingId === client.id ? "Deleting…" : "Delete all?"}
+                  {deletingId === client.id ? "Deleting…" : "Delete client + projects?"}
                 </button>
               ) : (
                 <button
