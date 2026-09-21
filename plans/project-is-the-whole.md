@@ -323,3 +323,49 @@ Proof is by database rows and HTTP status codes, not UI state.
    - `deliverable_delivered` log rows equal deliverables with status `delivered`.
 6. **Every stage.** `npx tsc --noEmit` clean; `npm run lint` shows no new findings beyond the 10
    pre-existing errors.
+
+## Verification status — 2026-09-21
+
+All five stages are built and deployed. This section records what the checks above have actually
+had run against them, not just what the plan intended — the two are not the same thing, and saying
+so plainly is worth more than declaring the plan finished.
+
+**Proven, with a passing test that was itself confirmed to fail on the bug it checks for** (each
+mutation-tested: deliberately broken, observed to fail, then restored):
+
+- Every project, task, time and deliverable route requires `content-creator.manage` — reflectively
+  (`GeekBackend.Tests.ContentCreator.ContentCreatorAuthorizationTests`, catches an `[AllowAnonymous]`
+  override too) and through the real running pipeline, with real signed tokens
+  (`GeekBackend.IntegrationTests.ContentCreatorAuthorizationPipelineTests`): no token 401s, wrong or
+  missing scope 403s, the right scope passes.
+- A logged entry's rate and currency are fixed at write time; changing the client's rate afterward
+  does not move a previously-logged entry. A billable entry against a client with no rate is
+  refused and writes nothing. A deliverable whose create belongs to another client is refused and
+  writes nothing. One create is one deliverable — a second attach attempt is refused
+  (`GeekBackend.Tests.ContentCreator.GccProjectRepositoryLogicTests`, against EF's InMemory
+  provider — no Postgres involved).
+
+**A real defect found and fixed while proving the above, worth recording on its own:**
+`content-creator.manage`'s entire registration — the JWT scheme, the policy, the scope
+assertion — lived inside GeekAPI's `if (GEEK_OAUTH_AUTHORITY is set)` block, a holdover from when
+that variable existed only for the v2 realtime hub. An unset variable would not have degraded the
+policy to something permissive; it would not have existed as a registered policy at all, so every
+route carrying it would throw "policy not found" — a 500 indistinguishable from an unrelated
+crash — on first request. GeekAPI now refuses to start without the variable, the same fail-closed
+pattern already applied to `REPO_API_KEY`.
+
+**Still unverified, and why:** every claim above that depends on a Postgres CHECK constraint,
+trigger, unique index or composite foreign key — the idempotency-key dedupe and its 409, `gcc_projects`
+"two rows for one keyword", every `TRUNCATE`/`UPDATE`/`DELETE` refusal, the composite-FK task/project
+match, the client-record-level CHECKs (payment terms, rate, currency format). EF's InMemory provider,
+used for the tests above, does not enforce any of these — a duplicate idempotency key or an invoiced
+`UPDATE` simply succeeds under it, silently proving nothing. Closing this gap needs a real Postgres,
+and the standing instruction this session was given is that database access goes only through
+GeekAPI → GeekRepository, not a direct connection from tooling — which rules out both a local
+throwaway database and `dotnet ef` scaffolding against one. It is closed either by Jeff walking the
+list above directly (signed in, in the browser) or by a decision to permit a real-Postgres
+integration-test target for GeekRepository.
+
+`CreateDraftWorkspace` opening from a deliverable (Stage 4's UI claim) has not been driven through a
+browser in this session either — the Chrome extension was not connected when this work was done.
+
