@@ -54,6 +54,37 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 /**
+ * The actual declared URLs, not just how many — a count here is a measurement, not the record.
+ * These are exactly what ProjectForm's Partner/Competitor URL textareas saved.
+ */
+function UrlListField({ label, urls }: { label: string; urls: readonly string[] }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+        {label} ({urls.length})
+      </dt>
+      {urls.length > 0 ? (
+        <dd className="mt-1 flex flex-col gap-0.5">
+          {urls.map((u) => (
+            <a
+              key={u}
+              href={u}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all font-mono text-xs text-brand hover:underline"
+            >
+              {u}
+            </a>
+          ))}
+        </dd>
+      ) : (
+        <dd className="mt-0.5 text-sm text-muted">— none declared</dd>
+      )}
+    </div>
+  );
+}
+
+/**
  * A project's profile, schedule and log.
  *
  * The log is shown because it is the record nothing can quietly rewrite — the database still
@@ -183,10 +214,11 @@ export default function ProjectProfilePanel({
           <Field label="Finished" value={formatDate(project.finishedDate)} />
           <Field label="Site" value={project.siteUrl ?? "—"} />
           <Field label="Run ID" value={project.projectSiteRunId ?? "— no crawl evidence"} />
-          <Field
-            label="Partners / Competitors"
-            value={`${project.partnerUrls.length} / ${project.competitorUrls.length}`}
-          />
+        </dl>
+
+        <dl className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
+          <UrlListField label="Partner URLs" urls={project.partnerUrls} />
+          <UrlListField label="Competitor URLs" urls={project.competitorUrls} />
         </dl>
       </div>
 
