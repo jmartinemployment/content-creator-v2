@@ -25,6 +25,18 @@ import type {
  * picks a project and the panels open underneath the list, which stays on screen so it is always
  * visible which project the work below belongs to.
  */
+/**
+ * The project the list shows first for a client, or null when it has none. The list and this
+ * function read the same array in the same order, so what opens is always the top row.
+ */
+function firstProjectOf(
+  projects: ProjectSummary[],
+  clientId: string | null,
+): string | null {
+  if (!clientId) return null;
+  return projects.find((p) => p.clientId === clientId)?.id ?? null;
+}
+
 export default function WorkflowPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -47,9 +59,12 @@ export default function WorkflowPage() {
         if (cancelled) return;
         setClients(clientList);
         setProjects(projectList);
-        if (clientList.length > 0) {
-          setSelectedClientId(clientList[0].id);
-        }
+        const firstClient = clientList[0] ?? null;
+        setSelectedClientId(firstClient?.id ?? null);
+        // Both halves of the page are populated on arrival. Opening the row the list already
+        // shows first means the brief, tools, generate and review below are about a real project
+        // rather than waiting on a click to exist at all.
+        setSelectedProjectId(firstProjectOf(projectList, firstClient?.id ?? null));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -108,12 +123,13 @@ export default function WorkflowPage() {
   function handleClientCreated(client: Client) {
     setClients((prev) => [...prev, client]);
     setSelectedClientId(client.id);
+    // A client created a moment ago has no projects; the form below is how it gets one.
     selectProject(null);
   }
 
   function handleClientSelected(clientId: string) {
     setSelectedClientId(clientId);
-    selectProject(null);
+    selectProject(firstProjectOf(projects, clientId));
   }
 
   function handleProjectCreated(created: ProjectSummary) {
@@ -147,7 +163,7 @@ export default function WorkflowPage() {
           onDeleted={(clientId) => {
             setClients((prev) => prev.filter((c) => c.id !== clientId));
             setSelectedClientId((prev) => (prev === clientId ? null : prev));
-            selectProject(null);
+            if (selectedClientId === clientId) selectProject(null);
           }}
         />
 
