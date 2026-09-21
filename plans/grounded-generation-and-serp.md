@@ -289,8 +289,9 @@ it never declared one.
    implementation of `ContentDocumentText.Flatten` that emitted `"- "` bullets into a prompt
    (`:1152`) — Markdown at prompt assembly, via exactly the duplicate projection `CLAUDE.md` warns
    caused the corpus drift.
-2. **BLOCKED — a create cannot reach its partner and competitor URLs.** Found 2026-09-21 while
-   wiring retrieval. This is the structural cause of *"didn't cite or quote Partners/Tools"*: even
+2. **Create → project link — DONE 2026-09-21.** `gcc_creates.project_id`, nullable, indexed, FK
+   to `gcc_projects` with RESTRICT. Was blocking: **a create could not reach its partner and
+   competitor URLs.** This is the structural cause of *"didn't cite or quote Partners/Tools"*: even
    with retrieval wired, nothing tells it which hosts to query.
 
    | Fact | Where |
@@ -312,19 +313,33 @@ it never declared one.
    `GccV2CreateLibraryWriter.SeedQueryAsync` (`:602-640`) is the working reference for the
    null / `Failed` / warning handling, and `BuildNeed` (`:641`) for composing the query.
 
-   **Options, none taken unilaterally — this changes a live schema:**
-   - **(i)** Add nullable `ProjectId` to `GccCreate` (migration + DTO + repository, via
-     GeekAPI → GeekRepository). Most direct; makes the project the create's owner, matching
-     `plans/project-is-the-whole.md`.
-   - **(ii)** Create the `GccDeliverable` row when a create is created, making the existing join
-     reliable. No schema change; changes when deliverables appear in project views.
-   - **(iii)** Resolve by `ClientId` and refuse when the client has more than one project. No
-     schema change, but it refuses legitimate work.
+   Nullable because existing creates predate it — and because a create with no project genuinely
+   cannot resolve partner evidence, which must **refuse** rather than generate ungrounded. Carried
+   through `GccCreateDto`, `CreateGccCreateCommand`, the repository mapping and the create endpoint;
+   model snapshot hand-updated alongside the hand-written migration.
 
-3. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
+3. **The grounding gate — DONE 2026-09-21.** `GccGroundingResolver`:
+
+   ```
+   project → PartnerUrls / CompetitorUrls → HostsIndexedAsync → run ids
+           → QueryAsync(need, runId, crawlType) → GccQuoteablePage[]
+   ```
+
+   A null client result and `Failed` are both failures; **empty `Pages` from a successful query is
+   not** — another run may cover the topic. Requirements are declared per content type
+   (`RequiredFor`), refusal is at the draft, and the refusal carries a named reason mapped to 400
+   through the controller's existing convention. Retrieved passages fold into the create's research
+   so the existing quoteable prompt block carries them, appending to operator uploads rather than
+   replacing them. 800 tests pass; 16 new ones assert the declared policy.
+
+   **Testability gap, stated rather than hidden:** `HttpGccRepository` is a concrete class with no
+   interface, so `ResolveAsync` itself has no unit coverage — only the policy table, `BuildNeed` and
+   the outcome shape. An interface would close it.
+
+4. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
    model-authored HTML, and not via the flat text projection — that projection discards hrefs, tags
    and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
-4. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
+5. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
    today (`GccController.cs:667`, `:674` — `bodyJson`), which is the deviation recorded below.
    `ExtractSectionHeadings` then disappears: `ContentDocumentText.AllHeadings` /
    `TopLevelHeadings` already read headings off the document, with no parse and no guess.
