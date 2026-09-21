@@ -22,6 +22,7 @@ export default function ClientsPanel({
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function handleDelete(client: Client) {
     setError(null);
@@ -29,8 +30,10 @@ export default function ClientsPanel({
     try {
       await deleteClient(client.id);
       onDeleted(client.id);
+      setConfirmingId(null);
     } catch (err) {
-      // The 409 body explains what is in the way; show it rather than a generic failure.
+      // The server no longer 409s on projects — it cascades. A failure here is a real failure,
+      // so show what the server said rather than a generic message.
       setError(err instanceof ApiError ? err.message : `Could not delete “${client.name}”.`);
     } finally {
       setDeletingId(null);
@@ -100,7 +103,14 @@ export default function ClientsPanel({
                 selected ? "bg-brand text-white" : "bg-background text-foreground hover:bg-border/50"
               }`}
             >
-              <button type="button" onClick={() => onSelect(client.id)} className="font-medium">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingId(null);
+                  onSelect(client.id);
+                }}
+                className="font-medium"
+              >
                 {client.name}
                 {!client.publishTarget && (
                   <span className="ml-1.5 text-xs opacity-70" title="No PublishTarget configured — publish will fail">
@@ -108,20 +118,32 @@ export default function ClientsPanel({
                   </span>
                 )}
               </button>
-              {/* No confirm dialog: the server refuses while the client has projects, so the
-                  destructive case cannot be reached by a stray click. An empty client is a name. */}
-              <button
-                type="button"
-                onClick={() => void handleDelete(client)}
-                disabled={deletingId === client.id}
-                aria-label={`Delete ${client.name}`}
-                title={`Delete ${client.name}`}
-                className={`rounded-full px-1.5 text-xs leading-none opacity-60 hover:opacity-100 disabled:opacity-30 ${
-                  selected ? "hover:bg-white/20" : "hover:bg-border"
-                }`}
-              >
-                ×
-              </button>
+              {/* This used to have no confirmation, because the server refused while the client
+                  had projects — the destructive case was unreachable by a stray click. The server
+                  now cascades: projects, their linked creates, and those creates' artifacts and
+                  versions all go. So the guard has to be here instead. */}
+              {confirmingId === client.id ? (
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(client)}
+                  disabled={deletingId === client.id}
+                  className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletingId === client.id ? "Deleting…" : "Delete all?"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingId(client.id)}
+                  aria-label={`Delete ${client.name}`}
+                  title={`Delete ${client.name} and all its projects`}
+                  className={`rounded-full px-1.5 text-xs leading-none opacity-60 hover:opacity-100 ${
+                    selected ? "hover:bg-white/20" : "hover:bg-border"
+                  }`}
+                >
+                  ×
+                </button>
+              )}
             </span>
           );
         })}

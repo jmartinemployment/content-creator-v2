@@ -154,6 +154,9 @@ export default function WorkflowPage() {
           onCreated={handleClientCreated}
           onDeleted={(clientId) => {
             setClients((prev) => prev.filter((c) => c.id !== clientId));
+            // The server cascades, so that client's projects are gone too — drop them here rather
+            // than leaving rows that 404 on the next click.
+            setProjects((prev) => prev.filter((p) => p.clientId !== clientId));
             setSelectedClientId((prev) => (prev === clientId ? null : prev));
             if (selectedClientId === clientId) selectProject(null);
           }}
