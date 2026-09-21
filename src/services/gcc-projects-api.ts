@@ -342,6 +342,8 @@ export interface GccTask {
   dueDate: string | null;
   estimatedHours: number | null;
   sortOrder: number;
+  /** Which v2 content types this task relates to. Never required — an empty list is ordinary. */
+  contentTypes: string[];
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -391,6 +393,7 @@ export function createTask(
     dueDate?: string | null;
     estimatedHours?: number | null;
     sortOrder?: number;
+    contentTypes?: string[];
   },
 ): Promise<GccTask> {
   return projectsRequest<GccTask>(`${PROJECTS}/${encodeURIComponent(projectId)}/tasks`, {
@@ -402,6 +405,7 @@ export function createTask(
       dueDate: input.dueDate ?? null,
       estimatedHours: input.estimatedHours ?? null,
       sortOrder: input.sortOrder ?? 0,
+      contentTypes: input.contentTypes ?? [],
     }),
   });
 }
@@ -417,6 +421,7 @@ export function updateTask(
     dueDate?: string | null;
     estimatedHours?: number | null;
     sortOrder?: number;
+    contentTypes?: string[];
   },
 ): Promise<GccTask> {
   return projectsRequest<GccTask>(
@@ -431,6 +436,7 @@ export function updateTask(
         dueDate: input.dueDate ?? null,
         estimatedHours: input.estimatedHours ?? null,
         sortOrder: input.sortOrder ?? 0,
+        contentTypes: input.contentTypes ?? [],
       }),
     },
   );

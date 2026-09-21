@@ -17,6 +17,7 @@ import {
   type GccTaskStatus,
   type GccTimeEntry,
 } from "@/services/gcc-projects-api";
+import { CONTENT_TYPES, contentTypeLabel } from "@/lib/content-types";
 
 /** Today as "YYYY-MM-DD" in the operator's own timezone, which is the day they worked. */
 function today(): string {
@@ -77,6 +78,9 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
 
   const [taskName, setTaskName] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  // Which v2 content types this task relates to. Purely descriptive — nothing checks these, and
+  // an empty set is a complete, ordinary task.
+  const [taskContentTypes, setTaskContentTypes] = useState<string[]>([]);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [addingTask, setAddingTask] = useState(false);
 
@@ -132,15 +136,23 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
         name: taskName,
         dueDate: taskDue || null,
         sortOrder: tasks?.length ?? 0,
+        contentTypes: taskContentTypes,
       });
       setTaskName("");
       setTaskDue("");
+      setTaskContentTypes([]);
       setVersion((v) => v + 1);
     } catch (err) {
       setTaskError(err instanceof ApiError ? err.message : "Could not add the task.");
     } finally {
       setAddingTask(false);
     }
+  }
+
+  function toggleTaskContentType(value: string) {
+    setTaskContentTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
   }
 
   async function handleStatus(task: GccTask, status: GccTaskStatus) {
@@ -154,6 +166,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
         dueDate: task.dueDate,
         estimatedHours: task.estimatedHours,
         sortOrder: task.sortOrder,
+        contentTypes: task.contentTypes,
       });
       setVersion((v) => v + 1);
     } catch (err) {
@@ -238,6 +251,14 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
                   className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-4 py-3"
                 >
                   <span className="flex-1 text-sm font-medium text-foreground">{task.name}</span>
+                  {task.contentTypes.map((ct) => (
+                    <span
+                      key={ct}
+                      className="rounded-full bg-border px-2 py-0.5 text-xs text-muted"
+                    >
+                      {contentTypeLabel(ct)}
+                    </span>
+                  ))}
                   {logged > 0 ? (
                     <span className="text-xs text-muted">{duration(logged)} logged</span>
                   ) : null}
@@ -263,32 +284,57 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
 
         {taskError ? <p className="mt-3 text-sm text-red-600">{taskError}</p> : null}
 
-        <form onSubmit={handleAddTask} className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex flex-1 flex-col gap-1.5 text-sm font-medium text-foreground">
-            New task
-            <input
-              value={taskName}
-              onChange={(e) => setTaskName(e.target.value)}
-              placeholder="Draft the pillar outline"
-              className={inputClass}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-            Due
-            <input
-              type="date"
-              value={taskDue}
-              onChange={(e) => setTaskDue(e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={addingTask || taskName.trim().length === 0}
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
-          >
-            {addingTask ? "Adding…" : "Add task"}
-          </button>
+        <form onSubmit={handleAddTask} className="mt-4 flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-1 flex-col gap-1.5 text-sm font-medium text-foreground">
+              New task
+              <input
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+                placeholder="Draft the pillar outline"
+                className={inputClass}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+              Due
+              <input
+                type="date"
+                value={taskDue}
+                onChange={(e) => setTaskDue(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={addingTask || taskName.trim().length === 0}
+              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+            >
+              {addingTask ? "Adding…" : "Add task"}
+            </button>
+          </div>
+
+          {/* Optional, always — checking none of these is a complete task, not an unfinished one. */}
+          <fieldset className="rounded-md border border-border p-3">
+            <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+              Content types (optional)
+            </legend>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+              {CONTENT_TYPES.map((ct) => (
+                <label
+                  key={ct.value}
+                  className="flex items-center gap-1.5 text-xs font-normal text-foreground"
+                >
+                  <input
+                    type="checkbox"
+                    checked={taskContentTypes.includes(ct.value)}
+                    onChange={() => toggleTaskContentType(ct.value)}
+                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+                  />
+                  {ct.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </form>
       </div>
 
