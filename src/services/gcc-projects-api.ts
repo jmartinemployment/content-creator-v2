@@ -320,3 +320,157 @@ export function updateClient(id: string, input: ClientDetailsInput): Promise<Gcc
 export function deleteClient(id: string): Promise<void> {
   return projectsRequest<void>(`${CLIENTS}/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+/** todo | in_progress | done. The database carries the same list. */
+export type GccTaskStatus = "todo" | "in_progress" | "done";
+
+export const GCC_TASK_STATUSES: readonly GccTaskStatus[] = ["todo", "in_progress", "done"];
+
+export const GCC_TASK_STATUS_LABELS: Record<GccTaskStatus, string> = {
+  todo: "To do",
+  in_progress: "In progress",
+  done: "Done",
+};
+
+export interface GccTask {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  status: GccTaskStatus;
+  assigneeUserId: string | null;
+  dueDate: string | null;
+  estimatedHours: number | null;
+  sortOrder: number;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export interface GccTimeEntry {
+  id: string;
+  projectId: string;
+  taskId: string | null;
+  userId: string;
+  /** The day worked, "YYYY-MM-DD" — a timesheet date, not an instant. */
+  workDate: string;
+  minutes: number;
+  description: string | null;
+  billable: boolean;
+  /** The client's rate when this was logged. A later rate change cannot move it. */
+  rateSnapshot: number | null;
+  currency: string | null;
+  /** Once set the entry is frozen: the database refuses updates and deletes. */
+  invoicedAtUtc: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+/** Billable money is per currency and never summed across them. */
+export interface GccBillableTotal {
+  currency: string;
+  minutes: number;
+  amount: number;
+}
+
+export interface GccProjectTimeTotals {
+  totalMinutes: number;
+  billableMinutes: number;
+  billable: GccBillableTotal[];
+}
+
+export function listTasks(projectId: string): Promise<GccTask[]> {
+  return projectsRequest<GccTask[]>(`${PROJECTS}/${encodeURIComponent(projectId)}/tasks`);
+}
+
+export function createTask(
+  projectId: string,
+  input: {
+    name: string;
+    description?: string | null;
+    assigneeUserId?: string | null;
+    dueDate?: string | null;
+    estimatedHours?: number | null;
+    sortOrder?: number;
+  },
+): Promise<GccTask> {
+  return projectsRequest<GccTask>(`${PROJECTS}/${encodeURIComponent(projectId)}/tasks`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: input.name.trim(),
+      description: input.description ?? null,
+      assigneeUserId: input.assigneeUserId ?? null,
+      dueDate: input.dueDate ?? null,
+      estimatedHours: input.estimatedHours ?? null,
+      sortOrder: input.sortOrder ?? 0,
+    }),
+  });
+}
+
+export function updateTask(
+  projectId: string,
+  taskId: string,
+  input: {
+    name: string;
+    status: GccTaskStatus;
+    description?: string | null;
+    assigneeUserId?: string | null;
+    dueDate?: string | null;
+    estimatedHours?: number | null;
+    sortOrder?: number;
+  },
+): Promise<GccTask> {
+  return projectsRequest<GccTask>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: input.name.trim(),
+        status: input.status,
+        description: input.description ?? null,
+        assigneeUserId: input.assigneeUserId ?? null,
+        dueDate: input.dueDate ?? null,
+        estimatedHours: input.estimatedHours ?? null,
+        sortOrder: input.sortOrder ?? 0,
+      }),
+    },
+  );
+}
+
+export function listTime(projectId: string): Promise<GccTimeEntry[]> {
+  return projectsRequest<GccTimeEntry[]>(`${PROJECTS}/${encodeURIComponent(projectId)}/time`);
+}
+
+export function getTimeTotals(projectId: string): Promise<GccProjectTimeTotals> {
+  return projectsRequest<GccProjectTimeTotals>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/time/totals`,
+  );
+}
+
+/**
+ * Log time against a project, and optionally one of its tasks.
+ *
+ * The user is never sent — GeekAPI takes it from the token, because a caller who could name the
+ * user could log someone else's hours. A 409 means the write was refused with a reason worth
+ * reading, most often that the client has no rate and so cannot have billable time logged.
+ */
+export function logTime(
+  projectId: string,
+  input: {
+    workDate: string;
+    minutes: number;
+    billable: boolean;
+    taskId?: string | null;
+    description?: string | null;
+  },
+): Promise<GccTimeEntry> {
+  return projectsRequest<GccTimeEntry>(`${PROJECTS}/${encodeURIComponent(projectId)}/time`, {
+    method: "POST",
+    body: JSON.stringify({
+      workDate: input.workDate,
+      minutes: input.minutes,
+      billable: input.billable,
+      taskId: input.taskId ?? null,
+      description: input.description ?? null,
+    }),
+  });
+}
