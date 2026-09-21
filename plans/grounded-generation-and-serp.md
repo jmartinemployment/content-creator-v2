@@ -289,10 +289,42 @@ it never declared one.
    implementation of `ContentDocumentText.Flatten` that emitted `"- "` bullets into a prompt
    (`:1152`) — Markdown at prompt assembly, via exactly the duplicate projection `CLAUDE.md` warns
    caused the corpus drift.
-2. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
+2. **BLOCKED — a create cannot reach its partner and competitor URLs.** Found 2026-09-21 while
+   wiring retrieval. This is the structural cause of *"didn't cite or quote Partners/Tools"*: even
+   with retrieval wired, nothing tells it which hosts to query.
+
+   | Fact | Where |
+   |---|---|
+   | Partner/competitor URLs live on the **project** | `GccProject.PartnerUrls`, `.CompetitorUrls` (`ProjectEntities.cs:39,42`) |
+   | A create carries **no `ProjectId`** | `GccCreate` has `ClientId`, `OwnerUserId`, `ProjectSiteRunId` only (`Entities.cs:5-28`) |
+   | The only create→project join is `GccDeliverable(ProjectId, CreateId)` | `ProjectEntities.cs:198,201` |
+   | Deliverables are created by an explicit operator action, not on create | `GccProjectsController.CreateDeliverable:308` |
+
+   So at generation time a create typically has no project link at all. `ClientId` does not
+   substitute — a client may run several projects over different sites.
+
+   **The retrieval half is otherwise ready and needs no new client.**
+   `IGeekCrawlerRagClient.QueryAsync(need, runId, crawlType, …)` already returns
+   `IReadOnlyList<GccQuoteablePage>` — **the exact type** `research.Quoteables` feeds into the v1
+   prompt at `GccGenerateService.cs:169`. It also already carries the rule this stage needs:
+   `Failed` is documented *"empty Pages must not be treated as success."* URL → run id is
+   `HostsIndexedAsync`, which returns `GeekCrawlerRagHostIndex(Url, Host, Indexed, RunId)`.
+   `GccV2CreateLibraryWriter.SeedQueryAsync` (`:602-640`) is the working reference for the
+   null / `Failed` / warning handling, and `BuildNeed` (`:641`) for composing the query.
+
+   **Options, none taken unilaterally — this changes a live schema:**
+   - **(i)** Add nullable `ProjectId` to `GccCreate` (migration + DTO + repository, via
+     GeekAPI → GeekRepository). Most direct; makes the project the create's owner, matching
+     `plans/project-is-the-whole.md`.
+   - **(ii)** Create the `GccDeliverable` row when a create is created, making the existing join
+     reliable. No schema change; changes when deliverables appear in project views.
+   - **(iii)** Resolve by `ClientId` and refuse when the client has more than one project. No
+     schema change, but it refuses legitimate work.
+
+3. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
    model-authored HTML, and not via the flat text projection — that projection discards hrefs, tags
    and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
-3. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
+4. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
    today (`GccController.cs:667`, `:674` — `bodyJson`), which is the deviation recorded below.
    `ExtractSectionHeadings` then disappears: `ContentDocumentText.AllHeadings` /
    `TopLevelHeadings` already read headings off the document, with no parse and no guess.
