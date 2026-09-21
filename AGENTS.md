@@ -256,6 +256,21 @@ Writer" — records the *previous* direction and is not the instruction. The rep
 not reach for a `-v2` endpoint merely because one already exists — existing is not the same as
 correct when the direction is v1.
 
+**Generation is the exception, and it is not arbitrary: generation is RAG-grounded, and the
+RAG-grounded path is `ContentCreatorV2/*`.** Root `CLAUDE.md` §1 says so outright — *"Generation is
+GeekAPI-side (`ContentCreatorV2/*`), grounded strictly on corpus text that the Library half
+retrieved and verified."* The v1 generate methods are not grounded that way, so drafting must never
+go through them again. Confirmed by Jeff 2026-09-21: *"the way you actually generate Content is also
+an exception — you will no longer create using v1 methods. i.e., RAG."*
+
+Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api`
+(`generateGccCreate` / `reviseGccVersion` / `polishGccVersion` / `seoGccVersion` /
+`approveGccVersion`). The v1 generate calls in `content-writer-api.ts` —
+`generatePillarPlanContent`, `generatePillarBodyContent`, `generateBlogContent`,
+`generateSocialPack`, `generateColdOutreachContent`, `generateImagePromptsContent`,
+`generateToolsFromNames`, `generateToolsContent`, `generateAllContent`, `reviseProjectContent`,
+`rewriteFromLatestVerdict`, `runReview` — have **no live caller**. Do not wire one back.
+
 ## Current state (2026-09-18)
 
 - **`GccController` is restored and live** — `GeekAPI/Controllers/ContentCreator/GccController.cs`,

@@ -6,15 +6,9 @@ import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectList from "@/components/content-writer/ProjectList";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
-import ReviewPublishPanel from "@/components/content-writer/ReviewPublishPanel";
 import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
 import { isContentBriefComplete, migrateBrief } from "@/lib/content-creator/brief-catalog";
-import type {
-  Client,
-  GeneratedContentSet,
-  ProjectDetail,
-  ProjectSummary,
-} from "@/lib/types";
+import type { Client, ProjectDetail, ProjectSummary } from "@/lib/types";
 
 /**
  * The whole workflow, on one page.
@@ -45,7 +39,6 @@ export default function WorkflowPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
-  const [generated, setGenerated] = useState<GeneratedContentSet | null>(null);
   const [briefComplete, setBriefComplete] = useState(false);
   // The Content Creator create the draft lives on. It comes off the project when one is already
   // linked; a project that has never had a brief saved has none yet, and saving the brief mints it.
@@ -88,7 +81,6 @@ export default function WorkflowPage() {
     setSelectedProjectId(projectId);
     setProject(null);
     setProjectError(null);
-    setGenerated(null);
     setBriefComplete(false);
     setCreateId(null);
   }
@@ -103,7 +95,6 @@ export default function WorkflowPage() {
         const detail = await getProject(selectedProjectId);
         if (cancelled) return;
         setProject(detail);
-        setGenerated(detail.contentSet);
         setCreateId(detail.linkedCreateId ?? null);
         if (detail.briefJson) {
           const brief = migrateBrief(JSON.parse(detail.briefJson));
@@ -222,12 +213,6 @@ export default function WorkflowPage() {
                 )}
               </>
             )}
-
-            <ReviewPublishPanel
-              projectId={project.id}
-              result={generated}
-              onGenerated={setGenerated}
-            />
           </>
         ) : null}
       </div>
