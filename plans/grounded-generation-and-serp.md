@@ -92,9 +92,9 @@ Urgent ────────────────────────�
 Stage 0 (naming) ───────────────────── independent
 Stage 7 (SERP upload) ──────────────── independent, parallel from day one
 Stage 9 (local/FAQ schema) ─────────── independent, parallel from day one
-Stage 1 (diagnosis) → Stage 2 (provenance) → Stage 3 (Brief) → Stage 4 (switch)
-                                                        Stage 4 → Stage 5 (frontend)
-                                                        Stage 4 ⇄ Stage 6 (lede — must not lag)
+Stage 1 ─── DECIDED (b): v1 writes, grounding moves to it. No spike.
+Stage 2 (provenance) → Stage 3 (Brief) → Stage 4 (grounding onto v1) → Stage 5 (frontend)
+                                                        Stage 6 (lede) — no longer time-critical
 Stage 8 (analyses) needs Stage 4 and Stage 7
 ```
 
@@ -109,29 +109,54 @@ Stage 8 (analyses) needs Stage 4 and Stage 7
   while `PAF` means *Primary Answer Feature* in Geek-SEO. One of them changes.
 - Commit the already-done prose correction first, so no stage points at working-tree state.
 
-## Stage 1 — Diagnosis spike *(timeboxed; ends in a decision, not a port)*
+## Stage 1 — DECIDED: (b) keep v1 as the writer, bring grounding to it
 
-**Restated 2026-09-21. The original spike asked the wrong question.** It said "reproduce the
-fabrication against the grounded path" — but v2 has never produced a document, so there is no
-fabrication to reproduce and no output to compare. The question is not *how badly does v2 write*;
-it is *why does v2 never emit anything, and is that cheaper to fix than to bring retrieval to v1*.
+**Decided 2026-09-21. No spike; the run was dropped as not decision-relevant.** The proposed test
+would have found *where* v2 stops. It could not have returned a result that changes the direction,
+because a clean run is also a bad outcome — see the structure loss below. A test whose every
+outcome leads to the same decision is not worth running.
 
-Run v2's writer once, end to end, with `DraftingEnabled` on, and record where it stops. The
-Markdown structure guard (`ParseSynthesizedMarkdown`) is the first thing to check, per the
-hypothesis in **Context**.
+**The evidence, in the order it landed:**
 
-Then decide, in writing, one of:
+1. **v2 has never produced a document.** Jeff: *"version 2 never produced one document, none,
+   nada."* Zero live callers; `DraftingEnabled` unset everywhere. So "v2 fabricates structure" has
+   no artifact behind it.
+2. **Markdown is v2's interchange format, not a format choice.** `ToStableMarkdown` → model →
+   `ParseSynthesizedMarkdown`, plus `MarkdownToSection` on every section write. Removing it is a
+   rebuild of the document model, not an edit.
+3. **v2 cannot preserve the structure it is grounded on — this is the decisive one.** The corpus
+   types seven block kinds (`extract-content.ts:418-425`): `heading(level)`, `paragraph`,
+   `listItem(ordered)`, `quote`, `code`, `term`, `definition`, each with `text`, `html`, `anchors`.
+   `MarkdownToSection` (`:1446`) returns **one** — `TextParagraph`:
 
-- **(a)** make v2 produce its first document, then remove Markdown from its write loop and switch, or
-- **(b)** keep v1 as the writer and bring retrieval + verification to it.
+   | Step | Effect |
+   |---|---|
+   | `Split("\n\n")` | paragraph boundary re-inferred from whitespace — Markdown has no paragraph token |
+   | `.Where(line => !line.StartsWith('#'))` | headings silently discarded |
+   | `.TrimStart('-', '*', ' ')` | list markers stripped; a `listItem` becomes prose |
+   | `string.Join(" ", …)` | line structure flattened |
 
-**The cost sides are not symmetric, and this should be said plainly.** (a) means getting a writer
-that has never emitted a page to emit one, and then rebuilding its document model to remove a format
-that must not be there. (b) starts from the path that runs today and, as of this session, has no
-Markdown in it. Nothing here forecloses (a) — but it must be chosen on evidence from an actual run,
-not on the `08651ab` narrative.
+   Quotes, code, terms, definitions, anchors and heading levels have nowhere to land.
+4. **And it fails open.** `:1453` — when nothing parses, the raw Markdown is returned as a single
+   paragraph. A total parse failure yields a success-shaped section containing literal `##` and `-`.
+   Direct violation of the no-fallbacks rule, and invisible from outside.
 
-Timebox it. If v2 cannot be made to emit a document inside the box, that is the finding.
+**The shape of both failures is the same, and it is the shape to avoid.** Readability guessed which
+node held the article and returned 9% / 44% / 175% of three live pages. Markdown guesses where a
+paragraph ended and returns one kind out of seven. The crawler fixed its half by keeping the
+boundary in the data (`101-103%` on the same pages). The writer still guesses.
+
+**So the loss was never in the corpus or in retrieval.** Site Structure working proves the blocks
+survive the crawl. The structure is thrown away by the writer on the way to the model.
+
+**What (b) means concretely:** v1 writes — it runs today, emits a cross-linked schema graph, and as
+of this session has no Markdown in it. What moves to v1 is v2's **grounding** — retrieval and
+verified quotes — never its writing. Stages 2, 3, 6, 8 retarget onto v1. Stage 4 inverts.
+
+**Open, and deliberately not decided here:** whether `GccV2WriteService` and the rest of the v2
+write path are deleted or left dormant. Jeff, 2026-09-21: *"You can throw everything away and start
+over."* That is a live option, not an instruction executed here. Nothing is deleted until it is
+asked for.
 
 ## Stage 2 — Define "invented structure" as heading provenance
 
@@ -169,20 +194,26 @@ carrying *"if audience notes conflict with segment, follow notes."*
 doing for immediate effect, but it is not "pays off regardless" — the v2 half cannot be verified
 until Stage 4 lands.
 
-## Stage 4 — Switch the writer *(blocked on Stages 1–3)*
+## Stage 4 — Bring grounding to v1 *(inverted by Stage 1's decision)*
 
-Only if Stage 1 decided **(a)**.
+**This stage used to say "switch the writer" — v1 → v2. Stage 1 decided (b), so it inverts.** v1
+stays the writer; retrieval and verified quotes move to it. Do not port v2's Markdown document
+model, its `ToStableMarkdown`/`ParseSynthesizedMarkdown` loop, or `MarkdownToSection`.
 
-- `GccV2JobWorker.cs:562-563` → `writeService.WriteAsync`; PLAN → `GccV2PlanService.BuildOutlineAsync`.
-- Delete `GeekAPI/Services/ContentCreatorV2/V1Restore/`.
-- Remove the `DraftingEnabled` gate (`:336-341`).
+- Feed `ContentGenerationOrchestrator` retrieved, verified corpus passages — typed `blocks`, never a
+  flattened projection and never Markdown.
+- Carry the seven block kinds through to the generated document so `listItem`, `quote`, `code`,
+  `term` and `definition` survive as themselves.
+- **V1Restore stays** — it is v1 routing, and Stage 6's `BuildLedeTypeGuidance` caller lives there.
+  The ordering constraint below is void: nothing deletes that caller now.
+- The `DraftingEnabled` gate (`:336-341`) governs the v2 path and is left as-is.
 - **Tier decision, cheapest moment:** the job worker, controllers and V1Restore sit in GeekAPI, which
   `architecture.md` defines as a gateway with no product logic. Either move it now, while V1Restore
   is already being deleted, or record the exception explicitly. After Stage 5 the frontend is coupled
   to GeekAPI routes and the moment is gone.
 
-**Presence, not fitness:** all 11 methods exist and compile (`GccV2WriteService.cs:380-405`); none is
-known to produce acceptable output.
+**Presence, not fitness:** all 11 v2 methods exist and compile (`GccV2WriteService.cs:380-405`) and
+**none has ever produced a document.** The 11-type target now applies to v1's path instead.
 
 ## Stage 5 — Frontend reaches the pipeline *(split)*
 
@@ -211,8 +242,10 @@ depend on the own-site crawl, which touches out-of-scope Site Analyzer. Resolve 
   the body loops (`:938-945`, `:990-997`).
 - Fixes `blog`, which uses a hardcoded "prefer creative opening" today.
 
-**Ordering constraint:** deleting V1Restore (Stage 4) removes this method's only live caller. If
-Stage 6 lags, the guidance is dark in between.
+**Ordering constraint — void as of Stage 1's decision.** It assumed Stage 4 deletes V1Restore and
+with it this method's only live caller (`ContentGenerationOrchestrator.cs:1424`). Under (b),
+V1Restore stays and the caller is never removed. Stage 6 becomes formalization, not a rescue:
+expose it properly, and fix `blog`, which uses a hardcoded "prefer creative opening" today.
 
 ## Stage 7 — Keyword SERP by manual upload *(independent; start day one)*
 
@@ -342,9 +375,10 @@ never on ours.
 |---|---|
 | `GccV2CreateLibraryWriter` | **Keep** — the writer |
 | `ContentPromptBuilder` | **Keep** — v2 depends on it for lede (6) and FAQ (8c); assign an owner |
-| `ContentGenerationOrchestrator` | Undecided — depends on Stage 1's (a)/(b) |
-| `GccGenerateService` | Retire after Stage 4 — but it holds the only appendix call today |
-| `V1Restore/` | Delete at Stage 4 |
+| `ContentGenerationOrchestrator` | **Keep — this is the writer.** Stage 1 decided (b) |
+| `GccGenerateService` | **Keep** — it runs, and as of this session carries no Markdown |
+| `GccV2WriteService` write path | Dormant. Deletion is open, not decided — nothing removed unasked |
+| `V1Restore/` | **Keep** — v1 routing, and Stage 6's live caller sits in it |
 | `GccSavedSerpParser` / `GccSerpLensModels` | Keep, reconciled with `ISerpProvider` |
 | `TechnicalArticleSchemaBuilder` / `BlogPostingSchemaBuilder` / `SoftwareApplicationSchemaBuilder` | **Keep** — these are the working v1 schema path; Stage 9 extends them |
 | `JsonLdParserService` | **Keep** — already harvests `areaServed` and the business type; Stage 9 writes it back out |
