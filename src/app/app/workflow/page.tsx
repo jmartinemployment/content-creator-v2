@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectForm from "@/components/content-writer/ProjectForm";
-import ProjectList from "@/components/content-writer/ProjectList";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
@@ -172,18 +171,7 @@ export default function WorkflowPage() {
         />
 
         {selectedClientId ? (
-          <>
-            <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
-            <ProjectList
-              projects={clientProjects}
-              selectedProjectId={selectedProjectId}
-              onSelect={selectProject}
-              onDeleted={(projectId) => {
-                setProjects((prev) => prev.filter((p) => p.id !== projectId));
-                if (selectedProjectId === projectId) selectProject(null);
-              }}
-            />
-          </>
+          <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
         ) : null}
 
         {projectError ? <p className="text-sm text-red-600">{projectError}</p> : null}
@@ -199,12 +187,6 @@ export default function WorkflowPage() {
         {!selectedClientId ? (
           <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
             Select a client above to start. Everything below is scoped to it.
-          </p>
-        ) : null}
-
-        {selectedClientId && !selectedProjectId && clientProjects.length > 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
-            Pick a project from the list above to open its brief and draft.
           </p>
         ) : null}
 
