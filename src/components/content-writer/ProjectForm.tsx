@@ -225,6 +225,10 @@ export default function ProjectForm({
           ) : null}
         </label>
 
+        {/* mt-auto on both inputs: Due Date's helper line makes its cell taller, and grid cells
+            stretch to the tallest in the row, so Start Date's input would otherwise sit one line
+            above Due Date's. Bottom-aligning both is what puts them on the same row regardless —
+            the same fix already applied to the brief form's paired fields. */}
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Start Date
           <input
@@ -232,7 +236,7 @@ export default function ProjectForm({
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} mt-auto`}
           />
         </label>
 
@@ -244,7 +248,7 @@ export default function ProjectForm({
             value={dueDate}
             min={startDate || undefined}
             onChange={(e) => setDueDate(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} mt-auto`}
           />
         </label>
 
