@@ -6,6 +6,7 @@ import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectsPanel from "@/components/content-writer/ProjectsPanel";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
+import ProjectDeliverablesPanel from "@/components/content-writer/ProjectDeliverablesPanel";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import {
@@ -206,6 +207,8 @@ export default function WorkflowPage() {
             <ProjectProfilePanel project={project} onChanged={handleProjectChanged} />
 
             <ProjectWorkPanel project={project} />
+
+            <ProjectDeliverablesPanel project={project} onOpenCreate={setCreateId} />
 
             {/* Generate is Content Creator's. The workspace brings its own Content Brief, so the
                 standalone brief below is only the way in for a project that has no create yet —

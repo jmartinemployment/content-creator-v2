@@ -474,3 +474,74 @@ export function logTime(
     }),
   });
 }
+
+/** planned | in_progress | delivered. The database carries the same list. */
+export type GccDeliverableStatus = "planned" | "in_progress" | "delivered";
+
+export const GCC_DELIVERABLE_STATUSES: readonly GccDeliverableStatus[] = [
+  "planned",
+  "in_progress",
+  "delivered",
+];
+
+export const GCC_DELIVERABLE_STATUS_LABELS: Record<GccDeliverableStatus, string> = {
+  planned: "Planned",
+  in_progress: "In progress",
+  delivered: "Delivered",
+};
+
+export interface GccDeliverable {
+  id: string;
+  projectId: string;
+  /** The create this deliverable is. One create, one deliverable. */
+  createId: string;
+  name: string;
+  type: string;
+  status: GccDeliverableStatus;
+  dueDate: string | null;
+  /** Set exactly when delivered; the database enforces the pair. */
+  deliveredAtUtc: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export function listDeliverables(projectId: string): Promise<GccDeliverable[]> {
+  return projectsRequest<GccDeliverable[]>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/deliverables`,
+  );
+}
+
+/**
+ * Record a deliverable on a project.
+ *
+ * A 409 means it was refused with a reason worth reading: the create belongs to another client, or
+ * it is already a deliverable on some project. Neither is a fault to retry.
+ */
+export function createDeliverable(
+  projectId: string,
+  input: { createId: string; name: string; type?: string | null; dueDate?: string | null },
+): Promise<GccDeliverable> {
+  return projectsRequest<GccDeliverable>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/deliverables`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        createId: input.createId,
+        name: input.name.trim(),
+        type: input.type ?? null,
+        dueDate: input.dueDate ?? null,
+      }),
+    },
+  );
+}
+
+export function changeDeliverableStatus(
+  projectId: string,
+  deliverableId: string,
+  status: GccDeliverableStatus,
+): Promise<GccDeliverable> {
+  return projectsRequest<GccDeliverable>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/deliverables/${encodeURIComponent(deliverableId)}/status`,
+    { method: "PUT", body: JSON.stringify({ status }) },
+  );
+}
