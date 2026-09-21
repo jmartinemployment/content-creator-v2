@@ -7,9 +7,13 @@ import ProjectsPanel from "@/components/content-writer/ProjectsPanel";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
-import { getClients } from "@/services/content-writer-api";
-import { listProjects, ApiError, type GccProject } from "@/services/gcc-projects-api";
-import type { Client } from "@/lib/types";
+import {
+  listClients,
+  listProjects,
+  ApiError,
+  type GccClient,
+  type GccProject,
+} from "@/services/gcc-projects-api";
 
 /**
  * The whole workflow, on one page.
@@ -19,7 +23,7 @@ import type { Client } from "@/lib/types";
  * project. Several pieces can be written under one project, which is what a project is for.
  */
 export default function WorkflowPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<GccClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -39,7 +43,7 @@ export default function WorkflowPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getClients()
+    listClients()
       .then((clientList) => {
         if (cancelled) return;
         setClients(clientList);
@@ -48,7 +52,11 @@ export default function WorkflowPage() {
       .catch((err) => {
         if (cancelled) return;
         setLoadError(
-          err instanceof Error ? err.message : "Could not reach the Content Writer API.",
+          err instanceof ApiError && err.status === 403
+            ? "Your sign-in predates client access. Sign out and back in to load clients."
+            : err instanceof Error
+              ? err.message
+              : "Could not reach GeekAPI.",
         );
       });
     return () => {
@@ -103,7 +111,7 @@ export default function WorkflowPage() {
     setCreateId(null);
   }
 
-  function handleClientCreated(client: Client) {
+  function handleClientCreated(client: GccClient) {
     setClients((prev) => [...prev, client]);
     setSelectedClientId(client.id);
     selectProject(null);

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
-import { getClients, ApiError } from "@/services/content-writer-api";
-import type { Client } from "@/lib/types";
+import { ApiError } from "@/services/content-writer-api";
+import { listClients, type GccClient } from "@/services/gcc-projects-api";
 import { createGccCreate } from "@/services/gcc-api";
 import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE } from "@/lib/content-types";
 
@@ -22,7 +22,7 @@ import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE } from "@/lib/content-types";
  */
 export default function NewCreatePage() {
   const router = useRouter();
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<GccClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
@@ -32,7 +32,7 @@ export default function NewCreatePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getClients()
+    listClients()
       .then((list) => {
         setClients(list);
         if (list[0]) setSelectedClientId(list[0].id);

@@ -3,18 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
-import { getClients, ApiError } from "@/services/content-writer-api";
-import type { Client } from "@/lib/types";
+import { ApiError } from "@/services/content-writer-api";
+import { listClients, type GccClient } from "@/services/gcc-projects-api";
 import { listGccCreates, type GccCreate } from "@/services/gcc-api";
 
 export default function CreatesListPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<GccClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [creates, setCreates] = useState<GccCreate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getClients()
+    listClients()
       .then((list) => {
         setClients(list);
         if (list[0]) setSelectedClientId(list[0].id);

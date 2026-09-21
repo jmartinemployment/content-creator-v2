@@ -206,3 +206,117 @@ export function changeProjectStatus(
     body: JSON.stringify({ status, finishedDate }),
   });
 }
+
+const CLIENTS = "/api/geek-content-creator/clients";
+
+/** Every part optional — plenty of real clients have only a country. */
+export interface GccClientAddress {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  country: string | null;
+}
+
+/**
+ * Per-client GeekBackend publish configuration.
+ *
+ * The env-var fields name environment variables the publish service reads at call time. The
+ * secrets themselves are never stored or sent — that is what makes this safe to keep on the
+ * client record.
+ */
+export interface GccClientPublishTarget {
+  apiBaseUrl: string;
+  /** camelCase of OAuthTokenEndpoint, which lowercases only the first letter. */
+  oAuthTokenEndpoint: string;
+  clientIdEnvVar: string;
+  clientSecretEnvVar: string;
+  defaultAuthorId: number | null;
+  categoryStrategy: string | null;
+}
+
+export interface GccClient {
+  id: string;
+  name: string;
+  notes: string | null;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string | null;
+  billingContactName: string | null;
+  /** Stored, never derived from the contact email — so it is required even when identical. */
+  billingEmail: string;
+  contactAddress: GccClientAddress;
+  billingAddress: GccClientAddress;
+  /** Whole days; 0 is due on receipt. */
+  paymentTermsDays: number;
+  /** Null on purpose: a client with no rate cannot have billable time logged against it. */
+  rate: number | null;
+  currency: string;
+  taxId: string | null;
+  poReference: string | null;
+  publishTarget: GccClientPublishTarget | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export interface ClientDetailsInput {
+  name: string;
+  contactName: string;
+  contactEmail: string;
+  billingEmail: string;
+  paymentTermsDays: number;
+  currency: string;
+  notes?: string | null;
+  contactPhone?: string | null;
+  billingContactName?: string | null;
+  rate?: number | null;
+  taxId?: string | null;
+  poReference?: string | null;
+}
+
+function clientBody(input: ClientDetailsInput) {
+  return {
+    name: input.name.trim(),
+    contactName: input.contactName.trim(),
+    contactEmail: input.contactEmail.trim(),
+    billingEmail: input.billingEmail.trim(),
+    paymentTermsDays: input.paymentTermsDays,
+    currency: input.currency.trim().toUpperCase(),
+    notes: input.notes ?? null,
+    contactPhone: input.contactPhone ?? null,
+    billingContactName: input.billingContactName ?? null,
+    rate: input.rate ?? null,
+    taxId: input.taxId ?? null,
+    poReference: input.poReference ?? null,
+  };
+}
+
+export function listClients(): Promise<GccClient[]> {
+  return projectsRequest<GccClient[]>(CLIENTS);
+}
+
+export function createClient(input: ClientDetailsInput): Promise<GccClient> {
+  return projectsRequest<GccClient>(CLIENTS, {
+    method: "POST",
+    body: JSON.stringify(clientBody(input)),
+  });
+}
+
+export function updateClient(id: string, input: ClientDetailsInput): Promise<GccClient> {
+  return projectsRequest<GccClient>(`${CLIENTS}/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify({ id, ...clientBody(input) }),
+  });
+}
+
+/**
+ * Delete a client.
+ *
+ * A client with projects is refused by the database. That is the intended answer: the alternative
+ * is deleting the client's projects — their schedule, their log, and in time their hours — to make
+ * a delete button work.
+ */
+export function deleteClient(id: string): Promise<void> {
+  return projectsRequest<void>(`${CLIENTS}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
