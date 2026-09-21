@@ -481,17 +481,18 @@ export default function ContentBriefPanel({
           <span className="text-xs font-normal text-muted">Google Ads call-to-action type.</span>
         </label>
 
-        <label className={`${labelClass} sm:col-span-2`}>
+        <label className={labelClass}>
           CTA label (optional)
           <input
             value={brief.ctaLabel}
             onChange={(e) => patch({ ctaLabel: e.target.value })}
             className={fieldClass}
           />
+          <span className="text-xs font-normal text-muted">
+            Overrides the CTA type&apos;s default wording, if set.
+          </span>
         </label>
-      </div>
 
-      <div className="mt-6 border-t border-border pt-5">
         <label className={labelClass}>
           Tone of voice
           <select
@@ -513,8 +514,7 @@ export default function ContentBriefPanel({
             })}
           </select>
           <span className="text-xs font-normal text-muted">
-            Internal editorial control (not a Google attribute). Options gated by primary intent
-            and angle.
+            Internal control, not a Google attribute. Gated by primary intent and angle.
           </span>
         </label>
       </div>
