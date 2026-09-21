@@ -48,10 +48,17 @@ Do not call a `site-analyzer` route, restore one, or treat a Site Analyzer profi
 It was retired from the v2 path deliberately (`5072820`) and GeekAPI's v1 route was deleted by
 `582a171`. Gap analysis remains Geek-SEO's and reaches Create via RAG.
 
-**The live trap:** `siteAnalysisProfileId` carries a **Geek-Crawler-v2 run id** since `4f7d540` — the
-name is legacy, the value is not. It is load-bearing: `ProjectForm` → `createProject` →
-`project.siteAnalysisProfileId` → `HierarchyContextPanel`. Deleting the field during a Site Analyzer
-sweep cuts grounding with no error. Rename it only as a coordinated change with GeekAPI's contract.
+**The trap, as it now stands:** the value a Site Analyzer sweep would delete is a **Geek-Crawler-v2
+run id**, whatever the field is called. On the live path it is called what it is —
+`gcc_projects.project_site_run_id`, `projectSiteRunId` in the browser — and it is resolved by the
+index check in `ProjectForm`. Without it a project has no crawl to ground on, which is why the form
+refuses to create one.
+
+The chain this paragraph used to name — `ProjectForm` → `createProject` →
+`project.siteAnalysisProfileId` → `HierarchyContextPanel` — no longer exists: `ProjectForm` was
+rewritten onto `projectSiteRunId` and `HierarchyContextPanel` is not in this repo at all. The legacy
+spelling survives only on `gcc_creates`, whose column stays `SiteAnalysisId` because renaming a
+column over live rows buys nothing.
 
 RAG is **Library-only — retrieval and verification**. `/v1/generate` and `rag-generate.*` were
 removed and must never be revived. See `.cursor/rules/geek-crawler-rag.mdc`.
@@ -205,23 +212,25 @@ keeping:
   `crawl_runs`). Content Creator's job is to **pass** a Run ID, not to own crawl identity.
 - A rename enforces nothing anyway — see below.
 
-**What enforces the invariant is removing the copies, not renaming anything.** Today
-`ProjectSummary` carries its own `projectUrl` **and** its own `siteAnalysisProfileId`, and
-`ProjectForm` collects the URL per project. One client with ten projects is ten copies of the site
-URL and ten independently-resolved run ids, free to disagree — different crawls, different ages, some
-naming slots that no longer exist. That is the accumulation that made this a mess before, and it is
-still open.
+**Superseded, 2026-09-21 — the site URL and its Run ID belong to the project, not the client.**
+Jeff decided this when the Project concept was defined, and `gcc_projects` implements it:
+`site_url` and `project_site_run_id` are columns on the project row
+(`plans/project-is-the-whole.md`). A client may run several projects over different sites or
+microsites over time, and a project is the thing that targets one of them.
 
-The shape to move to: the client holds `projectUrl` and `projectSiteRunId`, set once when the
-operator confirms the site (`indexed[url].runId` is already in hand at that moment); projects inherit
-and carry neither. A URL change then updates one field on one row.
+This paragraph used to say the opposite — "the client holds `projectUrl` and `projectSiteRunId`;
+projects inherit and carry neither" — and that is no longer the design. The concern behind it was
+real and is answered differently: the ten-copies problem came from `ProjectSummary` carrying a URL
+that nothing owned, on a record that was really an article. A project owns its site because a
+project *is* the engagement with that site; two projects on one site is two engagements, not a copy
+of a fact.
 
-**Rename pending: `siteAnalysisProfileId` → `projectSiteRunId`.** The field holds a Geek-Crawler-v2
-run id and has since `4f7d540`, while its doc comment still claims `geek_seo.site_analysis_profiles.Id`.
-It is load-bearing — `ProjectForm` → `createProject` → `project.siteAnalysisProfileId` →
-`HierarchyContextPanel` — so the rename is a coordinated change across `WorkflowGate`, `workflowHref`,
-`ProjectForm`, `content-writer-api`, `gcc-api` and GeekAPI's request contract. Never delete the field
-on a Site Analyzer sweep: the name is legacy, the value is not.
+**Rename done: `siteAnalysisProfileId` → `projectSiteRunId`.** The new tables use
+`project_site_run_id` throughout, and the frontend type is `projectSiteRunId`
+(`src/services/gcc-projects-api.ts`). The legacy name survives only on the retired blob-store path
+and on `gcc_creates`, whose column is still `SiteAnalysisId` because renaming a column over live
+rows buys nothing (`ContentCreatorDbContext.cs`). Never delete the field on a Site Analyzer sweep:
+the name is legacy, the value is a Geek-Crawler-v2 run id.
 
 **Correction, 2026-09-20.** This section used to assert the discarded design as fact — "a crawl always
 gets its own run", "never purge before the replacement exists", plus create/publish/commit/retire/abort
