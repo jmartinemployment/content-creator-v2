@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { ProjectSummary } from "@/lib/types";
 
 const STATUS_CLASS: Record<string, string> = {
@@ -12,7 +11,19 @@ const STATUS_CLASS: Record<string, string> = {
   Failed: "bg-red-100 text-red-800",
 };
 
-export default function ProjectList({ projects }: { projects: ProjectSummary[] }) {
+/**
+ * Picking a project opens it underneath this list rather than navigating to it. The list stays on
+ * screen while the work happens, so the operator can see which project the panels below belong to.
+ */
+export default function ProjectList({
+  projects,
+  selectedProjectId,
+  onSelect,
+}: {
+  projects: ProjectSummary[];
+  selectedProjectId: string | null;
+  onSelect: (projectId: string) => void;
+}) {
   if (projects.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
@@ -32,23 +43,38 @@ export default function ProjectList({ projects }: { projects: ProjectSummary[] }
           </tr>
         </thead>
         <tbody>
-          {projects.map((project) => (
-            <tr key={project.id} className="border-b border-border last:border-0 hover:bg-background/60">
-              {/* The keyword is what the project is about and the only column that helps pick
-                  one, so it is the link. */}
-              <td className="px-4 py-3">
-                <Link href={`/app/workflow/projects/${project.id}`} className="font-medium text-brand hover:underline">
-                  {project.targetKeyword}
-                </Link>
-              </td>
-              <td className="px-4 py-3">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[project.status] ?? ""}`}>
-                  {project.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-muted">{new Date(project.createdAtUtc).toLocaleDateString()}</td>
-            </tr>
-          ))}
+          {projects.map((project) => {
+            const selected = selectedProjectId === project.id;
+            return (
+              <tr
+                key={project.id}
+                className={`border-b border-border last:border-0 ${
+                  selected ? "bg-brand/5" : "hover:bg-background/60"
+                }`}
+              >
+                {/* The keyword is what the project is about and the only column that helps pick
+                    one, so it is what you click. */}
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(project.id)}
+                    aria-current={selected ? "true" : undefined}
+                    className={`text-left font-medium text-brand hover:underline ${
+                      selected ? "underline" : ""
+                    }`}
+                  >
+                    {project.targetKeyword}
+                  </button>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[project.status] ?? ""}`}>
+                    {project.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-muted">{new Date(project.createdAtUtc).toLocaleDateString()}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

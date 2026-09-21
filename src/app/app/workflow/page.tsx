@@ -1,19 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectList from "@/components/content-writer/ProjectList";
-import { getClients, getRecentProjects } from "@/services/content-writer-api";
-import type { Client, ProjectSummary } from "@/lib/types";
+import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
+import ContentResults from "@/components/content-writer/ContentResults";
+import ToolsFromNamesPanel from "@/components/content-writer/ToolsFromNamesPanel";
+import ReviewPublishPanel from "@/components/content-writer/ReviewPublishPanel";
+import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
+import { isContentBriefComplete, migrateBrief } from "@/lib/content-creator/brief-catalog";
+import type {
+  Client,
+  GeneratedContentSet,
+  ProjectDetail,
+  ProjectSummary,
+} from "@/lib/types";
 
+/**
+ * The whole workflow, on one page.
+ *
+ * Client → project → brief → tools → generate → review used to be two routes, and the second was
+ * reached only by navigating away from the first. Nothing about the work needs that: the operator
+ * picks a project and the panels open underneath the list, which stays on screen so it is always
+ * visible which project the work below belongs to.
+ */
 export default function WorkflowPage() {
-  const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<GeneratedContentSet | null>(null);
+  const [briefComplete, setBriefComplete] = useState(false);
+
+  // The brief is the sole research input, so it is the whole of what Generate waits on.
+  const canGenerate = briefComplete;
 
   useEffect(() => {
     let cancelled = false;
@@ -39,14 +64,61 @@ export default function WorkflowPage() {
     };
   }, []);
 
+  /**
+   * Selection clears the previous project's state here rather than in an effect. Carrying a draft
+   * or a brief verdict into the next project would attribute one project's work to another, and
+   * doing it at the point of selection means there is no render in between where the old values
+   * are shown under the new heading.
+   */
+  function selectProject(projectId: string | null) {
+    setSelectedProjectId(projectId);
+    setProject(null);
+    setProjectError(null);
+    setGenerated(null);
+    setBriefComplete(false);
+  }
+
+  // The cancelled flag is what keeps a slow response for a project the operator has already
+  // navigated off from landing on the one they are now looking at.
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await getProject(selectedProjectId);
+        if (cancelled) return;
+        setProject(detail);
+        setGenerated(detail.contentSet);
+        if (detail.briefJson) {
+          const brief = migrateBrief(JSON.parse(detail.briefJson));
+          setBriefComplete(isContentBriefComplete(brief));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setProjectError(
+          err instanceof Error ? err.message : "Could not load this project.",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
+
   function handleClientCreated(client: Client) {
     setClients((prev) => [...prev, client]);
     setSelectedClientId(client.id);
+    selectProject(null);
   }
 
-  function handleProjectCreated(project: ProjectSummary) {
-    setProjects((prev) => [project, ...prev]);
-    router.push(`/app/workflow/projects/${project.id}`);
+  function handleClientSelected(clientId: string) {
+    setSelectedClientId(clientId);
+    selectProject(null);
+  }
+
+  function handleProjectCreated(created: ProjectSummary) {
+    setProjects((prev) => [created, ...prev]);
+    selectProject(created.id);
   }
 
   const clientProjects = projects.filter((p) => p.clientId === selectedClientId);
@@ -70,18 +142,73 @@ export default function WorkflowPage() {
         <ClientsPanel
           clients={clients}
           selectedClientId={selectedClientId}
-          onSelect={setSelectedClientId}
+          onSelect={handleClientSelected}
           onCreated={handleClientCreated}
-                  onDeleted={(clientId) => {
+          onDeleted={(clientId) => {
             setClients((prev) => prev.filter((c) => c.id !== clientId));
             setSelectedClientId((prev) => (prev === clientId ? null : prev));
+            selectProject(null);
           }}
         />
 
         {selectedClientId ? (
           <>
             <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
-            <ProjectList projects={clientProjects} />
+            <ProjectList
+              projects={clientProjects}
+              selectedProjectId={selectedProjectId}
+              onSelect={selectProject}
+            />
+          </>
+        ) : null}
+
+        {projectError ? <p className="text-sm text-red-600">{projectError}</p> : null}
+
+        {selectedProjectId && !project && !projectError ? (
+          <p className="text-sm text-muted">Loading...</p>
+        ) : null}
+
+        {project ? (
+          <>
+            {/* The keyword leads: it is what the piece is about. The project name is a label the
+                operator chose and nothing derives from it, so it sits underneath. */}
+            <div className="border-t border-border pt-6">
+              <h2 className="text-2xl font-bold text-foreground">{project.targetKeyword}</h2>
+              <p className="mt-1 text-sm text-muted">
+                {project.name} · <span className="break-all">{project.projectUrl}</span>
+              </p>
+            </div>
+
+            <ContentBriefPanel
+              clientId={project.clientId}
+              projectSiteRunId={project.projectSiteRunId ?? undefined}
+              targetKeyword={project.targetKeyword}
+              createId={project.linkedCreateId ?? undefined}
+              projectId={project.id}
+              onBriefSaved={(_id, complete) => setBriefComplete(complete)}
+              onBriefValidityChange={setBriefComplete}
+            />
+            {briefComplete ? null : (
+              <p className="text-sm text-amber-700">
+                Content Brief incomplete — Generate will use the saved brief on the linked create;
+                complete the brief to ensure lede + body honor audience/angle/intent.
+              </p>
+            )}
+
+            <ToolsFromNamesPanel projectId={project.id} onGenerated={setGenerated} />
+
+            <ContentResults
+              projectId={project.id}
+              canGenerate={canGenerate}
+              result={generated}
+              onGenerated={setGenerated}
+            />
+
+            <ReviewPublishPanel
+              projectId={project.id}
+              result={generated}
+              onGenerated={setGenerated}
+            />
           </>
         ) : null}
       </div>
