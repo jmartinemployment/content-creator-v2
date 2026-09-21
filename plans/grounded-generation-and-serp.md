@@ -127,14 +127,48 @@ between two writers where no choice exists. Jeff, 2026-09-21:
 no cutover, and no writer to select. v2 contributes **no code** — it never executed, so nothing in it
 is proven — but its *intent* is the specification for what to add.
 
-**What "no concept of RAG" means concretely.** v1 was built before the corpus existed, so it has no
-notion of:
+**What was actually wrong with v1 — stated by Jeff, 2026-09-21:**
 
-- retrieving passages from the indexed crawl for the topic at hand,
-- verifying a quote against the block text it came from,
-- refusing when neither is available.
+> *"The problem with version one was it wasn't grounded enough, didn't cite or quote Partners/Tools,
+> said it used SERP and didn't."*
 
-Everything else it needs, it already has — and that is the part worth not breaking.
+**All three are one defect: grounding is optional, and its absence is silent.**
+`ContentGenerationOrchestrator.cs:869` says so in the code —
+*"research (KeywordSources/SerpIndex) is optional enrichment, **not a generation gate**. Brief +
+Hierarchy alone grounds generation."* Every grounding block is conditional and simply disappears
+when empty:
+
+| Block | Guard | When absent |
+|---|---|---|
+| Partner/tool quoteables | `if (research?.Quoteables is { Count: > 0 })` (`GccGenerateService.cs:169`) | omitted; generation continues |
+| Keyword SERP uploads | `if (research?.SerpPages is { Count: > 0 })` (`:185`) | omitted; generation continues |
+| SERP index (organics, PAA) | `if (research?.SerpIndex is { } serp)` (`:204`) | omitted; generation continues |
+
+Nothing ever *claims* SERP in words. The pipeline carries SERP fields, drops them when empty, and
+produces equally confident prose either way — so the operator cannot tell a grounded draft from an
+ungrounded one. That is what "said it used SERP and didn't" describes, and it is the same
+middle-state failure the repo already bans: *"Partial extraction is failure… it hid a total
+extraction outage behind thirteen drafts of filler"* (`AGENTS.md`).
+
+**So the requirement is not "add retrieval." It is three things, and the third is the one that was
+missing entirely:**
+
+1. **Retrieval** — passages from the indexed crawl for the topic at hand.
+2. **Citation and quotation of Partners/Tools** — verbatim quote plus its source, verified against
+   the block text it came from, not paraphrase the model produced unaided.
+3. **Provenance that is enforced, not asserted.** A draft records what actually fed it. Absent
+   grounding is a **refusal**, never a silent omission. This is `CLAUDE.md` §2 applied to the
+   product: never state a property nothing enforces.
+
+**Everything else v1 already has, and that is the part not to break:**
+`ContentGenerationOrchestrator` → `ContentDocument` → `SectionHtmlRenderer` — structure in a document
+model, markup produced in exactly one place, HTML out — plus a cross-linked schema graph that fails
+closed on an empty builder.
+
+**Note the inversion this forces.** `:869` is a deliberate decision, recorded with a commit
+(`293da90`), that made research optional so generation would not block. Reversing it means drafts
+that used to succeed will now refuse. That is the intended outcome — a refusal is information, a
+generic draft is not — but it is a behaviour change to make on purpose, not by accident.
 
 **What v1 already has, and must keep.** `ContentGenerationOrchestrator` → `ContentDocument` →
 `SectionHtmlRenderer` is the single correct output path: structure in a document model, markup
