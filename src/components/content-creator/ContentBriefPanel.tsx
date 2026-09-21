@@ -32,7 +32,6 @@ import {
   getGccCreate,
   patchBriefResearch,
 } from "@/services/gcc-api";
-import { updateProjectBrief } from "@/services/content-writer-api";
 import {
   clearSiteSectionHandoff,
   readSiteSectionHandoff,
@@ -43,7 +42,6 @@ export default function ContentBriefPanel({
   projectSiteRunId,
   targetKeyword,
   createId: createIdProp,
-  projectId,
   startingContentType = "blog",
   onBriefSaved,
   onBriefValidityChange,
@@ -53,8 +51,6 @@ export default function ContentBriefPanel({
   targetKeyword: string;
   /** When set, brief saves onto this create (does not open a second create). */
   createId?: string | null;
-  /** When set, brief is also linked to this Workflow project. */
-  projectId?: string;
   startingContentType?: string;
   /** Called when brief is persisted on a Content Creator create (server). */
   onBriefSaved: (createId: string, complete: boolean) => void;
@@ -267,9 +263,6 @@ export default function ContentBriefPanel({
     try {
       const id = await ensureCreateId();
       await patchBriefResearch(id, { briefJson: briefToJson(brief) });
-      if (projectId) {
-        await updateProjectBrief(projectId, { createId: id, briefJson: briefToJson(brief) });
-      }
       setSavedMsg("Brief saved on Content Creator create.");
       onBriefSaved(id, true);
     } catch (err) {

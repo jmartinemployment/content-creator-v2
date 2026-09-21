@@ -2,60 +2,59 @@
 
 import { useEffect, useState } from "react";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
-import ProjectForm from "@/components/content-writer/ProjectForm";
-import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
+import CreateForm from "@/components/content-creator/CreateForm";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
-import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
-import { isContentBriefComplete, migrateBrief } from "@/lib/content-creator/brief-catalog";
-import type { Client, ProjectDetail, ProjectSummary } from "@/lib/types";
+import { getClients } from "@/services/content-writer-api";
+import { listGccCreates, type GccCreate } from "@/services/gcc-api";
+import type { Client } from "@/lib/types";
 
 /**
- * The whole workflow, on one page.
+ * Client → create → brief → generate → revise → approve, on one page.
  *
- * Client → project → brief → tools → generate → review used to be two routes, and the second was
- * reached only by navigating away from the first. Nothing about the work needs that: the operator
- * picks a project and the panels open underneath the list, which stays on screen so it is always
- * visible which project the work below belongs to.
+ * There is no project. A project sat between the client and the thing being written and carried
+ * nothing of its own: its URL resolved to a Run ID, its keyword became the create's topic, its
+ * department was a passthrough. GccCreate holds all three, so the create is the unit of work.
  */
-/**
- * The project the list shows first for a client, or null when it has none. The list and this
- * function read the same array in the same order, so what opens is always the top row.
- */
-function firstProjectOf(
-  projects: ProjectSummary[],
-  clientId: string | null,
-): string | null {
+function mostRecent(creates: GccCreate[], clientId: string | null): string | null {
   if (!clientId) return null;
-  return projects.find((p) => p.clientId === clientId)?.id ?? null;
+  const mine = creates.filter((c) => c.clientId === clientId);
+  if (mine.length === 0) return null;
+  return mine.reduce((newest, c) =>
+    new Date(c.createdAtUtc) > new Date(newest.createdAtUtc) ? c : newest,
+  ).id;
 }
 
 export default function WorkflowPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [projectError, setProjectError] = useState<string | null>(null);
-  const [briefComplete, setBriefComplete] = useState(false);
-  // The Content Creator create the draft lives on. It comes off the project when one is already
-  // linked; a project that has never had a brief saved has none yet, and saving the brief mints it.
+  const [creates, setCreates] = useState<GccCreate[]>([]);
   const [createId, setCreateId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createsError, setCreatesError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getClients(), getRecentProjects()])
-      .then(([clientList, projectList]) => {
+    getClients()
+      .then(async (clientList) => {
         if (cancelled) return;
         setClients(clientList);
-        setProjects(projectList);
         const firstClient = clientList[0] ?? null;
         setSelectedClientId(firstClient?.id ?? null);
-        // Both halves of the page are populated on arrival. Opening the row the list already
-        // shows first means the brief, tools, generate and review below are about a real project
-        // rather than waiting on a click to exist at all.
-        setSelectedProjectId(firstProjectOf(projectList, firstClient?.id ?? null));
+        if (!firstClient) return;
+
+        // Listing is what lets the page reopen yesterday's work. It failing is not fatal — the
+        // form below still starts a new one — so it reports itself and leaves the rest usable.
+        try {
+          const list = await listGccCreates(firstClient.id);
+          if (cancelled) return;
+          setCreates(list);
+          setCreateId(mostRecent(list, firstClient.id));
+        } catch (err) {
+          if (cancelled) return;
+          setCreatesError(
+            err instanceof Error ? err.message : "Could not list existing work.",
+          );
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -70,65 +69,33 @@ export default function WorkflowPage() {
     };
   }, []);
 
-  /**
-   * Selection clears the previous project's state here rather than in an effect. Carrying a draft
-   * or a brief verdict into the next project would attribute one project's work to another, and
-   * doing it at the point of selection means there is no render in between where the old values
-   * are shown under the new heading.
-   */
-  function selectProject(projectId: string | null) {
-    setSelectedProjectId(projectId);
-    setProject(null);
-    setProjectError(null);
-    setBriefComplete(false);
+  async function selectClient(clientId: string | null) {
+    setSelectedClientId(clientId);
     setCreateId(null);
+    setCreatesError(null);
+    if (!clientId) return;
+    try {
+      const list = await listGccCreates(clientId);
+      setCreates(list);
+      setCreateId(mostRecent(list, clientId));
+    } catch (err) {
+      setCreatesError(
+        err instanceof Error ? err.message : "Could not list existing work.",
+      );
+    }
   }
-
-  // The cancelled flag is what keeps a slow response for a project the operator has already
-  // navigated off from landing on the one they are now looking at.
-  useEffect(() => {
-    if (!selectedProjectId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const detail = await getProject(selectedProjectId);
-        if (cancelled) return;
-        setProject(detail);
-        setCreateId(detail.linkedCreateId ?? null);
-        if (detail.briefJson) {
-          const brief = migrateBrief(JSON.parse(detail.briefJson));
-          setBriefComplete(isContentBriefComplete(brief));
-        }
-      } catch (err) {
-        if (cancelled) return;
-        setProjectError(
-          err instanceof Error ? err.message : "Could not load this project.",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
 
   function handleClientCreated(client: Client) {
     setClients((prev) => [...prev, client]);
     setSelectedClientId(client.id);
-    // A client created a moment ago has no projects; the form below is how it gets one.
-    selectProject(null);
+    setCreateId(null);
+    setCreatesError(null);
   }
 
-  function handleClientSelected(clientId: string) {
-    setSelectedClientId(clientId);
-    selectProject(firstProjectOf(projects, clientId));
+  function handleCreated(create: GccCreate) {
+    setCreates((prev) => [create, ...prev]);
+    setCreateId(create.id);
   }
-
-  function handleProjectCreated(created: ProjectSummary) {
-    setProjects((prev) => [created, ...prev]);
-    selectProject(created.id);
-  }
-
-  const clientProjects = projects.filter((p) => p.clientId === selectedClientId);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -149,93 +116,43 @@ export default function WorkflowPage() {
         <ClientsPanel
           clients={clients}
           selectedClientId={selectedClientId}
-          onSelect={handleClientSelected}
+          onSelect={(clientId) => void selectClient(clientId)}
           onCreated={handleClientCreated}
           onDeleted={(clientId) => {
             const remaining = clients.filter((c) => c.id !== clientId);
             setClients(remaining);
-            // The server cascades, so that client's projects are gone too — drop them here rather
-            // than leaving rows that 404 on the next click.
-            setProjects((prev) => prev.filter((p) => p.clientId !== clientId));
-
-            // Deleting the selected client has to hand the selection to another one. Everything
-            // below this panel is gated on a client being selected, so leaving it null empties the
-            // page from here down: the New Project form and the list both vanish, with clients
-            // still sitting in the panel above and nothing saying where the rest went.
+            setCreates((prev) => prev.filter((c) => c.clientId !== clientId));
+            // Deleting the selected client has to hand the selection on. Everything below is
+            // gated on a client, so leaving it null empties the page from here down.
             if (selectedClientId === clientId) {
-              const nextClientId = remaining[0]?.id ?? null;
-              setSelectedClientId(nextClientId);
-              selectProject(firstProjectOf(projects, nextClientId));
+              void selectClient(remaining[0]?.id ?? null);
             }
           }}
         />
 
         {selectedClientId ? (
-          <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
-        ) : null}
-
-        {projectError ? <p className="text-sm text-red-600">{projectError}</p> : null}
-
-        {selectedProjectId && !project && !projectError ? (
-          <p className="text-sm text-muted">Loading...</p>
-        ) : null}
-
-        {/* The page used to render nothing in every state but "a project is loaded": no client
-            selected, none chosen, one that failed to resolve. It ended after the form with no
-            explanation, which reads as broken rather than as empty. Each state now says what it
-            is and what to do about it. */}
-        {!selectedClientId ? (
+          <CreateForm clientId={selectedClientId} onCreated={handleCreated} />
+        ) : (
           <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
             Select a client above to start. Everything below is scoped to it.
           </p>
-        ) : null}
+        )}
 
-        {selectedClientId && clientProjects.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
-            This client has no projects yet. Create one with the form above — the brief, generate
-            and review steps open here once it exists.
+        {createsError ? (
+          <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            {createsError} Starting new work above still functions.
           </p>
         ) : null}
 
-        {project ? (
-          <>
-            {/* The keyword leads: it is what the piece is about. The project name is a label the
-                operator chose and nothing derives from it, so it sits underneath. */}
-            <div className="border-t border-border pt-6">
-              <h2 className="text-2xl font-bold text-foreground">{project.targetKeyword}</h2>
-              <p className="mt-1 text-sm text-muted">
-                {project.name} · <span className="break-all">{project.projectUrl}</span>
-              </p>
-            </div>
-
-            {/* Generate is Content Creator's. The workspace brings its own Content Brief, so the
-                standalone brief below is only the way in for a project that has no create yet —
-                saving it mints one, and the workspace takes over from there. */}
-            {createId ? (
-              <CreateDraftWorkspace createId={createId} />
-            ) : (
-              <>
-                <ContentBriefPanel
-                  clientId={project.clientId}
-                  projectSiteRunId={project.projectSiteRunId ?? undefined}
-                  targetKeyword={project.targetKeyword}
-                  projectId={project.id}
-                  onBriefSaved={(savedCreateId, complete) => {
-                    setBriefComplete(complete);
-                    if (savedCreateId) setCreateId(savedCreateId);
-                  }}
-                  onBriefValidityChange={setBriefComplete}
-                />
-                {briefComplete ? null : (
-                  <p className="text-sm text-amber-700">
-                    Content Brief incomplete — complete it to ensure lede + body honor
-                    audience/angle/intent.
-                  </p>
-                )}
-              </>
-            )}
-          </>
+        {/* Never render nothing. Empty and broken have to look different. */}
+        {selectedClientId && !createId && !createsError ? (
+          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
+            Nothing written for this client yet. Use the form above — the brief, generate and
+            review steps open here once it exists.
+          </p>
         ) : null}
+
+        {createId ? <CreateDraftWorkspace createId={createId} /> : null}
       </div>
     </div>
   );
