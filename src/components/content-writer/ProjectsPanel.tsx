@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   GCC_PROJECT_STATUS_LABELS,
   type GccProject,
@@ -77,14 +78,24 @@ export default function ProjectsPanel({
   onSelect: (projectId: string) => void;
   loading: boolean;
 }) {
+  // Cancelled projects stay in the database forever — a project can never actually be deleted;
+  // its log carries a row from the moment it exists, and that log refuses to be edited or removed
+  // by design. Hiding cancelled ones here is what stands in for "get this out of my way": no
+  // database change, no weakening of that guarantee, just fewer rows on screen by default. The
+  // toggle is what keeps that honest — "gone" is a display choice, never pretend it is deletion.
+  const [showCancelled, setShowCancelled] = useState(false);
+  const cancelledCount = projects.filter((p) => p.status === "cancelled").length;
+  const visible = showCancelled ? projects : projects.filter((p) => p.status !== "cancelled");
+
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold text-foreground">Projects</h2>
         {/* The count is the point: it is answerable by looking, without a request that changes
-            anything. */}
+            anything. Counts what is shown, not the raw row total — a cancelled duplicate hidden
+            from view should not still be counted as if it were live. */}
         <span className="text-sm text-muted">
-          {loading ? "Loading…" : `${projects.length} ${projects.length === 1 ? "project" : "projects"}`}
+          {loading ? "Loading…" : `${visible.length} ${visible.length === 1 ? "project" : "projects"}`}
         </span>
       </div>
 
@@ -94,8 +105,20 @@ export default function ProjectsPanel({
         </p>
       ) : null}
 
+      {!loading && cancelledCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowCancelled((v) => !v)}
+          className="mt-2 text-xs font-medium text-brand hover:underline"
+        >
+          {showCancelled
+            ? "Hide cancelled"
+            : `Show ${cancelledCount} cancelled ${cancelledCount === 1 ? "project" : "projects"}`}
+        </button>
+      ) : null}
+
       <div className="mt-4 flex flex-col gap-2">
-        {projects.map((project) => {
+        {visible.map((project) => {
           const selected = project.id === selectedProjectId;
           const due = dueNote(project);
           const start = formatDate(project.startDate);

@@ -56,9 +56,12 @@ export default function ContentBriefPanel({
 }) {
   const [brief, setBrief] = useState<ContentBrief>(() => emptyContentBrief());
   const [createId, setCreateId] = useState<string | null>(createIdProp ?? null);
-  // Read-only mirror of the project's keyword. Kept as state rather than used directly because
-  // it also keys brief storage and the create topic.
-  const [keywordInput] = useState(targetKeyword || "");
+  // What this create is about. Used to be a read-only mirror of the project's own target keyword —
+  // that field is gone (a project is an engagement now, not one article; see ProjectForm), so this
+  // was left permanently empty with nothing able to set it, and every create silently got the
+  // topic "untitled". Editable again: this is the create's topic and only the create's, so there is
+  // nothing left for it to drift out of sync with.
+  const [keywordInput, setKeywordInput] = useState(targetKeyword || "");
   const [hydrated, setHydrated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,6 +216,14 @@ export default function ContentBriefPanel({
 
   async function ensureCreateId(): Promise<string> {
     if (createId) return createId;
+    const topic = keywordInput.trim();
+    if (!topic) {
+      // No placeholder topic. "untitled" used to stand in here silently — a generic label
+      // masking a field nobody could actually fill in, which is exactly the auto-repair this
+      // codebase's fail-closed rule forbids. Refuse instead: the operator sees why nothing
+      // was created rather than discovering "untitled" three steps later.
+      throw new ApiError("Target keyword is required before a create can be started.", 400);
+    }
     const handoff = readSiteSectionHandoff();
     if (handoff && !handoff.section.relatedPages?.length) {
       throw new ApiError(
@@ -223,7 +234,7 @@ export default function ContentBriefPanel({
     const created = await createGccCreate({
       clientId,
       startingContentType,
-      topic: keywordInput.trim() || "untitled",
+      topic,
       projectSiteRunId: projectSiteRunId || handoff?.projectSiteRunId || null,
       siteSection: handoff?.section ?? null,
     });
@@ -240,6 +251,10 @@ export default function ContentBriefPanel({
   async function handleSaveBrief() {
     setError(null);
     setSavedMsg(null);
+    if (!createId && !keywordInput.trim()) {
+      setError("Required: Target keyword");
+      return;
+    }
     if (!isContentBriefComplete(brief)) {
       setError(`Required: ${missing.join(", ")}`);
       return;
@@ -295,18 +310,25 @@ export default function ContentBriefPanel({
         until required fields are saved.
       </p>
 
-      {/* The project's keyword, shown not asked. It was an editable field here, and editing it
-          changed almost nothing: the hierarchy match keys on the project's targetKeyword, while
-          this input fed a separate state used for a storage key and for the create topic - and the
-          latter only when no create existed yet. Two fields with one name, diverging in silence.
-          Changing the keyword means changing the project. */}
+      {/* What this create is about. Editable up until a create exists: ensureCreateId reads it
+          exactly once, to mint the create's topic, and returns early forever after — so once
+          createId is set, further edits here are cosmetic and change nothing on the server. */}
       <div className="mt-5">
-        <p className={labelClass}>
-          Target keyword
-          <span className={`${fieldClass} block font-normal`}>
-            {keywordInput || "None set on this project."}
-          </span>
-        </p>
+        <label className={labelClass}>
+          Target keyword{requiredMark(!!keywordInput.trim() || !!createId)}
+          <input
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            disabled={!!createId}
+            placeholder="ai chatbot implementation cost"
+            className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
+          />
+          {createId ? (
+            <span className="text-xs font-normal text-muted">
+              Set when this create was started — no longer editable.
+            </span>
+          ) : null}
+        </label>
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">

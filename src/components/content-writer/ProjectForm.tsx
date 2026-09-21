@@ -179,8 +179,39 @@ export default function ProjectForm({
   const inputClass =
     "rounded-md border border-border bg-white px-3 py-2 text-sm font-normal outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
 
+  /**
+   * Enter in any single-line field natively submits the form — standard browser behaviour with no
+   * opt-out short of this. Harmless on most forms; a real problem here specifically, because a
+   * successful submit deliberately leaves every field filled (so the operator can see what they
+   * just created) and mints a fresh idempotency key for whatever comes next. Put those two together
+   * and every stray Enter after a successful create — typing a description, tabbing through
+   * fields, an old habit from a search box — resubmits the still-valid form under a brand new key,
+   * which is not a duplicate the server can catch: it is a distinct, deliberate-looking create. The
+   * idempotency key only ever protected against repeating one submission, never against a run of
+   * genuinely new ones each triggered by a keystroke nobody meant as a submit.
+   *
+   * Textareas are excluded: Enter there inserts a newline, which is what Partner/Competitor URLs
+   * need for one URL per line. The submit button is excluded too: a keyboard-only operator tabbing
+   * to "Create Project" and pressing Enter there is the deliberate submit action, not a stray
+   * keystroke, and blocking it would trade one accessibility problem for another.
+   */
+  function blockEnterSubmit(e: React.KeyboardEvent<HTMLFormElement>) {
+    if (
+      e.key === "Enter" &&
+      e.target instanceof HTMLElement &&
+      e.target.tagName !== "TEXTAREA" &&
+      e.target.tagName !== "BUTTON"
+    ) {
+      e.preventDefault();
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={blockEnterSubmit}
+      className="rounded-xl border border-border bg-surface p-6 shadow-sm"
+    >
       <h2 className="text-lg font-semibold text-foreground">New Project</h2>
       <p className="mt-1 text-sm text-muted">
         A project is one engagement for this client: a name, a schedule, and the site it targets.
