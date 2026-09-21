@@ -78,7 +78,9 @@ export default function ProjectsPanel({
 }: {
   projects: GccProject[];
   selectedProjectId: string | null;
-  onSelect: (projectId: string) => void;
+  /** Clicking the already-selected project passes null — the only way to get back to no project
+   *  selected at all, which is also what brings New Project back instead of the "+" button. */
+  onSelect: (projectId: string | null) => void;
   onDeleted: (projectId: string) => void;
   loading: boolean;
 }) {
@@ -163,8 +165,9 @@ export default function ProjectsPanel({
             >
               <button
                 type="button"
-                onClick={() => onSelect(project.id)}
+                onClick={() => onSelect(selected ? null : project.id)}
                 aria-current={selected ? "true" : undefined}
+                aria-pressed={selected}
                 className="flex flex-1 flex-col items-start gap-1 text-left"
               >
                 <span className="flex w-full flex-wrap items-center gap-2">
