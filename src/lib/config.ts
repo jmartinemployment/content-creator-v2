@@ -42,7 +42,11 @@ export const authConfig = {
   // fixed — an override only creates a second host that can disagree with NEXT_PUBLIC_APP_URL,
   // which is exactly what stranded the PKCE cookie and broke sign-in.
   redirectUri: `${appUrl}/auth/callback`,
-  scope: "openid profile email offline_access",
+  // content-creator.manage is what GeekAPI's project routes check for. GeekOAuth is shared across
+  // Geek apps, so a valid token proves only that someone signed in somewhere — the scope is what
+  // says this app's user was granted this client's project and billing data. Without it every
+  // project route answers 403 to a user who looks correctly signed in.
+  scope: "openid profile email offline_access content-creator.manage",
   appUrl,
 };
 
