@@ -298,8 +298,14 @@ export default function ContentBriefPanel({
   const fieldClass =
     "mt-auto rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
   const labelClass = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
-  const requiredMark = (ok: boolean) =>
-    ok ? null : <span className="text-red-600"> (required)</span>;
+  // Always rendered, never conditionally omitted: a label that reads "Primary intent" while
+  // empty and "Primary intent (required)" once cleared can wrap to a second line only in the
+  // empty state, growing that field's row and shifting every field below it as the operator
+  // fills the form in. `invisible` reserves the same space either way — this is the same fix
+  // already applied to Secondary intent's "(optional)" text, generalized to every field here.
+  const requiredMark = (ok: boolean) => (
+    <span className={`text-red-600 ${ok ? "invisible" : ""}`}> (required)</span>
+  );
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
@@ -462,6 +468,9 @@ export default function ContentBriefPanel({
               </option>
             ))}
           </select>
+          {/* Matches Angle for SEO's caption line so the two selects, row-mates in this grid,
+              land at the same height instead of Discovery CTA type's sitting lower. */}
+          <span className="text-xs font-normal text-muted">Google Ads call-to-action type.</span>
         </label>
 
         <label className={`${labelClass} sm:col-span-2`}>

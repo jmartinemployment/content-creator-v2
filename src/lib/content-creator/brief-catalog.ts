@@ -220,7 +220,10 @@ export function emptyContentBrief(): ContentBrief {
     ctaType: "",
     ctaLabel: "",
     toneOfVoice: "",
-    eeatSignals: [],
+    // All four on by default — E-E-A-T applies to virtually every piece, and requiring a click
+    // per signal just to satisfy "pick at least one" was friction with no editorial value. An
+    // operator who wants fewer still deselects the ones that do not apply to this piece.
+    eeatSignals: EEAT_SIGNALS.map((s) => s.value),
     lengthBand: "",
     writingNotes: "",
     serpTitles: "",

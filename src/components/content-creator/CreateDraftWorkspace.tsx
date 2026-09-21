@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import ContentBriefPanel from "./ContentBriefPanel";
-import CreateAiToolsPanel from "./CreateAiToolsPanel";
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
@@ -299,12 +298,6 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
             <p className="mt-2 text-sm whitespace-pre-wrap">{generateMsg}</p>
           ) : null}
         </section>
-
-        <CreateAiToolsPanel
-          createId={createId}
-          artifacts={detail.artifacts}
-          onGenerated={() => void reload()}
-        />
       </div>
 
       {!version ? (
