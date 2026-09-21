@@ -325,8 +325,11 @@ export default function ContentBriefPanel({
           </select>
         </label>
 
+        {/* No "(optional)": it wrapped the label to two lines while "Primary intent" stayed at
+            one, so the two selects sat at different heights. The select defaults to None and
+            carries no required mark, which already says optional. */}
         <label className={labelClass}>
-          Secondary intent (optional)
+          Secondary intent
           <select
             value={brief.secondaryIntent}
             onChange={(e) =>
@@ -344,7 +347,7 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Buying stage (Full Funnel){requiredMark(!!brief.buyingStage)}
+          Buying stage{requiredMark(!!brief.buyingStage)}
           <select
             value={brief.buyingStage}
             onChange={(e) =>
