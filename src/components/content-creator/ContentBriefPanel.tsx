@@ -287,8 +287,13 @@ export default function ContentBriefPanel({
     );
   }
 
+  // mt-auto is what keeps controls on the same line as each other. Each label is a flex column in
+  // a grid cell, and grid cells stretch to the tallest in the row, so a label that wraps — and
+  // "Secondary intent (optional)" wraps where "Primary intent" does not — pushed its own control
+  // down while its neighbour's stayed put. Pushing every control to the bottom of its cell aligns
+  // the row regardless of how many lines each label takes.
   const fieldClass =
-    "rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
+    "mt-auto rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
   const labelClass = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
   const requiredMark = (ok: boolean) =>
     ok ? null : <span className="text-red-600"> (required)</span>;
