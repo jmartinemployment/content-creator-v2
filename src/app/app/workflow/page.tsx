@@ -189,6 +189,17 @@ export default function WorkflowPage() {
               projects={visibleProjects}
               selectedProjectId={selectedProjectId}
               onSelect={selectProject}
+              onDeleted={(projectId) => {
+                setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+                // Deleting the selected project has to hand the selection to another one, the same
+                // rule ClientsPanel's onDeleted follows above — otherwise everything gated on a
+                // project (profile, work, deliverables, brief) vanishes with nothing explaining why.
+                if (selectedProjectId === projectId) {
+                  const remaining = visibleProjects.filter((p) => p.id !== projectId);
+                  selectProject(remaining[0]?.id ?? null);
+                }
+              }}
               loading={projectsLoading}
             />
 

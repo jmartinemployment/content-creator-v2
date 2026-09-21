@@ -207,6 +207,18 @@ export function changeProjectStatus(
   });
 }
 
+/**
+ * Delete a project.
+ *
+ * This is a soft delete on the server — the row and its log survive underneath — but from here it
+ * disappears for good: gone from every list, and a further fetch 404s. There is no undo.
+ */
+export function deleteProject(id: string): Promise<void> {
+  return projectsRequest<void>(`${PROJECTS}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 const CLIENTS = "/api/geek-content-creator/clients";
 
 /** Every part optional — plenty of real clients have only a country. */
