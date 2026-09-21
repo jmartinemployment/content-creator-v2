@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectForm from "@/components/content-writer/ProjectForm";
-import ProjectList from "@/components/content-writer/ProjectList";
 import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import { getClients, getProject, getRecentProjects } from "@/services/content-writer-api";
@@ -129,8 +128,6 @@ export default function WorkflowPage() {
     selectProject(created.id);
   }
 
-  const clientProjects = projects.filter((p) => p.clientId === selectedClientId);
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -172,18 +169,7 @@ export default function WorkflowPage() {
         />
 
         {selectedClientId ? (
-          <>
-            <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
-            <ProjectList
-              projects={clientProjects}
-              selectedProjectId={selectedProjectId}
-              onSelect={selectProject}
-              onDeleted={(projectId) => {
-                setProjects((prev) => prev.filter((p) => p.id !== projectId));
-                if (selectedProjectId === projectId) selectProject(null);
-              }}
-            />
-          </>
+          <ProjectForm clientId={selectedClientId} onCreated={handleProjectCreated} />
         ) : null}
 
         {projectError ? <p className="text-sm text-red-600">{projectError}</p> : null}
