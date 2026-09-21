@@ -8,6 +8,7 @@ import {
   type GccProject,
   type GccProjectStatus,
 } from "@/services/gcc-projects-api";
+import ProjectForm from "./ProjectForm";
 
 /** Status colours. Finished and cancelled are both terminal, and read differently on purpose. */
 const STATUS_CLASS: Record<GccProjectStatus, string> = {
@@ -70,20 +71,28 @@ function dueNote(project: GccProject): { text: string; className: string } | nul
  * store that silently deleted them went unnoticed.
  */
 export default function ProjectsPanel({
+  clientId,
   projects,
   selectedProjectId,
   onSelect,
+  onCreated,
   onDeleted,
   loading,
 }: {
+  clientId: string;
   projects: GccProject[];
   selectedProjectId: string | null;
-  /** Clicking the already-selected project passes null — the only way to get back to no project
-   *  selected at all, which is also what brings New Project back instead of the "+" button. */
+  /** Clicking the already-selected project passes null. */
   onSelect: (projectId: string | null) => void;
+  onCreated: (project: GccProject) => void;
   onDeleted: (projectId: string) => void;
   loading: boolean;
 }) {
+  // Creating a project is this panel's own concern, the same way ClientsPanel owns creating a
+  // client — not something the page above wires up as a separate sibling form. Closed by default,
+  // same as ClientsPanel's "+ New client": nothing here auto-opens or auto-closes on selection.
+  const [showForm, setShowForm] = useState(false);
+
   // Cancelled is a status, shown or hidden here without touching a row. Delete is a separate,
   // real action below — a project can never truly be removed (its log carries a row from the
   // moment it exists, and that log refuses to be edited or removed by design), but the server
@@ -117,19 +126,41 @@ export default function ProjectsPanel({
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">Projects</h2>
-        {/* The count is the point: it is answerable by looking, without a request that changes
-            anything. Counts what is shown, not the raw row total — a cancelled duplicate hidden
-            from view should not still be counted as if it were live. */}
-        <span className="text-sm text-muted">
-          {loading ? "Loading…" : `${visible.length} ${visible.length === 1 ? "project" : "projects"}`}
-        </span>
+        <div className="flex items-center gap-3">
+          {/* The count is the point: it is answerable by looking, without a request that changes
+              anything. Counts what is shown, not the raw row total — a cancelled duplicate hidden
+              from view should not still be counted as if it were live. */}
+          <span className="text-sm text-muted">
+            {loading ? "Loading…" : `${visible.length} ${visible.length === 1 ? "project" : "projects"}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            className="shrink-0 text-sm font-medium text-brand hover:underline"
+          >
+            {showForm ? "Cancel" : "+ New Project"}
+          </button>
+        </div>
       </div>
 
-      {!loading && projects.length === 0 ? (
+      {showForm ? (
+        <div className="mt-4 border-t border-border pt-4">
+          <ProjectForm
+            key={clientId}
+            clientId={clientId}
+            onCreated={(project) => {
+              onCreated(project);
+              setShowForm(false);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {!loading && projects.length === 0 && !showForm ? (
         <p className="mt-4 text-sm text-muted">
-          No projects for this client yet. Create one below.
+          No projects for this client yet. Click “+ New Project” above to create one.
         </p>
       ) : null}
 

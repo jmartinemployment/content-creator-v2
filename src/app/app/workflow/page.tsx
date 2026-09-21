@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
-import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectsPanel from "@/components/content-writer/ProjectsPanel";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
@@ -36,11 +35,6 @@ export default function WorkflowPage() {
   const [loadedForClientId, setLoadedForClientId] = useState<string | null>(null);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  // New Project starts collapsed behind a button once a project exists to look at instead —
-  // selecting an existing project used to leave the create form sitting open right above it with
-  // nothing visibly different, which read as "the click did nothing." Reset on every selection
-  // change so it never carries a stray open state from one project, or one client, to the next.
-  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
 
   const [briefComplete, setBriefComplete] = useState(false);
   // The Content Creator create the draft lives on. A create is not yet owned by a project — that
@@ -116,7 +110,6 @@ export default function WorkflowPage() {
     setSelectedProjectId(projectId);
     setBriefComplete(false);
     setCreateId(null);
-    setShowNewProjectForm(false);
   }
 
   function handleClientCreated(client: GccClient) {
@@ -192,9 +185,11 @@ export default function WorkflowPage() {
         {selectedClientId ? (
           <>
             <ProjectsPanel
+              clientId={selectedClientId}
               projects={visibleProjects}
               selectedProjectId={selectedProjectId}
               onSelect={selectProject}
+              onCreated={handleProjectCreated}
               onDeleted={(projectId) => {
                 setProjects((prev) => prev.filter((p) => p.id !== projectId));
 
@@ -210,25 +205,6 @@ export default function WorkflowPage() {
             />
 
             {projectsError ? <p className="text-sm text-red-600">{projectsError}</p> : null}
-
-            {/* Open outright when there is nothing else to look at yet; otherwise collapsed
-                behind a button, so selecting an existing project is what fills the page, not a
-                create form that was there the whole time regardless of what got clicked. */}
-            {!project || showNewProjectForm ? (
-              <ProjectForm
-                key={selectedClientId}
-                clientId={selectedClientId}
-                onCreated={handleProjectCreated}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowNewProjectForm(true)}
-                className="self-start rounded-md border border-dashed border-border px-4 py-2 text-sm font-medium text-muted hover:border-brand/40 hover:text-brand"
-              >
-                + New Project
-              </button>
-            )}
           </>
         ) : null}
 

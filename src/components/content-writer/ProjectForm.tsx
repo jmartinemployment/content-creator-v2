@@ -61,7 +61,9 @@ function IndexReport({
 }
 
 /**
- * Start a project for this client.
+ * Start a project for this client. Embedded in ProjectsPanel, behind its "+ New Project" toggle —
+ * not a standalone sibling on the page, the same way ClientsPanel owns creating a client rather
+ * than leaving that to whatever renders it.
  *
  * A project is an engagement: a name, a schedule, and the site it targets. It is no longer a target
  * keyword — two pieces of content about one keyword are two pieces of content under one project,
@@ -207,13 +209,10 @@ export default function ProjectForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      onKeyDown={blockEnterSubmit}
-      className="rounded-xl border border-border bg-surface p-6 shadow-sm"
-    >
-      <h2 className="text-lg font-semibold text-foreground">New Project</h2>
-      <p className="mt-1 text-sm text-muted">
+    <form onSubmit={handleSubmit} onKeyDown={blockEnterSubmit}>
+      {/* No heading of its own — embedded in ProjectsPanel, under its "+ New Project" toggle,
+          the same way ClientsPanel's inline create form has none either. */}
+      <p className="text-sm text-muted">
         A project is one engagement for this client: a name, a schedule, and the site it targets.
         Content Creator does not crawl — Geek-Crawler does. Each URL below is checked against the
         index when you leave the field, to confirm evidence already exists.
