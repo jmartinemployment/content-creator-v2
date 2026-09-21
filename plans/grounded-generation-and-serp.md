@@ -349,19 +349,40 @@ it never declared one.
    integration/limitation no passage states, and must omit what the evidence does not cover — and
    labels each passage *retrieved from the crawl index* or *operator-supplied*.
 
-4. **Map RAG's typed blocks → `ContentDocument`. BLOCKED at the RAG boundary — found 2026-09-21.**
-   Retrieval does not deliver typed blocks. `HttpGeekCrawlerRagClient.MapChunksToQuoteable`
-   (`:761`) builds each `GccQuoteablePage` from `ChunkDto.Text` and sets **`Headings: []`** — flat
-   strings from RAG's `derive_plaintext_from_blocks` projection, which discards every href, tag and
-   heading marker by design (`AGENTS.md`). So `QuoteParagraph`, `CodeParagraph` and
-   `DefinitionParagraph` cannot be populated from retrieval as it stands, and a retrieved glossary
-   or code sample arrives as undifferentiated prose.
+4. **Map typed corpus blocks → `ContentDocument`.**
 
-   `AGENTS.md` already names the fix as the migration target: structure is recoverable from
-   `blocks` (`heading.level`, per-block `html`, per-block `anchors`) even though it is not
-   recoverable from the projection. Two ways to get them: RAG returns block-typed chunks, or
-   GeekAPI reads `crawl_pages.Blocks` for the `PageId` each chunk already carries and slices them.
-   The second needs no change to Geek-Crawler-Rag.
+   **Correction, 2026-09-21 — "RAG flattens" was wrong framing and is withdrawn.** Two different
+   things were collapsed into one:
+
+   | | Markdown conversion | The plaintext projection |
+   |---|---|---|
+   | What it did | Threw hrefs and heading levels away **irrecoverably** | Derives a flat string **alongside** the blocks |
+   | Why | A failed implementation | Chunk text and verification text must be *the same string*, or correct citations fail |
+   | Recoverable | No — no blocks to fall back on; 5,274 pages went | **Yes — the blocks are still in Mongo** |
+
+   `block_text.py`'s own docstring states the purpose: *"a quote comes out of a retrieved chunk and
+   is then matched against the page projection, so any divergence makes correct citations fail."*
+   Non-destructive and deliberate.
+
+   **So nothing is blocked and nothing is lost. GeekAPI simply was not reading the blocks it
+   already had.** `MapChunksToQuoteable` (`:761`) builds each `GccQuoteablePage` from
+   `ChunkDto.Text` with `Headings: []` — correct for prompt text, but it is the projection, not the
+   structure. The design anticipated this: `ChunkDto` carries `PageId`, so a matched chunk leads
+   straight back to its page's blocks.
+
+   `AGENTS.md` already names the route: structure is recoverable from `blocks` (`heading.level`,
+   per-block `html`, per-block `anchors`) even though it is not recoverable from the projection.
+   Read `crawl_pages.Blocks` for the retrieved URLs — no change to Geek-Crawler-Rag, and no second
+   text projection, which is the thing that must never be written twice.
+
+   **`GccCorpusBlockMapper` — DONE 2026-09-21.** Blocks in, typed nodes out, kind for kind: `quote`
+   → `QuoteParagraph` carrying the page URL as `Cite`; `code` → `CodeParagraph` as raw text;
+   `term`/`definition` → paired `DefinitionItem`s; consecutive `listItem`s → one `ListParagraph`,
+   closed when a paragraph interrupts or `ordered` flips. A `row` has no node type, so its cells
+   are joined rather than dropped. An anchor becomes an `Href` only when it labels the whole block
+   text — anchors carry no offsets, so placing a partial link would be guessing at structure, which
+   is the failure the mapper exists to avoid. 14 tests, including that all seven kinds survive one
+   page. `IGccCrawlPageReader` reads the pages by URL within a run (≤32 per call).
 
    **Attribution did not need this and shipped first** — a chunk plus its URL is already a citable
    quote. Typed blocks preserve *shape* (code as code, a glossary as a glossary), which is
