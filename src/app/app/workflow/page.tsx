@@ -153,12 +153,21 @@ export default function WorkflowPage() {
           onSelect={handleClientSelected}
           onCreated={handleClientCreated}
           onDeleted={(clientId) => {
-            setClients((prev) => prev.filter((c) => c.id !== clientId));
+            const remaining = clients.filter((c) => c.id !== clientId);
+            setClients(remaining);
             // The server cascades, so that client's projects are gone too — drop them here rather
             // than leaving rows that 404 on the next click.
             setProjects((prev) => prev.filter((p) => p.clientId !== clientId));
-            setSelectedClientId((prev) => (prev === clientId ? null : prev));
-            if (selectedClientId === clientId) selectProject(null);
+
+            // Deleting the selected client has to hand the selection to another one. Everything
+            // below this panel is gated on a client being selected, so leaving it null empties the
+            // page from here down: the New Project form and the list both vanish, with clients
+            // still sitting in the panel above and nothing saying where the rest went.
+            if (selectedClientId === clientId) {
+              const nextClientId = remaining[0]?.id ?? null;
+              setSelectedClientId(nextClientId);
+              selectProject(firstProjectOf(projects, nextClientId));
+            }
           }}
         />
 
