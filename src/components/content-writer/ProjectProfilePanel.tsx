@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   changeProjectStatus,
+  deleteProjectLogEntry,
   getProjectLog,
   GCC_PROJECT_STATUSES,
   GCC_PROJECT_STATUS_LABELS,
@@ -40,6 +41,7 @@ const EVENT_LABELS: Record<string, string> = {
   project_created: "Project created",
   project_updated: "Project updated",
   project_status_changed: "Status changed",
+  log_entry_deleted: "History entry deleted",
 };
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -54,9 +56,11 @@ function Field({ label, value }: { label: string; value: string }) {
 /**
  * A project's profile, schedule and log.
  *
- * The log is shown because it is the record nothing can quietly rewrite — the database refuses
- * UPDATE and DELETE on it. Everything above the log describes what the project is now; the log is
- * how it got there.
+ * The log is shown because it is the record nothing can quietly rewrite — the database still
+ * refuses to UPDATE a row in place. A row can be deleted outright since 2026-09-21, but even that
+ * leaves a trace: deleting one writes a log_entry_deleted entry recording who removed it and when,
+ * so the log still shows a removal happened even though it can no longer show what was removed.
+ * Everything above the log describes what the project is now; the log is how it got there.
  */
 export default function ProjectProfilePanel({
   project,
@@ -96,6 +100,31 @@ export default function ProjectProfilePanel({
 
   const entries = log?.projectId === project.id ? log.entries : null;
   const entriesError = logError?.projectId === project.id ? logError.message : null;
+
+  const [confirmingEntryId, setConfirmingEntryId] = useState<number | null>(null);
+  const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
+  const [deleteEntryError, setDeleteEntryError] = useState<string | null>(null);
+
+  /**
+   * Deleting an entry also writes a new one (log_entry_deleted), so the list is refetched rather
+   * than spliced locally — the replacement's id, timestamp and actor all come from the server.
+   */
+  async function handleDeleteEntry(entry: GccProjectLogEntry) {
+    setDeleteEntryError(null);
+    setDeletingEntryId(entry.id);
+    try {
+      await deleteProjectLogEntry(project.id, entry.id);
+      setConfirmingEntryId(null);
+      const refreshed = await getProjectLog(project.id);
+      setLog({ projectId: project.id, entries: refreshed });
+    } catch (err) {
+      setDeleteEntryError(
+        err instanceof ApiError ? err.message : "Could not delete that entry.",
+      );
+    } finally {
+      setDeletingEntryId(null);
+    }
+  }
 
   async function handleStatus(next: GccProjectStatus) {
     if (next === project.status) return;
@@ -165,6 +194,7 @@ export default function ProjectProfilePanel({
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">History</h3>
 
         {entriesError ? <p className="mt-3 text-sm text-red-600">{entriesError}</p> : null}
+        {deleteEntryError ? <p className="mt-3 text-sm text-red-600">{deleteEntryError}</p> : null}
         {!entries && !entriesError ? <p className="mt-3 text-sm text-muted">Loading…</p> : null}
 
         {entries && entries.length === 0 ? (
@@ -177,14 +207,46 @@ export default function ProjectProfilePanel({
 
         {entries && entries.length > 0 ? (
           <ol className="mt-3 flex flex-col gap-3">
-            {entries.map((entry) => (
-              <li key={entry.id} className="border-l-2 border-border pl-3">
-                <p className="text-sm font-medium text-foreground">
-                  {EVENT_LABELS[entry.eventType] ?? entry.eventType}
-                </p>
-                <p className="text-xs text-muted">{formatInstant(entry.occurredAtUtc)}</p>
-              </li>
-            ))}
+            {entries.map((entry) => {
+              const confirming = confirmingEntryId === entry.id;
+              const deleting = deletingEntryId === entry.id;
+              return (
+                <li
+                  key={entry.id}
+                  className="flex items-start justify-between gap-3 border-l-2 border-border pl-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {EVENT_LABELS[entry.eventType] ?? entry.eventType}
+                    </p>
+                    <p className="text-xs text-muted">{formatInstant(entry.occurredAtUtc)}</p>
+                  </div>
+
+                  {/* Permanent — there is no undo, and no soft-delete underneath this one the way
+                      a project has. A second, deliberate click is what stands between here and gone. */}
+                  {confirming ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteEntry(entry)}
+                      disabled={deleting}
+                      className="shrink-0 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleting ? "Deleting…" : "Delete for good?"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingEntryId(entry.id)}
+                      aria-label="Delete this history entry"
+                      title="Delete this history entry"
+                      className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-muted hover:bg-red-50 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         ) : null}
       </div>

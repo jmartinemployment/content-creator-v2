@@ -118,6 +118,20 @@ export function getProjectLog(id: string): Promise<GccProjectLogEntry[]> {
   );
 }
 
+/**
+ * Delete one History entry, for real.
+ *
+ * Unlike deleteProject, this is a true, permanent delete on the server — the entry's own content
+ * does not survive it. What does survive is a new entry recording that a deletion happened and who
+ * did it, so History still shows the removal even though it can no longer show what was removed.
+ */
+export function deleteProjectLogEntry(projectId: string, logEntryId: number): Promise<void> {
+  return projectsRequest<void>(
+    `${PROJECTS}/${encodeURIComponent(projectId)}/log/${logEntryId}`,
+    { method: "DELETE" },
+  );
+}
+
 export interface CreateProjectInput {
   clientId: string;
   /**
