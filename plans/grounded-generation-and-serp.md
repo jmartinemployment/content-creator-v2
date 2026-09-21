@@ -196,6 +196,64 @@ until Stage 4 lands.
 
 ## Stage 4 — Bring grounding to v1 *(inverted by Stage 1's decision)*
 
+**The output contract, which decides this stage's shape.** The output must end up HTML, and there
+must be **one** solution that produces it. `SectionHtmlRenderer` already is that solution and says
+so: *"The only place tag characters are produced in the whole pipeline."* It builds an
+HtmlAgilityPack DOM node-by-node from a `ContentDocument` — never string concatenation — so tags are
+balanced by construction and inserted text is encoded automatically.
+
+**Therefore the model never emits markup. Not Markdown, not HTML.** It returns content; the document
+model holds structure; the renderer makes tags. Any prompt asking the model for `##` or for `<h2>`
+creates a second markup producer and is wrong for the same reason.
+
+**Correction — my own error, 2026-09-21.** Removing Markdown from `GccGenerateService` (:260,
+:1995, :2030, :2122) was right; replacing it with *model-authored HTML* was not. That swapped which
+markup the model invents instead of taking markup out of the model's job, and made
+`GccGenerateService` a second tag producer. Jeff caught it: *"producing two solutions to out html."*
+
+**The block-kind gap, measured.** The corpus types seven kinds
+(`Geek-Crawler-v2/src/crawl/extract-content.ts:418-425`). `ContentDocument`
+(`Workflow/Domain/Entities/ContentDocument.cs`) represents four:
+
+| Corpus block | `ContentDocument` | |
+|---|---|---|
+| `heading(level)` | `Section` heading + nesting | present |
+| `paragraph` | `TextParagraph(Runs)` | present |
+| `listItem(ordered)` | `ListParagraph(Ordered, Items)` | present |
+| anchors | `Run.Href` | present |
+| `quote` | — | **missing** |
+| `code` | — | **missing** |
+| `term` / `definition` | — | **missing** |
+
+**Why the gap exists, and it is not an oversight:** v1 had no exposure to RAG or to ingesting those
+pipelines. `ContentDocument` was designed for article output, so it covers the article-shaped kinds
+and lacks the ones real crawled pages carry — code on docs pages, definition lists on glossaries,
+blockquotes. Same category error as Readability: an article-shaped model applied to a corpus that is
+mostly not articles.
+
+**This also prices what v2 was destroying.** `ListParagraph` and `Run.Href` already exist, so
+`MarkdownToSection` trimming `-`/`*` into prose and `:764`'s hand-rolled `[text](href)` scanner were
+flattening and then reconstructing structure the target model holds natively.
+
+**The work, in order:**
+
+1. **Extend `ContentDocument`** with `QuoteParagraph`, `CodeParagraph`, `DefinitionParagraph` and
+   their `SectionHtmlRenderer` branches. Additive — `Paragraph` is already an abstract record with
+   two implementations, and the renderer stays the only tag producer.
+2. **Map RAG's typed blocks → `ContentDocument` directly.** Block kind to node type. No Markdown, no
+   model-authored HTML, and not via the flat text projection — that projection discards hrefs, tags
+   and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
+3. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
+   today (`GccController.cs:667`, `:674` — `bodyJson`), which is the deviation recorded below.
+   `ExtractSectionHeadings` then disappears: `ContentDocumentText.AllHeadings` /
+   `TopLevelHeadings` already read headings off the document, with no parse and no guess.
+
+**Known deviation, stated rather than asserted away.** Until item 3 lands, `SectionHtmlRenderer` is
+the single tag producer **on the orchestrator path only**. `GccGenerateService`'s Create path — the
+one the frontend uses — still returns strings. Recorded here because a rule the code does not
+enforce must never be written down as though it does (`CLAUDE.md` §2).
+
+
 **This stage used to say "switch the writer" — v1 → v2. Stage 1 decided (b), so it inverts.** v1
 stays the writer; retrieval and verified quotes move to it. Do not port v2's Markdown document
 model, its `ToStableMarkdown`/`ParseSynthesizedMarkdown` loop, or `MarkdownToSection`.

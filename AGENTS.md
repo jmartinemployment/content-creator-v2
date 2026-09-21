@@ -92,6 +92,55 @@ Markdown in order to re-parse it with `#`/`[text](href)` regexes. Markdown remai
 exactly two places, neither of them the corpus: an **operator-supplied asset** (`text/markdown` in
 `asset_context.py`) and a **generated report** a human reads.
 
+## The model never emits markup — one document model, one renderer
+
+**The output must end up HTML, and exactly one thing may produce it.** `SectionHtmlRenderer`
+(`GeekAPI/Services/Workflow/Services/Export/`) declares itself *"the only place tag characters are
+produced in the whole pipeline"* and builds an HtmlAgilityPack DOM node-by-node from a
+`ContentDocument`, so tags are balanced by construction and text is encoded automatically.
+
+| Concern | The method |
+|---|---|
+| What the model returns | **Content. Never `##`, never `<h2>`** |
+| Structure | `ContentDocument` — `Section` · `TextParagraph(Runs)` · `ListParagraph(Ordered, Items)` · `Run(Text, Bold, Italic, Href)` |
+| Markup | `SectionHtmlRenderer`, and nowhere else |
+| Headings | `ContentDocumentText.AllHeadings` / `TopLevelHeadings`, never a string parse |
+
+**Asking the model for HTML is the same defect as asking it for Markdown** — it swaps which markup
+the model invents instead of removing markup from its job, and produces a second solution that
+outputs HTML.
+
+**Markdown cannot carry this even in principle:** it has no paragraph token. A paragraph is a blank
+line, so the boundary is whitespace every consumer re-infers. Seven typed corpus block kinds go into
+`GccV2WriteService.MarkdownToSection` (`:1446`) and **one** comes out — headings dropped by a
+`StartsWith('#')` filter, list markers trimmed to prose — and `:1453` **fails open**, returning raw
+Markdown as a paragraph when nothing parses. `ListParagraph` and `Run.Href` already exist, so that
+code flattened structure the target model holds natively, then rebuilt links with a hand-rolled
+`[text](href)` scanner (`:764`).
+
+**Two known gaps, recorded rather than asserted away.** `ContentDocument` has no node type for
+`quote`, `code` or `term`/`definition` — v1 had no exposure to RAG or to ingesting those pipelines,
+so its document model is article-shaped. And `GccGenerateService`'s Create path still returns string
+bodies (`GccController.cs:667`, `:674`), so the single-renderer rule holds on the orchestrator path
+only. Both are Stage 4 in `plans/grounded-generation-and-serp.md`.
+
+## Version 2 has never produced a document
+
+**Jeff, 2026-09-21: "version 2 never produced one document, none, nada."** `GccV2WriteService` has
+zero live callers (`GccV2JobWorker:562-563` routes to `V1Restore.GccV2V1WriteAdapter`) and
+`ContentCreatorV2:DraftingEnabled` is unset everywhere. A path that never executes cannot have
+written anything.
+
+**So no claim about the quality of v2's output can be sourced from v2** — including "v2 fabricates
+structure" (commit `08651ab`), the premise the whole V1Restore direction was built on. It is a claim
+with no artifact behind it.
+
+**Decided 2026-09-21: v1 writes; RAG's retrieval and verified quotes move to it.** Not because v1 is
+cheaper — because v1 already holds the single correct output path (`ContentGenerationOrchestrator` →
+`ContentDocument` → `SectionHtmlRenderer`), while v2 cannot preserve the structure it is grounded
+on. The v2 write path is dormant. Whether it is deleted is open and unexecuted; nothing is removed
+unasked.
+
 ## Crawl types
 
 `CrawlTypes` (`GeekApplication/Models/GeekCrawler/CrawlTypes.cs`):
@@ -265,12 +314,29 @@ Writer" — records the *previous* direction and is not the instruction. The rep
 not reach for a `-v2` endpoint merely because one already exists — existing is not the same as
 correct when the direction is v1.
 
-**Generation is the exception, and it is not arbitrary: generation is RAG-grounded, and the
-RAG-grounded path is `ContentCreatorV2/*`.** Root `CLAUDE.md` §1 says so outright — *"Generation is
-GeekAPI-side (`ContentCreatorV2/*`), grounded strictly on corpus text that the Library half
-retrieved and verified."* The v1 generate methods are not grounded that way, so drafting must never
-go through them again. Confirmed by Jeff 2026-09-21: *"the way you actually generate Content is also
-an exception — you will no longer create using v1 methods. i.e., RAG."*
+**Generation is the exception, and it is not arbitrary: generation must be RAG-grounded.** Root
+`CLAUDE.md` §1 — *"Generation is GeekAPI-side (`ContentCreatorV2/*`), grounded strictly on corpus
+text that the Library half retrieved and verified."* Jeff, 2026-09-21: *"the way you actually
+generate Content is also an exception — you will no longer create using v1 methods. i.e., RAG."*
+
+**Superseded later the same day, and the conflict is left visible on purpose.** Two facts landed
+after that instruction:
+
+1. **v2 has never produced a document** — *"version 2 never produced one document, none, nada."*
+   Zero live callers, `DraftingEnabled` unset. So `ContentCreatorV2/*` was never the RAG-grounded
+   *working* path; it was the RAG-grounded *intended* path.
+2. **v2 cannot preserve the structure it is grounded on.** Seven typed corpus block kinds in,
+   one out (`MarkdownToSection:1446`), failing open at `:1453`.
+
+**The requirement is unchanged: generation must be RAG-grounded. The vehicle inverts.** Rather than
+moving drafting to v2, retrieval and verified quotes move to v1, which already holds the single
+correct output path (`ContentGenerationOrchestrator` → `ContentDocument` → `SectionHtmlRenderer`).
+"No longer create using v1 methods" was aimed at *ungrounded* v1 generation — the thing being
+removed is the ungroundedness, not the writer.
+
+**This reinterprets a direct instruction, so it stands until Jeff says otherwise.** If the intent was
+"the v2 codebase writes, whatever it costs", this section is wrong and the decision reverts to
+hardening v2. Full reasoning and evidence: `plans/grounded-generation-and-serp.md` Stage 1.
 
 Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api`
 (`generateGccCreate` / `reviseGccVersion` / `polishGccVersion` / `seoGccVersion` /
