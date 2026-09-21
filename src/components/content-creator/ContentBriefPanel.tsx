@@ -6,7 +6,6 @@ import {
   BUYING_STAGES,
   CONTENT_ANGLES,
   CTA_TYPES,
-  EEAT_SIGNALS,
   PRIMARY_INTENTS,
   SECONDARY_INTENTS,
   TONES_OF_VOICE,
@@ -18,9 +17,7 @@ import {
   migrateBrief,
   saveBriefToStorage,
   toneAllowed,
-  LENGTH_BAND_OPTIONS,
   type ContentBrief,
-  type EeatSignal,
 } from "@/lib/content-creator/brief-catalog";
 import { ApiError } from "@/services/gcc-api";
 import {
@@ -231,19 +228,6 @@ export default function ContentBriefPanel({
     setSavedMsg(null);
   }
 
-  function toggleEeat(value: EeatSignal) {
-    setBrief((prev) => {
-      const has = prev.eeatSignals.includes(value);
-      const eeatSignals = has
-        ? prev.eeatSignals.filter((s) => s !== value)
-        : [...prev.eeatSignals, value];
-      const next = { ...prev, eeatSignals };
-      persistLocal(next);
-      return next;
-    });
-    setSavedMsg(null);
-  }
-
   async function ensureCreateId(): Promise<string> {
     if (createId) return createId;
     const topic = keywordInput.trim();
@@ -330,14 +314,6 @@ export default function ContentBriefPanel({
   const fieldClass =
     "mt-auto rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
   const labelClass = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
-  // Always rendered, never conditionally omitted: a label that reads "Primary intent" while
-  // empty and "Primary intent (required)" once cleared can wrap to a second line only in the
-  // empty state, growing that field's row and shifting every field below it as the operator
-  // fills the form in. `invisible` reserves the same space either way — this is the same fix
-  // already applied to Secondary intent's "(optional)" text, generalized to every field here.
-  const requiredMark = (ok: boolean) => (
-    <span className={`text-red-600 ${ok ? "invisible" : ""}`}> (required)</span>
-  );
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
@@ -353,7 +329,7 @@ export default function ContentBriefPanel({
           createId is set, further edits here are cosmetic and change nothing on the server. */}
       <div className="mt-5">
         <label className={labelClass}>
-          Target keyword{requiredMark(!!keywordInput.trim() || !!createId)}
+          Target keyword
           <input
             value={keywordInput}
             onChange={(e) => setKeywordInput(e.target.value)}
@@ -371,7 +347,7 @@ export default function ContentBriefPanel({
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>
-          Primary intent{requiredMark(!!brief.primaryIntent)}
+          Primary intent
           <select
             value={brief.primaryIntent}
             onChange={(e) =>
@@ -410,7 +386,7 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Buying stage{requiredMark(!!brief.buyingStage)}
+          Buying stage
           <select
             value={brief.buyingStage}
             onChange={(e) =>
@@ -431,7 +407,7 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Audience segment{requiredMark(!!brief.audienceSegment)}
+          Audience segment
           <select
             value={brief.audienceSegment}
             onChange={(e) =>
@@ -453,7 +429,7 @@ export default function ContentBriefPanel({
 
 
         <label className={`${labelClass} sm:col-span-2`}>
-          Audience notes{requiredMark(!!brief.audienceNotes.trim())}
+          Audience notes
           <textarea
             value={brief.audienceNotes}
             onChange={(e) => patch({ audienceNotes: e.target.value })}
@@ -464,7 +440,7 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Angle for SEO{requiredMark(!!brief.angle)}
+          Angle for SEO
           <select
             value={brief.angle}
             onChange={(e) =>
@@ -485,7 +461,7 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Discovery CTA type{requiredMark(!!brief.ctaType)}
+          Discovery CTA type
           <select
             value={brief.ctaType}
             onChange={(e) =>
@@ -513,24 +489,11 @@ export default function ContentBriefPanel({
             className={fieldClass}
           />
         </label>
-
-        {/* No longer a choice: length is a fact of the starting content type, and picking it by
-            hand risked one that quietly disagreed with that type. See lengthBandForContentType. */}
-        <label className={labelClass}>
-          Length
-          <p className={fieldClass}>
-            {LENGTH_BAND_OPTIONS.find((o) => o.value === derivedLengthBand)?.label ??
-              derivedLengthBand}
-          </p>
-          <span className="text-xs font-normal text-muted">
-            Set by the content type this create started as.
-          </span>
-        </label>
       </div>
 
       <div className="mt-6 border-t border-border pt-5">
         <label className={labelClass}>
-          Tone of voice{requiredMark(!!brief.toneOfVoice)}
+          Tone of voice
           <select
             value={brief.toneOfVoice}
             onChange={(e) =>
@@ -554,36 +517,7 @@ export default function ContentBriefPanel({
             and angle.
           </span>
         </label>
-
-        <div className="mt-4">
-          <p className="text-sm font-medium text-foreground">
-            E-E-A-T signals{requiredMark(brief.eeatSignals.length > 0)}
-          </p>
-          <p className="text-xs text-muted">
-            Google Search Quality framework — pick at least one.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {EEAT_SIGNALS.map((s) => {
-              const on = brief.eeatSignals.includes(s.value);
-              return (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => toggleEeat(s.value)}
-                  className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                    on
-                      ? "border-brand bg-brand/10 text-brand"
-                      : "border-border bg-white text-muted"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </div>
-
 
       <label className={`${labelClass} mt-5`}>
         Writing notes (optional)

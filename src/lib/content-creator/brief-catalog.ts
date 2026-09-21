@@ -220,9 +220,9 @@ export function emptyContentBrief(): ContentBrief {
     ctaType: "",
     ctaLabel: "",
     toneOfVoice: "",
-    // All four on by default — E-E-A-T applies to virtually every piece, and requiring a click
-    // per signal just to satisfy "pick at least one" was friction with no editorial value. An
-    // operator who wants fewer still deselects the ones that do not apply to this piece.
+    // Always the full set — not a per-piece choice. E-E-A-T applies to virtually every piece, and
+    // the picker that used to let an operator narrow it was removed entirely (2026-09-21), not
+    // just defaulted, so there is nothing left to persist here beyond the constant set itself.
     eeatSignals: EEAT_SIGNALS.map((s) => s.value),
     lengthBand: "",
     writingNotes: "",
@@ -298,7 +298,6 @@ const LEGACY_CTA: Record<string, CtaType> = {
 };
 
 const TONE_VALUES = TONES_OF_VOICE.map((o) => o.value) as string[];
-const EEAT_VALUES = EEAT_SIGNALS.map((o) => o.value) as string[];
 
 /**
  * Normalize any persisted brief (legacy or current) into the canonical shape.
@@ -310,7 +309,6 @@ export function migrateBrief(raw: unknown): ContentBrief {
   if (!raw || typeof raw !== "object") return base;
   const p = raw as Record<string, unknown>;
   const str = (v: unknown): string => (typeof v === "string" ? v : "");
-  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
 
   // Intent: split legacy single `intent` into primary/secondary.
   const legacyIntent = str(p.intent);
@@ -352,9 +350,9 @@ export function migrateBrief(raw: unknown): ContentBrief {
       ? "commercial_balanced"
       : "";
 
-  base.eeatSignals = Array.from(
-    new Set(arr(p.eeatSignals).filter((s) => EEAT_VALUES.includes(s)) as EeatSignal[]),
-  );
+  // No longer a choice the operator makes (removed from the form 2026-09-21) — always the full
+  // set, regardless of what an older, editable-era brief happened to have persisted.
+  base.eeatSignals = EEAT_SIGNALS.map((s) => s.value);
 
   base.lengthBand = (str(p.lengthBand) as LengthBandKey) || "";
   // Normalize writing notes: collapse consecutive duplicate lines (one-time migration for stale storage)
@@ -395,9 +393,9 @@ export function contentBriefMissingFields(brief: ContentBrief): string[] {
   if (!brief.angle) missing.push("Angle");
   if (!brief.ctaType) missing.push("Call to action");
   if (!brief.toneOfVoice) missing.push("Tone of voice");
-  if (brief.eeatSignals.length === 0) missing.push("E-E-A-T signal");
-  // Length is not asked for here — it is derived from starting content type
-  // (lengthBandForContentType) and never blank once a content type is known.
+  // Neither E-E-A-T signals nor Length is asked for here — E-E-A-T is always the full set (no
+  // longer a choice the operator makes), and Length is derived from starting content type
+  // (lengthBandForContentType). Neither can be blank once a content type is known.
   return missing;
 }
 
