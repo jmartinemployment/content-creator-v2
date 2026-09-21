@@ -391,15 +391,26 @@ it never declared one.
    Original intent, unchanged: block kind to node type. No Markdown, no model-authored HTML, and
    not via the flat text projection — that projection discards hrefs, tags
    and heading markers by design (`AGENTS.md`), which is why `Build` filters on `p.Html`.
-5. **Route `GccGenerateService`'s Create path through `ContentDocument`.** It returns string bodies
-   today (`GccController.cs:667`, `:674` — `bodyJson`), which is the deviation recorded below.
-   `ExtractSectionHeadings` then disappears: `ContentDocumentText.AllHeadings` /
-   `TopLevelHeadings` already read headings off the document, with no parse and no guess.
+5. **Route `GccGenerateService`'s Create path through `ContentDocument` — DONE 2026-09-21.**
+   `GeneratePillarBodyAsync` and `GenerateBlogBodyAsync` asked the model for a prose body and the
+   caller read structure back out of the string — first as Markdown `"## "`, then briefly as HTML,
+   which was the same defect in different markup and made this service a second tag producer.
 
-**Known deviation, stated rather than asserted away.** Until item 3 lands, `SectionHtmlRenderer` is
-the single tag producer **on the orchestrator path only**. `GccGenerateService`'s Create path — the
-one the frontend uses — still returns strings. Recorded here because a rule the code does not
-enforce must never be written down as though it does (`CLAUDE.md` §2).
+   Both now use the structured prompt builders this service already used for its standalone blog
+   path: `BuildPillarLedePrompt` + `BuildArticleSectionBatchPrompt`, and
+   `BuildStandaloneBlogLedePrompt` + `BuildStandaloneBlogBodyPrompt`. Sections return through
+   `LlmResponseJsonParser`, become a `ContentDocument`, pass `ContentGuardrail`, and serialize with
+   `CwDocumentJson` — the shape `renderArtifactBody` already renders.
+
+   `ExtractSectionHeadings` parses nothing now: `ContentDocumentText.TopLevelHeadings` reads them
+   off the tree. The interim HtmlAgilityPack scan and its regexes are gone.
+
+   **The known deviation below is closed:** `SectionHtmlRenderer` is once again the only place tag
+   characters are produced, on every path.
+
+**Deviation closed 2026-09-21.** `SectionHtmlRenderer` is the single tag producer on every path;
+the Create path returns a `ContentDocument`. It was recorded while it was true because a rule the
+code does not enforce must never be written down as though it does (`CLAUDE.md` §2).
 
 
 **This stage used to say "switch the writer" — v1 → v2. There is no switch.** v1 is the writer
@@ -438,7 +449,12 @@ source of truth**, not in the client.
 depend on the own-site crawl, which touches out-of-scope Site Analyzer. Resolve before committing to
 5a.
 
-## Stage 6 — Lede guidance *(must land with or before Stage 4)*
+## Stage 6 — Lede guidance *(partly delivered by Stage 4)*
+
+**Delivered 2026-09-21 for the Create path.** Routing the pillar lede through
+`BuildPillarLedePrompt` brings `BuildLedeTypeGuidance` to `GccGenerateService`, which previously had
+no lede-type handling at all. It is now live on both paths, and formalized rather than deleted —
+which was the ask. What remains below is `blog`, which still uses a hardcoded opening.
 
 `BuildLedeTypeGuidance` (`ContentPromptBuilder.cs:230-286`) reads fields already present on
 `wc.BaseContext` (`GccV2WriteService.cs:111`).
