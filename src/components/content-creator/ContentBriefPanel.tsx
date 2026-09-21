@@ -13,6 +13,7 @@ import {
   contentBriefMissingFields,
   emptyContentBrief,
   isContentBriefComplete,
+  lengthBandForContentType,
   loadBriefFromStorage,
   migrateBrief,
   saveBriefToStorage,
@@ -20,7 +21,6 @@ import {
   LENGTH_BAND_OPTIONS,
   type ContentBrief,
   type EeatSignal,
-  type LengthBandKey,
 } from "@/lib/content-creator/brief-catalog";
 import { ApiError } from "@/services/gcc-api";
 import {
@@ -180,6 +180,11 @@ export default function ContentBriefPanel({
     onBriefValidityChange(complete);
   }, [hydrated, complete, onBriefValidityChange]);
 
+  // Length was its own choice; now it is not — it is a fact of the starting content type. Derived
+  // at render and at save (handleSaveBrief) rather than synced into `brief` state via an effect,
+  // so there is no state write racing the content type prop or the brief's own hydration/load.
+  const derivedLengthBand = lengthBandForContentType(startingContentType);
+
   function persistLocal(next: ContentBrief) {
     saveBriefToStorage(`kw:${targetKeyword}`, next);
   }
@@ -265,7 +270,9 @@ export default function ContentBriefPanel({
       // The create holds the brief. There used to be a second write copying it onto a Workflow
       // project as well; that project store is being deleted, and two copies of one brief kept in
       // step by hand is what made them disagree.
-      await patchBriefResearch(id, { briefJson: briefToJson(brief) });
+      await patchBriefResearch(id, {
+        briefJson: briefToJson({ ...brief, lengthBand: derivedLengthBand }),
+      });
       setSavedMsg("Brief saved on Content Creator create.");
       onBriefSaved(id, true);
     } catch (err) {
@@ -482,22 +489,17 @@ export default function ContentBriefPanel({
           />
         </label>
 
+        {/* No longer a choice: length is a fact of the starting content type, and picking it by
+            hand risked one that quietly disagreed with that type. See lengthBandForContentType. */}
         <label className={labelClass}>
-          Length{requiredMark(!!brief.lengthBand)}
-          <select
-            value={brief.lengthBand}
-            onChange={(e) =>
-              patch({ lengthBand: e.target.value as LengthBandKey | "" })
-            }
-            className={fieldClass}
-          >
-            <option value="">Select length band</option>
-            {LENGTH_BAND_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          Length
+          <p className={fieldClass}>
+            {LENGTH_BAND_OPTIONS.find((o) => o.value === derivedLengthBand)?.label ??
+              derivedLengthBand}
+          </p>
+          <span className="text-xs font-normal text-muted">
+            Set by the content type this create started as.
+          </span>
         </label>
       </div>
 

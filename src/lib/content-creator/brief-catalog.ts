@@ -396,7 +396,8 @@ export function contentBriefMissingFields(brief: ContentBrief): string[] {
   if (!brief.ctaType) missing.push("Call to action");
   if (!brief.toneOfVoice) missing.push("Tone of voice");
   if (brief.eeatSignals.length === 0) missing.push("E-E-A-T signal");
-  if (!brief.lengthBand) missing.push("Length");
+  // Length is not asked for here — it is derived from starting content type
+  // (lengthBandForContentType) and never blank once a content type is known.
   return missing;
 }
 
@@ -542,9 +543,9 @@ export const CONTENT_LENGTH_TARGETS = {
     definition: "High response rates; pitch a single, clear call-to-action.",
   },
   tools: {
-    min: 1500,
-    max: 2500,
-    label: "1,500–2,500",
+    min: 3000,
+    max: 5000,
+    label: "3,000–5,000+",
     definition:
       "Comprehensive single-platform guides — deep implementation context, capabilities, and when to use it.",
   },
@@ -619,3 +620,40 @@ export const LENGTH_BAND_OPTIONS: {
     label: `Image prompt — ${CONTENT_LENGTH_TARGETS.imagePrompt.label}`,
   },
 ];
+
+/**
+ * Length is derived from the create's starting content type, not chosen separately — the two were
+ * never independent facts, and asking the operator to pick a length band by hand risked one that
+ * quietly disagreed with the type already set at creation. `startingContentType` (content-types.ts,
+ * twenty values) and `LengthBandKey` (ten bands) do not line up one-to-one — several content types
+ * share a band, and "social"/"ads"/"linkedin-document" pick the closest platform-specific band
+ * rather than naming one exactly — but every value has a real destination, and callers no longer
+ * need a blank/unmapped case.
+ */
+const LENGTH_BAND_BY_CONTENT_TYPE: Record<string, LengthBandKey> = {
+  pillar: "pillar",
+  blog: "blog",
+  "tech-article": "blog",
+  tool: "tools",
+  comparison: "blog",
+  alternatives: "blog",
+  "case-study": "blog",
+  guide: "blog",
+  listicle: "blog",
+  service: "blog",
+  local: "blog",
+  whitepaper: "blog",
+  "email-cold-outreach": "emailColdOutreach",
+  "email-newsletter": "emailColdOutreach",
+  "email-story-nurture": "emailColdOutreach",
+  "email-transactional": "emailColdOutreach",
+  social: "socialLinkedIn",
+  "image-prompt": "imagePrompt",
+  ads: "googleAds",
+  "linkedin-document": "socialLinkedIn",
+};
+
+/** Falls back to "blog" for a content type outside the twenty known values. */
+export function lengthBandForContentType(startingContentType: string): LengthBandKey {
+  return LENGTH_BAND_BY_CONTENT_TYPE[startingContentType] ?? "blog";
+}
