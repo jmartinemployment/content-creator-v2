@@ -203,7 +203,7 @@ three node types are missing before a retrieved passage can arrive intact.
 **Still open, deliberately.** Whether the v2 write path is deleted or left dormant. Jeff: *"You can
 throw everything away and start over."* A live option, not an instruction executed here.
 
-## Stage 2 — Define "invented structure" as heading provenance *(premise corrected again, 2026-09-22 — see below; not yet built)*
+## Stage 2 — Define "invented structure" as heading provenance *(DONE 2026-09-22)*
 
 **Premise corrected, 2026-09-21.** This originally said "Stage 4 swaps in
 `GccV2PlanService.BuildOutlineAsync` at the same moment it swaps the writer" — written before the
@@ -289,7 +289,55 @@ pieces, not one:
 Steps 1 and 2 are themselves real wiring work, not scaffolding around step 3 — and they're the
 reason "Stage 2 in full" now costs meaningfully more than what was scoped when that ordering decision
 was made. Flagged back to Jeff rather than built silently against the corrected-but-still-larger
-scope. **Do not start building until that's resolved.**
+scope. Jeff chose the full 3-step build.
+
+**Built, 2026-09-22.** All three steps, against `GccGenerateService`:
+
+1. **Retrieval wiring** used the cheaper of the two named options — `BuildBriefAndResearchBlock`'s
+   research half, split out as its own `BuildResearchBlock(create)` so pillar/blog can pull it in
+   without re-rendering the Brief a second time (that block already exists separately via
+   `BuildPillarContext`/`BuildBriefBodyGuidance`).
+2. **Competitor wiring** added a `GccCompetitorAnalysisResolver` dependency to `GccGenerateService`
+   and calls it from both `GeneratePillarBodyAsync`/`GenerateBlogBodyAsync`, gated on
+   `create.ProjectId` — empty, never a throw, when the create has no project or no indexed
+   competitor crawl.
+3. **Provenance tagging**: `Section` gained a `Provenance` field (the mirror image of `Id` —
+   `Id` is `[JsonIgnore]`, code-assigned, never read from the model; `Provenance` is the opposite,
+   model-assigned, never `[JsonIgnore]`, so it rides straight through into the artifact version row
+   `GccController.RunGenerateAsync` already persists). `GccHeadingProvenanceGuard
+   .FindUnlicensedHeadings` walks the returned section tree at every depth and checks each tag —
+   `plan` / `retrieval:<url>` / `brief:<field>` / `paa:<question>` / `competitor:<heading>` — against
+   the exact evidence set assembled for that call. Any unresolved tag throws
+   `InvalidOperationException` before the document is assembled; nothing is trimmed or persisted
+   half-licensed.
+
+**A real discovery made while wiring step 1, not anticipated by the plan text above.** The first
+attempt folded the research/competitor blocks into `BuildPillarContext`'s `sourceContext`
+(`ProjectGenerationContext.CrawledParagraphs`) on the assumption that's what reaches the model — it's
+how `GenerateStartingContentAsync`'s other content types get research. It doesn't reach pillar or
+blog: `ResearchBriefBuilder`'s `ArticleSection` phase (pillar body's own phase) never calls
+`AppendCompactSiteContext`, the one place `CrawledParagraphs` is ever rendered — caught by the new
+integration tests actually asserting on the rendered prompt, not just on the guard's math. Fixed by
+routing evidence through a direct `evidenceBlock` parameter on `BuildArticleSectionBatchPrompt`/
+`BuildStandaloneBlogBodyPrompt` instead, appended straight into their own system text — decoupled
+from `ResearchBriefPhase`'s per-phase rendering entirely, so it can't silently depend on which phase
+happens to include it.
+
+**Scope actually held to pillar and blog**, matching the plan's own framing ("Pillar and Blog — the
+highest-volume outputs"). `GenerateStartingContentAsync`'s fallback branch (techArticle and other
+types) was left untouched — it already gets research a different way, and pulling it into this stage
+would have been scope beyond what was decided.
+
+**Not attempted, left for a real decision later, same as Stage 8a's own scope cut:** the Coverage
+Gate itself — consuming competitor headings/retrieval at *outline selection* rather than only at
+*provenance checking* — is a different, later change; this stage makes the input real and checks
+what the model does with it, it does not choose the outline.
+
+899 tests pass (882 before this stage), 17 new: `GccHeadingProvenanceGuardTests` (11, pure guard
+logic) and `GccGenerateServiceProvenanceTests` (6, live-path integration — an unlicensed heading
+refuses generation, a `plan`-tagged heading passes with no other evidence, and — the two that caught
+the `CrawledParagraphs` dead end — competitor/retrieval evidence actually reaching the rendered
+system prompt, not just satisfying the guard).
 
 ## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side still sequenced)*
 
