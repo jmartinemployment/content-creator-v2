@@ -69,16 +69,18 @@ v2 output.** "v2 fabricates structure" rests on one commit message (`08651ab`) w
 separately shown inaccurate in **Urgent** above. Treat the premise as not merely unverified but
 unsourceable from the artifact it describes.
 
-**And v2's Markdown is not a format choice — it is the writer's interchange format.**
-`ToStableMarkdown` (`:441`, `:586`) serializes the in-progress document to Markdown, the model
-answers in Markdown, `ParseSynthesizedMarkdown` (`:482`, `:602`) parses it back, and
-`MarkdownToSection` runs on every section write (`:1190`, `:1372`). `:764` is a hand-rolled
-`[text](href)` scanner — the exact construct the no-Markdown rule names. Removing Markdown from v2
-is not an edit to it; it is a rebuild of its document model, serializer, parser, list and link
-handling, and structure guard.
+**And v2's Markdown was not a format choice — it was the writer's interchange format.**
 
-**A candidate explanation for the zero, worth testing in Stage 1.** `ParseSynthesizedMarkdown`
-throws on *any* deviation — "Final synthesis changed document structure: expected N H2 headings,
+> **All of the code this section describes was deleted on 2026-09-22 (`5a72445`).** Its method names
+> and line numbers have been removed rather than annotated: a dead identifier left in a document is
+> what the next reader greps and takes for a live path — the failure this whole section is about.
+
+The writer serialized the in-progress document to Markdown, the model answered in Markdown, a parser
+read it back, and a section-writer flattened it on every write. A hand-rolled `[text](href)` scanner
+sat alongside them. Removing Markdown from v2 was never an edit to it; it was a rebuild of its
+document model, serializer, parser, list and link handling, and structure guard.
+
+**A candidate explanation for the zero.** That parser threw on *any* deviation — "Final synthesis changed document structure: expected N H2 headings,
 received M". A model returning `<h2>`, or drifting by one heading, aborts the run. Fail-closed on a
 brittle format would produce exactly the observed outcome: no document, ever.
 
@@ -185,11 +187,11 @@ produced in exactly one place, HTML out. It emits a cross-linked schema graph (T
 BlogPosting / SoftwareApplication with Person, Organization, WebPage, ImageObject) and fails closed
 on an empty builder. None of that is up for renegotiation while adding retrieval.
 
-**Why v2's code cannot be ported in, only its intent.** Its write loop uses Markdown as the
-interchange format between the document and the model. `MarkdownToSection` (`:1446`) takes the
-corpus's seven typed block kinds and returns **one** — headings removed by a `StartsWith('#')`
-filter, list markers trimmed into prose, lines joined on spaces — then **fails open** at `:1453`,
-returning raw Markdown as a single paragraph when nothing parses. `ListParagraph` and `Run.Href`
+**Why v2's code could not be ported in, only its intent.** Its write loop used Markdown as the
+interchange format between the document and the model: the corpus's seven typed block kinds went in
+and **one** came out — headings removed by a `#` filter, list markers trimmed into prose, lines
+joined on spaces — then it failed open, returning raw Markdown as a single paragraph when nothing
+parsed. `ListParagraph` and `Run.Href`
 already exist in `ContentDocument`, so that code flattened structure the target model holds
 natively and then rebuilt links with a hand-rolled `[text](href)` scanner (`:764`). Porting it would
 import the defect.
@@ -360,7 +362,7 @@ blockquotes. Same category error as Readability: an article-shaped model applied
 mostly not articles.
 
 **This also prices what v2 was destroying.** `ListParagraph` and `Run.Href` already exist, so
-`MarkdownToSection` trimming `-`/`*` into prose and `:764`'s hand-rolled `[text](href)` scanner were
+that flattening of `-`/`*` into prose, and the hand-rolled `[text](href)` scanner, were
 flattening and then reconstructing structure the target model holds natively.
 
 **The gate's granularity — decided 2026-09-21.** Each content type declares the evidence it
@@ -509,7 +511,7 @@ code does not enforce must never be written down as though it does (`CLAUDE.md` 
 
 **This stage used to say "switch the writer" — v1 → v2. There is no switch.** v1 is the writer
 and always was; this stage adds the retrieval and verification it has no concept of. Do not port v2's Markdown document
-model, its `ToStableMarkdown`/`ParseSynthesizedMarkdown` loop, or `MarkdownToSection`.
+model, its serialize/parse loop, or its section flattener.
 
 - Feed `ContentGenerationOrchestrator` retrieved, verified corpus passages — typed `blocks`, never a
   flattened projection and never Markdown.

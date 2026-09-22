@@ -237,9 +237,10 @@ those pipelines. Extending it is additive (`Paragraph` is an abstract record); t
 
 **Why Markdown can never be the intermediate.** It has no paragraph token — a paragraph is a blank
 line, so the boundary is whitespace every consumer must re-infer, and nesting flattens outright.
-`GccV2WriteService.MarkdownToSection` (`:1446`) demonstrates the cost: seven kinds in, one
-(`TextParagraph`) out, headings dropped by a `StartsWith('#')` filter, list markers trimmed into
-prose — then **failing open** at `:1453`, returning raw Markdown as a paragraph when nothing parses.
+v2's writer demonstrated the cost: seven kinds in, one (`TextParagraph`) out, headings dropped by a
+`#` filter, list markers trimmed into prose — then failing open, returning raw Markdown as a
+paragraph when nothing parsed. That code was deleted in `5a72445` and is not named here: a dead
+identifier in a document is what the next reader greps and mistakes for a live path.
 
 **Known deviation.** `GccGenerateService`'s Create path still returns string bodies
 (`GccController.cs:667`, `:674`), so the single-renderer rule currently holds on the orchestrator

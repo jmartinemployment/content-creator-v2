@@ -50,8 +50,9 @@ block→text projection. That is its entire role.
 
 **Markdown is forbidden** as corpus, verification target, or interchange format — the body is typed
 `blocks`, the string is `block_text.derive_plaintext_from_blocks`, readiness is `ContentReadyAt`.
-Every "Markdown" below that names a live identifier (`MarkdownVerified`, `MarkdownReadyAt`) is a
-legacy name to be renamed, not a format to honour. See `AGENTS.md` § *Markdown is forbidden*.
+**Those legacy identifiers are gone, verified 2026-09-22** (`5a72445`). What survives is columns in
+the deprecated `geek_crawler` Postgres schema, which Mongo replaced and nothing writes.
+See `AGENTS.md` § *Markdown is forbidden*.
 
 The live code already agrees: `RagLibraryStatus.generateEnabled` is documented *"Always false — RAG
 generate is removed"* (`src/app/creates/rag-client/types.ts:29–30`), and the client header reads
@@ -207,7 +208,7 @@ alongside the other context connectors (`Drive`, `Gsc`, `Url`, `SharePoint`) beh
 |---|---|---|
 | **Clean text extraction** — strip boilerplate, keep main content | Implemented | resource kinds `original` and `normalized_text`; `Hierarchy/GccV2TextExtractor`; 2,000,000-character normalization cap |
 | **Metadata tagging** — URL, run, dates, category, for citation and recency | Implemented | `SourceDescriptorJson` carries the source run id; provenance carries `RunId`, `PageId`, `SectionTitle`, `TemporalAnchorUtc`, `SourceDigest`, `SourceRights` |
-| **Grounding / no hallucination** — generate only from the crawled set | Implemented | quote↔block-text verify (flag still named `MarkdownVerified` — misnomer, rename pending), `GccV2CitationEvidenceGuard`, `GccV2SourceRightsGate`, VALIDATE gates |
+| **Grounding / no hallucination** — generate only from the crawled set | Implemented | quote↔block-text verify (the misnamed verification flag was renamed 2026-09-22, `5a72445`), `GccV2CitationEvidenceGuard`, `GccV2SourceRightsGate`, VALIDATE gates |
 | **Brand voice from our own archive** | Implemented | `BrandKit/GccV2BrandKitBuilder.BuildVoiceSamples(pages, website, section)` derives voice samples from crawled own-site pages |
 | **Continuous / scheduled refresh** | **Gap** | no scheduled re-crawl exists; `forceRecrawl` is manual per create. Context connectors have a `CanRefresh` concept (`GccV2DriveContextConnector:19`) that project-site does not implement |
 

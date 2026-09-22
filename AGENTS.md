@@ -111,12 +111,17 @@ the model invents instead of removing markup from its job, and produces a second
 outputs HTML.
 
 **Markdown cannot carry this even in principle:** it has no paragraph token. A paragraph is a blank
-line, so the boundary is whitespace every consumer re-infers. Seven typed corpus block kinds go into
-`GccV2WriteService.MarkdownToSection` (`:1446`) and **one** comes out — headings dropped by a
-`StartsWith('#')` filter, list markers trimmed to prose — and `:1453` **fails open**, returning raw
-Markdown as a paragraph when nothing parses. `ListParagraph` and `Run.Href` already exist, so that
-code flattened structure the target model holds natively, then rebuilt links with a hand-rolled
-`[text](href)` scanner (`:764`).
+line, so the boundary is whitespace every consumer re-infers. Seven typed corpus block kinds go in and **one** comes out — headings dropped by a `#` filter, list
+markers trimmed to prose — failing open and returning raw Markdown as a paragraph when nothing
+parses. `ListParagraph` and `Run.Href` already exist, so such a hop flattens structure the target
+model holds natively, then rebuilds links with a hand-rolled `[text](href)` scanner.
+
+**v2's writer did this and the code is gone (`5a72445`, 2026-09-22).** It is not named here on
+purpose: a dead identifier left in a document is the thing the next reader greps and takes for a live
+path. GeekBackend is down to **10** case-insensitive `markdown` hits in `.cs`, all inside two
+migrations against the **deprecated `geek_crawler` Postgres schema** — Mongo replaced it and no
+crawler activity writes to Postgres (Jeff, 2026-09-22). Those columns stay:
+`GeekCrawlerDbContext:53-57` already refuses schema work on that table.
 
 **Two known gaps, recorded rather than asserted away.** `ContentDocument` has no node type for
 `quote`, `code` or `term`/`definition` — v1 had no exposure to RAG or to ingesting those pipelines,
@@ -326,7 +331,7 @@ after that instruction:
    Zero live callers, `DraftingEnabled` unset. So `ContentCreatorV2/*` was never the RAG-grounded
    *working* path; it was the RAG-grounded *intended* path.
 2. **v2 cannot preserve the structure it is grounded on.** Seven typed corpus block kinds in,
-   one out (`MarkdownToSection:1446`), failing open at `:1453`.
+   one out, failing open when nothing parsed — code since deleted (`5a72445`).
 
 **The requirement is unchanged: generation must be RAG-grounded. The vehicle inverts.** Rather than
 moving drafting to v2, retrieval and verified quotes move to v1, which already holds the single
