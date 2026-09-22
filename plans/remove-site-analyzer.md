@@ -2,6 +2,31 @@
 
 Jeff instructed on 2026-09-20: **do not restore Site Analyzer — remove it from this repo.**
 
+> **DONE 2026-09-22.** All six steps executed, three days after this plan was written and never
+> run. Commits: `99597aa` (routes), `71bc2f4` (matcher, missed by a failed multi-path `git add`
+> the first time — caught by re-checking git status rather than trusting the commit succeeded),
+> `8ca55ec` + `87354e1` (handoff, same git-add failure caught the same way), `f705344` (copy +
+> `SiteHeadingHierarchy.tsx`), `cb1c827` (docs). `tsc --noEmit`, `npm run lint`, and `npm run build`
+> all clean; the route table has no `/app/site-analyzer` or `/api/site-analyzer` entry.
+>
+> Two real references the original inventory missed, found by re-running the plan's own
+> `grep -rni "site.analyzer" src` after steps 1-5: the landing page's marketing copy
+> ("Site Analyzer gaps start a create...") and a stale code comment in `ContentBriefPanel.tsx`.
+> Both fixed in the docs commit.
+>
+> A prior, broader attempt at this (`dae8b7f`, 2026-09-17) was reverted same-day (`a278ce7`) —
+> checked before touching anything: the page/hub parts that attempt removed are already gone via
+> later, unrelated work, so this execution doesn't re-tread whatever caused that revert; it only
+> covers the narrower, re-verified scope this plan itself describes.
+>
+> **Not verified**: the plan's own final step — load `/app/workflow?siteAnalysisProfileId=<a real
+> run id>` in a browser and confirm `HierarchyContextPanel` still resolves matches. Standing
+> instruction this session: never debug via localhost. Traced instead, by reading: this removal
+> never touched `HierarchyContextPanel.tsx`, `parseSiteSectionJson`, `SiteContextBanner`, or the
+> `project-site/runs/{runId}/hierarchy-match` call path — everything removed was the dead
+> `writeSiteSectionHandoff`/`readSiteSectionHandoff` pair and the unreachable proxy routes, neither
+> of which that live path ever called. Confirm by hand if you want the plan's own bar met exactly.
+
 **Site Analyzer is obsolete — Geek-Crawler-v2 replaced it.** Site structure now comes from a
 Geek-Crawler-v2 `project-site` crawl run, read back by Run ID
 (`project-site/runs/{runId}/hierarchy-match`). This plan removes what is left of the old client here.
