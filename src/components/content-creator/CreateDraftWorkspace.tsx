@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
-import { isContentTypeDisabled } from "@/lib/content-types";
+import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import ContentBriefPanel from "./ContentBriefPanel";
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
   generateGccCreate,
-  GCC_OUTPUT_TYPES,
   getGccCreateDetail,
   listGccVersions,
   parseSiteSectionJson,
@@ -96,7 +95,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
       setOutputTypes((prev) => {
         if (prev.length) return prev;
         const t = d.startingContentType;
-        if (t && !isContentTypeDisabled(t) && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
+        if (t && !isContentTypeDisabled(t) && CONTENT_TYPES.some((o) => o.value === t)) return [t];
         return [];
       });
       // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
@@ -291,7 +290,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           <fieldset className="mt-4">
             <legend className="text-sm font-medium text-foreground">Content items to generate</legend>
             <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-              {GCC_OUTPUT_TYPES.map((o) => {
+              {CONTENT_TYPES.map((o) => {
                 const disabled = isContentTypeDisabled(o.value);
                 return (
                   <label

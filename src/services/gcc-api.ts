@@ -352,21 +352,6 @@ export function deleteCreateKeywordSource(
   );
 }
 
-/** All content items the multi-output generate can produce. */
-export const GCC_OUTPUT_TYPES: { value: string; label: string }[] = [
-  { value: "pillar", label: "Pillar" },
-  { value: "blog", label: "Blog post" },
-  { value: "techArticle", label: "TechArticle" },
-  { value: "imagePrompt", label: "Image prompts" },
-  { value: "email", label: "Email" },
-  { value: "linkedIn", label: "LinkedIn" },
-  { value: "x", label: "X" },
-  { value: "instagram", label: "Instagram" },
-  { value: "metaAds", label: "Meta ads" },
-  { value: "googleAds", label: "Google ads" },
-  { value: "aiTool", label: "AI Tool" },
-];
-
 export function reviseGccVersion(
   versionId: string,
   input: {
