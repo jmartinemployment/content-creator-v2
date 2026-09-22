@@ -93,13 +93,23 @@ export default function ContentBriefPanel({
   // nothing left for it to drift out of sync with.
   const [keywordInput, setKeywordInput] = useState(targetKeyword || "");
   // No default -- the operator must explicitly choose before a create can be minted, the same
-  // "remove default/fallback content type" rule applied to creates/new's picker. Once a create
-  // exists, startingContentType (the prop, from the server) is the only thing that matters; this
-  // local selection only drives ensureCreateId for a create that doesn't exist yet.
-  const [selectedContentType, setSelectedContentType] = useState(startingContentType ?? "");
-  // The prop (a real, already-chosen server value) always wins when present; the local picker
-  // selection only matters before a create exists to mint one.
-  const effectiveContentType = startingContentType ?? selectedContentType;
+  // "remove default/fallback content type" rule applied to creates/new's picker. Genuinely
+  // multi-selectable, matching Tasks' taskContentTypes exactly (Jeff, 2026-09-22: "No longer
+  // multi selectable checkboxes that match Tasks") -- once a create exists, startingContentType
+  // (the prop, from the server) is the only thing that matters; this local selection only drives
+  // ensureCreateId for a create that doesn't exist yet.
+  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(
+    startingContentType ? [startingContentType] : [],
+  );
+  function toggleContentType(value: string) {
+    setSelectedContentTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
+  // The create record itself has exactly one StartingContentType (the backend field is a single
+  // string, not a list) -- the first checked box is what mints the create; the prop (a real,
+  // already-chosen server value) always wins over the local selection when present.
+  const effectiveContentType = startingContentType ?? selectedContentTypes[0] ?? "";
   const [hydrated, setHydrated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,14 +248,15 @@ export default function ContentBriefPanel({
       // was created rather than discovering "untitled" three steps later.
       throw new ApiError("Target keyword is required before a create can be started.", 400);
     }
-    if (!selectedContentType || isContentTypeDisabled(selectedContentType)) {
+    if (!effectiveContentType) {
       // Same rule as above, for the same reason: "blog" used to stand in here silently as the
-      // prop's default value, no operator choice involved at all.
+      // prop's default value, no operator choice involved at all. Checkboxes for a disabled type
+      // are themselves disabled, so nothing here can ever resolve to one.
       throw new ApiError("Select a content type before a create can be started.", 400);
     }
     const created = await createGccCreate({
       clientId,
-      startingContentType: selectedContentType,
+      startingContentType: effectiveContentType,
       topic,
       projectSiteRunId: projectSiteRunId || null,
     });
@@ -265,7 +276,7 @@ export default function ContentBriefPanel({
       setError("Required: Target keyword");
       return;
     }
-    if (!createId && (!selectedContentType || isContentTypeDisabled(selectedContentType))) {
+    if (!createId && !effectiveContentType) {
       setError("Required: Content type");
       return;
     }
@@ -347,10 +358,12 @@ export default function ContentBriefPanel({
 
       {/* Same editable-until-createId rule as Target keyword above, and the same "no default"
           rule as creates/new's picker -- this used to be a prop defaulting silently to "blog"
-          when the caller (workflow/page.tsx) never passed one at all. Grid-of-inputs, not a
-          <select>: "Content Type selection should mirror tasks" (Jeff, 2026-09-22) -- same
-          CONTENT_TYPES grid ProjectWorkPanel's task checkboxes use, radio instead of checkbox
-          since a create's StartingContentType is one value, not a multi-value tag list. */}
+          when the caller (workflow/page.tsx) never passed one at all. Same CONTENT_TYPES grid
+          ProjectWorkPanel's task checkboxes use, genuinely multi-selectable the same way (Jeff,
+          2026-09-22: "No longer multi selectable checkboxes that match Tasks") -- the create
+          record itself only has one StartingContentType, so the first checked box is what
+          actually mints it (effectiveContentType, above), but the picker doesn't pretend that's
+          a single-select constraint the way a radio group would. */}
       <fieldset className="mt-5 rounded-md border border-border p-3">
         <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
           Content type
@@ -365,12 +378,11 @@ export default function ContentBriefPanel({
                 title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
               >
                 <input
-                  type="radio"
-                  name="starting-content-type"
-                  checked={effectiveContentType === t.value}
-                  onChange={() => setSelectedContentType(t.value)}
+                  type="checkbox"
+                  checked={selectedContentTypes.includes(t.value)}
+                  onChange={() => toggleContentType(t.value)}
                   disabled={disabled || !!createId}
-                  className="h-3.5 w-3.5 border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                  className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
                 />
                 {t.label}
                 {disabled ? " (disabled)" : ""}
