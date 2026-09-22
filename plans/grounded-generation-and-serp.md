@@ -544,7 +544,7 @@ reintroducing markdown.
 
 ---
 
-## Stage 9 — Emit local and FAQ schema *(independent; start day one)*
+## Stage 9 — Emit local and FAQ schema *(DONE 2026-09-21)*
 
 **Premise, verified 2026-09-21 — v1 schema already works.** The live long-form writer
 `ContentGenerationOrchestrator` emits a properly cross-linked graph, and it fails closed
@@ -567,23 +567,21 @@ already extracts `areaServed` (`:89`, `:190`). The result reaches the model as
 `JsonLdStructuredSummary` (`:1160`). So geography is **harvested and already in the prompt** — it is
 simply never written back out. No new brief field, no new input, no invented geography.
 
-- **9a — `areaServed` on the `Organization` node**, in all three builders, sourced from the parsed
-  `JsonLdSiteSummary`. **Omit the property when the summary is empty; never emit `[]`.** An empty
-  array asserts "serves nowhere", which is worse than silence — and `GccV2BrandKitBuilder.cs:100`
-  already hardcodes exactly that mistake (`AreaServed = []`, with the property at `:379` never
-  populated by anything).
-- **9b — a `LocalBusiness` / `ProfessionalService` node** when the crawled site declares itself one.
-  **Mirror the declared type; do not infer it.** If the client's own markup says `Organization`,
-  emit `Organization`. Promoting a business to `LocalBusiness` because it has an address is the
-  fabrication failure in schema form.
-- **9c — `FAQPage` / `Question` / `Answer`.** Absent from v1; present only in
-  `GccV2JsonLdBuilder`, which is reachable solely through `GccV2CmsPublishService` and
-  `GccV2HtmlExportService`. Port it to the v1 builders, emitted only where the draft actually has
-  question-and-answer structure. See the rich-results note under *Out of scope* — the markup's value
-  here is machine consumption, not a blue-link rich result.
-- **9d — decide the tool-page drop.** `GccGenerateService` passes `JsonLdStructuredSummary: null`
-  at `:1344` and `:1461`, so tool pages get no site summary at all. Establish whether that is
-  deliberate scoping or an oversight before 9a touches the tool builder.
+- **9a — `areaServed` on the `Organization` node — DONE.** `ProjectGenerationContext` now carries
+  `SiteAreaServed`/`SitePublisherType` (the structured `JsonLdSiteSummary` was previously discarded
+  right after being formatted to text), populated into every `ContentMetadata` construction site.
+  Empty is omitted, never `[]` — verified by test.
+- **9b — a `LocalBusiness` / `ProfessionalService` node — DONE.** `PublisherType` mirrors what the
+  crawled site declared, defaulting to `Organization` when nothing was — verified by test.
+- **9c — `FAQPage` / `Question` / `Answer` — DONE.** `ContentDocumentText.ExtractFaqPairs` is a
+  direct port of `GccV2JsonLdBuilder.ExtractFaqPairs`/`IsFaqSection`/`CollectFaqPairs` — the dead v2
+  path had already solved this correctly. Emitted only when the generated document actually has a
+  section headed FAQ or People Also Ask.
+- **9d — the tool-page drop, decided by reading the code.** `GenerateToolPageAsync` takes no
+  project or crawl reference at all (`toolName`/`brief`/`sourceContext` only) — `JsonLdStructuredSummary:
+  null` was never an oversight, there is no site to ask about geography or business type. Left
+  unset, documented in the code as deliberate. `Faq` is wired anyway since it reads the tool page's
+  own document, independent of any site.
 
 **Consumer already waiting:** Geek-SEO extracts `areaServed` (`SchemaOrgExtractor.cs:413`) and
 reasons over it (`LocalGapGenerator.cs:60`). Today it can only ever find it on competitor sites,
