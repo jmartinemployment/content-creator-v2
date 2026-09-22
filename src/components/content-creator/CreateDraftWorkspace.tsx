@@ -47,6 +47,38 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const [seo, setSeo] = useState<GccSeoReport | null>(null);
   const [polish, setPolish] = useState<GccPolishReport | null>(null);
 
+  // Which artifact id the operator is currently looking at. Separate from `artifact` itself
+  // (the full object) so reload() can tell "no selection yet" (null, pick a default) apart from
+  // "the operator picked one, keep it" (a real id) without re-deriving from `artifact`, which
+  // reload() is also about to replace.
+  const selectedArtifactIdRef = useRef<string | null>(null);
+
+  const loadVersionFor = useCallback(async (a: GccArtifact | null) => {
+    setArtifact(a);
+    selectedArtifactIdRef.current = a?.id ?? null;
+    // SEO/polish reports are per-version -- switching artifacts without clearing them would show
+    // a stale report for a different draft as if it applied to the one now on screen.
+    setSeo(null);
+    setPolish(null);
+    if (!a) {
+      setVersion(null);
+      return;
+    }
+    try {
+      const versions = await listGccVersions(a.id);
+      const latest = [...versions].sort((x, y) => y.versionNumber - x.versionNumber)[0] ?? null;
+      setVersion(latest);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not load that artifact's versions.",
+      );
+    }
+  }, []);
+
   const reload = useCallback(async () => {
     // No synchronous setState before the first await — see the identical fix and its reasoning
     // in creates/[id]/repurpose/page.tsx's `load`. Every path below still ends by setting
@@ -64,21 +96,24 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         if (t && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
         return ["blog"];
       });
-      const primary =
+      // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
+      // already selected an artifact (an earlier reload, or clicking a switcher tab), a fresh
+      // reload must not silently snap back to the auto-picked "primary" one out from under them.
+      // A generate that adds new artifacts is the one case reload() itself should move the
+      // selection — runGenerate passes the freshly created artifact's id explicitly for that.
+      const stillExists = selectedArtifactIdRef.current
+        ? d.artifacts.find((a) => a.id === selectedArtifactIdRef.current)
+        : undefined;
+      const target =
+        stillExists ??
         d.artifacts.find((a) =>
           ["blog", "pillar", "techarticle", "technicalarticle"].includes(
             a.type.toLowerCase(),
           ),
-        ) ?? d.artifacts[0] ?? null;
-      setArtifact(primary);
-      if (!primary) {
-        setVersion(null);
-        return;
-      }
-      const versions = await listGccVersions(primary.id);
-      const latest =
-        [...versions].sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null;
-      setVersion(latest);
+        ) ??
+        d.artifacts[0] ??
+        null;
+      await loadVersionFor(target);
     } catch (err) {
       setLoadError(
         err instanceof ApiError
@@ -88,7 +123,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
             : "Could not load create.",
       );
     }
-  }, [createId]);
+  }, [createId, loadVersionFor]);
 
   // reload is called through a ref rather than by name so this effect is not itself classified as
   // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
@@ -167,8 +202,15 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         setGenerateMsg(
           `Created ${result.artifact.type} “${result.artifact.name}” v${result.version.versionNumber}.`,
         );
+        // A fresh generate is the one case that should move the selection -- land on what was
+        // just created rather than whatever was selected before, or the pre-existing "primary"
+        // heuristic in reload().
+        selectedArtifactIdRef.current = result.artifact.id;
       } else if (result.created?.length) {
         setGenerateMsg(`Generated ${result.created.length} artifact(s).`);
+        // Multi-output: land on the primary (first requested long-form), same rule reload() uses
+        // when nothing is selected yet -- the switcher below makes every other one reachable.
+        selectedArtifactIdRef.current = result.created[0]?.artifact.id ?? null;
       } else {
         setGenerateMsg("Generate finished.");
       }
@@ -308,6 +350,32 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           ) : null}
         </section>
       </div>
+
+      {detail.artifacts.length > 1 ? (
+        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Generated artifacts">
+          {detail.artifacts.map((a) => {
+            const selected = a.id === artifact?.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => void loadVersionFor(a)}
+                className={
+                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
+                  (selected
+                    ? "border-brand bg-brand text-white"
+                    : "border-border bg-surface text-foreground hover:bg-muted/30")
+                }
+              >
+                {a.type}
+                {a.status?.toLowerCase() === "approved" ? " ✓" : ""}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {!version ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
