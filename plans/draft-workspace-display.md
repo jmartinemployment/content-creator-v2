@@ -3,7 +3,7 @@
 Found 2026-09-22 while Jeff tested generation directly. Written down properly rather than left as
 a verbal note, matching how everything else this session is tracked.
 
-## Problem 1 — concrete, already traced: no artifact switcher
+## Problem 1 — DONE 2026-09-22 (`a894590`)
 
 Confirmed by reading `CreateDraftWorkspace.tsx` directly. Selecting three output types at generate
 time produces three real artifacts server-side (`generateGccCreate` sends all of `outputTypes`,
@@ -23,9 +23,12 @@ the others, shows how many exist, or offers a way to switch. The other two gener
 real and retrievable (`listGccVersions(artifact.id)` already works per-artifact) — there is simply
 no UI surface that ever asks for any artifact but the "primary" one.
 
-**Shape of the fix, not yet built:** a switcher (tabs, a dropdown, a list) driven by `d.artifacts`,
-replacing the single auto-picked `artifact`/`setArtifact` with a selected-artifact-id state the
-operator controls. Small, well-scoped — this is a real gap, not a design question.
+**Built:** a tab switcher driven by `detail.artifacts`, shown whenever a create has more than one.
+`reload()` now preserves the operator's selection across reload cycles (via
+`selectedArtifactIdRef`) instead of snapping back to the "primary" heuristic every time — the same
+principle already used for `outputTypes`. A fresh generate is the one case that moves the
+selection on purpose. Switching also clears SEO/polish reports, since those are per-version.
+`tsc`/`lint`/`build` all clean.
 
 ## Problem 2 — real, but needs Jeff's read on what's overwhelming before proposing a shape
 
@@ -40,14 +43,13 @@ body preview itself, or the sheer count of controls visible at once regardless o
 risks solving the wrong problem. Once Jeff has tested and can point at what's actually in the way,
 that becomes the input to this section, not a guess made now.
 
-**One connection worth naming up front:** Problem 1's fix (an artifact switcher) makes Problem 2
-*worse* before it's addressed — adding a switcher to an already-dense page adds another control to
-an already-overloaded layout. Worth sequencing: either solve them together (a genuine
-page-structure redesign that includes artifact switching as one of its panels, not a bolt-on), or
-solve Problem 1 first with visible awareness that it's a stopgap, not the final shape.
+**The sequencing question above was answered by necessity, not by choice:** Problem 1 shipped first,
+as the stopgap it was flagged as — testing multi-select generation at all required being able to
+see more than one result. It does make Problem 2 somewhat worse in the meantime (one more control
+on an already-dense page); a genuine page-structure redesign should treat the switcher as one panel
+among several, not retrofit around it.
 
 ## Not started
 
-Neither problem has a fix built. This document exists so the next pass on this starts from what
-was actually traced (Problem 1) and what's still an open question pending Jeff's input
-(Problem 2), instead of re-finding the switcher gap or guessing at a layout.
+Problem 2 has no fix built. This document exists so the next pass on it starts from what Jeff
+actually finds overwhelming when testing, instead of guessing at a layout.
