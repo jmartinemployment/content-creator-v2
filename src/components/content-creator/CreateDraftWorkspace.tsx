@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
+import { isContentTypeDisabled } from "@/lib/content-types";
 import ContentBriefPanel from "./ContentBriefPanel";
 import { ApiError } from "@/services/gcc-api";
 import {
@@ -93,8 +94,10 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
       setOutputTypes((prev) => {
         if (prev.length) return prev;
         const t = d.startingContentType;
-        if (t && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
-        return ["blog"];
+        if (t && !isContentTypeDisabled(t) && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
+        // "aiTool" rather than "blog" -- Blog is disabled (see isContentTypeDisabled), and this
+        // fallback must never seed a disabled checkbox as the pre-checked default.
+        return ["aiTool"];
       });
       // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
       // already selected an artifact (an earlier reload, or clicking a switcher tab), a fresh
@@ -288,22 +291,31 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           <fieldset className="mt-4">
             <legend className="text-sm font-medium text-foreground">Content items to generate</legend>
             <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-              {GCC_OUTPUT_TYPES.map((o) => (
-                <label key={o.value} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={outputTypes.includes(o.value)}
-                    onChange={(e) =>
-                      setOutputTypes((prev) =>
-                        e.target.checked
-                          ? [...prev, o.value]
-                          : prev.filter((v) => v !== o.value),
-                      )
-                    }
-                  />
-                  {o.label}
-                </label>
-              ))}
+              {GCC_OUTPUT_TYPES.map((o) => {
+                const disabled = isContentTypeDisabled(o.value);
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex items-center gap-2 text-sm ${disabled ? "text-muted" : ""}`}
+                    title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={outputTypes.includes(o.value)}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        setOutputTypes((prev) =>
+                          e.target.checked
+                            ? [...prev, o.value]
+                            : prev.filter((v) => v !== o.value),
+                        )
+                      }
+                    />
+                    {o.label}
+                    {disabled ? " (disabled)" : ""}
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 

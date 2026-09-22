@@ -33,9 +33,39 @@ export const CONTENT_TYPES = [
 
 export type ContentTypeValue = (typeof CONTENT_TYPES)[number]["value"];
 
-export const DEFAULT_CONTENT_TYPE: ContentTypeValue = "pillar";
+// "tool" rather than "pillar" -- Pillar is disabled (see isContentTypeDisabled below), and a
+// picker must never default onto a disabled option.
+export const DEFAULT_CONTENT_TYPE: ContentTypeValue = "tool";
 
 export function contentTypeLabel(value: string | null | undefined): string {
   if (!value) return "no type yet";
   return CONTENT_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+/**
+ * Long-form content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan --
+ * mirrors GccGenerateService.DisabledLongFormContentTypes (GeekBackend), which is the real,
+ * enforced gate; this list is what makes that same state visible before Generate is even clicked.
+ * Tool is the one long-form type that meets the bar (always independently generated, never
+ * repurposed) and is deliberately excluded. Short-form types are out of scope for this disable.
+ * Normalized the same way as the backend: strip non-letters, lowercase, so "tech-article" and
+ * "techArticle" both match one entry.
+ */
+const DISABLED_LONG_FORM_TYPES = new Set([
+  "pillar",
+  "blog",
+  "techarticle",
+  "comparison",
+  "alternatives",
+  "casestudy",
+  "guide",
+  "listicle",
+  "service",
+  "local",
+  "whitepaper",
+]);
+
+export function isContentTypeDisabled(value: string): boolean {
+  const normalized = value.replace(/[^a-zA-Z]/g, "").toLowerCase();
+  return DISABLED_LONG_FORM_TYPES.has(normalized);
 }

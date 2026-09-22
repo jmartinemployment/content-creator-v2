@@ -7,7 +7,7 @@ import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import { ApiError } from "@/services/content-writer-api";
 import { listClients, type GccClient } from "@/services/gcc-projects-api";
 import { createGccCreate } from "@/services/gcc-api";
-import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE } from "@/lib/content-types";
+import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE, isContentTypeDisabled } from "@/lib/content-types";
 
 /**
  * Start a create directly, without crawling first.
@@ -130,8 +130,9 @@ export default function NewCreatePage() {
           className="mt-1 block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground disabled:opacity-50"
         >
           {CONTENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
+            <option key={t.value} value={t.value} disabled={isContentTypeDisabled(t.value)}>
               {t.label}
+              {isContentTypeDisabled(t.value) ? " (disabled — pending plan)" : ""}
             </option>
           ))}
         </select>

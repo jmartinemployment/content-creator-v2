@@ -17,7 +17,7 @@ import {
   type GccTaskStatus,
   type GccTimeEntry,
 } from "@/services/gcc-projects-api";
-import { CONTENT_TYPES, contentTypeLabel } from "@/lib/content-types";
+import { CONTENT_TYPES, contentTypeLabel, isContentTypeDisabled } from "@/lib/content-types";
 
 /** Today as "YYYY-MM-DD" in the operator's own timezone, which is the day they worked. */
 function today(): string {
@@ -319,20 +319,26 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
               Content types (optional)
             </legend>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-              {CONTENT_TYPES.map((ct) => (
-                <label
-                  key={ct.value}
-                  className="flex items-center gap-1.5 text-xs font-normal text-foreground"
-                >
-                  <input
-                    type="checkbox"
-                    checked={taskContentTypes.includes(ct.value)}
-                    onChange={() => toggleTaskContentType(ct.value)}
-                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
-                  />
-                  {ct.label}
-                </label>
-              ))}
+              {CONTENT_TYPES.map((ct) => {
+                const disabled = isContentTypeDisabled(ct.value);
+                return (
+                  <label
+                    key={ct.value}
+                    className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
+                    title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={taskContentTypes.includes(ct.value)}
+                      onChange={() => toggleTaskContentType(ct.value)}
+                      disabled={disabled}
+                      className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                    />
+                    {ct.label}
+                    {disabled ? " (disabled)" : ""}
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
         </form>
