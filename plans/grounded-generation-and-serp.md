@@ -109,7 +109,7 @@ Stage 8 (analyses) needs Stage 4 and Stage 7
 
 ---
 
-## Stage 0 — Finish the naming correction
+## Stage 0 — Finish the naming correction *(DONE 2026-09-21)*
 
 - Rename `GccV2WriteService.GenerateRagSectionAsync` and `WriteRagCompleteAsync` toward
   *library*/*grounded*. Correct vocabulary already exists (`GccV2CreateLibraryWriter`,
