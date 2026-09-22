@@ -225,6 +225,7 @@ export default function WorkflowPage() {
               <>
                 <ContentBriefPanel
                   clientId={project.clientId}
+                  projectId={project.id}
                   projectSiteRunId={project.projectSiteRunId ?? undefined}
                   targetKeyword=""
                   onBriefSaved={(savedCreateId, complete) => {

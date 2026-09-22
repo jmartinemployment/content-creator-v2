@@ -65,6 +65,7 @@ async function gccRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function createGccCreate(input: {
   clientId: string;
+  projectId?: string | null;
   startingContentType?: string | null;
   topic: string;
   notes?: string | null;
@@ -75,6 +76,7 @@ export function createGccCreate(input: {
     method: "POST",
     body: JSON.stringify({
       clientId: input.clientId,
+      projectId: input.projectId ?? null,
       startingContentType: input.startingContentType ?? null,
       topic: input.topic,
       notes: input.notes ?? null,

@@ -56,6 +56,7 @@ const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
 
 export default function ContentBriefPanel({
   clientId,
+  projectId,
   projectSiteRunId,
   targetKeyword,
   createId: createIdProp,
@@ -64,6 +65,11 @@ export default function ContentBriefPanel({
   onBriefValidityChange,
 }: {
   clientId: string;
+  /** The project this create belongs to, when minted from a project context (e.g. /app/workflow).
+   * Without it, GccGroundingResolver refuses any content type that needs partner/competitor
+   * evidence with "this create belongs to no project" -- even when the project genuinely has
+   * partner data, because nothing ever told the new create which project owns it. */
+  projectId?: string;
   projectSiteRunId?: string;
   targetKeyword: string;
   /** When set, brief saves onto this create (does not open a second create). */
@@ -256,6 +262,7 @@ export default function ContentBriefPanel({
     }
     const created = await createGccCreate({
       clientId,
+      projectId: projectId || null,
       startingContentType: effectiveContentType,
       topic,
       projectSiteRunId: projectSiteRunId || null,
