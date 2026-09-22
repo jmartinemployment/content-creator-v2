@@ -786,8 +786,13 @@ plan's own word for it. Reused Stage 4's `IGccProjectReader`/`IGccCrawlPageReade
 and needs its own logic. Not built — the resolver produces the raw heading/schema material a
 content-mix classifier would consume; it does not classify.
 
-*Not wired into outline selection* — the Coverage Gate is Stage 2, still deferred; this is that
-stage's input becoming real, not the consumption of it. 871 tests pass, 7 new.
+*Not wired into outline selection at write time* — this resolver's output became a real, checkable
+license for a heading once Stage 2 landed (`GccHeadingProvenanceGuard`'s `competitor:<heading>` tag,
+matched against exactly this resolver's output), which is the Coverage Gate's actual realization:
+"a candidate heading enters the outline only if [it resolves against real evidence]; otherwise it is
+not written" — done after the fact (the model proposes, the guard refuses) rather than before it
+(pre-filtering candidates), a distinction Stage 2's own writeup records but that does not change
+which headings end up licensed. 871 tests pass, 7 new.
 
 **8b. Partner — split into two, one done, one still open.**
 
@@ -820,8 +825,9 @@ deliberately) and emits `SectionJsonContract`, not `##` headings — no markdown
 the third routed through the FAQ prompt, and the FAQ section's content actually lands in the
 serialized document).
 
-*Not wired into outline selection* — same as 8a: this is Stage 2's Coverage Gate input becoming
-real, not the gate itself, which stays deferred.
+*Not wired into outline selection at write time* — same as 8a, and same resolution: Stage 2's guard
+makes a curated PAA question a real, checkable `paa:<question>` license for any body heading the
+model invents, not only the FAQ section's own verbatim ones. The Coverage Gate is Stage 2, done.
 
 ---
 
