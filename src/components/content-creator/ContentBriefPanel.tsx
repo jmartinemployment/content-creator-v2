@@ -587,6 +587,23 @@ export default function ContentBriefPanel({
       </div>
 
       <label className={`${labelClass} mt-5`}>
+        People Also Ask (direct entry, optional)
+        {/* Stage 7: "Direct PAA entry — one question per line" — the field and splitLines already
+            existed; the only thing missing was somewhere to type into it without a saved SERP
+            page. Kept separate from SerpIngestPanel's upload flow on purpose: an operator who
+            already knows the real questions from the SERP shouldn't need to save and parse a page
+            just to enter them. fill-empty still applies if a SERP is uploaded afterward — typed
+            entries here are exactly the "existing content" that upload will not clobber. */}
+        <textarea
+          value={brief.paaQuestions}
+          onChange={(e) => patch({ paaQuestions: e.target.value })}
+          rows={3}
+          placeholder={"One question per line, e.g.\nWhat is AI implementation?\nHow much does it cost?"}
+          className={`${fieldClass} font-mono text-xs`}
+        />
+      </label>
+
+      <label className={`${labelClass} mt-5`}>
         Writing Note for Image Prompt (optional)
         {/* Renamed to say what it actually does (2026-09-21 audit): read only by
             WriteImagePromptAsync — every other content type ignores this field entirely. */}
