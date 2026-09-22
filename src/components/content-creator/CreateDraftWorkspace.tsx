@@ -116,20 +116,18 @@ export default function CreateDraftWorkspace({
       setDetail(d);
       setLoadError(null);
       setBriefSavedOnServer(!!d.briefJson);
-      // Seed the checked output-type set from the create's starting type, once — never clobber a
-      // selection the operator has already made (an earlier reload, or their own clicks). No
-      // fallback: if the starting type isn't a valid, enabled output type, leave nothing checked
-      // rather than silently pre-select one the operator never chose.
-      setOutputTypes((prev) => {
-        if (prev.length) return prev;
-        const t = d.startingContentType;
-        if (t && !isContentTypeDisabled(t) && CONTENT_TYPES.some((o) => o.value === t)) return [t];
-        return [];
-      });
-      // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
-      // already selected an artifact (an earlier reload, or clicking a switcher tab), a fresh
-      // reload must not silently snap back to the auto-picked "primary" one out from under them.
-      // A generate that adds new artifacts is the one case reload() itself should move the
+      // Generate's checkboxes (outputTypes, below) are never seeded from the create's starting
+      // type. That type was a decision made at mint time, for Brief; Generate is a separate, later
+      // decision about what to produce right now, and pre-checking a box the operator never
+      // clicked is exactly the default/fallback content-type pattern removed everywhere else
+      // (Jeff, repeatedly, most recently 2026-09-22 after finding Pillar pre-checked here on an
+      // existing create). outputTypes starts at [] (its useState above) and only ever changes from
+      // the operator's own clicks on the checkboxes below -- reload() must not touch it at all.
+      //
+      // Same "don't clobber the operator's choice" principle applies to artifact selection: if
+      // they've already selected an artifact (an earlier reload, or clicking a switcher tab), a
+      // fresh reload must not silently snap back to the auto-picked "primary" one out from under
+      // them. A generate that adds new artifacts is the one case reload() itself should move the
       // selection — runGenerate passes the freshly created artifact's id explicitly for that.
       const stillExists = selectedArtifactIdRef.current
         ? d.artifacts.find((a) => a.id === selectedArtifactIdRef.current)
