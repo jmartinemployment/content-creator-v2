@@ -201,17 +201,33 @@ three node types are missing before a retrieved passage can arrive intact.
 **Still open, deliberately.** Whether the v2 write path is deleted or left dormant. Jeff: *"You can
 throw everything away and start over."* A live option, not an instruction executed here.
 
-## Stage 2 — Define "invented structure" as heading provenance
+## Stage 2 — Define "invented structure" as heading provenance *(deliberately deferred until Stage 7 lands)*
 
-The three guards named in `08651ab` cover prose, scope and title. **None constrains outline
-structure**, which is what that commit says was fabricated. Structural fabrication comes from PLAN,
-and Stage 4 swaps in `GccV2PlanService.BuildOutlineAsync` at the same moment it swaps the writer —
-so the old guards could all pass while the outline builder that caused the problem ships.
+**Premise corrected, 2026-09-21.** This originally said "Stage 4 swaps in
+`GccV2PlanService.BuildOutlineAsync` at the same moment it swaps the writer" — written before the
+pivot. Stage 4 never swaps the writer now; there is no v2 outline builder shipping to guard against.
+v1's only existing outline guard is `PillarHeadingContract.FindPlanViolations`, and it checks one
+thing: duplicate headings. No provenance concept exists today.
 
 **The fourth guard, and the operational definition the prior draft lacked:** every H2/H3 in a
 persisted outline carries a pointer to what licensed it — a verified retrieval passage, a brief
 field, an uploaded PAA question, or a competitor heading. **An outline containing an unlicensed
 heading fails.** Binary, queryable against the row, aimed at the actual failure.
+
+**Ordering decided 2026-09-22.** Two of the four sources — uploaded PAA questions, competitor
+headings — are not yet wired as inputs to outline generation; both arrive with Stage 7. Enforcing
+provenance against sources that don't exist would fail every heading that should trace to one of
+them, not because of a real defect but because the guard shipped ahead of its own inputs. Jeff chose
+building Stage 7 first, then Stage 2 in full against all four sources at once, over a two-source
+partial version now. **Do not start Stage 2 before Stage 7 is done.**
+
+**What the real fix will cost, scoped in advance so it isn't reopened from scratch:** the model must
+state, per heading, what licensed it — a post-hoc text-similarity match would be unreliable and
+isn't what "binary, queryable" asks for. That means extending `BuildArticleMetadataPrompt`'s JSON
+contract so `sectionOutline` entries carry a source tag; a new field on `GeneratedContent`; and
+threading it through `ProjectSnapshot`'s explicit, version-numbered serializer (currently
+`SchemaVersion: 5` — a real bump, not a free-form addition) since `Project`/`GeneratedContent` are
+not EF-persisted at all from GeekAPI, only serialized as a snapshot blob through GeekRepository.
 
 ## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side still sequenced)*
 
