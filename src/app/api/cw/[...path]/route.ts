@@ -8,6 +8,12 @@ import { apiConfig } from "@/lib/config";
  * when the user token is rejected — that masked auth failures.
  * Never exposes keys to the browser.
  */
+
+// Generate can now run several independent, fully-generated content types in one call (no more
+// cheap repurpose-derivation shortcut for any of them) -- the platform default is not guaranteed
+// long enough, and a killed function surfaces as an empty-body 500 with no diagnostic at all.
+export const maxDuration = 300;
+
 async function proxy(
   request: NextRequest,
   path: string[],
@@ -31,13 +37,28 @@ async function proxy(
   if (contentType) headers.set("content-type", contentType);
   headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: bufferedBody,
-    redirect: "manual",
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: bufferedBody,
+      redirect: "manual",
+      cache: "no-store",
+    });
+  } catch (err) {
+    // Previously uncaught -- a timeout, a reset connection, or GeekAPI simply not answering threw
+    // here and Next.js's own default handling returned a bare, empty 500 with no body at all,
+    // indistinguishable from every other kind of failure. This is the one that's actually ours to
+    // report accurately. Plain text, not JSON: gccRequest's error path reads the body directly as
+    // the error message (response.text(), never parsed), matching every other error body this
+    // proxy already passes through unchanged from GeekAPI itself.
+    const detail = err instanceof Error ? err.message : String(err);
+    return new Response(`Could not reach GeekAPI: ${detail}`, {
+      status: 502,
+      headers: { "content-type": "text/plain" },
+    });
+  }
 
   const responseHeaders = new Headers(response.headers);
   responseHeaders.delete("content-encoding");
