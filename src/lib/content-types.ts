@@ -33,9 +33,7 @@ export const CONTENT_TYPES = [
 
 export type ContentTypeValue = (typeof CONTENT_TYPES)[number]["value"];
 
-// "tool" rather than "pillar" -- Pillar is disabled (see isContentTypeDisabled below), and a
-// picker must never default onto a disabled option.
-export const DEFAULT_CONTENT_TYPE: ContentTypeValue = "tool";
+export const DEFAULT_CONTENT_TYPE: ContentTypeValue = "pillar";
 
 export function contentTypeLabel(value: string | null | undefined): string {
   if (!value) return "no type yet";
@@ -43,17 +41,24 @@ export function contentTypeLabel(value: string | null | undefined): string {
 }
 
 /**
- * Long-form content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan --
- * mirrors GccGenerateService.DisabledLongFormContentTypes (GeekBackend), which is the real,
- * enforced gate; this list is what makes that same state visible before Generate is even clicked.
- * Tool is the one long-form type that meets the bar (always independently generated, never
- * repurposed) and is deliberately excluded. Short-form types are out of scope for this disable.
+ * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan -- see
+ * plans/content-type-dispatch-and-richness.md. Mirrors GccGenerateService.DisabledContentTypes
+ * (GeekBackend), the real, enforced gate; this list is what makes that same state visible before
+ * Generate is even clicked. Revised same day: Pillar and Blog re-enabled -- they have real,
+ * independent dedicated generators and only break in one specific combination (multi-select
+ * alongside a sibling long-form type), tracked as its own bug fix, not a reason to disable a type
+ * that mostly works. Tool remains excluded outright -- it meets the bar these others don't.
+ * Everything still here has no real, correctly-routed implementation: the generic-fallback
+ * long-form types, LinkedInDocument (zero content-type-specific treatment), and
+ * EmailNewsletter/EmailStoryNurture/EmailTransactional (all three currently produce
+ * cold-outreach-shaped content regardless of which is picked -- the wrong thing, not a thin
+ * version of the right thing). Email-cold-outreach, Social, Ads, and Image prompt are not
+ * disabled -- cold outreach is the one email variant genuinely implemented, and Social/Ads/Image
+ * prompt were never flagged as broken.
  * Normalized the same way as the backend: strip non-letters, lowercase, so "tech-article" and
- * "techArticle" both match one entry.
+ * "techArticle", or "linkedin-document" and "PDF / LinkedIn document", each match one entry.
  */
-const DISABLED_LONG_FORM_TYPES = new Set([
-  "pillar",
-  "blog",
+const DISABLED_CONTENT_TYPES = new Set([
   "techarticle",
   "comparison",
   "alternatives",
@@ -63,9 +68,13 @@ const DISABLED_LONG_FORM_TYPES = new Set([
   "service",
   "local",
   "whitepaper",
+  "linkedindocument",
+  "emailnewsletter",
+  "emailstorynurture",
+  "emailtransactional",
 ]);
 
 export function isContentTypeDisabled(value: string): boolean {
   const normalized = value.replace(/[^a-zA-Z]/g, "").toLowerCase();
-  return DISABLED_LONG_FORM_TYPES.has(normalized);
+  return DISABLED_CONTENT_TYPES.has(normalized);
 }

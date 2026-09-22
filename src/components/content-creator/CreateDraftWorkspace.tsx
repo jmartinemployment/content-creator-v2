@@ -95,9 +95,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         if (prev.length) return prev;
         const t = d.startingContentType;
         if (t && !isContentTypeDisabled(t) && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
-        // "aiTool" rather than "blog" -- Blog is disabled (see isContentTypeDisabled), and this
-        // fallback must never seed a disabled checkbox as the pre-checked default.
-        return ["aiTool"];
+        return ["blog"];
       });
       // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
       // already selected an artifact (an earlier reload, or clicking a switcher tab), a fresh

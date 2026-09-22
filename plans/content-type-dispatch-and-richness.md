@@ -5,6 +5,19 @@ then confirmed by direct code inspection. Jeff, 2026-09-22: treat as its own fol
 work, after the session that found it completes -- email's per-subtype content differentiation is
 folded into this plan, not split out.
 
+## Status: 13 of these types are actively disabled (GeekBackend `GccGenerateService.DisabledContentTypes`)
+
+As of 2026-09-22, picking a disabled type refuses server-side (not just hidden in the picker) with
+`"Refused: '<type>' is disabled pending a written, approved resolve plan..."`, and every picker in
+this repo (`creates/new`, the Tasks panel, `CreateDraftWorkspace`'s Generate checkboxes) shows the
+disabled ones greyed out rather than hiding them. This plan *is* that resolve plan for them. Disabled
+now: TechArticle, Comparison, Alternatives, CaseStudy, Guide, Listicle, Service, Local, Whitepaper
+(Stages 0/2/3), LinkedInDocument (Stage 4), EmailNewsletter, EmailStoryNurture, EmailTransactional
+(Stage 1). Not disabled: Pillar, Blog, Tool (real, independent generators), Email — cold outreach
+(the one email variant genuinely implemented), Social, Ads, standalone Image prompt (never flagged
+as broken). A type only becomes selectable again once its stage below actually ships, not before --
+enabling any of these in the picker ahead of that is exactly the gap this plan exists to close.
+
 ## Shared architecture every new type below should follow
 
 Every type this session actually built (pillar, blog, Stage 6's lede fix, the tool-page grounding)
