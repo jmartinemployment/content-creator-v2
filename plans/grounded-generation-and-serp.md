@@ -629,15 +629,21 @@ content-mix classifier would consume; it does not classify.
 *Not wired into outline selection* — the Coverage Gate is Stage 2, still deferred; this is that
 stage's input becoming real, not the consumption of it. 871 tests pass, 7 new.
 
-**8b. Partner — from persisted `partner` crawl.** `GccV2PartnerExtractionService` already extracts
-comparisons, alternatives, pricing, FAQs, case studies, battlecards, quote-verified.
+**8b. Partner — split into two, one done, one still open.**
 
-***Missing-brand-integration is not computable from its inputs.*** Organic results are title, URL and
-snippet; whether a partner tool appears in a "best X tools" listicle depends on that listicle's
-**body**, which is in no crawl unless the ranking page is a declared competitor. Fetching arbitrary
-ranking URLs is a new crawl path and, via the ingest controller, new persisted rows — both ruled out.
-**Choose:** rescope to *"partner domain absent from top N"* plus a weak title/snippet mention check,
-or explicitly permit a non-persisting fetch of ranking URLs and record it under Settled questions.
+**Missing-brand-integration, rescoped — DONE 2026-09-22.** `GccMissingBrandIntegrationCheck`: per
+partner, whether its domain ranks in the top N of the brief's curated organics, at what position,
+and a weak title-mention check for when the domain itself doesn't rank but a competitor's title
+names it. Pure function, no crawl reads, no LLM calls. 879 tests pass, 8 new.
+
+**The extraction half — still open, deliberately not scoped in with the above.**
+`GccV2PartnerExtractionService` (comparisons, alternatives, pricing, FAQs, case studies,
+battlecards, quote-verified) is real — but it's an LLM call over `GccQuoteablePage[]` (the same
+type `GccGroundingResolver` already produces) producing a 23-field structured document, via
+`IGccV2SchemaConstrainedGenerator`. Reaching it from v1 is the same "wiring, not building" shape as
+8a, but the decision itself is a different shape: when does it run (every generation? on demand?),
+what consumes the 23-field output, whether/where it caches. A cost-bearing LLM call needs that
+decided before it's wired, not discovered by wiring it first.
 
 **8c. Keyword intent.** Cluster PAA via `PaaCluster`. Feed `BuildArticleFaqSectionPrompt`
 (`ContentPromptBuilder.cs:934-961`) from uploaded SERP data.
