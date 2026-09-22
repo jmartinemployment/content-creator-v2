@@ -104,7 +104,7 @@ Stage 9 (local/FAQ schema) ─────────── independent, parall
 Stage 1 ─── Not a fork: v1 writes; RAG is the capability being added.
 Stage 2 (provenance) → Stage 3 (Brief) → Stage 4 (grounding onto v1) → Stage 5 (frontend)
                                                         Stage 6 (lede) — no longer time-critical
-Stage 8 (analyses) needs Stage 4 and Stage 7
+Stage 8 (analyses) — unblocked: Stage 4 and Stage 7 both done
 ```
 
 ---
@@ -503,7 +503,7 @@ with it this method's only live caller (`ContentGenerationOrchestrator.cs:1424`)
 V1Restore stays and the caller is never removed. Stage 6 becomes formalization, not a rescue:
 expose it properly, and fix `blog`, which uses a hardcoded "prefer creative opening" today.
 
-## Stage 7 — Keyword SERP by manual upload *(independent; start day one)*
+## Stage 7 — Keyword SERP by manual upload *(DONE 2026-09-22)*
 
 **Automated fetch is foreclosed, not merely risky.** `cheerio-runner.ts:221` sets
 `respectRobotsTxtFile: { userAgent: BOT.name }` unconditionally with an `onSkippedRequest` recording
@@ -523,22 +523,53 @@ Two input modes:
 2. *Direct PAA entry* — **one question per line**, already the implemented contract
    (`brief-catalog.ts:205`; `splitLines` at `:483-488`). The four fields exist with no input UI today.
 
-**Presence, not fitness — this caveat applies here too.** `SerpIngestPanel.tsx`, `serp-lens.ts`,
-`GccV2PartnerExtractionService` and `GccV2HeadingTreeBuilder` have all never been reachable. "Wiring,
-not building" describes the diff size, not the risk.
+**Presence, not fitness — confirmed exactly right, and it changed the whole shape of this
+stage.** `SerpIngestPanel.tsx` and `serp-lens.ts` were real and complete: the parser
+(`GccSavedSerpParser`), a live endpoint already calling it, the full upload/paste/select/confirm
+panel, and **both merge modes already implemented** in `applyCuratedSerpToBrief`. `SerpIngestPanel`
+had zero importers; `applyCuratedSerpToBrief` had zero callers anywhere. "Wiring, not building" was
+exactly right — the fix was mounting one component and calling one function that already existed.
 
-Required behaviours:
+**Model reconciliation, decided:** `GccSavedSerpParser`/`GccSerpLensModels` were not touched.
+Geek-SEO's `SerpResult`/`SerpOrganicResult`/`PeopleAlsoAskResult` fit the raw data GCC's parser
+produces (Domain/Snippet/Answer/SourceUrl all nullable or defaultable), but `SerpAnalysisService`
+— the actual consumer of `ISerpProvider` in Geek-SEO — is a different product surface entirely (its
+own 7-day deep-cache, `DeepSerpResult`, competitor-gap analysis) with no relationship to GCC's
+Brief. Routing manual upload through it would have been wiring to the wrong consumer. GCC's model
+(`SavedSerpParseResult`/`SavedSerpOrganic`/`PaaCandidate`) survives because it carries real,
+GCC-specific advisory value — `SerpShapeSummary`'s Angle-for-SEO guidance, `PaaCandidate`'s
+relevance scoring — that Geek-SEO's raw-fetch shape has no reason to hold. Left as two models on
+purpose, not by default: one is raw SERP data, the other is content-strategy analysis built from it.
 
-- **Zero organics parsed ⇒ fail.** Never merge an empty result. The `//a[@href][.//h3]` selector is
-  written against current Google markup and will rot.
-- **Merge mode:** `replace` clobbers operator edits; `fill-empty` skips conflicts silently. Surface
-  the conflict.
-- **Stamp provenance** in `briefJson`: keyword, capture date, locale. Otherwise nobody can tell a
-  fresh SERP from a six-month-old one.
-- **No-SERP is a gate, not a warning.** Pick one: SERP required, or SERP optional with 8b/8c
-  recorded as skipped for that create.
+Required behaviours — all four done:
 
-## Stage 8 — The three analyses *(needs Stages 4 and 7)*
+- **Zero organics parsed ⇒ fail — DONE.** `curatedSerpHasOrganics` existed but nothing called it in
+  `SerpIngestPanel`; confirm was gated only on `parsed` being non-null, so every organic could be
+  unchecked and confirm would still fire. Now gates and disables the button.
+- **Merge mode: conflicts surfaced, not silent — DONE.** `applyCuratedSerpToBrief` now returns
+  `{ brief, conflicts }` instead of a bare brief. `ContentBriefPanel` renders each conflict with
+  "use SERP value" / "keep existing" actions.
+- **Provenance stamped — DONE.** `serpCapturedKeyword`/`serpCapturedAt`/`serpLocale` added to
+  `ContentBrief`, stamped only when a field is actually written (never claimed on a no-op merge),
+  surfaced in `buildBriefBlock`'s rendered output.
+- **No-SERP gate — decided: optional, not required.** No create has ever required SERP data —
+  forcing it now would be a breaking change with no consumer yet to justify it. "Recorded as
+  skipped for that create" is Stage 8's job: 8b/8c are the actual consumers of that skip signal,
+  and they don't exist yet. Building the skip-recording plumbing here, ahead of anything that reads
+  it, would be exactly the orphaned scaffolding this whole plan has been finding and fixing all
+  session. Stage 8 records the skip when it's built, against this decision.
+
+**Also done, not originally listed:** direct PAA entry — a plain textarea bound to `paaQuestions`,
+kept deliberately separate from the upload flow (an operator who already knows the real questions
+shouldn't need to save and parse a page), bypassing `applyCuratedSerpToBrief` since hand-typed
+questions carry no SERP provenance to stamp.
+
+Frontend production build clean, `tsc --noEmit` clean, eslint clean on every changed file.
+`serp-lens.test.ts`: 8 assertions — the zero-organics distinction, provenance stamped only on a
+real write, both merge modes, and that a conflict carries the value a caller needs to offer a
+"use it anyway" action.
+
+## Stage 8 — The three analyses *(unblocked — Stages 4 and 7 both done)*
 
 | Analysis | Source | Persisted? |
 |---|---|---|
