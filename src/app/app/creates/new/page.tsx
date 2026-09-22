@@ -7,7 +7,7 @@ import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import { ApiError } from "@/services/content-writer-api";
 import { listClients, type GccClient } from "@/services/gcc-projects-api";
 import { createGccCreate } from "@/services/gcc-api";
-import { CONTENT_TYPES, DEFAULT_CONTENT_TYPE, isContentTypeDisabled } from "@/lib/content-types";
+import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 
 /**
  * Start a create directly, without crawling first.
@@ -26,8 +26,9 @@ export default function NewCreatePage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
-  const [startingContentType, setStartingContentType] =
-    useState<string>(DEFAULT_CONTENT_TYPE);
+  // No default -- an operator must explicitly choose, never silently inherit whichever type
+  // happens to be first/enabled in the list.
+  const [startingContentType, setStartingContentType] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +43,11 @@ export default function NewCreatePage() {
       );
   }, []);
 
-  const canStart = selectedClientId !== null && topic.trim().length > 0;
+  const canStart =
+    selectedClientId !== null &&
+    topic.trim().length > 0 &&
+    startingContentType !== "" &&
+    !isContentTypeDisabled(startingContentType);
 
   async function submit() {
     if (!selectedClientId) {
@@ -52,6 +57,10 @@ export default function NewCreatePage() {
     const trimmedTopic = topic.trim();
     if (trimmedTopic.length === 0) {
       setError("Enter what this piece is about.");
+      return;
+    }
+    if (startingContentType === "" || isContentTypeDisabled(startingContentType)) {
+      setError("Select a content type.");
       return;
     }
     setError(null);
@@ -129,6 +138,9 @@ export default function NewCreatePage() {
           disabled={creating}
           className="mt-1 block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground disabled:opacity-50"
         >
+          <option value="" disabled>
+            Select a content type…
+          </option>
           {CONTENT_TYPES.map((t) => (
             <option key={t.value} value={t.value} disabled={isContentTypeDisabled(t.value)}>
               {t.label}

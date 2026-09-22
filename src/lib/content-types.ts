@@ -33,8 +33,6 @@ export const CONTENT_TYPES = [
 
 export type ContentTypeValue = (typeof CONTENT_TYPES)[number]["value"];
 
-export const DEFAULT_CONTENT_TYPE: ContentTypeValue = "pillar";
-
 export function contentTypeLabel(value: string | null | undefined): string {
   if (!value) return "no type yet";
   return CONTENT_TYPES.find((t) => t.value === value)?.label ?? value;

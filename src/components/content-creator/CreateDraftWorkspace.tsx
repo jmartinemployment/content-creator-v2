@@ -90,12 +90,14 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
       setLoadError(null);
       setBriefSavedOnServer(!!d.briefJson);
       // Seed the checked output-type set from the create's starting type, once — never clobber a
-      // selection the operator has already made (an earlier reload, or their own clicks).
+      // selection the operator has already made (an earlier reload, or their own clicks). No
+      // fallback: if the starting type isn't a valid, enabled output type, leave nothing checked
+      // rather than silently pre-select one the operator never chose.
       setOutputTypes((prev) => {
         if (prev.length) return prev;
         const t = d.startingContentType;
         if (t && !isContentTypeDisabled(t) && GCC_OUTPUT_TYPES.some((o) => o.value === t)) return [t];
-        return ["blog"];
+        return [];
       });
       // Same "don't clobber the operator's choice" principle as outputTypes above: if they've
       // already selected an artifact (an earlier reload, or clicking a switcher tab), a fresh
