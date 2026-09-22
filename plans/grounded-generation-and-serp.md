@@ -201,33 +201,93 @@ three node types are missing before a retrieved passage can arrive intact.
 **Still open, deliberately.** Whether the v2 write path is deleted or left dormant. Jeff: *"You can
 throw everything away and start over."* A live option, not an instruction executed here.
 
-## Stage 2 — Define "invented structure" as heading provenance *(deliberately deferred until Stage 7 lands)*
+## Stage 2 — Define "invented structure" as heading provenance *(premise corrected again, 2026-09-22 — see below; not yet built)*
 
 **Premise corrected, 2026-09-21.** This originally said "Stage 4 swaps in
 `GccV2PlanService.BuildOutlineAsync` at the same moment it swaps the writer" — written before the
 pivot. Stage 4 never swaps the writer now; there is no v2 outline builder shipping to guard against.
-v1's only existing outline guard is `PillarHeadingContract.FindPlanViolations`, and it checks one
-thing: duplicate headings. No provenance concept exists today.
 
-**The fourth guard, and the operational definition the prior draft lacked:** every H2/H3 in a
-persisted outline carries a pointer to what licensed it — a verified retrieval passage, a brief
-field, an uploaded PAA question, or a competitor heading. **An outline containing an unlicensed
-heading fails.** Binary, queryable against the row, aimed at the actual failure.
+**Premise corrected again, 2026-09-22 — the entire target named below was dead code.** Everything
+this section cited — `BuildArticleMetadataPrompt`'s model-chosen `sectionOutline`,
+`PillarHeadingContract.FindPlanViolations`, `GeneratedContent`, `ProjectSnapshot`, `SchemaVersion: 5`
+— belongs to `ContentGenerationOrchestrator` and the `Project`/`GeneratedContent` domain. Confirmed by
+direct grep: `BuildArticleMetadataPrompt` has exactly two callers, `ContentGenerationOrchestrator.cs:1347`
+and the dormant `GccV2WriteService.cs:1441` — never `GccGenerateService`. `FindPlanViolations` has
+exactly one non-test caller, also `ContentGenerationOrchestrator.cs`. And `AGENTS.md`'s own "Current
+state" already says the orchestrator's route in has **no live caller** — `content-writer-api.ts`'s
+generate calls are listed there by name as dead. Same trap as `GccV2*`, applied this time to the
+*other* dormant system: presence in a file that is architecturally described as "v1" is not the same
+as reachability from the live frontend. Nothing here was ever going to fire.
 
-**Ordering decided 2026-09-22.** Two of the four sources — uploaded PAA questions, competitor
-headings — are not yet wired as inputs to outline generation; both arrive with Stage 7. Enforcing
-provenance against sources that don't exist would fail every heading that should trace to one of
-them, not because of a real defect but because the guard shipped ahead of its own inputs. Jeff chose
-building Stage 7 first, then Stage 2 in full against all four sources at once, over a two-source
-partial version now. **Do not start Stage 2 before Stage 7 is done.**
+**What actually runs — `GccGenerateService` — was never checked against this section's four sources,
+so it was checked now, directly:**
 
-**What the real fix will cost, scoped in advance so it isn't reopened from scratch:** the model must
-state, per heading, what licensed it — a post-hoc text-similarity match would be unreliable and
-isn't what "binary, queryable" asks for. That means extending `BuildArticleMetadataPrompt`'s JSON
-contract so `sectionOutline` entries carry a source tag; a new field on `GeneratedContent`; and
-threading it through `ProjectSnapshot`'s explicit, version-numbered serializer (currently
-`SchemaVersion: 5` — a real bump, not a free-form addition) since `Project`/`GeneratedContent` are
-not EF-persisted at all from GeekAPI, only serialized as a snapshot blob through GeekRepository.
+- **Persisted row exists, and it's simpler than `ProjectSnapshot`.** `GccController.RunGenerateAsync`
+  calls `repo.CreateVersionAsync(new CreateGccArtifactVersionCommand(primaryArtifact.Id, bodyJson))`
+  — `bodyJson` is the serialized `ContentDocument`. Whatever provenance a `Section` carries would
+  ride along automatically, serialized straight through. No `SchemaVersion` bump, no separate
+  snapshot serializer — that machinery belongs to a system this doesn't touch.
+- **Invented structure is real here, just not where this section described it.** Pillar/blog
+  top-level H2s are a fixed plan (`PillarOutline`) or an "advisory... you may refine" list
+  (`BuildStandaloneBlogBodyPrompt`), not model-chosen the way `BuildArticleMetadataPrompt` chooses
+  one. But `SectionJsonContract` gives every `Section` a `children` array at every call site, and the
+  pillar batch prompt *requires* it: "Include 2-3 h3 subsections nested in children... every h3 needs
+  at least one substantive h4 child" (`ContentPromptBuilder.cs:645-648`). Every pillar generation
+  invents dozens of h3/h4 headings this way, and nothing — not `FindPlanViolations` (wrong system,
+  duplicates only anyway), not `ValidateContentHygiene`, not `ContentGuardrail` — checks any of them
+  against anything.
+- **Three of the four licensing sources don't reach the prompt that writes these headings, at all —
+  checked directly, not inferred:**
+  - *Retrieval.* `GccGroundingResolver.ResolveAsync` runs and can refuse on missing evidence
+    (`GccController.cs:703-705`) — that gate is real. But its `Passages` (the typed, block-level
+    verified evidence — the thing a heading could actually be licensed against) is computed and never
+    read again anywhere in the controller. Its `Pages` are merged into `create.ResearchJson`
+    (`MergeRetrievedEvidence`) — but `BuildPillarContext` (`GccGenerateService.cs:2100`), which builds
+    the context for both `GeneratePillarBodyAsync` and `GenerateBlogBodyAsync`, never reads
+    `ResearchJson` at all. The only place that ever deserializes it and renders a "QUOTEABLE RESEARCH"
+    block is `BuildBriefAndResearchBlock`, called from exactly one place:
+    `GenerateStartingContentAsync:1111` — the *other* content types (techArticle etc.), not pillar or
+    blog. **Retrieved evidence is resolved, merged, and then never seen by the two highest-volume
+    generators.** The Urgent section's "Closed. Retrieval landed as part of Stage 4's grounding gate"
+    is true only for the refusal gate — evidence presence is checked, but the evidence itself still
+    doesn't reach pillar/blog's prompt. Presence of a gate is not the same claim as presence of
+    grounding; this plan should not make that read easy to conflate a second time.
+  - *Competitor headings.* Stage 8a's own entry says it plainly: "Not wired into outline selection."
+    `GccCompetitorAnalysisResolver` has no caller inside `GccGenerateService`.
+  - *PAA questions* — the one source that does reach generation, but only into the isolated FAQ
+    section Stage 8c added (verbatim, by construction, so no provenance question even arises there).
+    Stage 8c's FAQ questions are never available to the *main body's* h3/h4 invention.
+  - *Brief fields* are the only source that reaches pillar/blog's main body today, via
+    `BuildBriefBodyGuidance` — and it renders POV/style controls (intent, tone, CTA, length,
+    E-E-A-T signals), not factual claims a heading could cite.
+
+**What this changes about "the real fix," concretely.** The old estimate (a `sectionOutline` JSON
+field + a `GeneratedContent` property + a `ProjectSnapshot` version bump) was pricing a task against
+a system that isn't running. The real fix, priced against what's actually live, is three sequential
+pieces, not one:
+
+1. **Wire retrieval into pillar/blog.** Either call `BuildBriefAndResearchBlock` from
+   `BuildPillarContext` (reads `ResearchJson`, already populated by the existing merge — cheapest),
+   or thread `grounding.Passages` through as typed evidence (richer, but needs a new parameter on
+   both `GeneratePillarBodyAsync`/`GenerateBlogBodyAsync` and a render path for it). Without this,
+   "licensed by a verified retrieval passage" can never be true for a pillar/blog heading, because no
+   retrieval passage is ever shown to the model that writes them.
+2. **Wire competitor headings into the same context**, so `GccCompetitorAnalysisResolver`'s output is
+   visible material the model can draw a heading from, not stored evidence nothing reads.
+3. **Only then does provenance-tagging make sense**: extend `SectionJsonContract` so every section
+   the model writes states which of the now-actually-available sources justified it; extend `Section`
+   with a non-`[JsonIgnore]` provenance field so it survives serialization into the artifact version
+   row; write a binary validator — no similarity matching — that checks each tag against the real,
+   concrete evidence set assembled for *that* generation call (a retrieval URL that's actually in
+   `Passages`, a brief field that's actually non-empty, a PAA question that's actually in the curated
+   list, a competitor heading that's actually in the resolver's output for *this* project) and fails
+   the whole generation on any tag that doesn't resolve. Fail closed, same as everywhere else in this
+   codebase — not a warning, not a partial strip.
+
+Steps 1 and 2 are themselves real wiring work, not scaffolding around step 3 — and they're the
+reason "Stage 2 in full" now costs meaningfully more than what was scoped when that ordering decision
+was made. Flagged back to Jeff rather than built silently against the corrected-but-still-larger
+scope. **Do not start building until that's resolved.**
 
 ## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side still sequenced)*
 
