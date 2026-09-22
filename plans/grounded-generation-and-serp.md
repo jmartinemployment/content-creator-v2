@@ -120,7 +120,7 @@ Stage 8 (analyses) — unblocked: Stage 4 and Stage 7 both done
   while `PAF` means *Primary Answer Feature* in Geek-SEO. One of them changes.
 - Commit the already-done prose correction first, so no stage points at working-tree state.
 
-## Stage 1 — Not a fork. v1 writes; RAG is the capability it lacks
+## Stage 1 — Not a fork. v1 writes; RAG is the capability it lacks *(requirement delivered 2026-09-22, via Stages 2/4/6/7/8 on `GccGenerateService`)*
 
 **The (a)/(b) framing was wrong and is withdrawn.** It was mine, not Jeff's, and it forced a choice
 between two writers where no choice exists. Jeff, 2026-09-21:
@@ -202,6 +202,15 @@ three node types are missing before a retrieved passage can arrive intact.
 
 **Still open, deliberately.** Whether the v2 write path is deleted or left dormant. Jeff: *"You can
 throw everything away and start over."* A live option, not an instruction executed here.
+
+**This stage's three requirements, closed against the actual writer.** This section names
+`ContentGenerationOrchestrator` throughout as "v1" — corrected, 2026-09-22 (Stage 3/4/5's matching
+corrections): the writer the frontend actually reaches is `GccGenerateService`, and that is where all
+three landed. (1) Retrieval — `GccGroundingResolver` + `GccCorpusBlockMapper`, Stage 4. (2) Citation
+and quotation of Partners/Tools, verified against block text — the same resolver, with the four-rule
+attribution block Stage 4 item 3 added to the prompt. (3) Provenance enforced, not asserted — Stage
+2's `GccHeadingProvenanceGuard`, which refuses a draft outright rather than silently degrading it,
+exactly the "refusal is information, a generic draft is not" standard this stage set.
 
 ## Stage 2 — Define "invented structure" as heading provenance *(DONE 2026-09-22)*
 
@@ -339,7 +348,7 @@ refuses generation, a `plan`-tagged heading passes with no other evidence, and �
 the `CrawledParagraphs` dead end — competitor/retrieval evidence actually reaching the rendered
 system prompt, not just satisfying the guard).
 
-## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side still sequenced)*
+## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side dropped 2026-09-22)*
 
 `GccV2CreateLibraryWriter.BuildResearchUserPrompt` (`:749-768`) is `private static` with 3 call
 sites (`:391` outline, `:432` section, `:683` long-form).
@@ -367,12 +376,15 @@ audience notes disagree with the segment, follow notes" inline. Covers
 multi-select); pillar/blog got their own version via `ContentPromptBuilder.BuildBriefBodyGuidance`
 in the Urgent fix. Verified: the raw JSON string can never appear verbatim in the rendered block.
 
-**v2 side — still not started, and still correctly sequenced.** Stage 4 landed, so "cannot be
-verified until Stage 4 lands" no longer blocks it — but the sequencing note above it still does:
-design `GccV2CreateLibraryWriter.BuildResearchUserPrompt`'s renderer after Stage 7 adds
-`serpTitles`/`serpUrls`/`relatedSearches`/`paaQuestions`, not before. Untouched here on purpose.
+**v2 side — dropped, 2026-09-22.** `GccV2CreateLibraryWriter.BuildResearchUserPrompt` belongs to the
+same dormant `-v2` job-worker pipeline named in Stage 5's correction below: `ContentGenerationOrchestrator`
+and everything routed to it (`V1Restore`, `GccV2JobWorker`) has zero live frontend callers, checked
+directly — `generateGccCreate` in `gcc-api.ts` calls `api/geek-content-creator/creates/{id}/generate`,
+never a `-v2` route, and there is no `geek-content-creator-v2` reference anywhere in this repo's
+frontend. Jeff decided not to pursue making it live. `GccGenerateService` is the writer; its Brief
+rendering is the v1-side work above, already done.
 
-## Stage 4 — Bring retrieval and verification to v1 *(the capability v1 lacks)*
+## Stage 4 — Bring retrieval and verification to v1 *(DONE 2026-09-22 — see items 1-5, and the correction below them)*
 
 **The output contract, which decides this stage's shape.** The output must end up HTML, and there
 must be **one** solution that produces it. `SectionHtmlRenderer` already is that solution and says
@@ -561,30 +573,56 @@ code does not enforce must never be written down as though it does (`CLAUDE.md` 
 and always was; this stage adds the retrieval and verification it has no concept of. Do not port v2's Markdown document
 model, its serialize/parse loop, or its section flattener.
 
-- Feed `ContentGenerationOrchestrator` retrieved, verified corpus passages — typed `blocks`, never a
-  flattened projection and never Markdown.
-- Carry the seven block kinds through to the generated document so `listItem`, `quote`, `code`,
-  `term` and `definition` survive as themselves.
-- **V1Restore stays** — it is v1 routing, and Stage 6's `BuildLedeTypeGuidance` caller lives there.
-  The ordering constraint below is void: nothing deletes that caller now.
-- The `DraftingEnabled` gate (`:336-341`) governs the v2 path and is left as-is.
-- **Tier decision, cheapest moment:** the job worker, controllers and V1Restore sit in GeekAPI, which
-  `architecture.md` defines as a gateway with no product logic. Either move it now, while V1Restore
-  is already being deleted, or record the exception explicitly. After Stage 5 the frontend is coupled
-  to GeekAPI routes and the moment is gone.
+**The four bullets below named `ContentGenerationOrchestrator`/`V1Restore` as "v1." Corrected,
+2026-09-22 — that naming is what's wrong, not (only) the bullets' content.** Checked directly:
+`ContentGenerationOrchestrator`, reached only via `V1Restore`/the `-v2` job-worker route, has zero
+live frontend callers — same finding as Stage 3's v2 side and Stage 5 below, and the same standing
+decision (Jeff, 2026-09-22): don't pursue making it live. **`GccGenerateService` is v1** — it is what
+`GccController` actually calls, what the frontend actually reaches, and item 5 above already routed
+it through `ContentDocument` with real grounding (Stage 4 itself), citation, and provenance (Stage 2).
+The bullets are kept below as a record of the track that was considered and dropped, not as
+remaining work:
+
+- ~~Feed `ContentGenerationOrchestrator` retrieved, verified corpus passages~~ — done instead via
+  `GccGroundingResolver` + `GccCorpusBlockMapper`, both wired into `GccGenerateService`'s live path.
+- ~~Carry the seven block kinds through to the generated document~~ — `ContentDocument`'s four
+  present kinds plus `QuoteParagraph`/`CodeParagraph`/`DefinitionParagraph` (item 1 above) already
+  serve the live path; this was never orchestrator-specific.
+- ~~V1Restore stays — Stage 6's `BuildLedeTypeGuidance` caller lives there~~ — also corrected: Stage
+  6's real live caller was `GccGenerateService`'s `BuildStandaloneBlogLedePrompt`, missing the same
+  guidance pillar already had. Fixed there, 2026-09-22.
+- ~~Tier decision — move the job worker/V1Restore out of GeekAPI, or record the exception~~ — moot;
+  nothing is being built on that path to move.
 
 **Presence, not fitness:** all 11 v2 methods exist and compile (`GccV2WriteService.cs:380-405`) and
-**none has ever produced a document.** The 11-type target now applies to v1's path instead.
+**none has ever produced a document.** The 11-type target now applies to `GccGenerateService`'s path.
 
-## Stage 5 — Frontend reaches the pipeline *(split)*
+## Stage 5 — Frontend reaches the pipeline *(dropped 2026-09-22 — the frontend already reaches the live pipeline)*
 
-**5a — routing and mapping.** Point `generateGccCreate` (`gcc-api.ts:244`) at
+**Dropped, not done.** This stage's whole premise was pointing `generateGccCreate` at the `-v2`
+job-worker route so `ContentGenerationOrchestrator` would finally have a live caller. Checked
+directly, 2026-09-22: `generateGccCreate` (`gcc-api.ts:253`) calls
+`api/geek-content-creator/creates/{id}/generate` today — the live `GccController`/`GccGenerateService`
+route — and there is no `geek-content-creator-v2` reference anywhere in this frontend. The frontend
+was never *not* reaching a pipeline; it was reaching the correct one the whole time, under a name
+(`api/geek-content-creator`, no suffix) this stage's own title didn't credit as "the pipeline." Jeff
+decided not to pursue making the `-v2` route live (same decision as Stage 3's v2 side and Stage 4's
+closing bullets), so there is no routing change to make.
+
+**5a/5b kept below as a record, not remaining work.** Both were real problems on the `-v2` path
+specifically — the 11-value canonical mapping, and the fan-out gap between N social-platform
+checkboxes and `CreateDraftWorkspace` polling one job — but that path isn't being pursued, so neither
+needs solving there. If the live path (`GccGenerateService`/`GccController`) ever needs multi-platform
+fan-out, that would be scoped fresh against its own code, not inherited from this stage's v2-shaped
+answer.
+
+**5a — routing and mapping (dropped).** Point `generateGccCreate` (`gcc-api.ts:244`) at
 `POST /api/geek-content-creator-v2/creates/{id}/generate` and poll `.../jobs/{id}`. The 11 UI values
 → canonical mapping (`techArticle`→`tech-article`, `imagePrompt`→`image-prompt`, `aiTool`→`tool`,
 `metaAds`/`googleAds`→`ads`, `linkedIn`/`x`/`instagram`→`social`) **lives server-side as the single
 source of truth**, not in the client.
 
-**5b — platform mechanisms.** Per-job platform: a Create-level `socialPlatform`
+**5b — platform mechanisms (dropped).** Per-job platform: a Create-level `socialPlatform`
 (`GccV2WriteService.cs:1636`) cannot express LinkedIn + X + Instagram checked together, and
 `WriteAdsAsync:1082` has no Meta/Google split at all. **Fan-out:** N checkboxes create N jobs while
 `CreateDraftWorkspace` polls one. Both are missing mechanisms, not unset fields.
