@@ -5,6 +5,14 @@ import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import ContentBriefPanel from "./ContentBriefPanel";
+import type { HubConnection } from "@microsoft/signalr";
+import {
+  createWorkflowHubConnection,
+  joinGccGenerate,
+  onGccGenerateEvent,
+  onGccGenerateReconnected,
+  onGccGenerateTypeEvent,
+} from "@/services/workflow-tools-hub";
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
@@ -87,6 +95,10 @@ export default function CreateDraftWorkspace({
   // "the operator picked one, keep it" (a real id) without re-deriving from `artifact`, which
   // reload() is also about to replace.
   const selectedArtifactIdRef = useRef<string | null>(null);
+  // The generate job this workspace is following, and the hub connection following it. Generate
+  // returns 202 and reports over SignalR -- see plans/generate-async-signalr.md.
+  const hubRef = useRef<HubConnection | null>(null);
+  const generateJobIdRef = useRef<string | null>(null);
 
   const loadVersionFor = useCallback(async (a: GccArtifact | null) => {
     setArtifact(a);
@@ -170,6 +182,17 @@ export default function CreateDraftWorkspace({
     if (!effectiveCreateId) return;
     void reloadRef.current();
   }, [effectiveCreateId]);
+
+  // Close the hub connection when this workspace goes away. The job keeps running server-side --
+  // it is not tied to the connection -- and GetJob plus JoinGccGenerate pick it back up.
+  useEffect(
+    () => () => {
+      const conn = hubRef.current;
+      hubRef.current = null;
+      void conn?.stop();
+    },
+    [],
+  );
 
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);
@@ -273,6 +296,46 @@ export default function CreateDraftWorkspace({
   // (Jeff, 2026-09-22: two hours of "same error"). Refuse here, in words, instead.
   const missingProjectSiteRun = !detail.projectSiteRunId;
 
+  /**
+   * Follow a generate job on the hub. Each content type pushes as it finishes, so artifacts appear
+   * progressively rather than all at once when the slowest one lands; the job event is what ends
+   * the run. Handlers read reload through its ref so they never close over a stale copy.
+   */
+  async function attachToGenerateJob(jobId: string) {
+    generateJobIdRef.current = jobId;
+    let conn = hubRef.current;
+    if (!conn) {
+      conn = createWorkflowHubConnection();
+      hubRef.current = conn;
+
+      onGccGenerateTypeEvent(conn, (evt) => {
+        if (evt.jobId !== generateJobIdRef.current) return;
+        setGenerateMsg(
+          evt.status === "failed"
+            ? `${evt.contentType}: ${evt.error ?? "failed"}`
+            : `${evt.contentType} ready.`,
+        );
+        void reloadRef.current();
+      });
+
+      onGccGenerateEvent(conn, (evt) => {
+        if (evt.jobId !== generateJobIdRef.current) return;
+        if (evt.status === "ready") {
+          setGenerateMsg("Generate finished.");
+          setGenerating(false);
+          void reloadRef.current();
+        } else if (evt.status === "failed") {
+          // The refusal or fault verbatim -- the whole point of the job carrying its error.
+          setGenerateMsg(evt.error ?? "Generate failed.");
+          setGenerating(false);
+        }
+      });
+
+      onGccGenerateReconnected(conn, () => generateJobIdRef.current);
+    }
+    await joinGccGenerate(conn, jobId);
+  }
+
   async function runGenerate(acknowledgeStale = false) {
     if (!effectiveCreateId || !canGenerate || saMissingPages) return;
     setGenerateMsg(null);
@@ -283,23 +346,35 @@ export default function CreateDraftWorkspace({
         outputTypes,
         acknowledgeStaleGrounding: acknowledgeStale,
       });
+
+      // Job shape: generation runs in the background and reports over the hub. `generating` stays
+      // true until a terminal job event arrives, so the button reflects real state rather than
+      // "the POST returned".
+      if (result.jobId) {
+        setGenerateMsg(
+          outputTypes.length > 1
+            ? `Generating ${outputTypes.length} content items — each appears as it finishes.`
+            : "Generating — this runs in the background.",
+        );
+        await attachToGenerateJob(result.jobId);
+        return;
+      }
+
+      // Inline shapes, for a GeekAPI not yet running the job runner. This frontend deploys first
+      // on purpose, so there is never a moment where the two disagree.
       if (result.artifact && result.version) {
         setGenerateMsg(
-          `Created ${result.artifact.type} “${result.artifact.name}” v${result.version.versionNumber}.`,
+          `Created ${result.artifact.type} \u201c${result.artifact.name}\u201d v${result.version.versionNumber}.`,
         );
-        // A fresh generate is the one case that should move the selection -- land on what was
-        // just created rather than whatever was selected before, or the pre-existing "primary"
-        // heuristic in reload().
         selectedArtifactIdRef.current = result.artifact.id;
       } else if (result.created?.length) {
         setGenerateMsg(`Generated ${result.created.length} artifact(s).`);
-        // Multi-output: no "primary" anymore (every type is generated independently) -- just land
-        // on the first one created, the switcher below makes every other one reachable.
         selectedArtifactIdRef.current = result.created[0]?.artifact.id ?? null;
       } else {
         setGenerateMsg("Generate finished.");
       }
       await reload();
+      setGenerating(false);
     } catch (err) {
       const stale = parseStaleGroundingError(err);
       if (stale) {
@@ -314,7 +389,6 @@ export default function CreateDraftWorkspace({
               : "Generate failed",
         );
       }
-    } finally {
       setGenerating(false);
     }
   }

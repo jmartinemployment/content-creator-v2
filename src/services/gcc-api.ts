@@ -177,6 +177,13 @@ export interface GccStaleGroundingError {
 }
 
 export interface GccGenerateResult {
+  /** Present once GeekAPI runs generate as a job: join it on the hub and await events. */
+  jobId?: string;
+  createId?: string;
+  status?: string;
+  /* The shapes a synchronous generate returned. Kept so the UI works against a GeekAPI that has
+     not yet been deployed with the job runner -- this frontend ships first, deliberately, so
+     there is no window where the two disagree. */
   artifact?: GccArtifact;
   version?: GccArtifactVersion;
   created?: Array<{ artifact: GccArtifact; version: GccArtifactVersion }>;
