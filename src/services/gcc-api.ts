@@ -5,7 +5,6 @@
 
 import type { ContentBrief } from "@/lib/content-creator/brief-catalog";
 import type { SiteSectionContext } from "@/lib/types";
-import { siteSectionForApi } from "@/lib/site-section-storage";
 import type { SavedSerpParseResult } from "@/lib/content-creator/serp-lens";
 
 const API_BASE = "/api/cw";
@@ -70,19 +69,8 @@ export function createGccCreate(input: {
   topic: string;
   notes?: string | null;
   projectSiteRunId?: string | null;
-  siteSection?: SiteSectionContext | null;
   department?: string | null;
 }): Promise<GccCreate> {
-  const projectSiteRunId = input.projectSiteRunId ?? null;
-  const siteSection = input.siteSection ?? null;
-  // Site Analyzer handoff path requires relatedPages; domain-only grounding (crawl id,
-  // no section) is allowed — Generate uses trees for "must mention", not relatedPages.
-  if (siteSection && (!siteSection.relatedPages || siteSection.relatedPages.length === 0)) {
-    throw new ApiError(
-      "Site Analyzer create requires non-empty relatedPages in site section context.",
-      400,
-    );
-  }
   return gccRequest<GccCreate>("/api/geek-content-creator/creates", {
     method: "POST",
     body: JSON.stringify({
@@ -90,8 +78,7 @@ export function createGccCreate(input: {
       startingContentType: input.startingContentType ?? null,
       topic: input.topic,
       notes: input.notes ?? null,
-      projectSiteRunId,
-      siteSection: siteSection ? siteSectionForApi(siteSection) : null,
+      projectSiteRunId: input.projectSiteRunId ?? null,
       department: input.department?.trim() || "marketing",
     }),
   });

@@ -33,61 +33,17 @@ import {
   getGccCreate,
   patchBriefResearch,
 } from "@/services/gcc-api";
-import {
-  clearSiteSectionHandoff,
-  readSiteSectionHandoff,
-} from "@/lib/site-section-storage";
-
 /**
- * What's saved locally for this keyword, seeded once from a Site Analyzer handoff (gap reason +
- * curated SERP, only into empty fields). Reading the handoff does not consume it — ensureCreateId
- * clears it once a create actually uses it — so this is safe to call more than once.
+ * What's saved locally for this keyword. Used to seed a Site Analyzer handoff (gap reason +
+ * curated SERP) — that handoff writer has had zero callers since the gap-pick flow was removed
+ * (`b2a7fc8`), so the handoff-reading branch that used to live here was dead: it could never see
+ * a value. Removed with `src/lib/site-section-storage.ts` rather than left as an always-false
+ * check, per `plans/remove-site-analyzer.md`.
  */
 function computeLocalBrief(targetKeyword: string): ContentBrief {
   const stored = loadBriefFromStorage(targetKeyword || "draft");
   const fromKw = loadBriefFromStorage(`kw:${targetKeyword}`);
-  let localBrief = fromKw ?? stored ?? emptyContentBrief();
-
-  try {
-    const handoff = readSiteSectionHandoff();
-    if (handoff) {
-      const seedNotes: string[] = [];
-      if (handoff.gapReason?.trim()) {
-        seedNotes.push(`Gap reason: ${handoff.gapReason.trim()}`);
-      }
-      if (handoff.gapSectionPath?.trim()) {
-        seedNotes.push(`Section path: ${handoff.gapSectionPath.trim()}`);
-      }
-      if (handoff.curatedSerp?.shapeGuidance?.trim()) {
-        seedNotes.push(`SERP shape: ${handoff.curatedSerp.shapeGuidance.trim()}`);
-      }
-      if (handoff.curatedSerp?.informationGainSummary?.trim()) {
-        seedNotes.push(
-          `Information Gain: ${handoff.curatedSerp.informationGainSummary.trim()}`,
-        );
-      }
-      if (seedNotes.length && !localBrief.writingNotes.trim()) {
-        localBrief = {
-          ...localBrief,
-          writingNotes: seedNotes.join("\n"),
-        };
-      }
-      const serp = handoff.curatedSerp;
-      if (serp) {
-        localBrief = {
-          ...localBrief,
-          serpTitles: localBrief.serpTitles.trim() || serp.serpTitles,
-          serpUrls: localBrief.serpUrls.trim() || serp.serpUrls,
-          paaQuestions: localBrief.paaQuestions.trim() || serp.paaQuestions,
-          relatedSearches:
-            localBrief.relatedSearches.trim() || serp.relatedSearches,
-        };
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return localBrief;
+  return fromKw ?? stored ?? emptyContentBrief();
 }
 
 const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
@@ -271,21 +227,12 @@ export default function ContentBriefPanel({
       // was created rather than discovering "untitled" three steps later.
       throw new ApiError("Target keyword is required before a create can be started.", 400);
     }
-    const handoff = readSiteSectionHandoff();
-    if (handoff && !handoff.section.relatedPages?.length) {
-      throw new ApiError(
-        "Site Analyzer create requires non-empty relatedPages in site section context.",
-        400,
-      );
-    }
     const created = await createGccCreate({
       clientId,
       startingContentType,
       topic,
-      projectSiteRunId: projectSiteRunId || handoff?.projectSiteRunId || null,
-      siteSection: handoff?.section ?? null,
+      projectSiteRunId: projectSiteRunId || null,
     });
-    if (handoff) clearSiteSectionHandoff();
     setInternalCreateId(created.id);
     try {
       localStorage.setItem(GCC_CREATE_STORAGE_PREFIX + keywordInput, created.id);
