@@ -569,13 +569,42 @@ Frontend production build clean, `tsc --noEmit` clean, eslint clean on every cha
 real write, both merge modes, and that a conflict carries the value a caller needs to offer a
 "use it anyway" action.
 
-## Stage 8 — The three analyses *(unblocked — Stages 4 and 7 both done)*
+## Stage 8 — The three analyses *(in progress, 2026-09-22)*
 
 | Analysis | Source | Persisted? |
 |---|---|---|
 | Competitor | `competitors` crawl pages | Already stored |
 | Partner | `partner` crawl pages | Already stored |
 | Keyword | Stage 7 upload | In `briefJson` — existing store |
+
+**The real shape of this stage, found while scoping — not "build three analyses," but "reach v2's
+real extraction services from v1 for the first time."** `GccV2PartnerExtractionService`
+(comparisons, alternatives, pricing, FAQs, case studies, battlecards, quote-verified — 501 lines,
+real, tested) and `GccV2HeadingTreeBuilder` (heading outlines from arbitrary HTML, 195 lines, real,
+tested, already used by the live project-site hierarchy path) are genuinely working code with real
+callers — **but every one of those callers is `GccV2*` namespace, and the frontend makes zero calls
+to any `api/geek-content-creator-v2/*` route, confirmed directly.** Same trap as `GccV2WriteService`
+and `SerpIngestPanel` before it: presence inside the v2 namespace is not reachability. Confirmed:
+neither `GccGenerateService` nor `ContentGenerationOrchestrator` (the live v1 writer) calls either
+service anywhere today. So each of 8a/8b/8c is a wiring task from v1 into this real v2 logic — the
+same pattern as Stage 4's grounding gate, done three times.
+
+**8b decided, 2026-09-22:** rescope to *"partner domain absent from the top N organic results"*
+plus a weak title/snippet mention check. No new fetch, no new persisted rows — computable today
+from data already crawled. The non-persisting-fetch alternative was available and not chosen.
+
+**Approach decided:** one analysis at a time, in the plan's own order — 8a → 8b → 8c — each wired,
+tested and committed before the next starts, matching Stage 4's rhythm.
+
+**8c's Markdown concern, already resolved — checked directly.** `BuildArticleFaqSectionPrompt`
+(`ContentPromptBuilder.cs:945`) already emits `SectionJsonContract` — `tag`/`heading`/`paragraphs`,
+"no code fences, no commentary" — not `##` headings. Whatever the plan's concern was written
+against, it isn't the current code. The heading-title naming concern ("People Also Ask" is Google's
+feature name, not necessarily reader-facing copy) is real but minor — left as-is; "People Also Ask"
+is now common enough as reader-facing copy that this isn't a correctness issue.
+
+**Stale reference fixed:** 8c said `PaaPafCluster`; that type was renamed to `PaaCluster` in Stage 0
+(the PAF-collision fix) after this section was written.
 
 **Coverage gate — applies to all of Stage 8.** Feeding competitor headings and PAA clusters into
 outline selection produces headings the corpus may have nothing on, leaving the writer only invention
@@ -601,7 +630,7 @@ ranking URLs is a new crawl path and, via the ingest controller, new persisted r
 **Choose:** rescope to *"partner domain absent from top N"* plus a weak title/snippet mention check,
 or explicitly permit a non-persisting fetch of ranking URLs and record it under Settled questions.
 
-**8c. Keyword intent.** Cluster PAA via `PaaPafCluster`. Feed `BuildArticleFaqSectionPrompt`
+**8c. Keyword intent.** Cluster PAA via `PaaCluster`. Feed `BuildArticleFaqSectionPrompt`
 (`ContentPromptBuilder.cs:934-961`) from uploaded SERP data.
 *Two checks:* it titles the section **"People Also Ask"** — Google's feature name, not reader-facing
 copy; and it emits `##` headings, so confirm that fits structured-JSON output rather than
