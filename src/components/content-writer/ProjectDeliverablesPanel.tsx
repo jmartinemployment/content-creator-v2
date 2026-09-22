@@ -97,7 +97,6 @@ export default function ProjectDeliverablesPanel({
       await createDeliverable(project.id, {
         createId: create.id,
         name: create.topic,
-        type: create.startingContentType,
         dueDate: dueDate || null,
       });
       setSelectedCreateId("");

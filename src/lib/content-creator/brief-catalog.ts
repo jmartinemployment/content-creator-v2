@@ -681,7 +681,11 @@ const LENGTH_BAND_BY_CONTENT_TYPE: Record<string, LengthBandKey> = {
   "linkedin-document": "socialLinkedIn",
 };
 
-/** Falls back to "blog" for a content type outside the twenty known values. */
-export function lengthBandForContentType(startingContentType: string): LengthBandKey {
-  return LENGTH_BAND_BY_CONTENT_TYPE[startingContentType] ?? "blog";
+/**
+ * "" for no content type chosen yet, or one outside the twenty known values -- no default band.
+ * `ContentBrief.lengthBand` is already typed `LengthBandKey | ""` for exactly this state; every
+ * real caller resolves a real content type before this result is ever persisted.
+ */
+export function lengthBandForContentType(startingContentType: string): LengthBandKey | "" {
+  return LENGTH_BAND_BY_CONTENT_TYPE[startingContentType] ?? "";
 }

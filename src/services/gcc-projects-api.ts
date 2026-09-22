@@ -551,7 +551,9 @@ export function listDeliverables(projectId: string): Promise<GccDeliverable[]> {
  */
 export function createDeliverable(
   projectId: string,
-  input: { createId: string; name: string; type?: string | null; dueDate?: string | null },
+  // No `type` -- the server derives it from the create being attached (its StartingContentType),
+  // never from a client-supplied copy that could drift from it.
+  input: { createId: string; name: string; dueDate?: string | null },
 ): Promise<GccDeliverable> {
   return projectsRequest<GccDeliverable>(
     `${PROJECTS}/${encodeURIComponent(projectId)}/deliverables`,
@@ -560,7 +562,6 @@ export function createDeliverable(
       body: JSON.stringify({
         createId: input.createId,
         name: input.name.trim(),
-        type: input.type ?? null,
         dueDate: input.dueDate ?? null,
       }),
     },
