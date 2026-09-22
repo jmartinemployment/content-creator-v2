@@ -206,8 +206,8 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         selectedArtifactIdRef.current = result.artifact.id;
       } else if (result.created?.length) {
         setGenerateMsg(`Generated ${result.created.length} artifact(s).`);
-        // Multi-output: land on the primary (first requested long-form), same rule reload() uses
-        // when nothing is selected yet -- the switcher below makes every other one reachable.
+        // Multi-output: no "primary" anymore (every type is generated independently) -- just land
+        // on the first one created, the switcher below makes every other one reachable.
         selectedArtifactIdRef.current = result.created[0]?.artifact.id ?? null;
       } else {
         setGenerateMsg("Generate finished.");
