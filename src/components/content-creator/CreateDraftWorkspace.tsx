@@ -26,7 +26,34 @@ import {
   type GccStaleGroundingError,
 } from "@/services/gcc-api";
 
-export default function CreateDraftWorkspace({ createId }: { createId: string }) {
+export default function CreateDraftWorkspace({
+  createId,
+  clientId,
+  projectId,
+  projectSiteRunId,
+  onCreateMinted,
+}: {
+  // Null before a create exists. Mint-through-review is one lifecycle now, in one component, so
+  // clientId/projectId/projectSiteRunId are threaded from the caller exactly once regardless of
+  // which stage the create is at -- two render paths each needing the same context props is how
+  // one of them silently went without it (the missing-projectId refusal bug, 2026-09-22).
+  createId: string | null;
+  // Only needed to mint a fresh create (the `!effectiveCreateId` branch below) -- once a create
+  // exists, the loaded state reads clientId/projectSiteRunId back off the create itself
+  // (`detail.clientId`, `detail.projectSiteRunId`), never off these props. Optional so
+  // /app/creates/[id], which always already has a createId, doesn't need to supply them.
+  clientId?: string;
+  projectId?: string;
+  projectSiteRunId?: string;
+  onCreateMinted?: (createId: string) => void;
+}) {
+  // The id this workspace actually operates on: the prop once a create exists, or one just minted
+  // by the brief panel below, before the parent's own createId state (if it tracks one at all)
+  // catches up on its next render.
+  const [mintedCreateId, setMintedCreateId] = useState<string | null>(null);
+  const effectiveCreateId = createId ?? mintedCreateId;
+  const [briefValid, setBriefValid] = useState(false);
+
   const [detail, setDetail] = useState<GccCreateDetail | null>(null);
   const [artifact, setArtifact] = useState<GccArtifact | null>(null);
   const [version, setVersion] = useState<GccArtifactVersion | null>(null);
@@ -80,11 +107,12 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   }, []);
 
   const reload = useCallback(async () => {
+    if (!effectiveCreateId) return;
     // No synchronous setState before the first await — see the identical fix and its reasoning
     // in creates/[id]/repurpose/page.tsx's `load`. Every path below still ends by setting
     // loadError to its correct value.
     try {
-      const d = await getGccCreateDetail(createId);
+      const d = await getGccCreateDetail(effectiveCreateId);
       setDetail(d);
       setLoadError(null);
       setBriefSavedOnServer(!!d.briefJson);
@@ -121,7 +149,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
             : "Could not load create.",
       );
     }
-  }, [createId, loadVersionFor]);
+  }, [effectiveCreateId, loadVersionFor]);
 
   // reload is called through a ref rather than by name so this effect is not itself classified as
   // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
@@ -133,8 +161,9 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
     reloadRef.current = reload;
   }, [reload]);
   useEffect(() => {
+    if (!effectiveCreateId) return;
     void reloadRef.current();
-  }, [createId]);
+  }, [effectiveCreateId]);
 
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);
@@ -153,6 +182,35 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         );
       }
     });
+  }
+
+  // No create yet -- the sole job here is to mint one. ContentBriefPanel takes it from there:
+  // ensureCreateId() mints the create the moment "Save brief" succeeds, and its onBriefSaved
+  // callback is how this component finds out. Nothing below (Generate, review, approval) has
+  // anything to operate on until that happens, so none of it renders yet.
+  if (!effectiveCreateId) {
+    return (
+      <div className="mb-6 flex flex-col gap-6">
+        <ContentBriefPanel
+          clientId={clientId ?? ""}
+          projectId={projectId}
+          projectSiteRunId={projectSiteRunId}
+          targetKeyword=""
+          onBriefValidityChange={setBriefValid}
+          onBriefSaved={(newCreateId) => {
+            if (!newCreateId) return;
+            setMintedCreateId(newCreateId);
+            onCreateMinted?.(newCreateId);
+          }}
+        />
+        {briefValid ? null : (
+          <p className="text-sm text-amber-700">
+            Content Brief incomplete — complete it to ensure lede + body honor
+            audience/angle/intent.
+          </p>
+        )}
+      </div>
+    );
   }
 
   if (loadError) {
@@ -187,12 +245,12 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
     !siteSection.relatedPages.length;
 
   async function runGenerate(acknowledgeStale = false) {
-    if (!canGenerate || saMissingPages) return;
+    if (!effectiveCreateId || !canGenerate || saMissingPages) return;
     setGenerateMsg(null);
     setStalePrompt(null);
     setGenerating(true);
     try {
-      const result = await generateGccCreate(createId, {
+      const result = await generateGccCreate(effectiveCreateId, {
         outputTypes,
         acknowledgeStaleGrounding: acknowledgeStale,
       });
@@ -264,7 +322,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
           clientId={detail.clientId}
           projectSiteRunId={detail.projectSiteRunId ?? undefined}
           targetKeyword={detail.topic}
-          createId={createId}
+          createId={effectiveCreateId}
           startingContentType={detail.startingContentType ?? undefined}
           onBriefValidityChange={setBriefFormComplete}
           onBriefSaved={(_id, ok) => {

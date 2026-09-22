@@ -6,7 +6,6 @@ import ProjectsPanel from "@/components/content-writer/ProjectsPanel";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
 import ProjectDeliverablesPanel from "@/components/content-writer/ProjectDeliverablesPanel";
-import ContentBriefPanel from "@/components/content-creator/ContentBriefPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import {
   listClients,
@@ -36,7 +35,6 @@ export default function WorkflowPage() {
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const [briefComplete, setBriefComplete] = useState(false);
   // The Content Creator create the draft lives on. A create is not yet owned by a project — that
   // link is gcc_deliverables, which Stage 4 adds — so it resolves the way it always has, from the
   // brief panel, and is cleared whenever the project changes.
@@ -108,7 +106,6 @@ export default function WorkflowPage() {
    */
   function selectProject(projectId: string | null) {
     setSelectedProjectId(projectId);
-    setBriefComplete(false);
     setCreateId(null);
   }
 
@@ -216,32 +213,18 @@ export default function WorkflowPage() {
 
             <ProjectDeliverablesPanel project={project} onOpenCreate={setCreateId} />
 
-            {/* Generate is Content Creator's. The workspace brings its own Content Brief, so the
-                standalone brief below is only the way in for a project that has no create yet —
-                saving it mints one, and the workspace takes over from there. */}
-            {createId ? (
-              <CreateDraftWorkspace createId={createId} />
-            ) : (
-              <>
-                <ContentBriefPanel
-                  clientId={project.clientId}
-                  projectId={project.id}
-                  projectSiteRunId={project.projectSiteRunId ?? undefined}
-                  targetKeyword=""
-                  onBriefSaved={(savedCreateId, complete) => {
-                    setBriefComplete(complete);
-                    if (savedCreateId) setCreateId(savedCreateId);
-                  }}
-                  onBriefValidityChange={setBriefComplete}
-                />
-                {briefComplete ? null : (
-                  <p className="text-sm text-amber-700">
-                    Content Brief incomplete — complete it to ensure lede + body honor
-                    audience/angle/intent.
-                  </p>
-                )}
-              </>
-            )}
+            {/* Generate is Content Creator's. One component now owns mint-through-review: below a
+                create, it's a brief form whose Save mints one; above one, it's the full workspace.
+                clientId/projectId/projectSiteRunId are threaded here exactly once regardless of
+                which state that is, rather than once per component the way the two-component
+                version needed. */}
+            <CreateDraftWorkspace
+              createId={createId}
+              clientId={project.clientId}
+              projectId={project.id}
+              projectSiteRunId={project.projectSiteRunId ?? undefined}
+              onCreateMinted={setCreateId}
+            />
           </>
         ) : null}
       </div>
