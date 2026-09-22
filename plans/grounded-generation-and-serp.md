@@ -17,7 +17,7 @@ or proxy-based SERP scraper exists anywhere in these repos — one `PROXY_URL`, 
 
 ---
 
-## Urgent — smaller than this plan, and it ships first
+## Urgent — DONE 2026-09-21
 
 Verifying the review's point about guard evidence produced a worse finding than the review assumed.
 **Commit `08651ab`'s guard narrative does not match the code.**
@@ -41,6 +41,15 @@ Two consequences:
 So today, single-select **Pillar and Blog** — the highest-volume outputs — generate with no
 appendix, no filler ban, no Brief, and no retrieval. That is a one-method fix on the path that
 actually runs, and it depends on no question below. **Ship it before Stage 0.**
+
+**Closed.** Retrieval landed as part of Stage 4's grounding gate. The Brief and the filler ban
+landed together: Stage 4's rewrite of `GeneratePillarBodyAsync`/`GenerateBlogBodyAsync` onto the
+shared structured prompt builders meant `BuildBriefBodyGuidance` was already being called from both
+— the Brief reached pillar/blog as a side effect of a different fix. The filler ban did not follow
+for free; `FillerBanInstruction` was added as a shared constant and wired into both body prompts.
+The third guard, refusal outside site scope, was never pillar/blog-specific — it was absent on both
+live paths because the Create path never used Site Analyzer hierarchy matching. `GccGroundingResolver`
+is its real equivalent: refusal on insufficient evidence rather than on a hierarchy-path mismatch.
 
 ---
 
