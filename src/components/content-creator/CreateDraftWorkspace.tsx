@@ -571,14 +571,6 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
                 Approve content
               </button>
             )}
-            {approved ? (
-              <Link
-                href={`/app/creates/${createId}/repurpose`}
-                className="mt-4 inline-block text-sm font-semibold text-brand hover:underline"
-              >
-                Open Repurpose (Mix) →
-              </Link>
-            ) : null}
           </section>
         </div>
       )}
