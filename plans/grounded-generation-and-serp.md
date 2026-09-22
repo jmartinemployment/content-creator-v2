@@ -593,7 +593,7 @@ source of truth**, not in the client.
 depend on the own-site crawl, which touches out-of-scope Site Analyzer. Resolve before committing to
 5a.
 
-## Stage 6 — Lede guidance *(partly delivered by Stage 4)*
+## Stage 6 — Lede guidance *(DONE 2026-09-22)*
 
 **Delivered 2026-09-21 for the Create path.** Routing the pillar lede through
 `BuildPillarLedePrompt` brings `BuildLedeTypeGuidance` to `GccGenerateService`, which previously had
@@ -612,6 +612,18 @@ which was the ask. What remains below is `blog`, which still uses a hardcoded op
 with it this method's only live caller (`ContentGenerationOrchestrator.cs:1424`). Under (b),
 V1Restore stays and the caller is never removed. Stage 6 becomes formalization, not a rescue:
 expose it properly, and fix `blog`, which uses a hardcoded "prefer creative opening" today.
+
+**Blog fixed, 2026-09-22 — on the actually-live path, checked directly.** The bullets above named
+`GccV2WriteService`'s `WriteBlogAsync`/`WritePillarAsync` — dormant, zero live callers, same as every
+other `GccV2*` writer this session has already found unreachable. The real live blog lede is
+`BuildStandaloneBlogLedePrompt`, called from `GccGenerateService.GenerateBlogBodyAsync` (and from
+`GenerateStartingContentAsync`'s fallback branch, which shares the same lede prompt) — and it still
+had the exact hardcoded line this stage names: *"Prefer a creative (hook/narrative) opening; use a
+summary opening only if a creative angle genuinely doesn't fit"* — with **no** guidance for the other
+10 of 12 `ledeType` values the prompt's own JSON contract already required a value from. Fixed by
+calling `BuildLedeTypeGuidance(context)` there too, same as pillar's live lede already does. 901
+tests pass, 2 new: the guidance block is present and the hardcoded line is gone; a populated
+angle/intent actually renders into the prompt, not just that some text appears.
 
 ## Stage 7 — Keyword SERP by manual upload *(DONE 2026-09-22)*
 
