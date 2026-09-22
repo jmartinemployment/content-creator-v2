@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { parseSavedSerp, ApiError } from "@/services/gcc-api";
 import {
   buildCuratedSerpSeed,
+  curatedSerpHasOrganics,
   type CuratedSerpSeed,
   type PaaCandidate,
   type SavedSerpOrganic,
@@ -82,12 +83,19 @@ export function SerpIngestPanel({
       selectedOrganics,
       selectedPaa,
       selectedRelated,
+      gapTopic,
       gain,
     );
-  }, [parsed, selectedOrganics, selectedPaa, selectedRelated, informationGain]);
+  }, [parsed, selectedOrganics, selectedPaa, selectedRelated, gapTopic, informationGain]);
 
   function confirm() {
-    if (!curatedPreview) return;
+    // Stage 7: "Zero organics parsed => fail. Never merge an empty result." A curatedPreview can
+    // exist (parsed is non-null) with every organic left unchecked -- that must not seed the brief.
+    if (!curatedPreview || !curatedSerpHasOrganics(curatedPreview)) {
+      setError("Select at least one organic result before confirming — an empty SERP is never merged.");
+      return;
+    }
+    setError(null);
     onCurated(curatedPreview);
   }
 
@@ -211,7 +219,7 @@ export function SerpIngestPanel({
           <button
             type="button"
             onClick={confirm}
-            disabled={!curatedPreview}
+            disabled={!curatedPreview || !curatedSerpHasOrganics(curatedPreview)}
             className="rounded-md bg-[var(--gcc-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
           >
             Confirm SERP shortlist for create
@@ -279,10 +287,12 @@ function buildSeed(
   organics: Set<number>,
   paa: Set<number>,
   related: Set<number>,
+  capturedKeyword: string,
   informationGain?: InformationGainNote | null,
 ): CuratedSerpSeed {
   return buildCuratedSerpSeed(parsed, organics, paa, related, {
     informationGainSummary: informationGain?.summary,
+    capturedKeyword,
   });
 }
 

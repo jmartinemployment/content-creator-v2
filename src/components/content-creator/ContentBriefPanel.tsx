@@ -20,6 +20,12 @@ import {
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
 import { ApiError } from "@/services/gcc-api";
+import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
+import {
+  applyCuratedSerpToBrief,
+  type CuratedSerpSeed,
+  type SerpMergeConflict,
+} from "@/lib/content-creator/serp-lens";
 import {
   GCC_CREATE_STORAGE_PREFIX,
   briefToJson,
@@ -84,6 +90,13 @@ function computeLocalBrief(targetKeyword: string): ContentBrief {
   return localBrief;
 }
 
+const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
+  serpTitles: "SERP organic titles",
+  serpUrls: "SERP organic URLs",
+  paaQuestions: "People Also Ask",
+  relatedSearches: "Related searches",
+};
+
 export default function ContentBriefPanel({
   clientId,
   projectSiteRunId,
@@ -124,6 +137,7 @@ export default function ContentBriefPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [serpConflicts, setSerpConflicts] = useState<SerpMergeConflict[]>([]);
 
   // Re-seeds the local brief when targetKeyword/createIdProp actually change after mount. This
   // runs during render — React's own pattern for "adjusting state when a prop changes" — rather
@@ -209,6 +223,25 @@ export default function ContentBriefPanel({
 
   function persistLocal(next: ContentBrief) {
     saveBriefToStorage(`kw:${targetKeyword}`, next);
+  }
+
+  // Stage 7: the only caller of applyCuratedSerpToBrief anywhere in this codebase -- everything
+  // upstream of this (the parser, the panel, both merge modes) was already built and simply never
+  // reached. fill-empty is the default because a confirmed SERP should never clobber an operator's
+  // own edits without being asked; conflicts are surfaced, never silently dropped.
+  function onSerpCurated(seed: CuratedSerpSeed | null) {
+    if (!seed) return;
+    const { brief: merged, conflicts } = applyCuratedSerpToBrief(brief, seed, "fill-empty");
+    setBrief(merged);
+    persistLocal(merged);
+    setSerpConflicts(conflicts);
+  }
+
+  function forceReplaceSerpField(field: SerpMergeConflict["field"], value: string) {
+    const next = { ...brief, [field]: value };
+    setBrief(next);
+    persistLocal(next);
+    setSerpConflicts((prev) => prev.filter((c) => c.field !== field));
   }
 
   function patch(partial: Partial<ContentBrief>) {
@@ -344,6 +377,40 @@ export default function ContentBriefPanel({
           ) : null}
         </label>
       </div>
+
+      <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
+
+      {serpConflicts.length > 0 ? (
+        <div className="mt-3 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="font-semibold">
+            This brief already had content in {serpConflicts.length === 1 ? "a field" : "fields"} the
+            confirmed SERP also offered — kept what was already here (fill-empty). Replace instead:
+          </p>
+          {serpConflicts.map((c) => (
+            <div key={c.field} className="flex items-center justify-between gap-2">
+              <span>{SERP_FIELD_LABEL[c.field]}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => forceReplaceSerpField(c.field, c.offered)}
+                  className="rounded border border-amber-400 px-2 py-1 font-semibold hover:bg-amber-100"
+                >
+                  Use SERP value
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSerpConflicts((prev) => prev.filter((x) => x.field !== c.field))
+                  }
+                  className="rounded border border-amber-300 px-2 py-1 text-amber-700 hover:bg-amber-100"
+                >
+                  Keep existing
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>

@@ -206,6 +206,19 @@ export interface ContentBrief {
   paaQuestions: string;
   /** One related search per line (uploaded/curated). */
   relatedSearches: string;
+  /**
+   * Provenance for the four SERP fields above — Stage 7: "otherwise nobody can tell a fresh SERP
+   * from a six-month-old one." Set together, once, when a curated SERP seed is confirmed; never
+   * hand-edited. Empty when no SERP has ever been confirmed onto this brief.
+   */
+  serpCapturedKeyword: string;
+  /** ISO 8601 timestamp of the confirm, not the page save — this codebase never trusts a client
+   * clock for anything it didn't just observe, and confirm is the moment this data entered GCC. */
+  serpCapturedAt: string;
+  /** Always "en-US" today: GccSavedSerpParser parses whatever locale operator saved, unlabeled: a
+   * saved Google results page carries no strong client-visible locale signal to extract. Stated
+   * explicitly rather than implied, so a real signal can replace it later without a schema change. */
+  serpLocale: string;
 }
 
 export function emptyContentBrief(): ContentBrief {
@@ -230,6 +243,9 @@ export function emptyContentBrief(): ContentBrief {
     serpUrls: "",
     paaQuestions: "",
     relatedSearches: "",
+    serpCapturedKeyword: "",
+    serpCapturedAt: "",
+    serpLocale: "",
   };
 }
 
@@ -370,6 +386,9 @@ export function migrateBrief(raw: unknown): ContentBrief {
   base.serpUrls = str(p.serpUrls);
   base.paaQuestions = str(p.paaQuestions);
   base.relatedSearches = str(p.relatedSearches);
+  base.serpCapturedKeyword = str(p.serpCapturedKeyword);
+  base.serpCapturedAt = str(p.serpCapturedAt);
+  base.serpLocale = str(p.serpLocale);
   base.briefVersion = BRIEF_VERSION;
   return base;
 }
@@ -457,6 +476,17 @@ export function buildBriefBlock(brief: ContentBrief, targetKeyword: string): str
   if (paa.length) {
     lines.push("People Also Ask (operator-curated):");
     for (const t of paa) lines.push(`- ${t}`);
+  }
+  if (titles.length || urls.length || related.length || paa.length) {
+    if (brief.serpCapturedAt.trim()) {
+      lines.push(
+        `SERP captured: ${brief.serpCapturedAt.trim()} for keyword "${brief.serpCapturedKeyword.trim()}" (${brief.serpLocale.trim() || "locale unknown"}).`,
+      );
+    } else {
+      lines.push(
+        "SERP capture date unknown — this data predates provenance stamping; treat as possibly stale.",
+      );
+    }
   }
 
   return lines.join("\n");

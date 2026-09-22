@@ -51,6 +51,13 @@ export type CuratedSerpSeed = {
   relatedSearches: string;
   shapeGuidance?: string;
   informationGainSummary?: string;
+  /** The keyword this SERP was captured for — stamped at build time, never hand-edited. */
+  capturedKeyword: string;
+  /** ISO 8601, stamped at build time (the confirm moment, not the page-save moment). */
+  capturedAt: string;
+  /** GccSavedSerpParser has no locale signal to extract from a saved page; "en-US" until one
+   * exists. Stated explicitly rather than left absent, so a real signal replaces it cleanly. */
+  locale: string;
 };
 
 /** Build a curated seed from a parse result and operator selection sets. */
@@ -62,6 +69,7 @@ export function buildCuratedSerpSeed(
   extras?: {
     shapeGuidance?: string;
     informationGainSummary?: string;
+    capturedKeyword?: string;
   },
 ): CuratedSerpSeed {
   const selectedO = parsed.organics.filter((_, i) => organics.has(i));
@@ -77,30 +85,77 @@ export function buildCuratedSerpSeed(
       .join("\n"),
     shapeGuidance: extras?.shapeGuidance ?? parsed.shape.guidance,
     informationGainSummary: extras?.informationGainSummary,
+    capturedKeyword: extras?.capturedKeyword ?? "",
+    capturedAt: new Date().toISOString(),
+    locale: "en-US",
   };
 }
+
+/** A field the seed offered but which `applyCuratedSerpToBrief` did not write, in `fill-empty`
+ * mode, because the brief already had content there. Named so a caller can tell the operator what
+ * was skipped instead of the conflict vanishing silently. */
+export type SerpMergeConflict = {
+  field: "serpTitles" | "serpUrls" | "paaQuestions" | "relatedSearches";
+  existing: string;
+  offered: string;
+};
+
+export type SerpMergeResult = {
+  brief: ContentBrief;
+  /** Non-empty only in `fill-empty` mode, and only for fields the seed actually offered content
+   * for. Empty in `replace` mode -- nothing is skipped there, so there is nothing to surface. */
+  conflicts: SerpMergeConflict[];
+};
 
 /**
  * Apply a curated SERP seed onto a Content Brief.
  * `mode: "fill-empty"` keeps existing non-empty fields; `"replace"` overwrites SERP fields from the seed.
+ * Stamps capture provenance (keyword/date/locale) whenever any SERP field is actually written --
+ * never on a no-op call, so an untouched brief never gains a provenance claim it didn't earn.
  */
 export function applyCuratedSerpToBrief(
   brief: ContentBrief,
   seed: CuratedSerpSeed,
   mode: "fill-empty" | "replace" = "fill-empty",
-): ContentBrief {
-  const pick = (current: string, next: string) => {
-    if (mode === "replace") return next;
-    return current.trim() ? current : next;
+): SerpMergeResult {
+  const conflicts: SerpMergeConflict[] = [];
+  let wroteAnyField = false;
+
+  const pick = (
+    field: SerpMergeConflict["field"],
+    current: string,
+    offered: string,
+  ) => {
+    if (!offered.trim()) return current;
+    if (mode === "replace") {
+      wroteAnyField = true;
+      return offered;
+    }
+    if (current.trim()) {
+      conflicts.push({ field, existing: current, offered });
+      return current;
+    }
+    wroteAnyField = true;
+    return offered;
   };
 
   const next: ContentBrief = {
     ...brief,
-    serpTitles: pick(brief.serpTitles, seed.serpTitles),
-    serpUrls: pick(brief.serpUrls, seed.serpUrls),
-    paaQuestions: pick(brief.paaQuestions, seed.paaQuestions),
-    relatedSearches: pick(brief.relatedSearches, seed.relatedSearches),
+    serpTitles: pick("serpTitles", brief.serpTitles, seed.serpTitles),
+    serpUrls: pick("serpUrls", brief.serpUrls, seed.serpUrls),
+    paaQuestions: pick("paaQuestions", brief.paaQuestions, seed.paaQuestions),
+    relatedSearches: pick(
+      "relatedSearches",
+      brief.relatedSearches,
+      seed.relatedSearches,
+    ),
   };
+
+  if (wroteAnyField) {
+    next.serpCapturedKeyword = seed.capturedKeyword;
+    next.serpCapturedAt = seed.capturedAt;
+    next.serpLocale = seed.locale;
+  }
 
   if (!brief.writingNotes.trim()) {
     const noteBits = [
@@ -114,7 +169,7 @@ export function applyCuratedSerpToBrief(
     }
   }
 
-  return next;
+  return { brief: next, conflicts };
 }
 
 export function curatedSerpHasOrganics(seed: CuratedSerpSeed): boolean {
