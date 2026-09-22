@@ -147,7 +147,7 @@ export default function ContentBriefPanel({
             }
             onBriefSaved(cid, true);
           } else {
-            // No server brief yet — keep Site Analyzer–seeded local brief.
+            // No server brief yet — keep the locally-stored brief as-is.
             onBriefSaved(cid, false);
           }
         } catch {

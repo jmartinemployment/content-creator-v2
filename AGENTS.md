@@ -366,9 +366,12 @@ Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api
   `e6b3701` repointed `HierarchyContextPanel` at the v1 run-id route
   `project-site/runs/{runId}/hierarchy-match`. There is still **no `site-analyzer` route anywhere in
   GeekAPI** (`582a171` deleted v1's, `5072820` removed the three v2 replacements) and none is wanted
-  — **Geek-Crawler-v2 supplies the structure now.** What survives is unreachable client-side
-  scaffolding: nine proxy routes under `src/app/api/site-analyzer/**` with **zero callers**, plus the
-  matcher at `src/proxy.ts:73`. Removal plan: `plans/remove-site-analyzer.md`.
+  — **Geek-Crawler-v2 supplies the structure now.** The unreachable client-side scaffolding this
+  used to describe — nine proxy routes under `src/app/api/site-analyzer/**`, the matcher entry at
+  `src/proxy.ts`, the dead gap-handoff writer, and copy naming Site Analyzer as the happy path —
+  is **removed**, 2026-09-22, per `plans/remove-site-analyzer.md`. `grep -rni "site.analyzer" src`
+  turns up only historical comments explaining a rename (`types.ts`) and this cleanup itself
+  (`ContentBriefPanel.tsx`) — no live reference.
 - **Drafting is OFF by default** — `ContentCreatorV2:DraftingEnabled=false` stops every create before
   the first paid model call, after the free evidence gates. Model default is `gpt-4o-mini`.
 - **`GET /api/geek-content-creator/creates` returns 500** — the route exists; the throw is inside

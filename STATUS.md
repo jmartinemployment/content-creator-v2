@@ -90,10 +90,7 @@ removed from the project-site path today.
    `CreateStartForm.tsx` no longer exists and `e6b3701` repointed `HierarchyContextPanel` at the v1
    run-id route. **Site Analyzer is obsolete; Geek-Crawler-v2 replaced it** — site structure comes
    from a `project-site` crawl run, read back by Run ID. No Site Analyzer call remains in this repo.
-3. `src/proxy.ts:73` still matches `/api/site-analyzer/:path*`, and nine now-unreachable proxy routes
-   remain under `src/app/api/site-analyzer/**` (344 lines, zero callers). Dead scaffolding, not a
-   broken feature — removal plan: `plans/remove-site-analyzer.md`.
-4. **`DraftingEnabled` is still `false`** — creates stop before the first paid model call.
+3. **`DraftingEnabled` is still `false`** — creates stop before the first paid model call.
    Nothing has tested whether v1 actually produces content again.
 
 ## Plan stages (from the approved plan)

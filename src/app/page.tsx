@@ -41,7 +41,7 @@ export default function HomePage() {
           Write from site gaps — grounded in what the site already says.
         </h1>
         <p className="mt-4 max-w-lg text-base leading-relaxed text-white/60">
-          Site Analyzer gaps start a create with real site section context. Content
+          A project&rsquo;s crawl grounding starts a create with real site section context. Content
           Brief, deep research, generate, revise, on-page SEO, approve, and Mix —
           pillar optional.
         </p>
