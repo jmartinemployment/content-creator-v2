@@ -50,8 +50,8 @@ export default function CreatesListPage() {
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">Creates</h1>
         <p className="mt-2 text-sm text-muted">
-          Happy path: Site Analyzer → Content Brief → generate → revise / SEO /
-          approve / Mix. Start a create by picking a gap in Site Analyzer.
+          Happy path: confirm project-site crawl grounding → Content Brief → generate → revise /
+          SEO / approve / Mix. Start a create from a project with a Run ID.
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export default function CreatesListPage() {
 
       {visible.length === 0 && !error ? (
         <p className="text-sm text-muted">
-          No creates yet for this client. Pick a gap in Site Analyzer to start one.
+          No creates yet for this client. Start one from a project with a Run ID.
         </p>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">

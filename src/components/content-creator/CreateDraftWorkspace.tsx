@@ -146,7 +146,8 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
   const canGenerate = briefFormComplete && briefReady;
-  // Site Analyzer handoff creates require relatedPages; domain-only grounding does not.
+  // A create grounded on a project-site crawl requires relatedPages on its persisted site
+  // section; domain-only grounding (a crawl id with no section) does not.
   const saMissingPages =
     !!detail.projectSiteRunId &&
     !!siteSection &&
@@ -214,8 +215,8 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
         {siteSection ? <SiteContextBanner siteSection={siteSection} /> : null}
         {saMissingPages ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            Site Analyzer create is missing related pages — Generate stays blocked
-            (no keyword-only path).
+            This create&rsquo;s project-site grounding is missing related pages — Generate stays
+            blocked (no keyword-only path).
           </p>
         ) : null}
 
