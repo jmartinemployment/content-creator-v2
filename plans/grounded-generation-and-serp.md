@@ -569,7 +569,7 @@ Frontend production build clean, `tsc --noEmit` clean, eslint clean on every cha
 real write, both merge modes, and that a conflict carries the value a caller needs to offer a
 "use it anyway" action.
 
-## Stage 8 — The three analyses *(in progress, 2026-09-22)*
+## Stage 8 — The three analyses *(8a and 8c done, 8b split — rescoped half done, extraction half open — 2026-09-22)*
 
 | Analysis | Source | Persisted? |
 |---|---|---|
@@ -645,11 +645,23 @@ type `GccGroundingResolver` already produces) producing a 23-field structured do
 what consumes the 23-field output, whether/where it caches. A cost-bearing LLM call needs that
 decided before it's wired, not discovered by wiring it first.
 
-**8c. Keyword intent.** Cluster PAA via `PaaCluster`. Feed `BuildArticleFaqSectionPrompt`
-(`ContentPromptBuilder.cs:934-961`) from uploaded SERP data.
-*Two checks:* it titles the section **"People Also Ask"** — Google's feature name, not reader-facing
-copy; and it emits `##` headings, so confirm that fits structured-JSON output rather than
-reintroducing markdown.
+**8c. Keyword intent — DONE 2026-09-22.** The real gap wasn't clustering PAA again — Stage 7's
+`SerpIngestPanel` already lets the operator pick which PAA questions matter, before they ever reach
+`briefJson`. It was that `GccGenerateService.GeneratePillarBodyAsync` — the path the live frontend
+actually calls, confirmed via `src/services/gcc-api.ts`, not `ContentGenerationOrchestrator`'s
+separate `Project`/`Project.BriefJson` system — parsed `PaaQuestions` via `ExtractBriefFields` and
+then never used them. No FAQ section reached a pillar body on the live path at all.
+
+Fixed by calling `BuildArticleFaqSectionPrompt` once, gated on the brief having any PAA questions,
+and appending its parsed section to `bodySections` before the document is assembled. Already
+verified before wiring: the prompt titles the section "People Also Ask" (Google's feature name, kept
+deliberately) and emits `SectionJsonContract`, not `##` headings — no markdown risk. 882 tests pass,
+3 new (`GccGenerateServicePillarFaqTests`: no-PAA means 2 completion calls, PAA present means 3 with
+the third routed through the FAQ prompt, and the FAQ section's content actually lands in the
+serialized document).
+
+*Not wired into outline selection* — same as 8a: this is Stage 2's Coverage Gate input becoming
+real, not the gate itself, which stays deferred.
 
 ---
 
