@@ -130,25 +130,38 @@ export default function NewCreatePage() {
         />
       </label>
 
-      <label className="mt-5 block text-sm font-medium text-foreground">
-        Content type
-        <select
-          value={startingContentType}
-          onChange={(e) => setStartingContentType(e.target.value)}
-          disabled={creating}
-          className="mt-1 block w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground disabled:opacity-50"
-        >
-          <option value="" disabled>
-            Select a content type…
-          </option>
-          {CONTENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value} disabled={isContentTypeDisabled(t.value)}>
-              {t.label}
-              {isContentTypeDisabled(t.value) ? " (disabled — pending plan)" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Grid-of-inputs, not a <select>: "Content Type selection should mirror tasks" (Jeff,
+          2026-09-22) -- same CONTENT_TYPES grid ProjectWorkPanel's task checkboxes and
+          ContentBriefPanel's picker use, radio instead of checkbox since a create's
+          StartingContentType is one value, not a multi-value tag list. */}
+      <fieldset className="mt-5 rounded-md border border-border p-3">
+        <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+          Content type
+        </legend>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+          {CONTENT_TYPES.map((t) => {
+            const disabled = isContentTypeDisabled(t.value);
+            return (
+              <label
+                key={t.value}
+                className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
+                title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
+              >
+                <input
+                  type="radio"
+                  name="starting-content-type"
+                  checked={startingContentType === t.value}
+                  onChange={() => setStartingContentType(t.value)}
+                  disabled={disabled || creating}
+                  className="h-3.5 w-3.5 border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                />
+                {t.label}
+                {disabled ? " (disabled)" : ""}
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <label className="mt-5 block text-sm font-medium text-foreground">
         Notes <span className="font-normal text-muted">(optional)</span>

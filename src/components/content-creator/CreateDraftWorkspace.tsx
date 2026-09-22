@@ -283,15 +283,21 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
             produced, the rest are derived from it.
           </p>
 
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium text-foreground">Content items to generate</legend>
-            <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+          {/* Same grid/input sizing as ProjectWorkPanel's task checkboxes and ContentBriefPanel's
+              content-type picker -- "Content Type selection should mirror tasks" (Jeff,
+              2026-09-22). This one really is multi-select (Generate can produce several
+              independent artifacts in one call), so it stays a checkbox grid, not radio. */}
+          <fieldset className="mt-4 rounded-md border border-border p-3">
+            <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+              Content items to generate
+            </legend>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
               {CONTENT_TYPES.map((o) => {
                 const disabled = isContentTypeDisabled(o.value);
                 return (
                   <label
                     key={o.value}
-                    className={`flex items-center gap-2 text-sm ${disabled ? "text-muted" : ""}`}
+                    className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
                     title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
                   >
                     <input
@@ -305,6 +311,7 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
                             : prev.filter((v) => v !== o.value),
                         )
                       }
+                      className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
                     />
                     {o.label}
                     {disabled ? " (disabled)" : ""}

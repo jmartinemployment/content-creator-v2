@@ -347,33 +347,43 @@ export default function ContentBriefPanel({
 
       {/* Same editable-until-createId rule as Target keyword above, and the same "no default"
           rule as creates/new's picker -- this used to be a prop defaulting silently to "blog"
-          when the caller (workflow/page.tsx) never passed one at all. */}
-      <div className="mt-5">
-        <label className={labelClass}>
+          when the caller (workflow/page.tsx) never passed one at all. Grid-of-inputs, not a
+          <select>: "Content Type selection should mirror tasks" (Jeff, 2026-09-22) -- same
+          CONTENT_TYPES grid ProjectWorkPanel's task checkboxes use, radio instead of checkbox
+          since a create's StartingContentType is one value, not a multi-value tag list. */}
+      <fieldset className="mt-5 rounded-md border border-border p-3">
+        <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
           Content type
-          <select
-            value={effectiveContentType}
-            onChange={(e) => setSelectedContentType(e.target.value)}
-            disabled={!!createId}
-            className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            <option value="" disabled>
-              Select a content type…
-            </option>
-            {CONTENT_TYPES.map((t) => (
-              <option key={t.value} value={t.value} disabled={isContentTypeDisabled(t.value)}>
+        </legend>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+          {CONTENT_TYPES.map((t) => {
+            const disabled = isContentTypeDisabled(t.value);
+            return (
+              <label
+                key={t.value}
+                className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
+                title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
+              >
+                <input
+                  type="radio"
+                  name="starting-content-type"
+                  checked={effectiveContentType === t.value}
+                  onChange={() => setSelectedContentType(t.value)}
+                  disabled={disabled || !!createId}
+                  className="h-3.5 w-3.5 border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                />
                 {t.label}
-                {isContentTypeDisabled(t.value) ? " (disabled — pending plan)" : ""}
-              </option>
-            ))}
-          </select>
-          {createId ? (
-            <span className="text-xs font-normal text-muted">
-              Set when this create was started — no longer editable.
-            </span>
-          ) : null}
-        </label>
-      </div>
+                {disabled ? " (disabled)" : ""}
+              </label>
+            );
+          })}
+        </div>
+        {createId ? (
+          <p className="mt-2 text-xs font-normal text-muted">
+            Set when this create was started — no longer editable.
+          </p>
+        ) : null}
+      </fieldset>
 
       <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
 
