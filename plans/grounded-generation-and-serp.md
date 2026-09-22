@@ -729,7 +729,7 @@ Frontend production build clean, `tsc --noEmit` clean, eslint clean on every cha
 real write, both merge modes, and that a conflict carries the value a caller needs to offer a
 "use it anyway" action.
 
-## Stage 8 — The three analyses *(8a and 8c done, 8b split — rescoped half done, extraction half open — 2026-09-22)*
+## Stage 8 — The three analyses *(8a and 8c done; 8b split -- rescoped half done, extraction half's foundation done, full richness open — 2026-09-22)*
 
 | Analysis | Source | Persisted? |
 |---|---|---|
@@ -801,14 +801,25 @@ partner, whether its domain ranks in the top N of the brief's curated organics, 
 and a weak title-mention check for when the domain itself doesn't rank but a competitor's title
 names it. Pure function, no crawl reads, no LLM calls. 879 tests pass, 8 new.
 
-**The extraction half — still open, deliberately not scoped in with the above.**
-`GccV2PartnerExtractionService` (comparisons, alternatives, pricing, FAQs, case studies,
-battlecards, quote-verified) is real — but it's an LLM call over `GccQuoteablePage[]` (the same
-type `GccGroundingResolver` already produces) producing a 23-field structured document, via
-`IGccV2SchemaConstrainedGenerator`. Reaching it from v1 is the same "wiring, not building" shape as
-8a, but the decision itself is a different shape: when does it run (every generation? on demand?),
-what consumes the 23-field output, whether/where it caches. A cost-bearing LLM call needs that
-decided before it's wired, not discovered by wiring it first.
+**The extraction half — foundation DONE 2026-09-22, full richness still open.**
+`GccV2PartnerExtractionService` (22 payload types — audited against the restored
+`plans/partner-extraction-complete.md` spec and found *richer* than it, not thinner) is real, and
+its trigger question is answered: `GenerateToolPageAsync` calls it directly on `create`'s already-
+resolved partner pages (`ResearchJson.Quoteables`, the same `GccQuoteablePage[]` `GccGroundingResolver`
+produces), no new caching layer, no scheduling decision needed — extraction runs once per generation
+call, same cost shape as every other per-call LLM step this pipeline already makes. Consumes into
+`BuildToolBodyPrompt`'s `extractedToolResearchJson` parameter (already existed, wired to nothing live
+before this) and real partner `SoftwareApplication` JSON-LD (price/review fail-closed). Fail-closed
+per instruction: a create with no usable partner extraction refuses rather than generating an
+ungrounded page. 906 tests pass, 5 new.
+
+**What this does not yet do — the richness the spec's §8 "Primary Create outputs" column describes
+beyond a single tool page:** Comparison (`versus` tables), Alternatives (deficit-router switch
+content), dedicated Ads/social snippets pulling `Advertisement`/`Offer-CTA` payloads, and the
+competitor-deficit → partner-swap join (`GccV2PartnerAlternativesJoin`'s live-path equivalent) are
+all real, spec'd, and still unbuilt — each is closer to a new content type than a wiring task, and
+was deliberately left out of this pass rather than folded in under time pressure. See the codebase
+audit and the tool-page grounding commit (`ca6ae95`, GeekBackend) for what's reusable as-is.
 
 **8c. Keyword intent — DONE 2026-09-22.** The real gap wasn't clustering PAA again — Stage 7's
 `SerpIngestPanel` already lets the operator pick which PAA questions matter, before they ever reach
