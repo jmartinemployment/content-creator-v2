@@ -66,6 +66,14 @@ export default function CreateDraftWorkspace({
   const [generating, setGenerating] = useState(false);
   const [generateMsg, setGenerateMsg] = useState<string | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
+  // The one content-type selection in this component. It mints the create (its first entry
+  // becomes StartingContentType) and it is what Generate produces -- not two pickers agreeing
+  // by hand.
+  function toggleOutputType(value: string) {
+    setOutputTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
 
   const [feedback, setFeedback] = useState("");
@@ -182,18 +190,26 @@ export default function CreateDraftWorkspace({
     });
   }
 
-  // No create yet -- the sole job here is to mint one. ContentBriefPanel takes it from there:
-  // ensureCreateId() mints the create the moment "Save brief" succeeds, and its onBriefSaved
-  // callback is how this component finds out. Nothing below (Generate, review, approval) has
-  // anything to operate on until that happens, so none of it renders yet.
+  // No create yet. Same single section as below -- one card, one content-type picker, the brief
+  // fields, then Generate. Saving the brief is what mints the create; Generate stays inert until
+  // it exists, rather than living in a second panel with a second picker of its own.
   if (!effectiveCreateId) {
     return (
-      <div className="mb-6 flex flex-col gap-6">
+      <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground">Content Brief &amp; Generate</h2>
+        <p className="mt-1 text-sm text-muted">
+          Pick what to produce, fill the brief, save it — saving creates the piece. Generate then
+          runs against saved server state only.
+        </p>
+
+        <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
         <ContentBriefPanel
           clientId={clientId ?? ""}
           projectId={projectId}
           projectSiteRunId={projectSiteRunId}
           targetKeyword=""
+          startingContentType={outputTypes[0]}
           onBriefValidityChange={setBriefValid}
           onBriefSaved={(newCreateId) => {
             if (!newCreateId) return;
@@ -201,13 +217,22 @@ export default function CreateDraftWorkspace({
             onCreateMinted?.(newCreateId);
           }}
         />
-        {briefValid ? null : (
-          <p className="text-sm text-amber-700">
-            Content Brief incomplete — complete it to ensure lede + body honor
-            audience/angle/intent.
-          </p>
-        )}
-      </div>
+
+        <button
+          type="button"
+          disabled
+          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Generate content
+        </button>
+        <p className="mt-2 text-xs text-muted">
+          {outputTypes.length === 0
+            ? "Select at least one content type, then save the brief."
+            : briefValid
+              ? "Save the brief above — that creates the piece, then Generate runs."
+              : "Complete the brief's required fields, then save it."}
+        </p>
+      </section>
     );
   }
 
@@ -241,6 +266,12 @@ export default function CreateDraftWorkspace({
     !!detail.projectSiteRunId &&
     !!siteSection &&
     !siteSection.relatedPages.length;
+  // GccV2SiteSection.ValidateSiteSectionGate throws "project site crawl required" when the create
+  // has no ProjectSiteRunId, and GenerateAsync turns that into a 400 before it looks at content
+  // types, grounding or anything else -- and without logging it. Nothing in here checked for it,
+  // so Generate was offered as enabled and then failed with an unexplained 400 every time
+  // (Jeff, 2026-09-22: two hours of "same error"). Refuse here, in words, instead.
+  const missingProjectSiteRun = !detail.projectSiteRunId;
 
   async function runGenerate(acknowledgeStale = false) {
     if (!effectiveCreateId || !canGenerate || saMissingPages) return;
@@ -316,70 +347,38 @@ export default function CreateDraftWorkspace({
           </p>
         ) : null}
 
-        <ContentBriefPanel
-          clientId={detail.clientId}
-          projectSiteRunId={detail.projectSiteRunId ?? undefined}
-          targetKeyword={detail.topic}
-          createId={effectiveCreateId}
-          startingContentType={detail.startingContentType ?? undefined}
-          onBriefValidityChange={setBriefFormComplete}
-          onBriefSaved={(_id, ok) => {
-            setBriefSavedOnServer(ok);
-            void reload();
-          }}
-        />
-
         <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground">
-            Generate (Content Creator)
-          </h2>
+          <h2 className="text-lg font-semibold text-foreground">Content Brief &amp; Generate</h2>
           <p className="mt-1 text-sm text-muted">
-            Reads persisted BriefJson / ResearchJson (and site section) from the
-            database only. Check every content item to generate — one long-form is
-            produced, the rest are derived from it.
+            One section, one content-type selection. Generate reads persisted BriefJson /
+            ResearchJson (and site section) from the database only — every checked type is
+            generated independently, nothing is derived from another.
           </p>
 
-          {/* Same grid/input sizing as ProjectWorkPanel's task checkboxes and ContentBriefPanel's
-              content-type picker -- "Content Type selection should mirror tasks" (Jeff,
-              2026-09-22). This one really is multi-select (Generate can produce several
-              independent artifacts in one call), so it stays a checkbox grid, not radio. */}
-          <fieldset className="mt-4 rounded-md border border-border p-3">
-            <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
-              Content items to generate
-            </legend>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-              {CONTENT_TYPES.map((o) => {
-                const disabled = isContentTypeDisabled(o.value);
-                return (
-                  <label
-                    key={o.value}
-                    className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
-                    title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={outputTypes.includes(o.value)}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        setOutputTypes((prev) =>
-                          e.target.checked
-                            ? [...prev, o.value]
-                            : prev.filter((v) => v !== o.value),
-                        )
-                      }
-                      className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
-                    />
-                    {o.label}
-                    {disabled ? " (disabled)" : ""}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
+          <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
+          <ContentBriefPanel
+            clientId={detail.clientId}
+            projectSiteRunId={detail.projectSiteRunId ?? undefined}
+            targetKeyword={detail.topic}
+            createId={effectiveCreateId}
+            startingContentType={outputTypes[0] ?? detail.startingContentType ?? undefined}
+            onBriefValidityChange={setBriefFormComplete}
+            onBriefSaved={(_id, ok) => {
+              setBriefSavedOnServer(ok);
+              void reload();
+            }}
+          />
 
           <button
             type="button"
-            disabled={!canGenerate || saMissingPages || generating || outputTypes.length === 0}
+            disabled={
+              !canGenerate ||
+              saMissingPages ||
+              missingProjectSiteRun ||
+              generating ||
+              outputTypes.length === 0
+            }
             onClick={() => void runGenerate(false)}
             className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -409,6 +408,13 @@ export default function CreateDraftWorkspace({
                 </button>
               </div>
             </div>
+          ) : null}
+          {missingProjectSiteRun ? (
+            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              This create has no project-site crawl (Run ID), so GeekAPI refuses every Generate on
+              it before it reads the content type. The project it belongs to needs a project-site
+              crawl, and the create has to be started while that Run ID is on the project.
+            </p>
           ) : null}
           {!canGenerate ? (
             <p className="mt-2 text-xs text-muted">
@@ -652,6 +658,51 @@ export default function CreateDraftWorkspace({
         <p className="mt-4 text-sm text-green-700">{actionMsg}</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The single content-type picker. One definition, used by this component's pre-create and
+ * post-create states alike -- Brief and Generate are one section with one selection now, so there
+ * is no second grid anywhere to drift from this one. Same grid/input sizing as ProjectWorkPanel's
+ * task checkboxes ("Content Type selection should mirror tasks", Jeff). Nothing is ever checked
+ * by default.
+ */
+function ContentTypePicker({
+  selected,
+  onToggle,
+}: {
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <fieldset className="mt-4 rounded-md border border-border p-3">
+      <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+        Content type
+      </legend>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+        {CONTENT_TYPES.map((o) => {
+          const disabled = isContentTypeDisabled(o.value);
+          return (
+            <label
+              key={o.value}
+              className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
+              title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(o.value)}
+                disabled={disabled}
+                onChange={() => onToggle(o.value)}
+                className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+              />
+              {o.label}
+              {disabled ? " (disabled)" : ""}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

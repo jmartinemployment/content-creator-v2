@@ -20,7 +20,6 @@ import {
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
 import { ApiError } from "@/services/gcc-api";
-import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
 import {
   applyCuratedSerpToBrief,
@@ -74,8 +73,9 @@ export default function ContentBriefPanel({
   targetKeyword: string;
   /** When set, brief saves onto this create (does not open a second create). */
   createId?: string | null;
-  /** Only meaningful for a create that already exists — its type is fixed server-side. When
-   * there's no create yet, the operator picks one below; there is no default. */
+  /** The content type this brief is for, chosen in the one picker the parent owns. Used only to
+   * mint the create (its single StartingContentType) and to derive the length band; there is no
+   * picker in here and no default. */
   startingContentType?: string;
   /** Called when brief is persisted on a Content Creator create (server). */
   onBriefSaved: (createId: string, complete: boolean) => void;
@@ -98,24 +98,11 @@ export default function ContentBriefPanel({
   // topic "untitled". Editable again: this is the create's topic and only the create's, so there is
   // nothing left for it to drift out of sync with.
   const [keywordInput, setKeywordInput] = useState(targetKeyword || "");
-  // No default -- the operator must explicitly choose before a create can be minted, the same
-  // "remove default/fallback content type" rule applied to creates/new's picker. Genuinely
-  // multi-selectable, matching Tasks' taskContentTypes exactly (Jeff, 2026-09-22: "No longer
-  // multi selectable checkboxes that match Tasks") -- once a create exists, startingContentType
-  // (the prop, from the server) is the only thing that matters; this local selection only drives
-  // ensureCreateId for a create that doesn't exist yet.
-  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>(
-    startingContentType ? [startingContentType] : [],
-  );
-  function toggleContentType(value: string) {
-    setSelectedContentTypes((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    );
-  }
-  // The create record itself has exactly one StartingContentType (the backend field is a single
-  // string, not a list) -- the first checked box is what mints the create; the prop (a real,
-  // already-chosen server value) always wins over the local selection when present.
-  const effectiveContentType = startingContentType ?? selectedContentTypes[0] ?? "";
+  // There is no content-type picker in here any more. Brief and Generate are one section with one
+  // picker now (Jeff, 2026-09-22: "The proposed fix that never happened was to combine these two
+  // sections") -- CreateDraftWorkspace owns that selection and passes the type down. The create
+  // row still has exactly one StartingContentType, so the parent hands us its first selection.
+  const effectiveContentType = startingContentType ?? "";
   const [hydrated, setHydrated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,7 +305,7 @@ export default function ContentBriefPanel({
 
   if (!hydrated) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+      <div>
         <p className="text-sm text-muted">Loading content brief…</p>
       </div>
     );
@@ -334,9 +321,8 @@ export default function ContentBriefPanel({
   const labelClass = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-foreground">Content Brief</h2>
-      <p className="mt-1 text-sm text-muted">
+    <div>
+      <p className="text-sm text-muted">
         Controls aligned to Google Search &amp; Ads terminology. Saved on the Content Creator
         create (GeekAPI); Generate reads server state only. Fail closed: Generate stays disabled
         until required fields are saved.
@@ -362,47 +348,6 @@ export default function ContentBriefPanel({
           ) : null}
         </label>
       </div>
-
-      {/* Same editable-until-createId rule as Target keyword above, and the same "no default"
-          rule as creates/new's picker -- this used to be a prop defaulting silently to "blog"
-          when the caller (workflow/page.tsx) never passed one at all. Same CONTENT_TYPES grid
-          ProjectWorkPanel's task checkboxes use, genuinely multi-selectable the same way (Jeff,
-          2026-09-22: "No longer multi selectable checkboxes that match Tasks") -- the create
-          record itself only has one StartingContentType, so the first checked box is what
-          actually mints it (effectiveContentType, above), but the picker doesn't pretend that's
-          a single-select constraint the way a radio group would. */}
-      <fieldset className="mt-5 rounded-md border border-border p-3">
-        <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
-          Content type
-        </legend>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-          {CONTENT_TYPES.map((t) => {
-            const disabled = isContentTypeDisabled(t.value);
-            return (
-              <label
-                key={t.value}
-                className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "text-muted" : "text-foreground"}`}
-                title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedContentTypes.includes(t.value)}
-                  onChange={() => toggleContentType(t.value)}
-                  disabled={disabled || !!createId}
-                  className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
-                />
-                {t.label}
-                {disabled ? " (disabled)" : ""}
-              </label>
-            );
-          })}
-        </div>
-        {createId ? (
-          <p className="mt-2 text-xs font-normal text-muted">
-            Set when this create was started — no longer editable.
-          </p>
-        ) : null}
-      </fieldset>
 
       <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
 
