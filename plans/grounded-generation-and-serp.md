@@ -613,12 +613,21 @@ it; otherwise it is recorded as a content gap and not written.** Those gaps are 
 output of competitor analysis, and recording them is the fail-loud alternative to a thin section that
 reads fine.
 
-**8a. Competitor — from persisted `competitors` crawl.** Heading outlines via
-`GccV2HeadingTreeBuilder.Build(page.Html)` (generic over arbitrary HTML; the existing
-`GccV2ArticleHtmlExtractor` path flattens and discards nesting). Schema via the JSON-LD extractor in
-the legacy Workflow pipeline (`SiteCrawlerService.ExtractJsonLd` + `JsonLdParserService`), ported.
-*Content mix:* `InferShape` classifies from SERP **titles**, not page structure — it needs its own
-logic or an explicit scope cut.
+**8a. Competitor — DONE 2026-09-22.** `GccCompetitorAnalysisResolver`: project → `CompetitorUrls`
+→ `HostsIndexedAsync` → indexed run ids → `ListPagesBySeedsAsync` → per page,
+`GccV2HeadingTreeBuilder.Build(page.Html)` for the heading tree (a real tree — an h2 nests under
+its h1 as a child, proven by test, not flattened) and the new
+`IJsonLdParserService.DistinctDeclaredTypes` for the page's declared schema.org types.
+`GccJsonLdBlockExtractor` is `SiteCrawlerService.ExtractJsonLd` ported and made reusable, per the
+plan's own word for it. Reused Stage 4's `IGccProjectReader`/`IGccCrawlPageReader`/
+`IGeekCrawlerRagClient` wholesale — no new plumbing, only new analysis logic.
+
+*Content mix scope cut, taken as flagged:* `InferShape` classifies SERP titles, not page structure,
+and needs its own logic. Not built — the resolver produces the raw heading/schema material a
+content-mix classifier would consume; it does not classify.
+
+*Not wired into outline selection* — the Coverage Gate is Stage 2, still deferred; this is that
+stage's input becoming real, not the consumption of it. 871 tests pass, 7 new.
 
 **8b. Partner — from persisted `partner` crawl.** `GccV2PartnerExtractionService` already extracts
 comparisons, alternatives, pricing, FAQs, case studies, battlecards, quote-verified.
