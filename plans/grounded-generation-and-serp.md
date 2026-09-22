@@ -213,7 +213,7 @@ persisted outline carries a pointer to what licensed it — a verified retrieval
 field, an uploaded PAA question, or a competitor heading. **An outline containing an unlicensed
 heading fails.** Binary, queryable against the row, aimed at the actual failure.
 
-## Stage 3 — The Brief reaches generation *(field-by-field, not wholesale)*
+## Stage 3 — The Brief reaches generation *(v1 side DONE 2026-09-21; v2 side still sequenced)*
 
 `GccV2CreateLibraryWriter.BuildResearchUserPrompt` (`:749-768`) is `private static` with 3 call
 sites (`:391` outline, `:432` section, `:683` long-form).
@@ -233,9 +233,18 @@ carrying *"if audience notes conflict with segment, follow notes."*
 **Sequencing:** design the renderer **after** Stage 7 adds `serpTitles`/`serpUrls`/
 `relatedSearches`/`paaQuestions`, or it gets designed against a brief about to change shape.
 
-**Honest scope:** the v1 mirror of this block is a **bridge on code slated for deletion**. Worth
-doing for immediate effect, but it is not "pays off regardless" — the v2 half cannot be verified
-until Stage 4 lands.
+**v1 side — DONE.** `GccGenerateService.BuildBriefAndResearchBlock` dumped `create.BriefJson`
+verbatim; the "raw JSON dump" mistake this section calls out by name. `BuildBriefFieldsBlock` now
+renders the already-parsed `BriefFields` as one labeled line per populated field, carrying "if
+audience notes disagree with the segment, follow notes" inline. Covers
+`GenerateStartingContentAsync`'s content types (techArticle/social/ads/imagePrompt/aiTool/
+multi-select); pillar/blog got their own version via `ContentPromptBuilder.BuildBriefBodyGuidance`
+in the Urgent fix. Verified: the raw JSON string can never appear verbatim in the rendered block.
+
+**v2 side — still not started, and still correctly sequenced.** Stage 4 landed, so "cannot be
+verified until Stage 4 lands" no longer blocks it — but the sequencing note above it still does:
+design `GccV2CreateLibraryWriter.BuildResearchUserPrompt`'s renderer after Stage 7 adds
+`serpTitles`/`serpUrls`/`relatedSearches`/`paaQuestions`, not before. Untouched here on purpose.
 
 ## Stage 4 — Bring retrieval and verification to v1 *(the capability v1 lacks)*
 
