@@ -20,6 +20,7 @@ import {
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
 import { ApiError } from "@/services/gcc-api";
+import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
 import {
   applyCuratedSerpToBrief,
@@ -58,7 +59,7 @@ export default function ContentBriefPanel({
   projectSiteRunId,
   targetKeyword,
   createId: createIdProp,
-  startingContentType = "blog",
+  startingContentType,
   onBriefSaved,
   onBriefValidityChange,
 }: {
@@ -67,6 +68,8 @@ export default function ContentBriefPanel({
   targetKeyword: string;
   /** When set, brief saves onto this create (does not open a second create). */
   createId?: string | null;
+  /** Only meaningful for a create that already exists — its type is fixed server-side. When
+   * there's no create yet, the operator picks one below; there is no default. */
   startingContentType?: string;
   /** Called when brief is persisted on a Content Creator create (server). */
   onBriefSaved: (createId: string, complete: boolean) => void;
@@ -89,6 +92,14 @@ export default function ContentBriefPanel({
   // topic "untitled". Editable again: this is the create's topic and only the create's, so there is
   // nothing left for it to drift out of sync with.
   const [keywordInput, setKeywordInput] = useState(targetKeyword || "");
+  // No default -- the operator must explicitly choose before a create can be minted, the same
+  // "remove default/fallback content type" rule applied to creates/new's picker. Once a create
+  // exists, startingContentType (the prop, from the server) is the only thing that matters; this
+  // local selection only drives ensureCreateId for a create that doesn't exist yet.
+  const [selectedContentType, setSelectedContentType] = useState(startingContentType ?? "");
+  // The prop (a real, already-chosen server value) always wins when present; the local picker
+  // selection only matters before a create exists to mint one.
+  const effectiveContentType = startingContentType ?? selectedContentType;
   const [hydrated, setHydrated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +186,7 @@ export default function ContentBriefPanel({
   // Length was its own choice; now it is not — it is a fact of the starting content type. Derived
   // at render and at save (handleSaveBrief) rather than synced into `brief` state via an effect,
   // so there is no state write racing the content type prop or the brief's own hydration/load.
-  const derivedLengthBand = lengthBandForContentType(startingContentType);
+  const derivedLengthBand = lengthBandForContentType(effectiveContentType);
 
   function persistLocal(next: ContentBrief) {
     saveBriefToStorage(`kw:${targetKeyword}`, next);
@@ -227,9 +238,14 @@ export default function ContentBriefPanel({
       // was created rather than discovering "untitled" three steps later.
       throw new ApiError("Target keyword is required before a create can be started.", 400);
     }
+    if (!selectedContentType || isContentTypeDisabled(selectedContentType)) {
+      // Same rule as above, for the same reason: "blog" used to stand in here silently as the
+      // prop's default value, no operator choice involved at all.
+      throw new ApiError("Select a content type before a create can be started.", 400);
+    }
     const created = await createGccCreate({
       clientId,
-      startingContentType,
+      startingContentType: selectedContentType,
       topic,
       projectSiteRunId: projectSiteRunId || null,
     });
@@ -247,6 +263,10 @@ export default function ContentBriefPanel({
     setSavedMsg(null);
     if (!createId && !keywordInput.trim()) {
       setError("Required: Target keyword");
+      return;
+    }
+    if (!createId && (!selectedContentType || isContentTypeDisabled(selectedContentType))) {
+      setError("Required: Content type");
       return;
     }
     if (!isContentBriefComplete(brief)) {
@@ -317,6 +337,36 @@ export default function ContentBriefPanel({
             placeholder="ai chatbot implementation cost"
             className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
           />
+          {createId ? (
+            <span className="text-xs font-normal text-muted">
+              Set when this create was started — no longer editable.
+            </span>
+          ) : null}
+        </label>
+      </div>
+
+      {/* Same editable-until-createId rule as Target keyword above, and the same "no default"
+          rule as creates/new's picker -- this used to be a prop defaulting silently to "blog"
+          when the caller (workflow/page.tsx) never passed one at all. */}
+      <div className="mt-5">
+        <label className={labelClass}>
+          Content type
+          <select
+            value={effectiveContentType}
+            onChange={(e) => setSelectedContentType(e.target.value)}
+            disabled={!!createId}
+            className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            <option value="" disabled>
+              Select a content type…
+            </option>
+            {CONTENT_TYPES.map((t) => (
+              <option key={t.value} value={t.value} disabled={isContentTypeDisabled(t.value)}>
+                {t.label}
+                {isContentTypeDisabled(t.value) ? " (disabled — pending plan)" : ""}
+              </option>
+            ))}
+          </select>
           {createId ? (
             <span className="text-xs font-normal text-muted">
               Set when this create was started — no longer editable.

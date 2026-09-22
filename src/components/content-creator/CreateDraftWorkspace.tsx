@@ -106,15 +106,11 @@ export default function CreateDraftWorkspace({ createId }: { createId: string })
       const stillExists = selectedArtifactIdRef.current
         ? d.artifacts.find((a) => a.id === selectedArtifactIdRef.current)
         : undefined;
-      const target =
-        stillExists ??
-        d.artifacts.find((a) =>
-          ["blog", "pillar", "techarticle", "technicalarticle"].includes(
-            a.type.toLowerCase(),
-          ),
-        ) ??
-        d.artifacts[0] ??
-        null;
+      // No type preference -- picking "blog" (or any other type) over whatever else exists is
+      // exactly the silent default this session removed everywhere else. Whatever the operator
+      // most recently generated/selected wins (stillExists, above); absent that, just the first
+      // artifact in the list, not the first one that happens to match a preferred type.
+      const target = stillExists ?? d.artifacts[0] ?? null;
       await loadVersionFor(target);
     } catch (err) {
       setLoadError(
