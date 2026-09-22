@@ -27,8 +27,17 @@ export default function NewCreatePage() {
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
   // No default -- an operator must explicitly choose, never silently inherit whichever type
-  // happens to be first/enabled in the list.
-  const [startingContentType, setStartingContentType] = useState<string>("");
+  // happens to be first/enabled in the list. Genuinely multi-selectable, matching Tasks'
+  // taskContentTypes (Jeff, 2026-09-22: "No longer multi selectable checkboxes that match
+  // Tasks") -- the create record itself only has one StartingContentType, so the first checked
+  // box (startingContentType, below) is what actually mints it.
+  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>([]);
+  function toggleContentType(value: string) {
+    setSelectedContentTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
+  const startingContentType = selectedContentTypes[0] ?? "";
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,10 +139,9 @@ export default function NewCreatePage() {
         />
       </label>
 
-      {/* Grid-of-inputs, not a <select>: "Content Type selection should mirror tasks" (Jeff,
-          2026-09-22) -- same CONTENT_TYPES grid ProjectWorkPanel's task checkboxes and
-          ContentBriefPanel's picker use, radio instead of checkbox since a create's
-          StartingContentType is one value, not a multi-value tag list. */}
+      {/* Same CONTENT_TYPES grid ProjectWorkPanel's task checkboxes use, genuinely
+          multi-selectable the same way (Jeff, 2026-09-22: "Content Type selection should mirror
+          tasks" / "No longer multi selectable checkboxes that match Tasks"). */}
       <fieldset className="mt-5 rounded-md border border-border p-3">
         <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
           Content type
@@ -148,12 +156,11 @@ export default function NewCreatePage() {
                 title={disabled ? "Disabled pending a written, approved resolve plan" : undefined}
               >
                 <input
-                  type="radio"
-                  name="starting-content-type"
-                  checked={startingContentType === t.value}
-                  onChange={() => setStartingContentType(t.value)}
+                  type="checkbox"
+                  checked={selectedContentTypes.includes(t.value)}
+                  onChange={() => toggleContentType(t.value)}
                   disabled={disabled || creating}
-                  className="h-3.5 w-3.5 border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                  className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
                 />
                 {t.label}
                 {disabled ? " (disabled)" : ""}
