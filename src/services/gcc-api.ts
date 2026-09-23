@@ -244,15 +244,17 @@ export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[
  * but is project-scoped and mounted nowhere. The create-scoped export already exists server-side
  * and is ownership-checked; only a caller was missing.
  *
- * Deviation worth naming: that endpoint lives on the `-v2` route surface, which AGENTS.md says not
- * to add calls to. The alternative was writing a second create-scoped export when a working one
- * already exists, which is the duplication this project keeps paying for. Jeff, 2026-09-23:
- * "it all should already exist".
+ * Points at the v1 surface. It briefly pointed at the -v2 export, which reads GccV2 jobs -- a store
+ * this path never writes -- so it returned an empty archive for every create. The v1 endpoint reads
+ * the artifacts themselves.
+ *
+ * The archive is foldered by content type with image prompts in their own tree, never mixed into
+ * the prose.
  *
  * Not gccRequest: the response is a zip, not JSON.
  */
 export async function downloadCreateHtmlExport(createId: string): Promise<void> {
-  const path = `/api/geek-content-creator-v2/creates/${encodeURIComponent(createId)}/export/html`;
+  const path = `/api/geek-content-creator/creates/${encodeURIComponent(createId)}/export/html`;
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`);
