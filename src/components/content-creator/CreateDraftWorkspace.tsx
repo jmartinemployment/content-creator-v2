@@ -873,7 +873,7 @@ function ArtifactBody({
 
       {html ? (
         <div
-          className="gcc-doc max-h-[32rem] overflow-auto rounded-md border border-border bg-white p-5 text-sm text-foreground [&_a]:text-brand [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_p]:leading-relaxed [&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote_cite]:mt-1 [&_blockquote_cite]:block [&_blockquote_cite]:text-xs [&_blockquote_cite]:not-italic [&_blockquote_cite]:text-muted"
+          className="gcc-doc max-h-[32rem] overflow-auto rounded-md border border-border bg-white p-5 text-sm text-foreground [&_a]:text-brand [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_p]:leading-relaxed [&_.gcc-summary]:mb-4 [&_.gcc-summary]:text-base [&_.gcc-summary]:font-medium [&_.gcc-summary]:leading-relaxed [&_.gcc-summary]:text-muted [&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote_cite]:mt-1 [&_blockquote_cite]:block [&_blockquote_cite]:text-xs [&_blockquote_cite]:not-italic [&_blockquote_cite]:text-muted"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (

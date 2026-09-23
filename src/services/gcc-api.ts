@@ -623,6 +623,13 @@ export function renderArtifactBody(bodyDocumentJson: string): string | null {
     const p = parsed as Record<string, unknown>;
     const rows: string[] = [];
     if (typeof p.title === "string" && p.title.trim()) rows.push(`<h2>${escHtml(p.title)}</h2>`);
+    // The short summary belongs directly under the title, above the lede -- the page is h1 +
+    // summary (the hero), then the h2 lede as the real hook (Jeff, 2026-09-23). It has been
+    // generated and stored on every tool page all along and rendered nowhere, the same way the
+    // JSON-LD was.
+    if (typeof p.summary === "string" && p.summary.trim()) {
+      rows.push(`<p class="gcc-summary">${escHtml(p.summary.trim())}</p>`);
+    }
     rows.push(docToHtml(p.body as WireDocument));
     return rows.filter(Boolean).join("\n");
   }
