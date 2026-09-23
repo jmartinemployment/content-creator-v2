@@ -237,6 +237,42 @@ export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[
   );
 }
 
+/**
+ * Download this create's generated content as a zip of HTML documents.
+ *
+ * Restores the export v1 had (ReviewPublishPanel -> downloadHtmlExport), which in this repo exists
+ * but is project-scoped and mounted nowhere. The create-scoped export already exists server-side
+ * and is ownership-checked; only a caller was missing.
+ *
+ * Deviation worth naming: that endpoint lives on the `-v2` route surface, which AGENTS.md says not
+ * to add calls to. The alternative was writing a second create-scoped export when a working one
+ * already exists, which is the duplication this project keeps paying for. Jeff, 2026-09-23:
+ * "it all should already exist".
+ *
+ * Not gccRequest: the response is a zip, not JSON.
+ */
+export async function downloadCreateHtmlExport(createId: string): Promise<void> {
+  const path = `/api/geek-content-creator-v2/creates/${encodeURIComponent(createId)}/export/html`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText);
+    throw new ApiError(detail || response.statusText, response.status);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${createId}-html-export.zip`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function generateGccCreate(
   createId: string,
   opts?: {

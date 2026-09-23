@@ -20,6 +20,7 @@ import {
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
+  downloadCreateHtmlExport,
   generateGccCreate,
   getGccCreateDetail,
   listGccVersions,
@@ -706,28 +707,46 @@ export default function CreateDraftWorkspace({
           </section>
 
           <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">Content approval</h2>
+            <h2 className="text-lg font-semibold text-foreground">Content approval &amp; export</h2>
             <p className="mt-1 text-sm text-muted">
               Approval is on the create artifact (GeekAPI) — required before Repurpose.
             </p>
-            {approved ? (
-              <p className="mt-4 text-sm font-medium text-green-800">Content approved.</p>
-            ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {approved ? (
+                <p className="text-sm font-medium text-green-800">Content approved.</p>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending || !version}
+                  onClick={() =>
+                    run("Approved.", async () => {
+                      if (!version) return;
+                      await approveGccVersion(version.id);
+                      await reload();
+                    })
+                  }
+                  className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
+                >
+                  Approve content
+                </button>
+              )}
+              {/* Export every artifact on this create as a zip of HTML documents -- the export v1
+                  had, which existed here with no caller. Not gated on approval: an operator
+                  reviewing output outside the browser is exactly when it is wanted. */}
               <button
                 type="button"
-                disabled={pending || !version}
+                disabled={pending || detail.artifacts.length === 0}
                 onClick={() =>
-                  run("Approved.", async () => {
-                    if (!version) return;
-                    await approveGccVersion(version.id);
-                    await reload();
+                  run("Export downloaded.", async () => {
+                    if (!effectiveCreateId) return;
+                    await downloadCreateHtmlExport(effectiveCreateId);
                   })
                 }
-                className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
+                className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30 disabled:opacity-50"
               >
-                Approve content
+                Export HTML (.zip)
               </button>
-            )}
+            </div>
           </section>
         </div>
       )}
