@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
+import {
+  CONTENT_LENGTH_TARGETS,
+  lengthBandForContentType,
+} from "@/lib/content-creator/brief-catalog";
 import ContentBriefPanel from "./ContentBriefPanel";
 import type { HubConnection } from "@microsoft/signalr";
 import {
@@ -540,7 +544,10 @@ export default function CreateDraftWorkspace({
               {approved ? " · approved" : ""}
             </h2>
             <p className="mt-1 text-sm text-muted">{artifact?.type}</p>
-            <ArtifactBody bodyDocumentJson={version.bodyDocumentJson} />
+            <ArtifactBody
+              bodyDocumentJson={version.bodyDocumentJson}
+              contentType={artifact?.type}
+            />
           </section>
 
           <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
@@ -781,16 +788,70 @@ function ContentTypePicker({
 }
 
 /**
- * Render an artifact body as readable content (CWV2 ContentDocument → HTML, or labeled
- * fields for image-prompt/tool artifacts). Raw JSON is available behind a collapsed toggle
- * for debugging — never the default view.
+ * Render an artifact body as readable content, with the affordances v1's ToolPostCard had and this
+ * workspace had lost: the meta description, a word count measured against the type's own target,
+ * and the JSON+LD schema behind a toggle (Jeff, 2026-09-23 -- "this display sucks", and JSON-LD
+ * looked missing because nothing ever drew it, though it is generated on every tool page).
+ *
+ * Deliberately not carried over from v1: it rendered the body through a Markdown component. v2
+ * renders the ContentDocument to HTML properly and Markdown is forbidden, so this takes the layout
+ * and none of that path. Raw JSON stays behind a collapsed toggle, never the default view.
  */
-function ArtifactBody({ bodyDocumentJson }: { bodyDocumentJson: string }) {
+function ArtifactBody({
+  bodyDocumentJson,
+  contentType,
+}: {
+  bodyDocumentJson: string;
+  contentType?: string;
+}) {
   const [showSource, setShowSource] = useState(false);
+  const [showSchema, setShowSchema] = useState(false);
   const html = renderArtifactBody(bodyDocumentJson);
+
+  // The generator serializes these alongside the document (title/metaDescription/summary/body/
+  // jsonLdSchema for a tool page); renderArtifactBody only draws title + body.
+  let metaDescription = "";
+  let jsonLdSchema = "";
+  try {
+    const parsed = JSON.parse(bodyDocumentJson) as Record<string, unknown>;
+    if (typeof parsed?.metaDescription === "string") metaDescription = parsed.metaDescription;
+    if (typeof parsed?.jsonLdSchema === "string") jsonLdSchema = parsed.jsonLdSchema;
+  } catch {
+    /* a body that will not parse still renders below */
+  }
+
+  // Not every band is word-ranged -- imagePrompt is specified in words *and* characters with a
+  // different shape -- so only use a band that actually carries min/max.
+  const band = contentType ? lengthBandForContentType(contentType) : "";
+  const raw = band ? CONTENT_LENGTH_TARGETS[band] : null;
+  const target =
+    raw && "min" in raw && "max" in raw
+      ? (raw as { min: number; max: number; label: string })
+      : null;
+  const words = html
+    ? html.replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length
+    : 0;
+  const outOfRange = !!target && words > 0 && (words < target.min || words > target.max);
 
   return (
     <div className="mt-4">
+      {metaDescription ? (
+        <p className="mb-2 text-sm text-muted">{metaDescription}</p>
+      ) : null}
+
+      {target && words > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              outOfRange ? "bg-amber-100 text-amber-800" : "bg-brand/10 text-brand"
+            }`}
+          >
+            {words.toLocaleString()} words
+          </span>
+          <span className="text-xs text-muted">Target: {target.label} words</span>
+        </div>
+      ) : null}
+
       {html ? (
         <div
           className="gcc-doc max-h-[32rem] overflow-auto rounded-md border border-border bg-white p-5 text-sm text-foreground [&_a]:text-brand [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_p]:leading-relaxed"
@@ -801,6 +862,23 @@ function ArtifactBody({ bodyDocumentJson }: { bodyDocumentJson: string }) {
           {previewBodyDocument(bodyDocumentJson, 8000)}
         </pre>
       )}
+
+      {jsonLdSchema ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowSchema((v) => !v)}
+            className="mt-4 block text-sm font-medium text-brand hover:underline"
+          >
+            {showSchema ? "Hide" : "Show"} JSON+LD Schema
+          </button>
+          {showSchema ? (
+            <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
+              {jsonLdSchema}
+            </pre>
+          ) : null}
+        </>
+      ) : null}
 
       <button
         type="button"
