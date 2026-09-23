@@ -30,16 +30,16 @@ and only then restored to `ChunkIndex` order so the prompt still reads in page o
 `QualityScore` had to be added to GeekAPI's `ChunkDto` — Geek-Crawler-Rag returns it on every hit
 and this side never read it.
 
-## 2. Parent/child collapse — BLOCKED on a RAG-side change
+## 2. Parent/child collapse — DONE
 
 `llama_nodes.py` emits parent and child nodes and carries **both** texts in metadata
 (`parentText`, `childText`) precisely so a matched child can be expanded to its parent without a
 second fetch. Nothing on the GeekAPI side does that, so a retrieved child reaches the writer as an
 isolated fragment.
 
-The fix is cheap — wrap the child in its parent for the prompt — but it cannot be written in C#
-today, because **`ChunkHit` does not return those fields**. They exist in the Qdrant payload and
-are not exposed by the search API.
+The fix could not be written in C# at all, because **`ChunkHit` did not return those fields**. They
+were in the Qdrant payload and unexposed by the search API — which is why this looked like a C#
+problem and was not one.
 
 `Geek-Crawler-Rag/src/geek_crawler_rag/models.py`, `ChunkHit` currently returns:
 
@@ -52,18 +52,25 @@ are not exposed by the search API.
 Needed: `parentText`, `childText`, `anchors`. `chunkRole` already comes back and is a cleaner
 parent/child signal than inferring from the presence of `childText`.
 
-Order of work:
+Done in three steps:
 
-1. Add the three fields to `ChunkHit` and populate them in `query.py` from the Qdrant payload.
-2. Add `ParentText`, `ChildText`, `Anchors` to GeekAPI's `ChunkDto`.
-3. In the mapper, when `chunkRole` is the child role and `parentText` exists, render the child
-   inside its parent rather than alone.
+1. `parentText`, `childText`, `anchors` added to `ChunkHit` and populated from the payload in
+   `query.py` (Geek-Crawler-Rag `890a8f3`).
+2. `ParentText`, `ChildText`, `Anchors`, `ChunkRole` added to GeekAPI's `ChunkDto`.
+3. `RenderChunk` wraps a child in its parent when `chunkRole` is the child role (GeekBackend
+   `f93498c`).
 
-## 3. Structure is dropped from the rendered block
+**Geek-Crawler-Rag must be deployed for 2 and 3 to do anything** — the C# side reads fields the live
+Python service does not yet return, and degrades to the old behaviour until it does.
 
-`BuildResearchBlock` renders a page as a title, a URL, and a flat list of paragraphs. `sectionTitle`
-is already carried on `GccQuoteablePage` and is not printed; `anchors` never arrives at all (see
-above).
+## 3. Structure is dropped from the rendered block — DONE
+
+`BuildResearchBlock` rendered a page as a title, a URL and a flat list of paragraphs. `sectionTitle`
+was carried on `GccQuoteablePage` and never printed; `anchors` never arrived at all.
+
+Fixed in `f93498c`: a chunk renders as its section, its parent context when it is a child, the
+specific detail, and the products that section links to — capped at eight anchors, because which
+products a section links to is worth a few lines and a navigation menu is not.
 
 This is the same structural loss a LlamaIndex `SimpleWebPageReader` would have caused at ingest —
 just deferred to the last hop instead. The crawler's heading levels and anchors are what make
@@ -80,7 +87,7 @@ Section: AP Automation
   Specific detail: Get full visibility into invoices, spend, and cash flow…
 ```
 
-## 4. `minQuality` is never passed
+## 4. `minQuality` is never passed — DONE
 
 `build_metadata_filters` accepts `min_quality` and the Content Creator retrieval path does not set
 it. So boilerplate is filtered out only by the cap in item 1, after it has already been retrieved
@@ -88,6 +95,11 @@ and has already consumed a top-k slot.
 
 Passing a floor at retrieval is strictly better than discarding at serialization: it frees slots for
 real content rather than spending them on a cookie banner and then dropping it.
+
+Fixed in `71a6fdd`: `GccPartnerResearchCaps.MinChunkQuality = 0.55`, sent on every query. Permissive
+on purpose — it drops navigation, cookie notices and footer fragments rather than second-guessing
+what is interesting, and a retrieval that returns nothing is worse than one that returns something
+plain.
 
 ## Correction: retrieval is already hybrid
 
