@@ -9,6 +9,10 @@ import {
   lengthBandForContentType,
 } from "@/lib/content-creator/brief-catalog";
 import ContentBriefPanel from "./ContentBriefPanel";
+import {
+  toGeneratedContentSet,
+  type GeneratedContentGroup,
+} from "@/lib/content-creator/generated-content-set";
 import type { HubConnection } from "@microsoft/signalr";
 import {
   createWorkflowHubConnection,
@@ -283,6 +287,10 @@ export default function CreateDraftWorkspace({
     );
   }
 
+  const contentSet = toGeneratedContentSet(detail.artifacts);
+  const selectedGroup: GeneratedContentGroup | undefined = artifact
+    ? contentSet.find((g) => g.artifacts.some((a) => a.id === artifact.id))
+    : contentSet[0];
   const briefReady = !!detail.briefJson || briefSavedOnServer;
   const researchReady = !!detail.researchJson;
   const approved = artifact?.status?.toLowerCase() === "approved";
@@ -506,29 +514,66 @@ export default function CreateDraftWorkspace({
         </section>
       </div>
 
-      {detail.artifacts.length > 1 ? (
-        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Generated artifacts">
-          {detail.artifacts.map((a) => {
-            const selected = a.id === artifact?.id;
-            return (
-              <button
-                key={a.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => void loadVersionFor(a)}
-                className={
-                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
-                  (selected
-                    ? "border-brand bg-brand text-white"
-                    : "border-border bg-surface text-foreground hover:bg-muted/30")
-                }
-              >
-                {a.type}
-                {a.status?.toLowerCase() === "approved" ? " ✓" : ""}
-              </button>
-            );
-          })}
+      {/* The generated content set: one tab per content type this create produced, and inside a
+          tab a row of that type's artifacts when it produced several. v1 grouped the same way --
+          its toolPosts[] was already a list, "one page per unique crawl tool ... no cap of 5" --
+          but declared the groups as fixed fields, so every new content type meant editing the
+          view. This derives them from the artifacts, so adding a type changes nothing here. */}
+      {contentSet.length > 0 ? (
+        <div className="mb-4 flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Content types">
+            {contentSet.map((group) => {
+              const selected = group.type === selectedGroup?.type;
+              const approved = group.artifacts.every(
+                (a) => a.status?.toLowerCase() === "approved",
+              );
+              return (
+                <button
+                  key={group.type}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => void loadVersionFor(group.artifacts[0])}
+                  className={
+                    "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
+                    (selected
+                      ? "border-brand bg-brand text-white"
+                      : "border-border bg-surface text-foreground hover:bg-muted/30")
+                  }
+                >
+                  {group.label}
+                  {group.artifacts.length > 1 ? ` (${group.artifacts.length})` : ""}
+                  {approved ? " ✓" : ""}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedGroup && selectedGroup.artifacts.length > 1 ? (
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label={`${selectedGroup.label} pages`}>
+              {selectedGroup.artifacts.map((a) => {
+                const selected = a.id === artifact?.id;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => void loadVersionFor(a)}
+                    className={
+                      "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors " +
+                      (selected
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border bg-surface text-muted hover:bg-muted/30")
+                    }
+                  >
+                    {a.name || a.id.slice(0, 8)}
+                    {a.status?.toLowerCase() === "approved" ? " ✓" : ""}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
