@@ -626,13 +626,13 @@ export function renderArtifactBody(bodyDocumentJson: string): string | null {
     const p = parsed as Record<string, unknown>;
     const rows: string[] = [];
     if (typeof p.title === "string" && p.title.trim()) rows.push(`<h2>${escHtml(p.title)}</h2>`);
-    // The short summary belongs directly under the title, above the lede -- the page is h1 +
-    // summary (the hero), then the h2 lede as the real hook (Jeff, 2026-09-23). It has been
-    // generated and stored on every tool page all along and rendered nowhere, the same way the
-    // JSON-LD was.
-    if (typeof p.summary === "string" && p.summary.trim()) {
-      rows.push(`<p class="gcc-summary">${escHtml(p.summary.trim())}</p>`);
-    }
+    // The summary is not drawn here. It sat directly under the title, one generic sentence, in the
+    // slot a reader reads as the lede -- and the meta description says nearly the same thing in the
+    // header above it, so the page opened with two near-identical one-liners before the actual
+    // opening (Jeff, 2026-09-23: "this is the lede ... and is barely one sentence").
+    //
+    // The lede is the lead paragraph and belongs in that slot: title, then the hook. The summary
+    // remains in the envelope for listings and cards, which is what it is for.
     rows.push(docToHtml(p.body as WireDocument));
     return rows.filter(Boolean).join("\n");
   }
