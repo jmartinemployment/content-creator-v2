@@ -558,9 +558,13 @@ export const CONTENT_LENGTH_TARGETS = {
       "Exhaustive macro-level entry points for massive topics — multiple subsections that link out to cluster articles.",
   },
   blog: {
-    min: 1800,
-    max: 2500,
-    label: "1,800–2,500",
+    // Raised with GeekBackend's ContentLengthTargets on 2026-09-23 -- blog landed 300-400 words
+    // under target run after run. These numbers exist twice, here and in C#, and only the backend
+    // half moved, so the badge kept reading 1,800-2,500 against a generator already writing to
+    // 2,000-2,700. Two copies of one fact is how that happens; change both together.
+    min: 2000,
+    max: 2700,
+    label: "2,000–2,700",
     definition:
       "Deep-dive articles aimed at outranking competitors — substantive depth in every section, not surface summaries.",
   },
