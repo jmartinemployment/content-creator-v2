@@ -77,13 +77,13 @@ per-type event becomes per-partner for this type.
 
 ## Sequencing
 
-This precedes the Tool polish items, because both are about a page currently aimed at the wrong
-subject:
+The three Tool polish items this section used to list are closed as of 2026-09-23 — the lede (Tool
+calls the shared 12-type path, and it now runs *before* the body so the body continues it, on the
+Create path and the orchestrator's `ToolPageGenerator` alike), the silently-short image prompt list,
+and JSON-LD rendering.
 
-- **Lede** — `GenerateToolPageAsync` promotes the model's first body section into the lede slot
-  (`var lede = sections[0] with { Tag = "h2" }`). Nothing writes a lede, and the six-section outline
-  loses its first section to it.
-- **Image prompts** — one per H2 is intended, but a short prompt list is silently accepted: index 0
-  goes to the hero and any section past `prompts.Count` keeps none, with no complaint.
-- **JSON-LD** — generated correctly, never rendered; `renderArtifactBody`'s tool branch draws only
-  title + body.
+What remains is the subject itself, and it is the larger half: the page is aimed at a category until
+`toolName: create.Topic` becomes a real partner tool name. The outline now names the product in
+every slot (`ToolPrompts.Outline(context, productName)`), so once the subject is per-partner the
+sections follow it with no further change — five partners give five outlines and five genuinely
+different pages, rather than five renderings of one.

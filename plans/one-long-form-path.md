@@ -37,10 +37,14 @@ lede" and "Overview on every page is boring" reports are one defect.
 contract forbids literal headings, the repeating "Overview" disappears. Do not write a
 Tool-specific lede prompt — that is the third copy the "one path" instruction rejects.
 
-**Consequence to handle:** the tool body prompt hardcodes *"Required top-level (h2) sections, in
-order: Overview, …"* with per-section budgets including *"Overview: ~500-700 words"*. Once
-`outline[0]` is the lede slot, that text and the word budget follow it, and Tool must still equal or
-exceed Pillar (`project_tool_is_the_priority_content_type`).
+**Done 2026-09-23.** Tool calls the shared lede path, and the hook is additive rather than carved
+out of the body -- all six sections survive, so Tool still equals or exceeds Pillar
+(`project_tool_is_the_priority_content_type`). The hardcoded *"Required top-level (h2) sections, in
+order: Overview, …"* prose and its per-section word budget went with it: the prompt renders the
+outline from `ToolPrompts.Outline`, the one definition, and no "Overview" case survives in it for
+any angle -- including `ultimate_guide` and the unrecognised-angle fallback, which were the most
+common paths of all. Jeff: *"I really don't want to see Overview again, on any content type.
+Overview is a type of Lede."*
 
 ## What is not shared: the body
 
@@ -60,6 +64,7 @@ long-form generator.
 - **Subject.** `toolName: create.Topic` makes the page's subject the SEO keyword, not a partner
   product — see `plans/tool-page-per-partner.md`. Paraphrasing partner data improves the substance
   but the page is still aimed at a category until that is fixed.
-- **Image prompts are silently short.** A prompt list shorter than the section count leaves later
-  sections with none and reports nothing; index 0 goes to the hero.
 - **Per-partner pages.** Five partners should be five pages, each from its own partner's evidence.
+
+Closed 2026-09-23: the lede, above — and the silently-short image prompt list, which now refuses
+anything less than one hero plus one per H2 rather than leaving later sections with none.
