@@ -1,5 +1,6 @@
 "use client";
 
+import { imagePromptsFor } from "@/lib/content-creator/image-prompts";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
@@ -870,7 +871,12 @@ function ArtifactBody({
 }) {
   const [showSource, setShowSource] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
+  const [showImagePrompts, setShowImagePrompts] = useState(false);
   const html = renderArtifactBody(bodyDocumentJson);
+  // v1 had these on their own tab. They are deliberately not drawn in the prose and ship as
+  // separate files in the export, so without a view of their own they were generated, paid for,
+  // stored and invisible (Jeff: "No Tab for Blog - Image Prompts?").
+  const imagePrompts = imagePromptsFor(bodyDocumentJson);
 
   // The generator serializes these alongside the document (title/metaDescription/summary/body/
   // jsonLdSchema for a tool page); renderArtifactBody only draws title + body.
@@ -901,6 +907,45 @@ function ArtifactBody({
     <div className="mt-4">
       {metaDescription ? (
         <p className="mb-2 text-sm text-muted">{metaDescription}</p>
+      ) : null}
+
+      {imagePrompts.length > 0 ? (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setShowImagePrompts((v) => !v)}
+            className="text-sm font-medium text-brand underline"
+          >
+            {showImagePrompts ? "Hide" : "Show"} image prompts ({imagePrompts.length})
+          </button>
+          {showImagePrompts ? (
+            <div className="mt-2 flex flex-col gap-3 rounded-md border border-border bg-white p-4">
+              <p className="text-xs text-muted">
+                One per H2 plus the hero. Copy into your image generator — these are production
+                instructions, which is why they are not printed in the page.
+              </p>
+              {imagePrompts.map((p, i) => (
+                <div key={`${p.heading}-${i}`} className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      {i === 0 ? p.heading : `${i}. ${p.heading}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard?.writeText(p.prompt)}
+                      className="text-xs font-medium text-brand underline"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                    {p.prompt}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {target && words > 0 ? (
