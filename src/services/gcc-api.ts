@@ -514,7 +514,14 @@ export function repurposeGccVersion(
 /* --------------------- readable artifact rendering --------------------- */
 
 type SerpRun = { text?: string; bold?: boolean; italic?: boolean; href?: string };
-type SerpParagraph = { type?: string; runs?: SerpRun[]; ordered?: boolean; items?: SerpRun[][] };
+type SerpParagraph = {
+  type?: string;
+  runs?: SerpRun[];
+  ordered?: boolean;
+  items?: SerpRun[][];
+  /** Source URL on a block quotation. */
+  cite?: string;
+};
 type DocSection = {
   tag?: string;
   heading?: string;
@@ -549,6 +556,15 @@ function renderRuns(runs: SerpRun[] | undefined): string {
 }
 
 function renderParagraph(p: SerpParagraph): string {
+  // A quote is a real block, not prose that happens to start with "According to". The backend
+  // renders <blockquote cite>; without this it would draw here as an ordinary paragraph and the
+  // attribution would vanish.
+  if (p.type === "quote") {
+    const cite = p.cite?.trim()
+      ? `<footer><cite>${escHtml(p.cite.trim())}</cite></footer>`
+      : "";
+    return `<blockquote>${renderRuns(p.runs ?? [])}${cite}</blockquote>`;
+  }
   if (p.type === "list" || Array.isArray(p.items)) {
     const tag = p.ordered ? "ol" : "ul";
     const items = (p.items ?? []).map((it) => `<li>${renderRuns(it)}</li>`).join("");
