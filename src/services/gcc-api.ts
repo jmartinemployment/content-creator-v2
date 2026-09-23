@@ -588,9 +588,10 @@ function renderSection(s: DocSection, depth: number): string {
     const r = renderParagraph(p);
     if (r) parts.push(r);
   }
-  if (s.imagePrompt?.trim()) {
-    parts.push(`<p><em>Image prompt:</em> ${escHtml(s.imagePrompt)}</p>`);
-  }
+  // Image prompts are deliberately not drawn in the prose. They are production instructions for
+  // an image generator, not something a reader reads, and inline they break the page you are trying
+  // to judge (Jeff, 2026-09-23: "in line image prompt is specifically said no to"). They ship as
+  // their own files in the export, under image-prompts/<type>/, one per H1 and H2.
   for (const c of s.children ?? []) parts.push(renderSection(c, depth + 1));
   return parts.join("\n");
 }
