@@ -89,19 +89,28 @@ and has already consumed a top-k slot.
 Passing a floor at retrieval is strictly better than discarding at serialization: it frees slots for
 real content rather than spending them on a cookie banner and then dropping it.
 
-## Also open, and not one of the four
+## Correction: retrieval is already hybrid
 
-**Dense-only retrieval.** `llama_engine.py` constructs `QdrantVectorStore(..., enable_hybrid=False)`
-and queries with `VectorStoreQueryMode.DEFAULT`. No BM25, no reranker.
+An earlier version of this plan said retrieval was dense-only, on the strength of
+`QdrantVectorStore(..., enable_hybrid=False)` in `llama_engine.py`. That was wrong, and a plan to
+re-embed 168,391 points into a sparse-capable collection was written on top of it. Deleted.
 
-For a system whose job is naming specific partner products, that is a real weakness: "Dext",
-"Zone & Co", "HighRadius" match on semantic similarity rather than lexically. The
-`InvalidOperationException: Blog names 4 of 5 partner tools. Missing: Dext` refusal is the visible
-form of it — though in that instance the underlying cause was that Dext had no indexed crawl at
-all.
+`/v1/query` does not use `llama_engine.aquery`. It routes to `QueryService.query` (`app.py:328`),
+which already runs three channels and fuses them:
 
-`ChunkHit` already carries `lexicalScore` and `rerankScore` fields, so the response shape
-anticipates hybrid retrieval that the engine does not currently perform.
+```python
+dense_nodes  = ...                                    # LlamaIndex dense
+lexical_hits = await self._store.search_text(...)     # Qdrant text search
+bm25_order   = bm25_rank_indices(request.need, docs_for_bm25)
+fused        = reciprocal_rank_fusion([dense_ids, bm25_ids, lexical_ids])
+```
+
+`bm25_rank.py` and `rrf.py` are real modules. `enable_hybrid=False` governs only whether that one
+vector-store object does its own fusion; fusion happens a layer above it, deliberately.
+
+The thing that made this hard to see from the outside: `lexical_score=None` is hardcoded at
+`query.py:235`. The lexical channel runs and its score is never reported, so "is BM25 running?"
+cannot be answered by reading a response. Reporting it is the small, honest fix.
 
 ## What is deliberately not here
 
