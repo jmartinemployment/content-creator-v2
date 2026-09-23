@@ -30,6 +30,7 @@ wrong question, and "mentions none of the tools" follows directly from the last 
 
 One Tool create → N artifacts, one per partner, each:
 
+- about that partner's tool **and how it addresses the create's keyword**, not the keyword alone,
 - grounded **only** in that partner's own crawl run,
 - extracted with that partner's tool name as `toolNames`,
 - gated for sufficiency **per partner**,
