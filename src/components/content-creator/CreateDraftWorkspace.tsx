@@ -106,6 +106,10 @@ export default function CreateDraftWorkspace({
   // selected on its own rather than by picking an artifact. v1 had it as a peer field on
   // GeneratedContentSet for the same reason.
   const [imagePromptsTab, setImagePromptsTab] = useState(false);
+  // Which content type's tab is open. Selection used to be derived from the loaded artifact, which
+  // cannot express "the Pillar tab, which has no pillar in it" -- the tab would appear selected and
+  // the view would show whatever loaded last.
+  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   // Which artifact id the operator is currently looking at. Separate from `artifact` itself
   // (the full object) so reload() can tell "no selection yet" (null, pick a default) apart from
@@ -297,9 +301,12 @@ export default function CreateDraftWorkspace({
   }
 
   const contentSet = toGeneratedContentSet(detail.artifacts);
-  const selectedGroup: GeneratedContentGroup | undefined = artifact
-    ? contentSet.find((g) => g.artifacts.some((a) => a.id === artifact.id))
-    : contentSet[0];
+  const selectedGroup: GeneratedContentGroup | undefined =
+    (selectedType ? contentSet.find((g) => g.type === selectedType) : undefined)
+    ?? (artifact ? contentSet.find((g) => g.artifacts.some((a) => a.id === artifact.id)) : undefined)
+    // Nothing chosen yet: open on a tab that has something in it rather than on an empty Pillar.
+    ?? contentSet.find((g) => g.artifacts.length > 0)
+    ?? contentSet[0];
   const briefReady = !!detail.briefJson || briefSavedOnServer;
   const researchReady = !!detail.researchJson;
   const approved = artifact?.status?.toLowerCase() === "approved";
@@ -545,6 +552,7 @@ export default function CreateDraftWorkspace({
           >
             {contentSet.map((group) => {
               const selected = !imagePromptsTab && group.type === selectedGroup?.type;
+              const empty = group.artifacts.length === 0;
               const approved = group.artifacts.every(
                 (a) => a.status?.toLowerCase() === "approved",
               );
@@ -554,17 +562,23 @@ export default function CreateDraftWorkspace({
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  onClick={() => void loadVersionFor(group.artifacts[0])}
+                  onClick={() => {
+                    setSelectedType(group.type);
+                    void loadVersionFor(group.artifacts[0] ?? null);
+                  }}
                   className={
                     "-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm transition-colors " +
                     (selected
                       ? "border-brand font-semibold text-foreground"
-                      : "border-transparent font-medium text-muted hover:border-border hover:text-foreground")
+                      : "border-transparent font-medium hover:border-border hover:text-foreground ") +
+                    // A tab with nothing behind it reads as available but unfilled, not as disabled:
+                    // it is the thing that tells you the type was not generated.
+                    (selected ? "" : empty ? "text-muted/60" : "text-muted")
                   }
                 >
                   {group.label}
                   {group.artifacts.length > 1 ? ` (${group.artifacts.length})` : ""}
-                  {approved ? " ✓" : ""}
+                  {approved && !empty ? " ✓" : ""}
                 </button>
               );
             })}
@@ -576,7 +590,10 @@ export default function CreateDraftWorkspace({
               type="button"
               role="tab"
               aria-selected={imagePromptsTab}
-              onClick={() => setImagePromptsTab(true)}
+              onClick={() => {
+                setImagePromptsTab(true);
+                setSelectedType(null);
+              }}
               className={
                 "-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm transition-colors " +
                 (imagePromptsTab
@@ -627,7 +644,9 @@ export default function CreateDraftWorkspace({
         <ImagePromptsPanel artifacts={detail.artifacts} />
       ) : !version ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          No draft artifact yet. Save the Content Brief, then Generate above.
+          {selectedGroup && selectedGroup.artifacts.length === 0
+            ? `No ${selectedGroup.label} yet for this create. Pick it as an output type, then Generate above.`
+            : "No draft artifact yet. Save the Content Brief, then Generate above."}
         </div>
       ) : (
         <div className="flex flex-col gap-6">
