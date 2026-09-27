@@ -97,4 +97,22 @@ const realResult = applyCuratedSerpToBrief(untouchedBrief, withOrganics, "fill-e
 assert(realResult.brief.serpCapturedAt.length > 0, "a field written => provenance is stamped");
 assertEqual(realResult.brief.serpTitles, withOrganics.serpTitles, "the field itself was actually written");
 
+// Writing notes are the operator's. Confirming a SERP used to write "SERP shape: ..." and
+// "Information Gain: ..." into them whenever the field was empty, so a field labelled as the
+// operator's input silently carried machine output into the body prompt.
+const shapedSeed: CuratedSerpSeed = {
+  ...withOrganics,
+  shapeGuidance: "Prefer an Angle for SEO that matches (advisory only — do not auto-set)",
+  informationGainSummary: "This site covers 0 related page(s)",
+};
+
+const notesAfterMerge = applyCuratedSerpToBrief(emptyContentBrief(), shapedSeed, "fill-empty");
+assertEqual(notesAfterMerge.brief.writingNotes, "", "a confirmed SERP never writes writing notes");
+
+// And the operator's own note is returned untouched, which the old is-empty guard also got right
+// but only by accident -- it was the reason a typed note suppressed both findings entirely.
+const typed = { ...emptyContentBrief(), writingNotes: "Keep the second half concrete." };
+const notesKept = applyCuratedSerpToBrief(typed, shapedSeed, "fill-empty");
+assertEqual(notesKept.brief.writingNotes, "Keep the second half concrete.", "an operator note survives a merge");
+
 console.log("serp-lens tests passed");

@@ -157,18 +157,14 @@ export function applyCuratedSerpToBrief(
     next.serpLocale = seed.locale;
   }
 
-  if (!brief.writingNotes.trim()) {
-    const noteBits = [
-      seed.shapeGuidance?.trim() ? `SERP shape: ${seed.shapeGuidance.trim()}` : "",
-      seed.informationGainSummary?.trim()
-        ? `Information Gain: ${seed.informationGainSummary.trim()}`
-        : "",
-    ].filter(Boolean);
-    if (noteBits.length) {
-      next.writingNotes = noteBits.join("\n");
-    }
-  }
-
+  // Writing notes are the operator's, and nothing writes into them. Confirming a SERP used to put
+  // `SERP shape: ...` and `Information Gain: ...` there when the field happened to be empty, so a
+  // field labelled as your input silently filled with machine output — and a note you had already
+  // typed suppressed both, because the whole block was behind an is-empty check. They reach the
+  // writer as `Writing notes:` in the BRIEF CONTROLS block, which meant a research finding arrived
+  // at the model as though you had written it (Jeff, 2026-09-27: "None of it belongs as a writing
+  // note"). The SERP itself still reaches generation through its own fields — titles, urls, PAA and
+  // related searches are merged above.
   return { brief: next, conflicts };
 }
 

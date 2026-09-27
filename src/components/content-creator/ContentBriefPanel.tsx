@@ -575,9 +575,13 @@ export default function ContentBriefPanel({
       </label>
 
       <label className={`${labelClass} mt-5`}>
-        Writing Note for Image Prompt (optional)
-        {/* Renamed to say what it actually does (2026-09-21 audit): read only by
-            WriteImagePromptAsync — every other content type ignores this field entirely. */}
+        Writing notes (optional)
+        {/* Named "Writing Note for Image Prompt" on the strength of a 2026-09-21 audit that found
+            only WriteImagePromptAsync read it. That is no longer true and the label was telling
+            operators the opposite of what happens: GccGenerateService passes WritingNotes into
+            GenerateStartingContentAsync, GenerateToolPageAsync and GeneratePillarBodyAsync, and it
+            lands in every long-form body prompt as "Writing notes: ..." inside BRIEF CONTROLS
+            (ContentPromptBuilder:839, :878). So it reaches pillar, blog and tool bodies. */}
         <textarea
           value={brief.writingNotes}
           onChange={(e) => patch({ writingNotes: e.target.value })}
