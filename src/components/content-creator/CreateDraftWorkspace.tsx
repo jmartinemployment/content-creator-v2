@@ -9,8 +9,15 @@ import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import {
+  AUDIENCE_SEGMENTS,
+  BUYING_STAGES,
+  CONTENT_ANGLES,
   CONTENT_LENGTH_TARGETS,
+  CTA_TYPES,
   lengthBandForContentType,
+  migrateBrief,
+  PRIMARY_INTENTS,
+  TONES_OF_VOICE,
 } from "@/lib/content-creator/brief-catalog";
 import ContentBriefPanel from "./ContentBriefPanel";
 import {
@@ -110,6 +117,9 @@ export default function CreateDraftWorkspace({
   // cannot express "the Pillar tab, which has no pillar in it" -- the tab would appear selected and
   // the view would show whatever loaded last.
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  // Twelve fields you set once. Open while the brief is unsaved, collapsed to a summary after --
+  // reopened by the operator, never by a reload, so it does not spring back open under them.
+  const [briefOpen, setBriefOpen] = useState(false);
 
   // Which artifact id the operator is currently looking at. Separate from `artifact` itself
   // (the full object) so reload() can tell "no selection yet" (null, pick a default) apart from
@@ -284,7 +294,7 @@ export default function CreateDraftWorkspace({
   if (loadError) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-sm text-red-600">{loadError}</p>
+        <p className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">{loadError}</p>
         <Link href="/app/creates" className="mt-4 inline-block text-sm text-brand hover:underline">
           &larr; Back to workflow
         </Link>
@@ -428,36 +438,62 @@ export default function CreateDraftWorkspace({
         &larr; Back to workflow
       </Link>
 
-      <div className="mb-8 mt-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">
-          {detail.startingContentType ?? "no type yet"}
-        </p>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">{detail.topic}</h1>
-        <p className="mt-2 text-sm text-muted">
-          Create {detail.id}
-          {briefReady ? " · brief saved" : " · brief missing"}
-          {researchReady ? " · research saved" : ""}
-          {detail.projectSiteRunId ? " · grounded on a crawl" : ""}
-        </p>
-      </div>
+      {/* The title was an ALL-CAPS tracked eyebrow over a bold sans heading, with the state below it
+          as one sentence joined by middle dots: "Create 8f0c… · brief saved · research saved ·
+          grounded on a crawl". A dot-joined string makes the reader parse a sentence to find out
+          whether one thing is true, and buries the id -- which is the only part you ever copy --
+          among three booleans. Three facts, three marks, and the id where it can be selected. */}
+      <header className="mb-7 mt-3">
+        <h1 className="font-display text-[2rem] leading-[1.15] text-foreground">{detail.topic}</h1>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <span className="text-muted">
+            {detail.startingContentType ?? "No type chosen"}
+          </span>
+          <Ready on={briefReady} yes="Brief saved" no="Brief not saved" />
+          <Ready on={researchReady} yes="Research saved" no="No research" />
+          <Ready on={!!detail.projectSiteRunId} yes="Grounded on a crawl" no="No crawl" />
+          <code className="ml-auto select-all font-mono text-xs text-muted">{detail.id}</code>
+        </div>
+      </header>
 
-      <div className="mb-6 flex flex-col gap-6">
+      <div className="mb-6 flex flex-col gap-4">
         {siteSection ? <SiteContextBanner siteSection={siteSection} /> : null}
         {saMissingPages ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            This create&rsquo;s project-site grounding is missing related pages — Generate stays
-            blocked (no keyword-only path).
+          <p className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
+            Generate is blocked: this create&rsquo;s crawl has no related pages, and there is no
+            keyword-only path.
           </p>
         ) : null}
+      </div>
 
-        <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground">Content Brief &amp; Generate</h2>
-          <p className="mt-1 text-sm text-muted">
-            One section, one content-type selection. Generate reads persisted BriefJson /
-            ResearchJson (and site section) from the database only — every checked type is
-            generated independently, nothing is derived from another.
-          </p>
-
+      {/* One surface. Each stage is a band on it, divided by a rule -- see Stage. */}
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <Stage
+          step={1}
+          title="Brief"
+          note={
+            briefOpen
+              ? "What to write and who for. Saved to this create, and read back at generate time — every checked type is written independently."
+              : undefined
+          }
+          aside={
+            briefReady ? (
+              <button
+                type="button"
+                onClick={() => setBriefOpen((v) => !v)}
+                className="text-sm text-brand underline-offset-2 hover:underline"
+              >
+                {briefOpen ? "Done editing" : "Edit brief"}
+              </button>
+            ) : null
+          }
+        >
+          {/* Twelve fields you set once and then scroll past on every visit. Once the brief is
+              saved it collapses to what it actually says, and opens again on demand. */}
+          {!briefOpen && briefReady ? (
+            <BriefSummary detail={detail} outputTypes={outputTypes} />
+          ) : (
+        <>
           <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
 
           <ContentBriefPanel
@@ -473,6 +509,14 @@ export default function CreateDraftWorkspace({
             }}
           />
 
+        </>
+          )}
+        </Stage>
+
+        <Stage step={2} title="Generate">
+          {/* The one filled accent on this page. The parent site uses orange as a text colour 530
+              times and as a fill 21 -- a solid fill there means "act here", so it belongs to the
+              single primary action and nothing else. */}
           <button
             type="button"
             disabled={
@@ -483,7 +527,7 @@ export default function CreateDraftWorkspace({
               outputTypes.length === 0
             }
             onClick={() => void runGenerate(false)}
-            className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating
               ? "Generating…"
@@ -492,9 +536,9 @@ export default function CreateDraftWorkspace({
                 : "Generate content"}
           </button>
           {stalePrompt ? (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+            <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-3 text-sm text-foreground">
               <p className="font-medium">{stalePrompt.message}</p>
-              <p className="mt-1 text-amber-800">
+              <p className="mt-1 text-muted">
                 Last analyzed {new Date(stalePrompt.lastAnalyzedAtUtc).toLocaleString()} (
                 {stalePrompt.analysisAgeDays} day
                 {stalePrompt.analysisAgeDays === 1 ? "" : "s"} ago). Threshold:{" "}
@@ -505,31 +549,31 @@ export default function CreateDraftWorkspace({
                   type="button"
                   disabled={generating}
                   onClick={() => void runGenerate(true)}
-                  className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 disabled:opacity-50"
+                  className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-surface-muted disabled:opacity-50"
                 >
                   Proceed with stale grounding
                 </button>
               </div>
             </div>
           ) : null}
+          {/* A failure says what happened and what fixes it, in the interface's own voice. This one
+              named GeekAPI, a Run ID and the order the two were created in -- how the system is
+              built, not what the reader does about it. */}
           {missingProjectSiteRun ? (
-            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              This create has no project-site crawl (Run ID), so GeekAPI refuses every Generate on
-              it before it reads the content type. The project it belongs to needs a project-site
-              crawl, and the create has to be started while that Run ID is on the project.
+            <p className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
+              This create has no site crawl to work from, so nothing can be generated. Crawl the
+              project&rsquo;s site, then start the create again.
             </p>
           ) : null}
           {!canGenerate ? (
-            <p className="mt-2 text-xs text-muted">
-              Disabled until Content Brief is saved — inline required markers above.
-            </p>
+            <p className="mt-3 text-sm text-muted">Save the brief first.</p>
           ) : null}
           {generateMsg ? (
-            <p className="mt-2 text-sm whitespace-pre-wrap">{generateMsg}</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{generateMsg}</p>
           ) : null}
-        </section>
-      </div>
+        </Stage>
 
+      <Stage step={3} title="Output">
       {/* The generated content set: one tab per content type this create produced, and inside a
           tab a row of that type's artifacts when it produced several. v1 grouped the same way --
           its toolPosts[] was already a list, "one page per unique crawl tool ... no cap of 5" --
@@ -643,28 +687,31 @@ export default function CreateDraftWorkspace({
       {imagePromptsTab ? (
         <ImagePromptsPanel artifacts={detail.artifacts} />
       ) : !version ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           {selectedGroup && selectedGroup.artifacts.length === 0
             ? `No ${selectedGroup.label} yet for this create. Pick it as an output type, then Generate above.`
             : "No draft artifact yet. Save the Content Brief, then Generate above."}
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
-          <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">
-              {artifact?.name || "Draft"}
-              {" · "}v{version.versionNumber}
-              {approved ? " · approved" : ""}
-            </h2>
-            <p className="mt-1 text-sm text-muted">{artifact?.type}</p>
+        <div className="flex flex-col gap-7">
+          <section>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="font-display text-lg text-foreground">{artifact?.name || "Draft"}</h3>
+              <span className="text-sm text-muted">
+                {artifact?.type} · v{version.versionNumber}
+              </span>
+              {approved ? (
+                <span className="text-sm text-[var(--gcc-accent)]">Approved</span>
+              ) : null}
+            </div>
             <ArtifactBody
               bodyDocumentJson={version.bodyDocumentJson}
               contentType={artifact?.type}
             />
           </section>
 
-          <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">Revise</h2>
+          <section className="border-t border-border pt-6">
+            <h3 className="font-display text-lg text-foreground">Revise</h3>
             <p className="mt-1 text-sm text-muted">
               Full or Section — each submit creates a new version (not a chat thread).
             </p>
@@ -727,10 +774,8 @@ export default function CreateDraftWorkspace({
             </button>
           </section>
 
-          <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">
-              On-page SEO &amp; polish
-            </h2>
+          <section className="border-t border-border pt-6">
+            <h3 className="font-display text-lg text-foreground">On-page SEO &amp; polish</h3>
             <p className="mt-1 text-sm text-muted">
               Draft + target keyword only — no research dossier.
             </p>
@@ -818,8 +863,8 @@ export default function CreateDraftWorkspace({
             ) : null}
           </section>
 
-          <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">Content approval &amp; export</h2>
+          <section className="border-t border-border pt-6">
+            <h3 className="font-display text-lg text-foreground">Approve &amp; export</h3>
             <p className="mt-1 text-sm text-muted">
               Approval is on the create artifact (GeekAPI) — required before Repurpose.
             </p>
@@ -862,13 +907,15 @@ export default function CreateDraftWorkspace({
           </section>
         </div>
       )}
+      </Stage>
+      </div>
 
       {actionError ? (
-        <p className="mt-4 text-sm text-red-600 whitespace-pre-wrap">{actionError}</p>
+        <p className="mt-4 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm whitespace-pre-wrap text-foreground">
+          {actionError}
+        </p>
       ) : null}
-      {actionMsg ? (
-        <p className="mt-4 text-sm text-green-700">{actionMsg}</p>
-      ) : null}
+      {actionMsg ? <p className="mt-4 text-sm text-muted">{actionMsg}</p> : null}
     </div>
   );
 }
@@ -1054,6 +1101,123 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
  * renders the ContentDocument to HTML properly and Markdown is forbidden, so this takes the layout
  * and none of that path. Raw JSON stays behind a collapsed toggle, never the default view.
  */
+/**
+ * One stage of the run, as a band on a single work surface.
+ *
+ * Every section on this page was its own `rounded-xl border shadow-sm` card, five of them stacked,
+ * identical radius and identical shadow whatever the section did. That reads as five unrelated
+ * widgets rather than one sequence, and it is the reason the page felt like a form dump: nothing in
+ * the chrome said what followed what. Bands on a shared surface, divided by a rule, say it.
+ *
+ * The number is here because these genuinely are ordered -- brief, then generate, then the draft,
+ * then revise, then approve. Numbering anything that is not a sequence is decoration.
+ */
+/**
+ * What the saved brief says, in the words the pickers use.
+ *
+ * The brief is a dozen selects that are set once per create and then scrolled past on every later
+ * visit, which is most of why this page read as a form dump. Collapsed, it answers the only question
+ * the operator has after saving -- what did I choose -- and the fields are a click away.
+ *
+ * An unset field is listed as unset rather than omitted: a summary that silently drops what is
+ * missing is how "no tone chosen" becomes indistinguishable from "tone is not a field".
+ */
+function BriefSummary({
+  detail,
+  outputTypes,
+}: {
+  detail: GccCreateDetail;
+  outputTypes: string[];
+}) {
+  const brief = migrateBrief(safeParse(detail.briefJson));
+  const label = (options: readonly { value: string; label: string }[], value: string) =>
+    options.find((o) => o.value === value)?.label ?? value;
+
+  const rows: { term: string; value: string }[] = [
+    { term: "Writing", value: outputTypes.map((t) => contentTypeLabel(t)).join(", ") },
+    { term: "Keyword", value: detail.topic },
+    { term: "Intent", value: brief.primaryIntent ? label(PRIMARY_INTENTS, brief.primaryIntent) : "" },
+    { term: "Buying stage", value: brief.buyingStage ? label(BUYING_STAGES, brief.buyingStage) : "" },
+    { term: "Audience", value: brief.audienceSegment ? label(AUDIENCE_SEGMENTS, brief.audienceSegment) : "" },
+    { term: "Angle", value: brief.angle ? label(CONTENT_ANGLES, brief.angle) : "" },
+    { term: "Call to action", value: brief.ctaType ? label(CTA_TYPES, brief.ctaType) : "" },
+    { term: "Tone", value: brief.toneOfVoice ? label(TONES_OF_VOICE, brief.toneOfVoice) : "" },
+  ];
+
+  return (
+    <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+      {rows.map((row) => (
+        <div key={row.term} className="flex flex-col gap-0.5">
+          <dt className="text-xs text-muted">{row.term}</dt>
+          <dd className={row.value ? "text-sm text-foreground" : "text-sm text-muted"}>
+            {row.value || "Not set"}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function safeParse(json: string | null | undefined): unknown {
+  if (!json) return null;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function contentTypeLabel(value: string): string {
+  return CONTENT_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+/**
+ * One piece of readiness. A filled mark for true and a hollow one for false, so the row reads at a
+ * glance without the reader parsing prose -- and the false state still says what is missing rather
+ * than going silent, which is how "no research" used to be indistinguishable from "not rendered".
+ */
+function Ready({ on, yes, no }: { on: boolean; yes: string; no: string }) {
+  return (
+    <span className={on ? "flex items-center gap-1.5 text-foreground" : "flex items-center gap-1.5 text-muted"}>
+      <span
+        aria-hidden
+        className={
+          "h-1.5 w-1.5 rounded-full " + (on ? "bg-[var(--gcc-accent)]" : "border border-current bg-transparent")
+        }
+      />
+      {on ? yes : no}
+    </span>
+  );
+}
+
+function Stage({
+  step,
+  title,
+  note,
+  children,
+  aside,
+}: {
+  step: number;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+  aside?: React.ReactNode;
+}) {
+  return (
+    <section className="border-t border-border px-5 py-7 first:border-t-0 sm:px-7">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="flex items-baseline gap-2.5 font-display text-xl text-foreground">
+          <span className="text-sm font-normal text-muted tabular-nums">{step}</span>
+          {title}
+        </h2>
+        {aside}
+      </div>
+      {note ? <p className="mt-1 max-w-[62ch] text-sm leading-relaxed text-muted">{note}</p> : null}
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
 function ArtifactBody({
   bodyDocumentJson,
   contentType,
@@ -1099,7 +1263,7 @@ function ArtifactBody({
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              outOfRange ? "bg-amber-100 text-amber-800" : "bg-brand/10 text-brand"
+              outOfRange ? "bg-[var(--gcc-accent)]/12 text-[var(--gcc-accent-deep)]" : "bg-surface-muted text-muted"
             }`}
           >
             {words.toLocaleString()} words

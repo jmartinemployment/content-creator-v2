@@ -349,10 +349,24 @@ export default function ContentBriefPanel({
         </label>
       </div>
 
-      <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
+      {/* Behind a disclosure, because it is optional and most creates never touch it -- it was
+          sitting open in the middle of the brief, pushing the required fields and the save button
+          below the fold on every visit.
+
+          Named for what it is rather than what it is called internally. "SERP ingest" is the
+          system's word; the operator is uploading a saved search results page. */}
+      <details className="group mt-6 border-t border-border pt-5">
+        <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:content-['']">
+          <span className="text-brand underline-offset-2 group-open:no-underline hover:underline">
+            Add a saved search results page
+          </span>
+          <span className="ml-2 text-sm font-normal text-muted">Optional</span>
+        </summary>
+        <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
+      </details>
 
       {serpConflicts.length > 0 ? (
-        <div className="mt-3 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+        <div className="mt-3 space-y-2 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 p-3 text-xs text-foreground">
           <p className="font-semibold">
             This brief already had content in {serpConflicts.length === 1 ? "a field" : "fields"} the
             confirmed SERP also offered — kept what was already here (fill-empty). Replace instead:
@@ -364,7 +378,7 @@ export default function ContentBriefPanel({
                 <button
                   type="button"
                   onClick={() => forceReplaceSerpField(c.field, c.offered)}
-                  className="rounded border border-amber-400 px-2 py-1 font-semibold hover:bg-amber-100"
+                  className="rounded border border-border px-2 py-1 font-semibold text-foreground hover:bg-surface-muted"
                 >
                   Use SERP value
                 </button>
@@ -373,7 +387,7 @@ export default function ContentBriefPanel({
                   onClick={() =>
                     setSerpConflicts((prev) => prev.filter((x) => x.field !== c.field))
                   }
-                  className="rounded border border-amber-300 px-2 py-1 text-amber-700 hover:bg-amber-100"
+                  className="rounded border border-border px-2 py-1 text-muted hover:bg-surface-muted"
                 >
                   Keep existing
                 </button>
@@ -591,7 +605,7 @@ export default function ContentBriefPanel({
       </label>
 
       {!complete ? (
-        <p className="mt-4 text-sm text-amber-800">
+        <p className="mt-4 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           Missing required: {missing.join(", ")}. Generate stays disabled until these are filled
           and the brief is saved.
         </p>
@@ -609,8 +623,8 @@ export default function ContentBriefPanel({
         {createId ? (
           <span className="text-xs text-muted">Create {createId.slice(0, 8)}…</span>
         ) : null}
-        {savedMsg ? <span className="text-sm text-green-700">{savedMsg}</span> : null}
-        {error ? <span className="text-sm text-red-600 whitespace-pre-wrap">{error}</span> : null}
+        {savedMsg ? <span className="text-sm text-muted">{savedMsg}</span> : null}
+        {error ? <span className="text-sm whitespace-pre-wrap text-[var(--gcc-accent-deep)]">{error}</span> : null}
       </div>
     </div>
   );
