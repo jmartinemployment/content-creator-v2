@@ -7,6 +7,11 @@
  * export. Between those two facts they had nowhere to be looked at, so they were generated, paid
  * for, stored, and invisible (Jeff, 2026-09-23: "No Tab for Blog - Image Prompts?").
  *
+ * That was first answered with a collapsed "Show image prompts" toggle inside the artifact's own
+ * body, which is not a tab and not where v1 put them, so the same question came back on 2026-09-27.
+ * The toggle is gone; `ImagePromptsPanel` in `CreateDraftWorkspace` is the tab, reading across every
+ * artifact in the create rather than only the one on screen.
+ *
  * They live on the document itself — `lede.imagePrompt` and each section's — rather than as
  * artifacts of their own, so this reads them back out of the stored body.
  */

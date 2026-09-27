@@ -1,6 +1,9 @@
 "use client";
 
-import { imagePromptsFor } from "@/lib/content-creator/image-prompts";
+import {
+  imagePromptsFor,
+  type ArtifactImagePrompt,
+} from "@/lib/content-creator/image-prompts";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
@@ -99,6 +102,10 @@ export default function CreateDraftWorkspace({
   const [sectionPath, setSectionPath] = useState("");
   const [seo, setSeo] = useState<GccSeoReport | null>(null);
   const [polish, setPolish] = useState<GccPolishReport | null>(null);
+  // Image prompts are a view of every artifact at once, not one artifact's draft, so the tab is
+  // selected on its own rather than by picking an artifact. v1 had it as a peer field on
+  // GeneratedContentSet for the same reason.
+  const [imagePromptsTab, setImagePromptsTab] = useState(false);
 
   // Which artifact id the operator is currently looking at. Separate from `artifact` itself
   // (the full object) so reload() can tell "no selection yet" (null, pick a default) apart from
@@ -111,6 +118,7 @@ export default function CreateDraftWorkspace({
   const generateJobIdRef = useRef<string | null>(null);
 
   const loadVersionFor = useCallback(async (a: GccArtifact | null) => {
+    setImagePromptsTab(false);
     setArtifact(a);
     selectedArtifactIdRef.current = a?.id ?? null;
     // SEO/polish reports are per-version -- switching artifacts without clearing them would show
@@ -548,9 +556,27 @@ export default function CreateDraftWorkspace({
                 </button>
               );
             })}
+
+            {/* Peer to the content-type tabs, because that is what it was in v1 -- a field on
+                GeneratedContentSet beside article/blog/toolPosts[]. It is not a content type, so it
+                is not derived from the artifacts; it reads across all of them. */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={imagePromptsTab}
+              onClick={() => setImagePromptsTab(true)}
+              className={
+                "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
+                (imagePromptsTab
+                  ? "border-brand bg-brand text-white"
+                  : "border-border bg-surface text-foreground hover:bg-muted/30")
+              }
+            >
+              Image prompts
+            </button>
           </div>
 
-          {selectedGroup && selectedGroup.artifacts.length > 1 ? (
+          {!imagePromptsTab && selectedGroup && selectedGroup.artifacts.length > 1 ? (
             <div className="flex flex-wrap gap-2" role="tablist" aria-label={`${selectedGroup.label} pages`}>
               {selectedGroup.artifacts.map((a) => {
                 const selected = a.id === artifact?.id;
@@ -578,7 +604,9 @@ export default function CreateDraftWorkspace({
         </div>
       ) : null}
 
-      {!version ? (
+      {imagePromptsTab ? (
+        <ImagePromptsPanel artifacts={detail.artifacts} />
+      ) : !version ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           No draft artifact yet. Save the Content Brief, then Generate above.
         </div>
@@ -853,6 +881,132 @@ function ContentTypePicker({
 }
 
 /**
+ * Every image prompt the create produced, on its own tab, grouped by the artifact it came from.
+ *
+ * v1 had these as a field on `GeneratedContentSet`, peer to `article`/`blog`/`toolPosts[]`, and so
+ * a tab of their own. They are deliberately not drawn in the prose (`renderArtifactBody`) and ship
+ * as separate files in the export, so without this they are generated, paid for, stored and
+ * invisible -- Jeff asked for it twice, "No Tab for Blog - Image Prompts?" (2026-09-23) and again
+ * 2026-09-27. The first answer was a collapsed toggle inside the blog's own body, which is not a
+ * tab and is not where v1 put them.
+ *
+ * Prompts live on the document (`lede.imagePrompt` and each section's), not as artifacts, so the
+ * bodies have to be read back: one latest-version fetch per artifact, on demand when the tab is
+ * opened rather than on every workspace load.
+ *
+ * A create whose artifacts carry none still gets the tab, saying so per artifact. Hiding it when
+ * empty is how a generation step that silently stopped attaching prompts would look identical to a
+ * create that never had any.
+ */
+function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
+  const [groups, setGroups] = useState<
+    { artifact: GccArtifact; prompts: ArtifactImagePrompt[] }[] | null
+  >(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const loaded = await Promise.all(
+          artifacts.map(async (a) => {
+            const versions = await listGccVersions(a.id);
+            const latest = [...versions].sort((x, y) => y.versionNumber - x.versionNumber)[0];
+            return {
+              artifact: a,
+              prompts: latest ? imagePromptsFor(latest.bodyDocumentJson) : [],
+            };
+          }),
+        );
+        if (live) setGroups(loaded);
+      } catch (err) {
+        if (live) {
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : "Could not load image prompts.",
+          );
+        }
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [artifacts]);
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        {error}
+      </div>
+    );
+  }
+
+  if (!groups) {
+    return <p className="text-sm text-muted">Reading image prompts…</p>;
+  }
+
+  const total = groups.reduce((n, g) => n + g.prompts.length, 0);
+
+  return (
+    <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-foreground">Image prompts</h2>
+      <p className="mt-1 text-sm text-muted">
+        {total === 0
+          ? "None of this create's drafts carry image prompts."
+          : `${total} prompt${total === 1 ? "" : "s"} — one per H2 plus the hero, for each draft.`}{" "}
+        Copy these into your image generator. They are production instructions, which is why they
+        are not printed in the page.
+      </p>
+
+      <div className="mt-4 flex flex-col gap-6">
+        {groups.map((group) => (
+          <div key={group.artifact.id} className="flex flex-col gap-2">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                {group.artifact.name || group.artifact.id.slice(0, 8)}
+              </h3>
+              <span className="text-xs text-muted">{group.artifact.type}</span>
+            </div>
+
+            {group.prompts.length === 0 ? (
+              <p className="text-sm text-muted">
+                This draft carries no image prompts. Its body was generated before prompts were
+                attached, or the prompt step did not run for it.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-md border border-border bg-white p-4">
+                {group.prompts.map((prompt, i) => (
+                  <div key={`${prompt.heading}-${i}`} className="flex flex-col gap-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        {i === 0 ? prompt.heading : `${i}. ${prompt.heading}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard?.writeText(prompt.prompt)}
+                        className="text-xs font-medium text-brand underline"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {prompt.prompt}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
  * Render an artifact body as readable content, with the affordances v1's ToolPostCard had and this
  * workspace had lost: the meta description, a word count measured against the type's own target,
  * and the JSON+LD schema behind a toggle (Jeff, 2026-09-23 -- "this display sucks", and JSON-LD
@@ -871,13 +1025,7 @@ function ArtifactBody({
 }) {
   const [showSource, setShowSource] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
-  const [showImagePrompts, setShowImagePrompts] = useState(false);
   const html = renderArtifactBody(bodyDocumentJson);
-  // v1 had these on their own tab. They are deliberately not drawn in the prose and ship as
-  // separate files in the export, so without a view of their own they were generated, paid for,
-  // stored and invisible (Jeff: "No Tab for Blog - Image Prompts?").
-  const imagePrompts = imagePromptsFor(bodyDocumentJson);
-
   // The generator serializes these alongside the document (title/metaDescription/summary/body/
   // jsonLdSchema for a tool page); renderArtifactBody only draws title + body.
   let metaDescription = "";
@@ -907,45 +1055,6 @@ function ArtifactBody({
     <div className="mt-4">
       {metaDescription ? (
         <p className="mb-2 text-sm text-muted">{metaDescription}</p>
-      ) : null}
-
-      {imagePrompts.length > 0 ? (
-        <div className="mb-3">
-          <button
-            type="button"
-            onClick={() => setShowImagePrompts((v) => !v)}
-            className="text-sm font-medium text-brand underline"
-          >
-            {showImagePrompts ? "Hide" : "Show"} image prompts ({imagePrompts.length})
-          </button>
-          {showImagePrompts ? (
-            <div className="mt-2 flex flex-col gap-3 rounded-md border border-border bg-white p-4">
-              <p className="text-xs text-muted">
-                One per H2 plus the hero. Copy into your image generator — these are production
-                instructions, which is why they are not printed in the page.
-              </p>
-              {imagePrompts.map((p, i) => (
-                <div key={`${p.heading}-${i}`} className="flex flex-col gap-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      {i === 0 ? p.heading : `${i}. ${p.heading}`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void navigator.clipboard?.writeText(p.prompt)}
-                      className="text-xs font-medium text-brand underline"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                    {p.prompt}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
       ) : null}
 
       {target && words > 0 ? (
