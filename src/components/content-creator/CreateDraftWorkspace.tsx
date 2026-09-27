@@ -529,10 +529,22 @@ export default function CreateDraftWorkspace({
           but declared the groups as fixed fields, so every new content type meant editing the
           view. This derives them from the artifacts, so adding a type changes nothing here. */}
       {contentSet.length > 0 ? (
-        <div className="mb-4 flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Content types">
+        <div className="mb-6 flex flex-col">
+          {/* Tabs, not pills. They were rounded-full chips, which read as filters -- a set of
+              chips looks like several things that can each be on or off, and none of them owns what
+              is below. A tab is one-of-a-set: it sits on a rail, and the selected one is marked on
+              that rail rather than filled in. Jeff, 2026-09-27: "I asked for tabs, I got pills?"
+
+              Underlined rather than a box joined to the panel, because what follows is a rounded
+              card with its own shadow -- a tab drawn to butt against it would have to square that
+              card's top corners, and there are several such cards below. */}
+          <div
+            className="flex flex-wrap items-end gap-6 border-b border-border"
+            role="tablist"
+            aria-label="Content types"
+          >
             {contentSet.map((group) => {
-              const selected = group.type === selectedGroup?.type;
+              const selected = !imagePromptsTab && group.type === selectedGroup?.type;
               const approved = group.artifacts.every(
                 (a) => a.status?.toLowerCase() === "approved",
               );
@@ -544,10 +556,10 @@ export default function CreateDraftWorkspace({
                   aria-selected={selected}
                   onClick={() => void loadVersionFor(group.artifacts[0])}
                   className={
-                    "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
+                    "-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm transition-colors " +
                     (selected
-                      ? "border-brand bg-brand text-white"
-                      : "border-border bg-surface text-foreground hover:bg-muted/30")
+                      ? "border-brand font-semibold text-foreground"
+                      : "border-transparent font-medium text-muted hover:border-border hover:text-foreground")
                   }
                 >
                   {group.label}
@@ -566,18 +578,25 @@ export default function CreateDraftWorkspace({
               aria-selected={imagePromptsTab}
               onClick={() => setImagePromptsTab(true)}
               className={
-                "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors " +
+                "-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm transition-colors " +
                 (imagePromptsTab
-                  ? "border-brand bg-brand text-white"
-                  : "border-border bg-surface text-foreground hover:bg-muted/30")
+                  ? "border-brand font-semibold text-foreground"
+                  : "border-transparent font-medium text-muted hover:border-border hover:text-foreground")
               }
             >
               Image prompts
             </button>
           </div>
 
+          {/* The artifacts inside the selected type. Deliberately still small buttons rather than a
+              second row of tabs: two tab rows of equal weight read as two independent choices, when
+              this one only exists within the tab above it. */}
           {!imagePromptsTab && selectedGroup && selectedGroup.artifacts.length > 1 ? (
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label={`${selectedGroup.label} pages`}>
+            <div
+              className="mt-3 flex flex-wrap gap-2"
+              role="tablist"
+              aria-label={`${selectedGroup.label} pages`}
+            >
               {selectedGroup.artifacts.map((a) => {
                 const selected = a.id === artifact?.id;
                 return (
