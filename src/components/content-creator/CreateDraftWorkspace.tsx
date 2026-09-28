@@ -215,16 +215,29 @@ export default function CreateDraftWorkspace({
     void reloadRef.current();
   }, [effectiveCreateId]);
 
-  // Close the hub connection when this workspace goes away. The job keeps running server-side --
-  // it is not tied to the connection -- and GetJob plus JoinGccGenerate pick it back up.
-  useEffect(
-    () => () => {
-      const conn = hubRef.current;
-      hubRef.current = null;
-      void conn?.stop();
-    },
-    [],
-  );
+  /**
+   * Close the hub, from wherever.
+   *
+   * The connection used to be opened on the first generate and then held for as long as the
+   * workspace stayed mounted -- long after the job it was following had finished. Nothing reads it
+   * in that state, so it idles until something upstream drops it, and a dropped socket has no close
+   * frame: "WebSocket closed with status code: 1006 (no reason given)" (Jeff, 2026-09-28).
+   *
+   * The job is not tied to the connection. It keeps running server-side, and GetJob plus
+   * JoinGccGenerate pick it back up, so closing early costs nothing and the next generate opens a
+   * fresh one -- attachToGenerateJob already creates the connection when the ref is empty.
+   */
+  const closeHub = useCallback(() => {
+    const conn = hubRef.current;
+    hubRef.current = null;
+    generateJobIdRef.current = null;
+    // Never rejects into the void: a stop that fails on an already-dead socket is the state we
+    // wanted anyway, and an unhandled rejection here would surface as an error the operator cannot
+    // act on.
+    void conn?.stop().catch(() => undefined);
+  }, []);
+
+  useEffect(() => closeHub, [closeHub]);
 
   // Both analysers are deterministic and free -- no model call, no token spend -- so there is no
   // reason to make anyone press a button to find out the score. They run whenever a version is on
@@ -396,10 +409,14 @@ export default function CreateDraftWorkspace({
           setGenerateMsg("Generate finished.");
           setGenerating(false);
           void reloadRef.current();
+          // Ready and failed are terminal: there is nothing further to hear, so the socket is closed
+          // rather than left to be dropped by a proxy and reported as a 1006 error.
+          closeHub();
         } else if (evt.status === "failed") {
           // The refusal or fault verbatim -- the whole point of the job carrying its error.
           setGenerateMsg(evt.error ?? "Generate failed.");
           setGenerating(false);
+          closeHub();
         }
       });
 
@@ -900,16 +917,30 @@ export default function CreateDraftWorkspace({
                     </li>
                   ))}
                 </ul>
+                {/* Same one-press treatment as the SEO report: the analyser already knows what it
+                    wants changed, so applying it is one action rather than copy-then-find-Revise. */}
                 {polish.applyFeedback ? (
                   <button
                     type="button"
-                    className="mt-3 text-sm font-semibold text-brand hover:underline"
+                    disabled={pending || !version}
+                    className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
                     onClick={() => {
-                      setFeedback(polish.applyFeedback);
+                      const fixes = polish.applyFeedback;
+                      setFeedback(fixes);
                       setScope("full");
+                      run("Revised against the polish report — new version saved.", async () => {
+                        if (!version) return;
+                        const next = await reviseGccVersion(version.id, {
+                          feedback: fixes,
+                          scope: "full",
+                          sectionPath: null,
+                        });
+                        setVersion(next);
+                        await reload();
+                      });
                     }}
                   >
-                    Copy polish fixes into revise
+                    {pending ? "Working…" : "Fix these and revise"}
                   </button>
                 ) : null}
               </div>
