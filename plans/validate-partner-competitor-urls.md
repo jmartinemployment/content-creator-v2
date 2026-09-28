@@ -69,15 +69,11 @@ host-only question as written.
   so pasting URLs and clicking Create would otherwise submit a form nobody ever checked. The
   button's disabled state is the affordance; the awaited check is the gate.
 
-  A URL the index could not be asked about blocks as *unchecked*, never as red: `HostsIndexedAsync`
-  returns `[]` — never `false` — when disabled, on a non-2xx and on a throw, and `RagController`
-  answers 502 for the same reason. Both block; only one says "crawl it".
-
 - **The server refuses too**, on `POST` and `PUT` alike
   (`GeekAPI/Controllers/ContentCreator/GccProjectsController.cs`). `CLAUDE.md` §2: a boundary is
   only fail-closed if code rejects the bad input. `updateProject` has no call site in the UI, so
   `PUT` is reachable only by direct API call — exactly what a form gate cannot cover. One helper,
-  two call sites. An unindexed URL is 400 naming it; an unreachable index is 503, never 400.
+  two call sites, one refusal naming the URLs with no index.
 - Same rule for both lists: an empty list blocks nothing; a list containing an unindexed URL blocks
   submit. Whether a list must be non-empty is `GccV2CreateLibraryWriter.cs:212-218` and is untouched.
 - Delete `src/lib/crawl-seeds.ts` and `src/lib/crawl-seeds.test.ts`.

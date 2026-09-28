@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { createProject, ApiError, type GccProject } from "@/services/gcc-projects-api";
 import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
-import { gateDeclaredUrls, describeVerdict } from "@/lib/declared-url-gate";
+import { unindexedUrls } from "@/lib/declared-url-gate";
 
 /** The three URL fields, each with its own check state so one field's error is not shown on all. */
 type FieldKey = "site" | "partner" | "competitor";
@@ -177,20 +177,18 @@ export default function ProjectForm({
 
   // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
   // reflect answers already obtained, and pasting a URL then clicking Create never blurs the field.
-  const partnerVerdict = gateDeclaredUrls(partnerUrls, indexed);
-  const competitorVerdict = gateDeclaredUrls(competitorUrls, indexed);
+  const uncrawled = unindexedUrls([...partnerUrls, ...competitorUrls], indexed);
   const canSubmit =
     name.trim().length > 0 &&
     startDate.length > 0 &&
     Boolean(projectSiteRunId) &&
-    partnerVerdict.ok &&
-    competitorVerdict.ok;
+    uncrawled.length === 0;
 
-  // What is blocking, in one line, in the order the operator should fix it.
   const blockingReason = !projectSiteRunId
     ? "Enter a site URL with crawl evidence — the Run ID is what the content is grounded on."
-    : (describeVerdict(partnerVerdict, "Partner URLs") ??
-       describeVerdict(competitorVerdict, "Competitor URLs"));
+    : uncrawled.length > 0
+      ? `No crawl exists for ${uncrawled.join(", ")}. Crawl and index each one, then try again.`
+      : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -215,13 +213,9 @@ export default function ProjectForm({
       return;
     }
 
-    // Partner first, then competitor -- same rule, one implementation, reported one at a time so
-    // the operator fixes one list before being told about the next.
-    const refusal =
-      describeVerdict(gateDeclaredUrls(partnerUrls, answers), "Partner URLs") ??
-      describeVerdict(gateDeclaredUrls(competitorUrls, answers), "Competitor URLs");
-    if (refusal) {
-      setError(refusal);
+    const blocked = unindexedUrls([...partnerUrls, ...competitorUrls], answers);
+    if (blocked.length > 0) {
+      setError(`No crawl exists for ${blocked.join(", ")}. Crawl and index each one, then try again.`);
       return;
     }
 
