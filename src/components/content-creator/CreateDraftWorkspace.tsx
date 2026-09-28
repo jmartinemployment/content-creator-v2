@@ -830,37 +830,14 @@ export default function CreateDraftWorkspace({
 
           <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">On-page SEO &amp; polish</h3>
+            {/* No Run buttons. Both analysers are deterministic -- same draft in, same numbers out
+                -- and they already run whenever a version loads, so pressing Run refetched an
+                identical report and re-rendered the same values. A button that cannot change
+                anything reads as broken, which is what it was reported as (Jeff, 2026-09-28: "Run
+                SEO does nothing"). The scores below are current for the version on screen. */}
             <p className="mt-1 text-sm text-muted">
-              Draft + target keyword only — no research dossier.
+              Scored from the draft and the target keyword. Updates with every version.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={pending || !version}
-                onClick={() =>
-                  run("SEO report ready.", async () => {
-                    if (!version || !detail) return;
-                    setSeo(await seoGccVersion(version.id, detail.topic));
-                  })
-                }
-                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Run SEO
-              </button>
-              <button
-                type="button"
-                disabled={pending || !version}
-                onClick={() =>
-                  run("Polish report ready.", async () => {
-                    if (!version) return;
-                    setPolish(await polishGccVersion(version.id));
-                  })
-                }
-                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Run polish
-              </button>
-            </div>
             {seo ? (
               <div className="mt-4 text-sm">
                 <p className="font-medium">
