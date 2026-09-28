@@ -1,5 +1,11 @@
 # Validate entered partner and competitor URLs
 
+**Status: Live (2026-09-29).** The lookup, the colouring and the host normalisation shipped in
+`fd5c920` (2026-09-17). **The block did not** — that commit's only submit guard read
+`siteUrls.length`, never an index answer, and the button it disabled was *crawl the site*, not
+create. So every partner and competitor verdict was rendered and consumed by nothing for twelve
+days. The block landed 2026-09-29, in the form and on `POST`/`PUT` alike.
+
 ## Task
 
 For each URL the operator enters: **does an index exist for it?** Green if yes, red if no.
@@ -28,7 +34,10 @@ notarealdomain-xyz123.com    no index
 Whether, not how much — no counts. A count invites a threshold, which is a different question.
 
 Normalize host: `www.x.com` and `x.com` are separate payload values, so both forms must give the same
-answer.
+answer. **Done 2026-09-23**, both directions, in `_host_candidates`
+(`Geek-Crawler-Rag/src/geek_crawler_rag/app.py:646-683`) with tests in `tests/test_host_index.py`.
+The earlier body stripped `www.` and never added it, so `https://www.medius.com` reported indexed
+while `https://medius.com` reported not indexed, for one run, at the same moment.
 
 ## Placement
 
@@ -47,8 +56,28 @@ host-only question as written.
 
 ## Then
 
-- `src/app/app/create/create-client.tsx` — per URL, green when an index exists, red when not.
-  Create submit blocked while any entered URL is red.
+- `src/components/content-writer/ProjectForm.tsx` — per URL, green when an index exists, red when
+  not. Create submit blocked while any entered URL is red. (This said
+  `src/app/app/create/create-client.tsx`, which `2367b08` deleted along with the whole
+  `src/app/app/create/` directory. `ProjectForm` is the only place these URLs are entered.)
+
+  The verdict is `src/lib/declared-url-gate.ts`, a pure function, for two reasons: the test runner
+  is `node --test` with no DOM, so a verdict computed inside the component could not be tested at
+  all; and partner and competitor are one rule, so they get one implementation.
+
+  `submit()` asks the index for anything unanswered **before** deciding. The check fires on blur,
+  so pasting URLs and clicking Create would otherwise submit a form nobody ever checked. The
+  button's disabled state is the affordance; the awaited check is the gate.
+
+  A URL the index could not be asked about blocks as *unchecked*, never as red: `HostsIndexedAsync`
+  returns `[]` — never `false` — when disabled, on a non-2xx and on a throw, and `RagController`
+  answers 502 for the same reason. Both block; only one says "crawl it".
+
+- **The server refuses too**, on `POST` and `PUT` alike
+  (`GeekAPI/Controllers/ContentCreator/GccProjectsController.cs`). `CLAUDE.md` §2: a boundary is
+  only fail-closed if code rejects the bad input. `updateProject` has no call site in the UI, so
+  `PUT` is reachable only by direct API call — exactly what a form gate cannot cover. One helper,
+  two call sites. An unindexed URL is 400 naming it; an unreachable index is 503, never 400.
 - Same rule for both lists: an empty list blocks nothing; a list containing an unindexed URL blocks
   submit. Whether a list must be non-empty is `GccV2CreateLibraryWriter.cs:212-218` and is untouched.
 - Delete `src/lib/crawl-seeds.ts` and `src/lib/crawl-seeds.test.ts`.

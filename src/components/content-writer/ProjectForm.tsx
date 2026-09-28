@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import { createProject, ApiError, type GccProject } from "@/services/gcc-projects-api";
 import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
+import { gateDeclaredUrls, describeVerdict } from "@/lib/declared-url-gate";
+
+/** The three URL fields, each with its own check state so one field's error is not shown on all. */
+type FieldKey = "site" | "partner" | "competitor";
 
 /** One URL per line; blanks dropped. Parsing only — validity is the index's answer. */
 function parseLines(raw: string): string[] {
@@ -86,15 +90,27 @@ export default function ProjectForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Declared partners and competitors, saved with the project. The index check beside each one
-  // reports whether a crawl exists; it does not gate the declaration. A partner the client really
-  // has, with no crawl yet, is a fact worth recording — and the gap between what is declared and
-  // what is crawled is exactly the thing worth being able to see.
+  // Declared partners and competitors, saved with the project — and every one of them must have a
+  // crawl behind it. `plans/validate-partner-competitor-urls.md` has said so since 2026-09-17; the
+  // check shipped and the block did not, so a partner could be declared with nothing indexed and
+  // the gap only surfaced at generate time, as a refusal reading "a partner with no evidence gives
+  // the writer nothing to say about it". Declaring one is what obliges the writer to name it.
   const [partnerSeeds, setPartnerSeeds] = useState("");
   const [competitorSeeds, setCompetitorSeeds] = useState("");
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
-  const [checkingIndex, setCheckingIndex] = useState(false);
-  const [indexError, setIndexError] = useState<string | null>(null);
+  // Per field, not per form. One shared pair of flags meant a check on the site URL rendered
+  // "Checking the index…" under partners and competitors too, which with the gate live would
+  // misreport which field is blocking.
+  const [checking, setChecking] = useState<Record<FieldKey, boolean>>({
+    site: false,
+    partner: false,
+    competitor: false,
+  });
+  const [indexErrors, setIndexErrors] = useState<Record<FieldKey, string | null>>({
+    site: null,
+    partner: null,
+    competitor: null,
+  });
 
   /**
    * One key per form, minted when it opens.
@@ -118,33 +134,97 @@ export default function ProjectForm({
   const siteRow = siteUrls[0] ? indexed[siteUrls[0]] : undefined;
   const projectSiteRunId = siteRow?.indexed ? siteRow.runId : null;
 
-  async function checkIndex(urls: string[]) {
-    const pending = urls.filter((u) => indexed[u] === undefined);
-    if (pending.length === 0) return;
-    setCheckingIndex(true);
-    setIndexError(null);
+  /**
+   * Ask the index about anything in `urls` that `known` has no answer for, and return the answers
+   * including whatever came back.
+   *
+   * It returns the merged map rather than relying on the `indexed` state because submit asks about
+   * three fields in a row: React has not re-rendered between them, so reading state would decide on
+   * answers two calls out of date.
+   */
+  async function resolveAnswers(
+    field: FieldKey,
+    urls: string[],
+    known: Record<string, HostIndexed>,
+  ): Promise<Record<string, HostIndexed>> {
+    const pending = urls.filter((u) => known[u] === undefined);
+    if (pending.length === 0) return known;
+    setChecking((prev) => ({ ...prev, [field]: true }));
+    setIndexErrors((prev) => ({ ...prev, [field]: null }));
     try {
       const rows = await checkHostsIndexed(pending);
+      const merged = { ...known };
+      for (const r of rows) merged[r.url] = r;
+      // Functional update: another field's check may have landed while this one was in flight.
       setIndexed((prev) => {
         const next = { ...prev };
         for (const r of rows) next[r.url] = r;
         return next;
       });
+      return merged;
     } catch (e) {
-      // The check failing is not a verdict on the URL. Leave it unmarked rather than red.
-      setIndexError(e instanceof Error ? e.message : "Could not reach the index.");
+      // The check failing is not a verdict on the URL. It stays unanswered, which the gate reads as
+      // "unchecked" -- it still blocks, but it blames the index rather than the URL.
+      setIndexErrors((prev) => ({
+        ...prev,
+        [field]: e instanceof Error ? e.message : "Could not reach the index.",
+      }));
+      return known;
     } finally {
-      setCheckingIndex(false);
+      setChecking((prev) => ({ ...prev, [field]: false }));
     }
   }
 
+  // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
+  // reflect answers already obtained, and pasting a URL then clicking Create never blurs the field.
+  const partnerVerdict = gateDeclaredUrls(partnerUrls, indexed);
+  const competitorVerdict = gateDeclaredUrls(competitorUrls, indexed);
   const canSubmit =
-    name.trim().length > 0 && startDate.length > 0 && Boolean(projectSiteRunId);
+    name.trim().length > 0 &&
+    startDate.length > 0 &&
+    Boolean(projectSiteRunId) &&
+    partnerVerdict.ok &&
+    competitorVerdict.ok;
+
+  // What is blocking, in one line, in the order the operator should fix it.
+  const blockingReason = !projectSiteRunId
+    ? "Enter a site URL with crawl evidence — the Run ID is what the content is grounded on."
+    : (describeVerdict(partnerVerdict, "Partner URLs") ??
+       describeVerdict(competitorVerdict, "Competitor URLs"));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (isSubmitting) return;
+    if (name.trim().length === 0 || startDate.length === 0) return;
     setError(null);
+
+    // The gate, and the reason it is here rather than in `canSubmit`: the index is asked on blur,
+    // so pasting URLs and clicking Create submits a form nobody ever checked. Ask first, decide on
+    // the answers, and only then create.
+    let answers = indexed;
+    answers = await resolveAnswers("site", siteUrls, answers);
+    answers = await resolveAnswers("partner", partnerUrls, answers);
+    answers = await resolveAnswers("competitor", competitorUrls, answers);
+
+    const siteAnswer = siteUrls[0] ? answers[siteUrls[0]] : undefined;
+    const runId = siteAnswer?.indexed ? siteAnswer.runId : null;
+    if (!runId) {
+      setError(
+        "This project has no crawl to ground on. Enter a site URL whose crawl is indexed, then try again.",
+      );
+      return;
+    }
+
+    // Partner first, then competitor -- same rule, one implementation, reported one at a time so
+    // the operator fixes one list before being told about the next.
+    const refusal =
+      describeVerdict(gateDeclaredUrls(partnerUrls, answers), "Partner URLs") ??
+      describeVerdict(gateDeclaredUrls(competitorUrls, answers), "Competitor URLs");
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const project = await createProject({
@@ -155,7 +235,7 @@ export default function ProjectForm({
         dueDate: dueDate || null,
         description: description.trim() || null,
         siteUrl: siteUrls[0] ?? null,
-        projectSiteRunId,
+        projectSiteRunId: runId,
         partnerUrls,
         competitorUrls,
       });
@@ -237,15 +317,15 @@ export default function ProjectForm({
             type="url"
             value={siteUrl}
             onChange={(e) => setSiteUrl(e.target.value)}
-            onBlur={() => void checkIndex(siteUrls)}
+            onBlur={() => void resolveAnswers("site", siteUrls, indexed)}
             placeholder="https://client-site.com"
             className={inputClass}
           />
           <IndexReport
             urls={siteUrls}
             results={indexed}
-            checking={checkingIndex}
-            error={indexError}
+            checking={checking.site}
+            error={indexErrors.site}
           />
           {projectSiteRunId ? (
             <span className="break-all text-xs font-normal text-muted">
@@ -299,9 +379,10 @@ export default function ProjectForm({
           Partners &amp; competitors
         </legend>
         <p className="mb-3 text-xs text-muted">
-          Saved with the project. Each is checked against the index as you leave the field — a red
-          line means no crawl exists for it yet, which is worth knowing but does not stop you
-          declaring it.
+          Saved with the project, and each one must already be crawled. Every URL here is checked
+          against the index as you leave the field; a red line means no crawl exists for it yet, and
+          the project cannot be created until it does. Declaring a partner is what obliges the
+          writer to name it, so a partner with no evidence is a page it has nothing to say about.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -311,7 +392,7 @@ export default function ProjectForm({
             <textarea
               value={partnerSeeds}
               onChange={(e) => setPartnerSeeds(e.target.value)}
-              onBlur={() => void checkIndex(partnerUrls)}
+              onBlur={() => void resolveAnswers("partner", partnerUrls, indexed)}
               rows={4}
               placeholder={"https://partner.example/pricing\nhttps://partner.example/docs"}
               className={`${inputClass} font-mono text-xs`}
@@ -319,8 +400,8 @@ export default function ProjectForm({
             <IndexReport
               urls={partnerUrls}
               results={indexed}
-              checking={checkingIndex}
-              error={indexError}
+              checking={checking.partner}
+              error={indexErrors.partner}
             />
           </label>
 
@@ -330,7 +411,7 @@ export default function ProjectForm({
             <textarea
               value={competitorSeeds}
               onChange={(e) => setCompetitorSeeds(e.target.value)}
-              onBlur={() => void checkIndex(competitorUrls)}
+              onBlur={() => void resolveAnswers("competitor", competitorUrls, indexed)}
               rows={4}
               placeholder={"https://rival.example/services\nhttps://rival.example/about"}
               className={`${inputClass} font-mono text-xs`}
@@ -338,8 +419,8 @@ export default function ProjectForm({
             <IndexReport
               urls={competitorUrls}
               results={indexed}
-              checking={checkingIndex}
-              error={indexError}
+              checking={checking.competitor}
+              error={indexErrors.competitor}
             />
           </label>
         </div>
@@ -355,12 +436,11 @@ export default function ProjectForm({
         >
           {isSubmitting ? "Creating..." : "Create Project"}
         </button>
-        {/* The refusal, at the point of action and with its reason. A project with no Run ID has no
-            crawl to ground on, and creating one would only defer the failure to generate time. */}
-        {!projectSiteRunId ? (
-          <span className="text-xs text-amber-800">
-            Enter a site URL with crawl evidence — the Run ID is what the content is grounded on.
-          </span>
+        {/* The refusal, at the point of action and with its reason. Creating a project whose
+            declared URLs have no crawl behind them only defers the failure to generate time, where
+            it surfaces as a draft that cannot be written rather than a field the operator can fix. */}
+        {blockingReason ? (
+          <span className="text-xs text-amber-800">{blockingReason}</span>
         ) : null}
       </div>
     </form>
