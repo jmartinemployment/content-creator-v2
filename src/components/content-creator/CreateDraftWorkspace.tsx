@@ -226,6 +226,31 @@ export default function CreateDraftWorkspace({
     [],
   );
 
+  // Both analysers are deterministic and free -- no model call, no token spend -- so there is no
+  // reason to make anyone press a button to find out the score. They run whenever a version is on
+  // screen, which covers Generate, Revise, and switching between drafts. Failure is silent: a score
+  // that cannot be computed is not a reason to put an error banner over a finished draft.
+  useEffect(() => {
+    if (!version || !detail) return;
+    let live = true;
+    void (async () => {
+      try {
+        const [nextSeo, nextPolish] = await Promise.all([
+          seoGccVersion(version.id, detail.topic),
+          polishGccVersion(version.id),
+        ]);
+        if (!live) return;
+        setSeo(nextSeo);
+        setPolish(nextPolish);
+      } catch {
+        /* the draft is still readable without a score */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [version, detail]);
+
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);
     setActionMsg(null);
@@ -559,7 +584,7 @@ export default function CreateDraftWorkspace({
                   type="button"
                   disabled={generating}
                   onClick={() => void runGenerate(true)}
-                  className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-surface-muted disabled:opacity-50"
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Proceed with stale grounding
                 </button>
@@ -780,7 +805,7 @@ export default function CreateDraftWorkspace({
                   await reload();
                 })
               }
-              className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
             >
               {pending ? "Working…" : "Revise"}
             </button>
@@ -801,7 +826,7 @@ export default function CreateDraftWorkspace({
                     setSeo(await seoGccVersion(version.id, detail.topic));
                   })
                 }
-                className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30 disabled:opacity-50"
+                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Run SEO
               </button>
@@ -814,7 +839,7 @@ export default function CreateDraftWorkspace({
                     setPolish(await polishGccVersion(version.id));
                   })
                 }
-                className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30 disabled:opacity-50"
+                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Run polish
               </button>
@@ -832,16 +857,32 @@ export default function CreateDraftWorkspace({
                     </li>
                   ))}
                 </ul>
+                {/* Was two steps: copy the fixes into the box, then find Revise and press it. The
+                    report already knows what it wants changed, so applying it is one action. The
+                    feedback is still put in the box, so it is visible and editable if the revise
+                    then needs steering. */}
                 {seo.applyFeedback ? (
                   <button
                     type="button"
-                    className="mt-3 text-sm font-semibold text-brand hover:underline"
+                    disabled={pending || !version}
+                    className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
                     onClick={() => {
-                      setFeedback(seo.applyFeedback);
+                      const fixes = seo.applyFeedback;
+                      setFeedback(fixes);
                       setScope("full");
+                      run("Revised against the SEO report — new version saved.", async () => {
+                        if (!version) return;
+                        const next = await reviseGccVersion(version.id, {
+                          feedback: fixes,
+                          scope: "full",
+                          sectionPath: null,
+                        });
+                        setVersion(next);
+                        await reload();
+                      });
                     }}
                   >
-                    Copy SEO fixes into revise
+                    {pending ? "Working…" : "Fix these and revise"}
                   </button>
                 ) : null}
               </div>
@@ -911,7 +952,7 @@ export default function CreateDraftWorkspace({
                     await downloadCreateHtmlExport(effectiveCreateId);
                   })
                 }
-                className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/30 disabled:opacity-50"
+                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Export HTML (.zip)
               </button>

@@ -122,7 +122,7 @@ export function SerpIngestPanel({
           type="button"
           disabled={busy || !raw.trim()}
           onClick={() => void runParse(raw)}
-          className="rounded-md border border-[var(--gcc-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--gcc-accent-deep)] disabled:opacity-50"
+          className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? "Parsing…" : "Parse pasted HTML"}
         </button>
@@ -220,7 +220,7 @@ export function SerpIngestPanel({
             type="button"
             onClick={confirm}
             disabled={!curatedPreview || !curatedSerpHasOrganics(curatedPreview)}
-            className="rounded-md bg-[var(--gcc-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             Confirm SERP shortlist for create
           </button>

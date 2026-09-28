@@ -378,7 +378,7 @@ export default function ContentBriefPanel({
                 <button
                   type="button"
                   onClick={() => forceReplaceSerpField(c.field, c.offered)}
-                  className="rounded border border-border px-2 py-1 font-semibold text-foreground hover:bg-surface-muted"
+                  className="rounded bg-brand px-2 py-1 font-semibold text-white transition-colors hover:bg-brand-dark"
                 >
                   Use SERP value
                 </button>
@@ -387,7 +387,7 @@ export default function ContentBriefPanel({
                   onClick={() =>
                     setSerpConflicts((prev) => prev.filter((x) => x.field !== c.field))
                   }
-                  className="rounded border border-border px-2 py-1 text-muted hover:bg-surface-muted"
+                  className="rounded bg-brand px-2 py-1 font-semibold text-white transition-colors hover:bg-brand-dark"
                 >
                   Keep existing
                 </button>
@@ -616,7 +616,7 @@ export default function ContentBriefPanel({
           type="button"
           onClick={handleSaveBrief}
           disabled={isSaving || !complete}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSaving ? "Saving…" : "Save brief for generate"}
         </button>
