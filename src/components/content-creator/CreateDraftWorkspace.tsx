@@ -245,49 +245,52 @@ export default function CreateDraftWorkspace({
     });
   }
 
-  // No create yet. Same single section as below -- one card, one content-type picker, the brief
-  // fields, then Generate. Saving the brief is what mints the create; Generate stays inert until
-  // it exists, rather than living in a second panel with a second picker of its own.
+  // No create yet: the same two stages as the create that follows it, on the same surface. This
+  // branch had its own copy of the old card -- heading, blurb, chrome and all -- so restyling the
+  // main path left the state every new piece starts in looking exactly as it did before. Two render
+  // paths for one screen is why; they now share Stage rather than each describing a card.
   if (!effectiveCreateId) {
     return (
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-foreground">Content Brief &amp; Generate</h2>
-        <p className="mt-1 text-sm text-muted">
-          Pick what to produce, fill the brief, save it — saving creates the piece. Generate then
-          runs against saved server state only.
-        </p>
-
-        <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
-
-        <ContentBriefPanel
-          clientId={clientId ?? ""}
-          projectId={projectId}
-          projectSiteRunId={projectSiteRunId}
-          targetKeyword=""
-          startingContentType={outputTypes[0]}
-          onBriefValidityChange={setBriefValid}
-          onBriefSaved={(newCreateId) => {
-            if (!newCreateId) return;
-            setMintedCreateId(newCreateId);
-            onCreateMinted?.(newCreateId);
-          }}
-        />
-
-        <button
-          type="button"
-          disabled
-          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <Stage
+          step={1}
+          title="Brief"
+          note="What to write and who for. Saving the brief creates the piece."
         >
-          Generate content
-        </button>
-        <p className="mt-2 text-xs text-muted">
-          {outputTypes.length === 0
-            ? "Select at least one content type, then save the brief."
-            : briefValid
-              ? "Save the brief above — that creates the piece, then Generate runs."
-              : "Complete the brief's required fields, then save it."}
-        </p>
-      </section>
+          <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
+          <ContentBriefPanel
+            clientId={clientId ?? ""}
+            projectId={projectId}
+            projectSiteRunId={projectSiteRunId}
+            targetKeyword=""
+            startingContentType={outputTypes[0]}
+            onBriefValidityChange={setBriefValid}
+            onBriefSaved={(newCreateId) => {
+              if (!newCreateId) return;
+              setMintedCreateId(newCreateId);
+              onCreateMinted?.(newCreateId);
+            }}
+          />
+        </Stage>
+
+        <Stage step={2} title="Generate">
+          <button
+            type="button"
+            disabled
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Generate content
+          </button>
+          <p className="mt-3 text-sm text-muted">
+            {outputTypes.length === 0
+              ? "Choose at least one thing to write, then save the brief."
+              : briefValid
+                ? "Save the brief to create the piece. Generate runs after that."
+                : "Fill the brief's required fields, then save it."}
+          </p>
+        </Stage>
+      </div>
     );
   }
 
@@ -321,7 +324,12 @@ export default function CreateDraftWorkspace({
   const researchReady = !!detail.researchJson;
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
-  const canGenerate = briefFormComplete && briefReady;
+  // briefFormComplete is the form's own validity, reported by ContentBriefPanel while it is mounted.
+  // Collapsing the brief unmounts that panel, so the signal went false and took Generate with it --
+  // the button disabled itself the moment the brief was folded away. The saved brief is the real
+  // authority anyway: the server refuses an incomplete save, so briefReady already means complete.
+  // The form's opinion only matters while someone is editing it.
+  const canGenerate = briefReady && (briefOpen ? briefFormComplete : true);
   // A create grounded on a project-site crawl requires relatedPages on its persisted site
   // section; domain-only grounding (a crawl id with no section) does not.
   const saMissingPages =
@@ -494,8 +502,6 @@ export default function CreateDraftWorkspace({
             <BriefSummary detail={detail} outputTypes={outputTypes} />
           ) : (
         <>
-          <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
-
           <ContentBriefPanel
             clientId={detail.clientId}
             projectSiteRunId={detail.projectSiteRunId ?? undefined}
@@ -513,7 +519,11 @@ export default function CreateDraftWorkspace({
           )}
         </Stage>
 
-        <Stage step={2} title="Generate">
+        <Stage step={2} title="Generate" note="What to produce from this brief. Each one is written independently.">
+          {/* Lives here rather than inside the brief: it is the choice Generate acts on, and inside
+              the brief it disappeared the moment the brief was collapsed. */}
+          <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
           {/* The one filled accent on this page. The parent site uses orange as a text colour 530
               times and as a fill 21 -- a solid fill there means "act here", so it belongs to the
               single primary action and nothing else. */}
@@ -527,7 +537,7 @@ export default function CreateDraftWorkspace({
               outputTypes.length === 0
             }
             onClick={() => void runGenerate(false)}
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating
               ? "Generating…"
@@ -567,6 +577,8 @@ export default function CreateDraftWorkspace({
           ) : null}
           {!canGenerate ? (
             <p className="mt-3 text-sm text-muted">Save the brief first.</p>
+          ) : outputTypes.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
           ) : null}
           {generateMsg ? (
             <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{generateMsg}</p>
