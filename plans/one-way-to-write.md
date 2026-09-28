@@ -69,6 +69,36 @@ Exactly that, for every other research field, is still true today.
 `ResearchBriefBuilder` has six phases. On the live path all of them reduce to `AppendKnownToolsBrief`
 plus a one-line instruction.
 
+**Correction, 2026-09-29 — half of this is dead by design, not by omission.** Checked before
+planning Stage 2, and the finding is narrower than the table above implies:
+
+- `GccSerpIndex` — the type `SerpTitles`/`SerpUrls`/`SerpPaaQuestions`/`SerpRelatedSearches` would be
+  filled from — is **declared and never constructed anywhere in the solution**, and the frontend
+  never sends one. `ResearchJson.SerpIndex` is always null. But SERP data does reach the prompt: the
+  Create path renders `ResearchJson.SerpPages` directly in `BuildResearchBlock`. So
+  `AppendKeywordSerpBrief` is not a missing input — it is a second route to material already
+  arriving by the first.
+- `KeywordSourceSummary` wants `Headings` and `Paragraphs`; `GccKeywordSource`, what a create
+  actually stores, holds only `HeadingCount` / `ParagraphCount` / `QuestionCount`. The text is not
+  on the create to pass, so `AppendAuthoritativeSourcesBrief` cannot be populated from it.
+
+**So "fill the context" was the wrong frame.** The Create path assembles evidence its own way —
+`BuildResearchBlock` off `ResearchJson`, `BuildEvidenceBlock`, `BuildPublisherSiteBlock` — and the
+orchestrator's context fields are that other writer's input shape. Two of the eight rows above are
+better read as *the orchestrator's plumbing, inert here*, and the honest fix for those is to stop
+calling them on this path rather than to feed them.
+
+The rows that are genuine gaps, because nothing else carries them:
+
+| Gap | Why nothing else covers it |
+|---|---|
+| `Hierarchy*` — the project-site match and its tools-by-heading | `BuildPublisherSiteBlock` carries the site's *content*, never its *structure* |
+| `PillarBodyExcerpt` on the tool path | set only by `ContentGenerationOrchestrator:211,343`; the tool prompt asks for it and never gets it |
+| partner retrieval for Pillar and Blog | §4.2 |
+| competitor prose, all three types | §4.3, §4.4 |
+
+That is Stage 2's real scope, and it is smaller and more specific than the original wording.
+
 ### 1.2 The same split explains the other oddities
 
 - `BuildArticleSectionPrompt` (one section per call) and `BuildArticleSectionBatchPrompt` both exist
@@ -259,10 +289,12 @@ is `node --test`, no DOM, so the logic must leave the component to be testable);
 `POST` and `PUT` in `GccProjectsController`: **flagged to strike** (§7 Q3). Reuses
 `checkHostsIndexed`, `IndexReport`, `RagController`, `_host_candidates` unchanged.
 
-**Stage 2 — fill the context.** `BuildMinimalContext` populates the research fields the prompts
-already read: `KeywordSources`, `Serp*`, `PeopleAlsoAskQuestions` from `create.ResearchJson`;
-`Hierarchy*` from the project-site run via `GccV2SiteHierarchyFromCrawl.Build`; `PillarBodyExcerpt`
-on the tool path. This alone re-animates six prompt blocks with no prompt changes at all.
+**Stage 2 — the context fields that are genuinely missing.** Narrowed by the correction in §1.1:
+`Hierarchy*` from the project-site run via `GccV2SiteHierarchyFromCrawl.Build`, and
+`PillarBodyExcerpt` on the tool path. `Serp*` and `KeywordSources` are **not** in scope — the first
+already reaches the prompt by another route, the second has no text on the create to pass. Their
+`ResearchBriefBuilder` phases should be dropped from this path rather than fed, so nothing reads as
+a live input that is not one.
 
 **Stage 3 — split policy from retrieval.** `RequiredCrawlTypes` becomes `MustCite` (tool/aitool →
 partner, unchanged) and `RetrieveFor` (all three → partner **and** competitor). The loop, query and
