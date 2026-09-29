@@ -2,11 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { createProject, ApiError, type GccProject } from "@/services/gcc-projects-api";
-import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
+import { checkHostsIndexed, startGeekCrawl, type HostIndexed } from "@/services/gcc-api";
 import { unindexedUrls } from "@/lib/declared-url-gate";
 
 /** The three URL fields, each with its own check state so one field's error is not shown on all. */
 type FieldKey = "site" | "partner" | "competitor";
+
+/** The crawl each field's URLs belong to. One run per URL, so this is per URL, not per batch. */
+const CRAWL_TYPE: Record<FieldKey, "project-site" | "partner" | "competitors"> = {
+  site: "project-site",
+  partner: "partner",
+  competitor: "competitors",
+};
 
 /** One URL per line; blanks dropped. Parsing only — validity is the index's answer. */
 function parseLines(raw: string): string[] {
@@ -33,11 +40,17 @@ function IndexReport({
   results,
   checking,
   error,
+  crawling,
+  started,
+  onCrawl,
 }: {
   urls: string[];
   results: Record<string, HostIndexed>;
   checking: boolean;
   error: string | null;
+  crawling: Record<string, boolean>;
+  started: Record<string, string>;
+  onCrawl: (url: string) => void;
 }) {
   if (urls.length === 0) return null;
   if (checking) return <p className="text-xs text-muted">Checking the index…</p>;
@@ -53,9 +66,27 @@ function IndexReport({
         return (
           <p key={u} className={r.indexed ? "text-green-700" : "text-red-600"}>
             <span className="font-mono">{u}</span> —{" "}
-            {r.indexed ? "indexed" : "no index — crawl it first"}
+            {r.indexed ? "indexed" : "no index"}
             {r.indexed && !r.runId ? (
               <span className="text-red-600"> · no run id — nothing to read</span>
+            ) : null}
+            {/* The refusal used to say "crawl it first" and give no way to do it. One run per URL,
+                so this starts exactly one. */}
+            {!r.indexed && !started[u] ? (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => onCrawl(u)}
+                  disabled={crawling[u]}
+                  className="underline decoration-dotted underline-offset-2 disabled:opacity-60"
+                >
+                  {crawling[u] ? "Starting…" : "Crawl it"}
+                </button>
+              </>
+            ) : null}
+            {started[u] ? (
+              <span className="text-muted"> · {started[u]}</span>
             ) : null}
           </p>
         );
@@ -111,6 +142,9 @@ export default function ProjectForm({
     partner: null,
     competitor: null,
   });
+  // Keyed by URL, not by field: one run per URL, so one of each of these per URL.
+  const [crawling, setCrawling] = useState<Record<string, boolean>>({});
+  const [crawlStarted, setCrawlStarted] = useState<Record<string, string>>({});
 
   /**
    * One key per form, minted when it opens.
@@ -173,6 +207,55 @@ export default function ProjectForm({
     } finally {
       setChecking((prev) => ({ ...prev, [field]: false }));
     }
+  }
+
+  /**
+   * Crawl one URL.
+   *
+   * One run, one URL — not a batch of the field's lines. A run's chunk and page counts are the
+   * run's, so a run covering five partner hosts can say it indexed four hundred chunks while the
+   * one partner you care about contributed none of them.
+   *
+   * Starting a crawl does not make the URL indexed: it takes minutes, and the index answers only
+   * once it finishes. So this says what it did and leaves the URL red until a re-check says
+   * otherwise — the gate is about evidence existing, not about a crawl having been requested.
+   */
+  async function crawlOne(field: FieldKey, url: string) {
+    setCrawling((prev) => ({ ...prev, [url]: true }));
+    try {
+      const result = await startGeekCrawl(CRAWL_TYPE[field], url);
+      const refused = result.rejected.find((r) => r.raw === url);
+      setCrawlStarted((prev) => ({
+        ...prev,
+        [url]: refused
+          ? `refused: ${refused.reason}`
+          : "crawl started — re-check once it finishes",
+      }));
+    } catch (e) {
+      setCrawlStarted((prev) => ({
+        ...prev,
+        [url]: e instanceof Error ? `could not start: ${e.message}` : "could not start the crawl",
+      }));
+    } finally {
+      setCrawling((prev) => ({ ...prev, [url]: false }));
+    }
+  }
+
+  /** Ask the index again for URLs already answered, so a finished crawl can turn one green. */
+  async function recheck(field: FieldKey, urls: string[]) {
+    setIndexed((prev) => {
+      const next = { ...prev };
+      for (const u of urls) delete next[u];
+      return next;
+    });
+    setCrawlStarted((prev) => {
+      const next = { ...prev };
+      for (const u of urls) delete next[u];
+      return next;
+    });
+    await resolveAnswers(field, urls, Object.fromEntries(
+      Object.entries(indexed).filter(([u]) => !urls.includes(u)),
+    ));
   }
 
   // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
@@ -320,6 +403,9 @@ export default function ProjectForm({
             results={indexed}
             checking={checking.site}
             error={indexErrors.site}
+            crawling={crawling}
+            started={crawlStarted}
+            onCrawl={(u) => void crawlOne("site", u)}
           />
           {projectSiteRunId ? (
             <span className="break-all text-xs font-normal text-muted">
@@ -377,6 +463,8 @@ export default function ProjectForm({
           against the index as you leave the field; a red line means no crawl exists for it yet, and
           the project cannot be created until it does. Declaring a partner is what obliges the
           writer to name it, so a partner with no evidence is a page it has nothing to say about.
+          Crawl a red one from its own line — one crawl per URL, so its page and chunk counts
+          describe that host and not a batch it was bundled into.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -396,6 +484,9 @@ export default function ProjectForm({
               results={indexed}
               checking={checking.partner}
               error={indexErrors.partner}
+              crawling={crawling}
+              started={crawlStarted}
+              onCrawl={(u) => void crawlOne("partner", u)}
             />
           </label>
 
@@ -415,6 +506,9 @@ export default function ProjectForm({
               results={indexed}
               checking={checking.competitor}
               error={indexErrors.competitor}
+              crawling={crawling}
+              started={crawlStarted}
+              onCrawl={(u) => void crawlOne("competitor", u)}
             />
           </label>
         </div>
@@ -434,7 +528,24 @@ export default function ProjectForm({
             declared URLs have no crawl behind them only defers the failure to generate time, where
             it surfaces as a draft that cannot be written rather than a field the operator can fix. */}
         {blockingReason ? (
-          <span className="text-xs text-amber-800">{blockingReason}</span>
+          <span className="text-xs text-amber-800">
+            {blockingReason}
+            {uncrawled.length > 0 ? (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    void recheck("partner", partnerUrls.filter((u) => uncrawled.includes(u)));
+                    void recheck("competitor", competitorUrls.filter((u) => uncrawled.includes(u)));
+                  }}
+                  className="underline decoration-dotted underline-offset-2"
+                >
+                  Re-check the index
+                </button>
+              </>
+            ) : null}
+          </span>
         ) : null}
       </div>
     </form>

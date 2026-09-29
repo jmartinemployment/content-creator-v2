@@ -755,18 +755,25 @@ export interface StartCrawlResult {
 }
 
 /**
- * Start a crawl. Returns the run plus any seeds the server refused.
+ * Start a crawl for **one** URL. Returns the run, plus the refusal if the server would not take it.
+ *
+ * One run, one URL — the signature is the rule, because a comment was not.
+ * `AGENTS.md` has said "Run ID = one URL" since the slot model was written, and the server still
+ * accepts a seed list and hashes the sorted set into a single `seedKey`. Five partner URLs sent
+ * together become one run with one `RagChunksUpserted`, so "does this partner have usable
+ * evidence" stops being answerable — the number belongs to the batch, not the host.
  *
  * The rejected list rides on success on purpose: a run that quietly crawled 9 of 12 seeds and said
- * nothing is how a corpus ends up smaller than the operator believes it is.
+ * nothing is how a corpus ends up smaller than the operator believes it is. With one seed it can
+ * only ever name that one.
  */
 export function startGeekCrawl(
   crawlType: "partner" | "competitors" | "local" | "project-site",
-  seeds: string[],
+  url: string,
 ): Promise<StartCrawlResult> {
   return gccRequest<StartCrawlResult>("/api/geek-crawler/crawls", {
     method: "POST",
-    body: JSON.stringify({ crawlType, seeds }),
+    body: JSON.stringify({ crawlType, seeds: [url] }),
   });
 }
 
