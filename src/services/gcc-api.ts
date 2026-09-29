@@ -808,6 +808,19 @@ export interface HostIndexed {
   host: string | null;
   indexed: boolean;
   runId: string | null;
+  /**
+   * Whether this URL can actually be written from — the answer the gate uses.
+   *
+   * Indexed is not usable. A crawl can complete having been blocked at its first page, or against a
+   * site that renders nothing without JavaScript, and still put a row in the index: that passes
+   * "does an index exist" and gives a writer nothing. The server decides this once, from the run's
+   * own page and chunk counts, so the form and the project gate cannot answer it differently.
+   */
+  usable: boolean;
+  /** Why not, in the operator's terms. Null when usable. */
+  reason: string | null;
+  pages: number | null;
+  chunks: number | null;
 }
 
 /**

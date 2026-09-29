@@ -11,10 +11,16 @@
  * rule, so they get one implementation.
  */
 
-/** What the index said about one URL. Absent means no answer, which is not an index. */
-export type IndexAnswer = { indexed: boolean } | undefined;
+/**
+ * What the index said about one URL. Absent means no answer, which is not evidence.
+ *
+ * `usable` rather than `indexed`: a crawl that was blocked at its first page still puts a row in
+ * the index, so "does an index exist" passes on a corpus a writer can do nothing with. The server
+ * decides usability once, from the run's own page and chunk counts.
+ */
+export type IndexAnswer = { usable: boolean } | undefined;
 
-/** The entered URLs with no index. Empty means the list may be saved. */
+/** The entered URLs that cannot be written from. Empty means the list may be saved. */
 export function unindexedUrls(
   urls: readonly string[],
   answers: Readonly<Record<string, IndexAnswer>>,
@@ -24,6 +30,6 @@ export function unindexedUrls(
     // The same URL typed twice is one URL to crawl, so it is named once.
     if (seen.has(url)) return false;
     seen.add(url);
-    return answers[url]?.indexed !== true;
+    return answers[url]?.usable !== true;
   });
 }

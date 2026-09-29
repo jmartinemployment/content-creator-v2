@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { unindexedUrls, type IndexAnswer } from "./declared-url-gate.ts";
 
-const yes = { indexed: true };
-const no = { indexed: false };
+const yes = { usable: true };
+const no = { usable: false };
 
 function answers(rows: Record<string, IndexAnswer>) {
   return rows;
@@ -29,8 +29,8 @@ test("an unindexed URL blocks, and only that URL is named", () => {
   assert.deepEqual(blocked, ["https://b.test"]);
 });
 
-test("no answer is not an index", () => {
-  // One question, one answer. A URL nobody could get an answer for has no index behind it, and the
+test("no answer is not evidence", () => {
+  // One question, one answer. A URL nobody could get an answer for cannot be written from, and the
   // operator does the same thing about it as about one that came back red.
   const blocked = unindexedUrls(["https://a.test"], answers({}));
   assert.deepEqual(blocked, ["https://a.test"]);

@@ -9,6 +9,13 @@ import { unindexedUrls } from "@/lib/declared-url-gate";
 type FieldKey = "site" | "partner" | "competitor";
 
 /** The crawl each field's URLs belong to. One run per URL, so this is per URL, not per batch. */
+/**
+ * How many URLs each list must carry (Jeff, 2026-09-29). Five is what a pillar names and what a
+ * comparison needs to be a comparison; the site is one because it is the page this content must not
+ * duplicate. All three pass the same test — only the count differs.
+ */
+const REQUIRED: Record<FieldKey, number> = { site: 1, partner: 5, competitor: 5 };
+
 const CRAWL_TYPE: Record<FieldKey, "project-site" | "partner" | "competitors"> = {
   site: "project-site",
   partner: "partner",
@@ -64,15 +71,14 @@ function IndexReport({
       {seen.map((u) => {
         const r = results[u];
         return (
-          <p key={u} className={r.indexed ? "text-green-700" : "text-red-600"}>
+          <p key={u} className={r.usable ? "text-green-700" : "text-red-600"}>
             <span className="font-mono">{u}</span> —{" "}
-            {r.indexed ? "indexed" : "no index"}
-            {r.indexed && !r.runId ? (
-              <span className="text-red-600"> · no run id — nothing to read</span>
-            ) : null}
+            {r.usable
+              ? `indexed · ${r.pages ?? 0} pages, ${r.chunks ?? 0} chunks`
+              : (r.reason ?? "cannot be written from")}
             {/* The refusal used to say "crawl it first" and give no way to do it. One run per URL,
                 so this starts exactly one. */}
-            {!r.indexed && !started[u] ? (
+            {!r.usable && !started[u] ? (
               <>
                 {" · "}
                 <button
@@ -264,17 +270,35 @@ export default function ProjectForm({
   // index return a run id for it -- which is the same question wearing a different shape, and two
   // shapes of one rule is how they come to disagree.
   const uncrawled = unindexedUrls([...siteUrls, ...partnerUrls, ...competitorUrls], indexed);
+
+  // The counts, which cost nothing to check and the operator can act on before any URL is asked
+  // about. Reported before the index answers, because "you need five" is a different problem from
+  // "this one has no crawl" and the second is not worth reading until the first is solved.
+  const shortfalls = (
+    [
+      ["Project site URL", siteUrls.length, REQUIRED.site],
+      ["Partner URLs", partnerUrls.length, REQUIRED.partner],
+      ["Competitor URLs", competitorUrls.length, REQUIRED.competitor],
+    ] as const
+  )
+    .filter(([, have, need]) => have < need)
+    .map(([label, have, need]) => `${label}: ${have} of ${need}`);
+
   const canSubmit =
     name.trim().length > 0 &&
     startDate.length > 0 &&
     Boolean(projectSiteRunId) &&
+    shortfalls.length === 0 &&
     uncrawled.length === 0;
 
-  const blockingReason = !projectSiteRunId
-    ? "Enter a site URL with crawl evidence — the Run ID is what the content is grounded on."
-    : uncrawled.length > 0
-      ? `No crawl exists for ${uncrawled.join(", ")}. Crawl and index each one, then try again.`
-      : null;
+  const blockingReason =
+    shortfalls.length > 0
+      ? `${shortfalls.join(" · ")} — every one needs its own indexed crawl.`
+      : !projectSiteRunId
+        ? "Enter a site URL with crawl evidence — the Run ID is what the content is grounded on."
+        : uncrawled.length > 0
+          ? `Cannot be written from: ${uncrawled.join(", ")}. Crawl and index each one, then try again.`
+          : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -466,14 +490,18 @@ export default function ProjectForm({
           against the index as you leave the field; a red line means no crawl exists for it yet, and
           the project cannot be created until it does. Declaring a partner is what obliges the
           writer to name it, so a partner with no evidence is a page it has nothing to say about.
-          Crawl a red one from its own line — one crawl per URL, so its page and chunk counts
-          describe that host and not a batch it was bundled into.
+          Five of each, and being indexed is not enough: a crawl that was blocked at its first page
+          still puts a row in the index and gives the writer nothing, so each line shows the pages
+          and chunks behind it. Crawl a red one from its own line — one crawl per URL, so those
+          counts describe that host and not a batch it was bundled into.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
             Partner URLs
-            <span className="text-xs font-normal text-muted">Products you sell or recommend.</span>
+            <span className="text-xs font-normal text-muted">
+              Products you sell or recommend. Five required, one per line.
+            </span>
             <textarea
               value={partnerSeeds}
               onChange={(e) => setPartnerSeeds(e.target.value)}
@@ -495,7 +523,9 @@ export default function ProjectForm({
 
           <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
             Competitor URLs
-            <span className="text-xs font-normal text-muted">Rivals writing on the same topics.</span>
+            <span className="text-xs font-normal text-muted">
+              Rivals writing on the same topics. Five required, one per line.
+            </span>
             <textarea
               value={competitorSeeds}
               onChange={(e) => setCompetitorSeeds(e.target.value)}
