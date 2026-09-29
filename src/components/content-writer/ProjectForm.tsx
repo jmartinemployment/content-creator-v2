@@ -260,7 +260,10 @@ export default function ProjectForm({
 
   // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
   // reflect answers already obtained, and pasting a URL then clicking Create never blurs the field.
-  const uncrawled = unindexedUrls([...partnerUrls, ...competitorUrls], indexed);
+  // One rule for all three lists. The site used to be gated by a different question -- does the
+  // index return a run id for it -- which is the same question wearing a different shape, and two
+  // shapes of one rule is how they come to disagree.
+  const uncrawled = unindexedUrls([...siteUrls, ...partnerUrls, ...competitorUrls], indexed);
   const canSubmit =
     name.trim().length > 0 &&
     startDate.length > 0 &&
