@@ -20,16 +20,39 @@
  */
 export type IndexAnswer = { usable: boolean } | undefined;
 
-/** The entered URLs that cannot be written from. Empty means the list may be saved. */
+/** The entered URLs that cannot be written from. These are excluded, not saved. */
 export function unindexedUrls(
   urls: readonly string[],
   answers: Readonly<Record<string, IndexAnswer>>,
 ): string[] {
+  return deduped(urls).filter((url) => answers[url]?.usable !== true);
+}
+
+/**
+ * The entered URLs that can be written from — the ones the project is actually saved with.
+ *
+ * The floor of five is measured on this, not on what was typed. Counting declared URLs against the
+ * floor while separately requiring every declared URL to be usable is two rules over two different
+ * sets, and it meant a sixth partner with no crawl behind it disabled a project that already had
+ * five good ones. An extra URL could only ever hurt. Five good partners are five good partners
+ * whether a sixth was entered or not.
+ *
+ * Pairs with {@link unindexedUrls} over the same answers, so every entered URL lands in exactly one
+ * of the two lists and "usable" has one definition rather than two.
+ */
+export function usableUrls(
+  urls: readonly string[],
+  answers: Readonly<Record<string, IndexAnswer>>,
+): string[] {
+  return deduped(urls).filter((url) => answers[url]?.usable === true);
+}
+
+/** The same URL typed twice is one URL, so it is counted and named once. */
+function deduped(urls: readonly string[]): string[] {
   const seen = new Set<string>();
   return urls.filter((url) => {
-    // The same URL typed twice is one URL to crawl, so it is named once.
     if (seen.has(url)) return false;
     seen.add(url);
-    return answers[url]?.usable !== true;
+    return true;
   });
 }
