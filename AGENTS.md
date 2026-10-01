@@ -92,6 +92,51 @@ Markdown in order to re-parse it with `#`/`[text](href)` regexes. Markdown remai
 exactly two places, neither of them the corpus: an **operator-supplied asset** (`text/markdown` in
 `asset_context.py`) and a **generated report** a human reads.
 
+## No tools sections on a pillar or a blog
+
+**A tools section is one that lists tools with a heading per product. It is prohibited.** Jeff has
+said this three times, most recently 2026-10-01:
+
+> "All five tools are written about with the prose and carry a link to the appropriate tool page.
+> No headings, no sections, just discussing how tool can help solve the Keyword & Angle for SEO
+> matrix, period."
+
+Five tools, in running prose, each linked to its tool page, no heading per tool. Write Tools owns
+the standalone tools page; a pillar or blog that duplicates it is the shape being banned. Pillar and
+blog are the same rule — no exceptions, no per-type variation.
+
+**The rule is specified in a prompt constant, not in a document.**
+
+| Thing | Where |
+|---|---|
+| The instruction the writer is given | `ContentPromptBuilder.NoToolsSectionInstruction` |
+| Prompts carrying it | `BuildArticleSectionBatchPrompt` (pillar), `BuildStandaloneBlogBodyPrompt` (blog) |
+| The guard | `GccToolsSectionGuard`, run at `GccGenerateService:2789` (pillar) and `:3071` (blog) |
+| The retry | `GccToolsSectionGuard.RetryInstruction` |
+
+It names three prohibited shapes: `"Top Tools for ..."`, `"Choosing the Right Tools"`, and **a
+heading per product with a product name in it**.
+
+**The guard enforces that list and nothing beyond it, and this is where it goes wrong.** Both
+failure directions shipped on 2026-10-01. *Stricter than the prompt* refuses work the writer was
+never told to avoid — a bare `\btools?\b` match refused "How AI Tools Simplify Your Accounts
+Payable Process", which lists nothing, and no retry could rescue it because every honest heading for
+that material contains the word. *Looser than the prompt* lets through what the prompt forbids — a
+purely structural test dropped "Choosing the Right Tools", so prompt and guard disagreed about the
+same section. **Read one before changing the other.** They are one rule in two places and they drift
+silently.
+
+**Documentation lives in prompts here.** Asked whether this rule was documented, a search of
+`plans/`, `docs/`, `*.md` and `.cursor/rules/` returned nothing and the answer given was "no
+documentation exists" — while `NoToolsSectionInstruction` had spelled it out the whole time, with
+the examples. A prompt constant is a specification: grep the code that instructs the model, not only
+the files ending in `.md`.
+
+**Known, flagged, not removed:** `ContentPromptBuilder.BuildToolsPlatformListPrompt` and
+`BuildToolsPlatformChildPrompt` build a pillar tools section with an h3 subtree per platform and
+their own word targets. Zero callers, in the same file as the instruction forbidding the shape.
+Unreachable, so not a live violation; named, so it reads as permission.
+
 ## The model never emits markup — one document model, one renderer
 
 **The output must end up HTML, and exactly one thing may produce it.** `SectionHtmlRenderer`
