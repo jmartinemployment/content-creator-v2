@@ -229,21 +229,69 @@ is that a negative claim is worth the grep behind it.
 *"requires an explicit operator choice before Generate proceeds"*. Nothing read it, and Finding 3 is
 that there is no staleness gate at all — a declared policy no code enforces is read as enforced.
 
-### Stage 3 — remove the dead Site Analyzer calls from the Create path
+### Stage 3 — remove the dead Site Analyzer calls — **done, 2026-10-01**
 
-**Files:** `GccController.cs`
+The Create-path half was as written: the two `_seo.GetSiteAnalysisStatusAsync` calls and the `_seo`
+field are gone, and `Generate` now has no staleness gate — the honest state, since it never had one
+that could fire. `analysisStale` / `lastAnalyzedAtUtc` stay on the wire as null/false because the
+client reads them.
 
-Drop the two `_seo.GetSiteAnalysisStatusAsync` calls (`:122`, `:676`) and the `_seo` field (`:48`,
-`:66`). They call a service that no longer exists, with the wrong kind of id, and fail open.
+**This stage's own text sent me past the defect that mattered.** It said:
 
-Keep `HttpGeekSeoSiteAnalyzerClient`: its nested DTOs (`PageSectionTreeDto`, `PageSectionDto`) are
-consumed by `GccGenerateService.ExtractToolsFromTrees` (`:465, :472`) and several tests.
-`ToolPageGenerator.cs:229` also calls it and throws loudly — the old Workflow path, not Create, and
-a separate decision.
+> `ToolPageGenerator.cs:229` also calls it and throws loudly — the old Workflow path, not Create, and
+> a separate decision.
 
-Generate then has no staleness gate. That is the honest state: it has never had one that could fire.
-Whether evidence age should gate generation is a real and separate question; the data to answer it
-exists (`ContentReadyAt`, `RagIndexedAtUtc` on the run row).
+It is not the old Workflow path. `ContentGenerationOrchestrator` injects `ToolPageGenerator`, and that
+is the live v1 output path — the one Stage 1 picks *because* it holds the single correct output chain.
+It carried the identical defect as Finding 3: `project.ProjectSiteRunId`, a Geek-Crawler-v2 run id,
+handed to Site Analyzer as a profile id, the local named `profileId`. And it was the worse of the two —
+the `GccController` sibling failed to null and generation continued, this one **threw**:
+
+| Project state | Before `89c86e2` |
+|---|---|
+| site run + target keyword — **a correctly configured project** | `ContentGenerationException`, no content |
+| no run id | returns empty, generates fine |
+
+Configuring the project was what broke generation. Nothing constructed the class, so no test saw it.
+
+**`89c86e2`** points it at the crawl, through one `GccProjectSiteStructureReader` shared with the live
+`hierarchy-match` route — the paged block read was written out twice in `GccController` and was about
+to be a third time. `MatchResult` gained `Level`, which the structure held and the record dropped.
+Empty is now an answer, never an exception. The dead SEO bearer plumbing went with it.
+
+### The cleanup reordered itself, twice
+
+Deleting the now-unreachable tree family would have thrown away a filter the live path lacked.
+`IsLikelyPartnerToolLink` recorded runtime evidence — *Privacy Policy*, *Call Us*, *Free Assessment*
+returned as tools — while `GccSiteStructureMatch` matched ten whole labels, so those passed and were
+excluded only when real tools out-ranked them. **Ranking is a tie-break and it was doing a filter's
+job:** a section whose nav block outnumbered its tool row sent a phone number to the prompt as a tool.
+Tool is the revenue type, so that is a content defect, not tidiness.
+
+So: filter first (`060e899`), deletion second (`6addcae`, 1,880 lines, no behaviour change).
+
+**Then Jeff caught the filter over-reaching, and he was right.** `"Learn more"` → `/tools/invoice-capture`
+is a real tool with a bad label, and `6addcae` discarded it — the failure mode project-site crawls are
+warned about by name: *tools and partners silently stop being found, no error, fewer matches.* The
+chrome list was doing two jobs. A **destination** label (`"Privacy Policy"`, `"Contact Us"`) can never
+be a product. A **CTA** (`"Learn more"`, `"read our"`, `"click here"`) names nothing, so the URL
+answers instead: `3bcf378` takes the name from the href's last segment, and yields nothing when that
+segment names a kind of page (`guide`, `index`, `blog`) rather than a product.
+
+`3bcf378` also fixes a regression `89c86e2` introduced: the assignment had `Paragraphs = []` under a
+comment claiming the crawl's paragraphs are "not consumed anywhere". They are —
+`ResearchBriefBuilder.AppendAssignment` renders them into the brief, and the tree projection supplied
+them — so the brief had quietly stopped carrying what the site already says under the matched heading.
+
+**What this stage cost in false confidence, recorded because the pattern repeats.** One test asserted
+three different things about `"Learn more"`: that it survives named "Learn more" (untrue — all three
+consumers drop `Context`), that it is dropped (the defect), and finally that it survives named from its
+URL. Two mutations passed before the cases were made to isolate their clauses. And one assertion I
+wrote targeted the wrong layer. Every one of those was a claim about code I had not checked against its
+consumers.
+
+**Known gap, left open:** `ToolRow.Context` has no consumer — built on every match, dropped by all
+three readers. Same shape as `Passages` in Finding 2, and worth deciding rather than carrying.
 
 ---
 
@@ -257,7 +305,7 @@ exists (`ContentReadyAt`, `RagIndexedAtUtc` on the run row).
 | 4 | The cross-list regression | **Done.** `One_url_in_two_corpora_appears_in_both_lists_rather_than_whichever_was_walked_first` — and it is both lists, not one, which is the correction Jeff made to this plan |
 | 5 | Count the calls | **Done.** `ThreeContentTypesQueryTheCorpusOnce_NotThreeTimes` |
 | 6 | Mutation-check the hoist | **Partly.** See the gap below |
-| 7 | End to end on a real create | **Not done.** Needs a deployed Generate on a real create; nothing local can stand in for it |
+| 7 | End to end on a real create | **Not done, and now the critical one.** Until `89c86e2` a correctly configured project threw before writing anything, so this is the first run that *can* succeed. Needs a deployed Generate |
 | 8 | The refusal names the run and the crawl type | **Done.** `A_library_failure_names_the_crawl_type_and_the_run_that_failed` and `An_empty_library_answer_names_...`, both failing under a mutation that drops the two facts from the message |
 
 **Two tests Stage 2 inverted on purpose.** `MissingBlocksDoNotTurnAGroundedDraftIntoARefusal` asserted
