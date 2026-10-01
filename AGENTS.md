@@ -105,6 +105,26 @@ Five tools, in running prose, each linked to its tool page, no heading per tool.
 the standalone tools page; a pillar or blog that duplicates it is the shape being banned. Pillar and
 blog are the same rule — no exceptions, no per-type variation.
 
+**And the obligation the ban exists to protect.** Jeff, 2026-10-01:
+
+> "Pillar is required; same as Blog and all other long-form content types, to discuss tools as a
+> solution to the problem identified in the Angle for SEO Problem-Solution"
+
+The ban says where tools may not go. It does not say why they are on the page, so a writer can
+satisfy it by mentioning each partner once in passing and linking it — the letter of the rule with
+none of its point. **The tools are the answer to the problem the angle identifies.** On a
+Problem-Solution angle: name the problem, then show what each tool does about *that* problem, for
+this keyword — not a general description of the product. A tool mentioned without saying what it
+solves has not been discussed.
+
+Carried by `ContentPromptBuilder.ToolsAsSolutionInstruction`, appended beside the ban at both long-
+form call sites so the two travel together.
+
+**Which types.** Pillar, Blog and Tool are the registered prompt sets; every other long-form type is
+disabled (Jeff, 2026-10-01: *"if we ever get something stable with these three, we will turn our
+attention other content types"*). So this lands on Pillar and Blog today — Tool is about one product
+by definition and takes neither half — and any long-form type enabled later inherits both.
+
 **The rule is specified in a prompt constant, not in a document.**
 
 | Thing | Where |
