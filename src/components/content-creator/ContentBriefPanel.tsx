@@ -19,7 +19,11 @@ import {
   toneAllowed,
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
-import { ApiError } from "@/services/gcc-api";
+import {
+  ApiError,
+  checkPartnerQuoteReadiness,
+  type PartnerQuoteReadiness,
+} from "@/services/gcc-api";
 import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
 import {
   applyCuratedSerpToBrief,
@@ -52,6 +56,119 @@ const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
   paaQuestions: "People Also Ask",
   relatedSearches: "Related searches",
 };
+
+/**
+ * Whether the declared partners can answer the question this Angle demands of the block quotation.
+ *
+ * The project form already validates these URLs, but it asks a volume question — indexed, enough
+ * pages and chunks — and volume is not fitness. A partner can carry thousands of chunks and still
+ * say nothing that answers `problem_solution` for this keyword. The Angle lives here, on the brief,
+ * so this is the first point at which the real question exists to be asked.
+ *
+ * Operator-triggered, not on render: each partner is a retrieval plus a model call, and ten of them
+ * would hang the panel. The same reason the project form checks the index on blur rather than on
+ * every keystroke.
+ */
+function PartnerQuoteFit({
+  projectId,
+  targetKeyword,
+  angle,
+}: {
+  projectId?: string;
+  targetKeyword: string;
+  angle: string;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [answered, setAnswered] = useState<{
+    key: string;
+    data: PartnerQuoteReadiness | null;
+    error: string | null;
+  } | null>(null);
+
+  const keyword = targetKeyword.trim();
+  const ready = Boolean(projectId) && angle.length > 0 && keyword.length > 0;
+
+  // An answer describes one project, angle and keyword. Tagging it with the question it answers and
+  // comparing on render keeps a stale result off screen without clearing state from an effect —
+  // which would re-render every time any of the three changed, to say nothing.
+  const key = `${projectId ?? ""}\u0000${angle}\u0000${keyword}`;
+  const current = answered?.key === key ? answered : null;
+
+  async function run() {
+    if (!projectId || checking) return;
+    setChecking(true);
+    try {
+      const data = await checkPartnerQuoteReadiness(projectId, keyword, angle);
+      setAnswered({ key, data, error: null });
+    } catch (err) {
+      setAnswered({
+        key,
+        data: null,
+        error: err instanceof ApiError ? err.message : "Could not check the partners.",
+      });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  if (!ready) {
+    return (
+      <span className="text-xs font-normal text-muted">
+        {projectId
+          ? "Pick an angle and a target keyword to check the partners can answer it."
+          : "No project on this create, so its declared partners are not known."}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={checking}
+        className="self-start text-xs font-normal underline decoration-dotted underline-offset-2 disabled:opacity-60"
+      >
+        {checking ? "Checking the partners…" : "Check partners can answer this angle"}
+      </button>
+
+      {current?.error ? (
+        <span className="text-xs font-normal text-red-600">{current.error}</span>
+      ) : null}
+
+      {current?.data ? (
+        <div className="space-y-1 text-xs font-normal">
+          <p className="text-muted">
+            Looking for {current.data.question} — {current.data.canAnswer} of{" "}
+            {current.data.declared} partners can.
+          </p>
+          {current.data.results.map((r) => (
+            <p
+              key={r.url}
+              className={
+                r.canAnswer
+                  ? "text-green-700"
+                  : r.outcome === "unavailable"
+                    ? "text-amber-700"
+                    : "text-red-600"
+              }
+            >
+              <span className="font-mono">{r.url}</span> —{" "}
+              {r.canAnswer ? (
+                <>
+                  &ldquo;{r.quote}&rdquo;{" "}
+                  <span className="text-muted">({r.cite})</span>
+                </>
+              ) : (
+                (r.reason ?? "cannot answer this angle")
+              )}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function ContentBriefPanel({
   clientId,
@@ -508,8 +625,14 @@ export default function ContentBriefPanel({
             ))}
           </select>
           <span className="text-xs font-normal text-muted">
-            Editorial choice — match the dominant SERP format.
+            Editorial choice — match the dominant SERP format. It also decides what the tool page’s
+            block quotation has to answer.
           </span>
+          <PartnerQuoteFit
+            projectId={projectId}
+            targetKeyword={keywordInput || targetKeyword}
+            angle={brief.angle}
+          />
         </label>
 
         <label className={labelClass}>

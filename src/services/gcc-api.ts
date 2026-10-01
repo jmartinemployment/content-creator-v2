@@ -757,6 +757,27 @@ export interface StartCrawlResult {
 /**
  * Start a crawl for **one** URL. Returns the run, plus the refusal if the server would not take it.
  *
+ * **No live caller since 2026-09-29, deliberately. Do not wire one back to this route.**
+ * `POST /api/geek-crawler/crawls` wakes `GeekCrawlerWorker`, a crawler running inside the GeekAPI
+ * container, and that path runs no extractor: the pages it writes to Mongo carry `Html` with
+ * `contentHtml` and `blocks` both null, and the completion patch sets `Status`, `HostProgressJson`
+ * and `CompletedAtUtc` without ever stamping `ContentReadyAt`. RAG indexes from `blocks` and treats
+ * their absence as unindexable, and its scheduler filters candidates on `ContentReadyAt`, so a run
+ * started here can finish successfully and still leave `RagPagesEnglish` and `RagChunksUpserted`
+ * null — the two numbers the declared-URL gate reads. The call succeeded; the crawl could not
+ * count. Full trace: `plans/geekapi-crawls-never-reach-rag.md`.
+ *
+ * The fix is not to extract blocks in GeekAPI — that is a second implementation of
+ * `Geek-Crawler-v2/src/crawl/extract-content.ts`, and block segmentation decides chunk boundaries,
+ * so quotes retrieved from one segmentation would be verified against the other. Crawling is
+ * Geek-Crawler-v2's, and it is local-only by design (shared cloud IPs get flagged by bot managers),
+ * so GeekAPI cannot call it either. Until it grows a queue-claim path the operator starts
+ * project-site, partner and competitors crawls in its own submit form, which already offers all
+ * three types, and Content Creator reads the result back through the index check.
+ *
+ * Kept rather than deleted because the shape is right and only the destination is wrong: when that
+ * queue-claim route exists, this is the one function whose URL changes.
+ *
  * One run, one URL — the signature is the rule, because a comment was not.
  * `AGENTS.md` has said "Run ID = one URL" since the slot model was written, and the server still
  * accepts a seed list and hashes the sorted set into a single `seedKey`. Five partner URLs sent
@@ -955,3 +976,45 @@ export function getProjectSiteStructure(runId: string): Promise<SiteStructure> {
   );
 }
 
+
+/** One partner's answer to the question the brief's Angle demands of the block quotation. */
+export interface PartnerQuoteFinding {
+  url: string;
+  canAnswer: boolean;
+  /** `answered` · `noanswer` · `unavailable` — the last is not a verdict on the partner. */
+  outcome: string;
+  quote: string | null;
+  cite: string | null;
+  reason: string | null;
+}
+
+export interface PartnerQuoteReadiness {
+  angle: string;
+  question: string;
+  canAnswer: number;
+  declared: number;
+  results: PartnerQuoteFinding[];
+}
+
+/**
+ * Whether each declared partner can answer the question this brief's Angle demands of the
+ * blockquote — asked before Generate rather than discovered when a paid draft refuses.
+ *
+ * Distinct from `checkHostsIndexed`, which asks whether a URL has an index behind it at all. That
+ * is a volume question, and volume is not fitness: a partner can carry nine thousand chunks and
+ * still say nothing that answers `problem_solution` for this keyword.
+ *
+ * The partner list is read from the project server-side, not sent from here — the declared list is
+ * what the content is obliged to name, and it is not the same set as the hosts that happen to be
+ * indexed under the `partner` crawl type.
+ */
+export function checkPartnerQuoteReadiness(
+  projectId: string,
+  topic: string,
+  angle: string,
+): Promise<PartnerQuoteReadiness> {
+  return gccRequest<PartnerQuoteReadiness>(
+    "/api/geek-content-creator/brief/partner-quote-readiness",
+    { method: "POST", body: JSON.stringify({ projectId, topic, angle }) },
+  );
+}
