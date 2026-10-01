@@ -205,10 +205,29 @@ pinned the block's rendering, not the wiring that fills it, which is the half th
 live failure — so `The_writer_is_shown_the_same_spans_the_quote_guard_will_check` was added at the
 service level.
 
-**Known divergence, recorded:** `GccV2ToolResearchExtractor.EnumerateQuoteCandidates` still walks
-`GccQuoteablePage` text. It is on the dormant v2 write path (no live callers, `DraftingEnabled`
-unset), so it is not a second live quote source — but it is a name that reads like one, and it goes
-when that path is decided.
+**The divergence this flagged is closed, same day.** `GccV2ToolResearchExtractor` held a second quote
+selection in four steps: the first paragraph over forty characters; failing that, the longest one with
+the page *title* among the candidates; truncated at five hundred characters with an ellipsis appended,
+which edits a quotation and then presents it as verbatim; and failing all of that, the model's own
+retyped sentence checked by substring. Its input was `GccQuoteablePage.Paragraphs` — `RenderChunk`
+output — and this path has no label stripper, so the chosen span could be a prompt label in a quote box
+attributed to a partner. The last step is a fallback method besides.
+
+All of it is removed. `ExtractAsync` stays, because it is reachable from the pillar spawn path, but
+returns the structured fields and no `SourceQuote`, and no longer refuses for want of a quotation —
+it used to pick one *before* the model was called and throw if that came back empty, so a partner page
+whose paragraphs were all short decided whether extraction ran at all. `GccV2PartnerToolWriteService`
+refuses and names the source it would need rather than resolving one its own way; wiring typed passages
+into it would be building out `GccV2WriteService.WriteAsync`, which has no live caller.
+
+**I had this wrong twice while doing it**, both times from an incomplete grep: first that
+`ExtractAsync` had no callers (a filtered grep hid two), then that its chain was wholly dead. The
+callers are on dormant paths but the method is live-reachable. Recorded because the plan's own standard
+is that a negative claim is worth the grep behind it.
+
+**Also removed:** `GccController.SiteAnalysisStaleAfterDays`, a thirty-day constant documented as
+*"requires an explicit operator choice before Generate proceeds"*. Nothing read it, and Finding 3 is
+that there is no staleness gate at all — a declared policy no code enforces is read as enforced.
 
 ### Stage 3 — remove the dead Site Analyzer calls from the Create path
 
@@ -228,31 +247,38 @@ exists (`ContentReadyAt`, `RagIndexedAtUtc` on the run row).
 
 ---
 
-## Verification
+## Verification — status, 2026-10-01
 
-1. **Pin the refusals first, before touching anything.** `GccGroundingPolicyTests.cs` (the
-   `MustCiteCrawlTypes` table), `GccGroundingResolverTests.cs` (ten refusal paths) and
-   `GccGroundingRetrievalTests.cs` (per-type crawl-type table, list separation) must pass
-   **unchanged** through Stage 1. If a refusal test has to move, the split is wrong.
-2. **`GccRetrievedEvidenceReachesThePromptTests.cs` is the behavioural anchor** — it hands
-   `ResearchJson` in directly, so it is agnostic to how the merge is produced and should stay green
-   throughout.
-3. **Write the missing coordinator tests first.** There are currently **none**:
-   `GccGenerationCoordinator`, `MergeRetrievedEvidence`, `NormalizeRequestedTypes`,
-   `ValidateRequestedTypes`, the fan-out, and the one-failure-fails-all rule are entirely untested.
-   Stage 1 edits exactly that file, so it needs a net before it is cut.
-4. **Add the cross-list regression**: a URL in both the partner and project-site corpora must land in
-   the same list for pillar, blog and tool. It fails today.
-5. **Count the calls.** The existing `CrawlTypeRag` fake (`GccGroundingRetrievalTests.cs:63, :86`)
-   already records every `crawlType` queried; extend it to count `QueryAsync` and assert 21, not 63.
-6. `dotnet test` green, then mutation-check Stage 1: revert the hoist and confirm the call-count test
-   fails.
-7. End to end: generate pillar+blog+tool on a real create and confirm from the Railway deploy logs
-   that retrieval runs once and the three drafts cite the same partner spellings.
-8. **The refusal message must name the run and crawl type that failed.** This is the one genuinely
-   new risk hoisting introduces: a failure moves from "this content type failed" to "the generate
-   failed", so without it an operator sees three dead drafts and no cause. Assert the message names
-   both.
+| # | What | Status |
+|---|---|---|
+| 1 | The refusal tests pass **unchanged** through Stage 1 | **Done.** `GccGroundingPolicyTests.cs` untouched by every commit in this plan. `GccGroundingResolverTests.cs` and `GccGroundingRetrievalTests.cs` changed only in their fakes and in two tests Stage 2 deliberately inverted (below) |
+| 2 | `GccRetrievedEvidenceReachesThePromptTests.cs` stays green | **Done.** Untouched and passing |
+| 3 | Coordinator tests, written first | **Done.** `GccGenerationCoordinatorTests.cs`, 12 cases over `NormalizeRequestedTypes`, `ValidateRequestedTypes` and `MergeRetrievedEvidence` |
+| 4 | The cross-list regression | **Done.** `One_url_in_two_corpora_appears_in_both_lists_rather_than_whichever_was_walked_first` — and it is both lists, not one, which is the correction Jeff made to this plan |
+| 5 | Count the calls | **Done.** `ThreeContentTypesQueryTheCorpusOnce_NotThreeTimes` |
+| 6 | Mutation-check the hoist | **Partly.** See the gap below |
+| 7 | End to end on a real create | **Not done.** Needs a deployed Generate on a real create; nothing local can stand in for it |
+| 8 | The refusal names the run and the crawl type | **Done.** `A_library_failure_names_the_crawl_type_and_the_run_that_failed` and `An_empty_library_answer_names_...`, both failing under a mutation that drops the two facts from the message |
+
+**Two tests Stage 2 inverted on purpose.** `MissingBlocksDoNotTurnAGroundedDraftIntoARefusal` asserted
+that a `tool` with unreadable blocks still proceeds. Once the blocks became the quote source that is
+exactly what must not happen, so it is now two tests: the original property kept for `pillar`, which
+never quotes, and its opposite pinned for `tool`. `RetrievedPagesAreReturnedWhenEvidenceExists` had to
+start supplying blocks. Neither is a refusal test moving to accommodate the split — item 1's warning —
+they are the quote source changing.
+
+### The one gap in item 6, stated rather than implied
+
+**The hoist itself is not pinned.** The call-count test lives on `GccGroundingResolver` and asserts
+that one `ResolveAsync` over three content types issues 21 queries rather than 63. It does not assert
+that `GccGenerationCoordinator` makes **one** such call instead of three — reverting the hoist back
+into `GenerateOneAsync` leaves every test green.
+
+Pinning it means constructing the coordinator, which needs a `GccGenerateService`: a concrete class
+with thirteen constructor dependencies and no interface. So the test needs an interface extracted
+first, which is live-code surgery for a test and was not in this plan's scope. The mutations that
+*are* pinned cover the consequences the hoist was for — one crawl-type order, per-corpus dedupe, the
+passages reaching the tool path — but not the hoist.
 
 ## Rejected, with reasons
 
