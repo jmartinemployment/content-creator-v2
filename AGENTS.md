@@ -132,10 +132,11 @@ documentation exists" — while `NoToolsSectionInstruction` had spelled it out t
 the examples. A prompt constant is a specification: grep the code that instructs the model, not only
 the files ending in `.md`.
 
-**Known, flagged, not removed:** `ContentPromptBuilder.BuildToolsPlatformListPrompt` and
-`BuildToolsPlatformChildPrompt` build a pillar tools section with an h3 subtree per platform and
-their own word targets. Zero callers, in the same file as the instruction forbidding the shape.
-Unreachable, so not a live violation; named, so it reads as permission.
+**Removed, 2026-10-01:** `ContentPromptBuilder.BuildToolsPlatformListPrompt` and
+`BuildToolsPlatformChildPrompt` built a pillar tools section with an h3 subtree per platform. They
+had no callers, but they sat in the same file as the instruction forbidding that shape, and a named
+builder reads as permission however dead it is. Gone, with their guidance helper and interface
+declarations.
 
 ## The model never emits markup — one document model, one renderer
 
