@@ -1,12 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ClientsPanel from "@/components/content-writer/ClientsPanel";
 import ProjectsPanel from "@/components/content-writer/ProjectsPanel";
-import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
-import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
-import ProjectDeliverablesPanel from "@/components/content-writer/ProjectDeliverablesPanel";
-import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import {
   listClients,
   listProjects,
@@ -16,29 +13,31 @@ import {
 } from "@/services/gcc-projects-api";
 
 /**
- * The whole workflow, on one page.
+ * The picker: choose a client, then a project.
  *
- * Client → project → brief → generate → review. The project is an engagement now, not an article:
- * it has a schedule and a site, and the keyword belongs to the piece of content rather than to the
- * project. Several pieces can be written under one project, which is what a project is for.
+ * This page used to be the whole workflow — six panels stacked in one `max-w-4xl` column, from the
+ * client list through profile, history, tasks, time and deliverables to the entire brief-and-generate
+ * pipeline. It had stopped fitting. Everything a project owns now lives at `/app/projects/[id]`, and
+ * choosing a project navigates there.
+ *
+ * **Two layouts, not one responsive tree.** Side by side above `lg`, stacked below. Those are different
+ * structures rather than one structure at two widths, so they are written separately and switched with
+ * `lg:hidden` / `hidden lg:block`. Client and project state is page state, so both trees read the same
+ * selection.
  */
 export default function WorkflowPage() {
+  const router = useRouter();
+
   const [clients, setClients] = useState<GccClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [projects, setProjects] = useState<GccProject[]>([]);
-  // Which client the rows in `projects` belong to. Loading is derived from this rather than kept
-  // as its own flag: a separate flag has to be set synchronously as the effect starts, and the two
-  // can disagree about which client is on screen.
+  // Which client the rows in `projects` belong to. Loading is derived from this rather than kept as its
+  // own flag: a separate flag has to be set synchronously as the effect starts, and the two can
+  // disagree about which client is on screen.
   const [loadedForClientId, setLoadedForClientId] = useState<string | null>(null);
   const [projectsError, setProjectsError] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-
-  // The Content Creator create the draft lives on. A create is not yet owned by a project — that
-  // link is gcc_deliverables, which Stage 4 adds — so it resolves the way it always has, from the
-  // brief panel, and is cleared whenever the project changes.
-  const [createId, setCreateId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,9 +62,9 @@ export default function WorkflowPage() {
     };
   }, []);
 
-  // Nothing is set before the first await. State written synchronously in an effect body costs a
-  // second render pass, and the cancelled flag is what keeps a slow response for a client the
-  // operator has already navigated off from landing on the one they are now looking at.
+  // Nothing is set before the first await. State written synchronously in an effect body costs a second
+  // render pass, and the cancelled flag is what keeps a slow response for a client the operator has
+  // already navigated off from landing on the one they are now looking at.
   useEffect(() => {
     if (!selectedClientId) return;
     let cancelled = false;
@@ -76,12 +75,10 @@ export default function WorkflowPage() {
         if (cancelled) return;
         setProjects(rows);
         setProjectsError(null);
-        setSelectedProjectId(rows[0]?.id ?? null);
         setLoadedForClientId(selectedClientId);
       } catch (err) {
         if (cancelled) return;
         setProjects([]);
-        setSelectedProjectId(null);
         setLoadedForClientId(selectedClientId);
         setProjectsError(
           err instanceof ApiError && err.status === 403
@@ -98,136 +95,131 @@ export default function WorkflowPage() {
     };
   }, [selectedClientId]);
 
-  /**
-   * Selection clears the previous project's draft state here rather than in an effect. Carrying a
-   * draft or a brief verdict into the next project would attribute one project's work to another,
-   * and doing it at the point of selection means there is no render in between where the old
-   * values are shown under the new project.
-   */
-  function selectProject(projectId: string | null) {
-    setSelectedProjectId(projectId);
-    setCreateId(null);
+  function openProject(projectId: string | null) {
+    if (projectId) router.push(`/app/projects/${projectId}`);
   }
 
   function handleClientCreated(client: GccClient) {
     setClients((prev) => [...prev, client]);
     setSelectedClientId(client.id);
-    selectProject(null);
   }
 
+  // A project is opened the moment it exists. Creating one is an act of intent -- nobody adds a project
+  // to look at the list afterwards.
   function handleProjectCreated(created: GccProject) {
     setProjects((prev) => [created, ...prev]);
-    selectProject(created.id);
+    openProject(created.id);
   }
 
-  function handleProjectChanged(updated: GccProject) {
-    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-  }
-
-  // Rows are only this client's once the load that fetched them has landed. Without this the
-  // previous client's projects stay on screen for the length of the request, under the new
-  // client's name.
+  // Rows are only this client's once the load that fetched them has landed. Without this the previous
+  // client's projects stay on screen for the length of the request, under the new client's name.
   const projectsLoading = loadedForClientId !== selectedClientId;
   const visibleProjects = projectsLoading ? [] : projects;
-  const project = visibleProjects.find((p) => p.id === selectedProjectId) ?? null;
+
+  const clientsPanel = (
+    <ClientsPanel
+      clients={clients}
+      selectedClientId={selectedClientId}
+      onSelect={setSelectedClientId}
+      onCreated={handleClientCreated}
+      onDeleted={(clientId) => {
+        const remaining = clients.filter((c) => c.id !== clientId);
+        setClients(remaining);
+        // Deleting the selected client has to hand the selection on: the projects list is gated on a
+        // client, so leaving it null empties the page with clients still sitting above it.
+        if (selectedClientId === clientId) setSelectedClientId(remaining[0]?.id ?? null);
+      }}
+    />
+  );
+
+  const projectsSide = selectedClientId ? (
+    <>
+      <ProjectsPanel
+        clientId={selectedClientId}
+        projects={visibleProjects}
+        selectedProjectId={null}
+        onSelect={openProject}
+        onCreated={handleProjectCreated}
+        onDeleted={(projectId) =>
+          setProjects((prev) => prev.filter((p) => p.id !== projectId))
+        }
+        loading={projectsLoading}
+      />
+      {projectsError ? <p className="text-sm text-red-600">{projectsError}</p> : null}
+    </>
+  ) : (
+    <p className="rounded-xl border border-dashed border-border bg-surface p-6 text-sm text-muted">
+      Select a client to see its projects. Everything here is scoped to one.
+    </p>
+  );
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">
-          Content Writer v2
-        </p>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">Workflow</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Grounded in the crawl Geek-Crawler already performed for this site. Add research, generate
-          a pillar article + companion content, run editorial review, and publish.
-        </p>
+    <>
+      {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
+      <div className="w-full bg-[#025E73] min-h-screen py-5 lg:hidden">
+        <div className="px-4">
+          <Masthead />
+        </div>
+        {loadError ? (
+          <p className="mt-4 px-4 text-sm text-red-200">{loadError}</p>
+        ) : null}
+        <div className="mt-5 flex flex-col gap-4 px-3">
+          <Sheet>{clientsPanel}</Sheet>
+          <Sheet>{projectsSide}</Sheet>
+        </div>
       </div>
 
-      {loadError ? <p className="mb-6 text-sm text-red-600">{loadError}</p> : null}
+      {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
+      <div className="w-full bg-[#025E73] min-h-screen py-5 hidden lg:block">
+        <div className="mx-auto w-full max-w-[1800px] px-8">
+          <Masthead />
+          {loadError ? <p className="mt-4 text-sm text-red-200">{loadError}</p> : null}
 
-      <div className="flex flex-col gap-6">
-        <ClientsPanel
-          clients={clients}
-          selectedClientId={selectedClientId}
-          onSelect={(clientId) => {
-            setSelectedClientId(clientId);
-            selectProject(null);
-          }}
-          onCreated={handleClientCreated}
-          onDeleted={(clientId) => {
-            const remaining = clients.filter((c) => c.id !== clientId);
-            setClients(remaining);
-
-            // Deleting the selected client has to hand the selection to another one. Everything
-            // below this panel is gated on a client being selected, so leaving it null empties the
-            // page from here down: the projects list and the New Project form both vanish, with
-            // clients still sitting in the panel above and nothing saying where the rest went.
-            if (selectedClientId === clientId) {
-              setSelectedClientId(remaining[0]?.id ?? null);
-              selectProject(null);
-            }
-          }}
-        />
-
-        {/* The page used to render nothing in every state but "a project is loaded". It ended after
-            the form with no explanation, which reads as broken rather than as empty. Each state now
-            says what it is and what to do about it. */}
-        {!selectedClientId ? (
-          <p className="rounded-xl border border-dashed border-border bg-background p-6 text-sm text-muted">
-            Select a client above to start. Everything below is scoped to it.
-          </p>
-        ) : null}
-
-        {selectedClientId ? (
-          <>
-            <ProjectsPanel
-              clientId={selectedClientId}
-              projects={visibleProjects}
-              selectedProjectId={selectedProjectId}
-              onSelect={selectProject}
-              onCreated={handleProjectCreated}
-              onDeleted={(projectId) => {
-                setProjects((prev) => prev.filter((p) => p.id !== projectId));
-
-                // Deleting the selected project has to hand the selection to another one, the same
-                // rule ClientsPanel's onDeleted follows above — otherwise everything gated on a
-                // project (profile, work, deliverables, brief) vanishes with nothing explaining why.
-                if (selectedProjectId === projectId) {
-                  const remaining = visibleProjects.filter((p) => p.id !== projectId);
-                  selectProject(remaining[0]?.id ?? null);
-                }
-              }}
-              loading={projectsLoading}
-            />
-
-            {projectsError ? <p className="text-sm text-red-600">{projectsError}</p> : null}
-          </>
-        ) : null}
-
-        {project ? (
-          <>
-            <ProjectProfilePanel project={project} onChanged={handleProjectChanged} />
-
-            <ProjectWorkPanel project={project} />
-
-            <ProjectDeliverablesPanel project={project} onOpenCreate={setCreateId} />
-
-            {/* Generate is Content Creator's. One component now owns mint-through-review: below a
-                create, it's a brief form whose Save mints one; above one, it's the full workspace.
-                clientId/projectId/projectSiteRunId are threaded here exactly once regardless of
-                which state that is, rather than once per component the way the two-component
-                version needed. */}
-            <CreateDraftWorkspace
-              createId={createId}
-              clientId={project.clientId}
-              projectId={project.id}
-              projectSiteRunId={project.projectSiteRunId ?? undefined}
-              onCreateMinted={setCreateId}
-            />
-          </>
-        ) : null}
+          {/* Clients is a short list that does not grow usefully wider, so it takes a fixed rail and the
+              projects list — which carries dates, status and a form — gets everything else. */}
+          <div className="mt-6 flex items-start gap-6">
+            <div className="w-[340px] shrink-0">
+              <Sheet>{clientsPanel}</Sheet>
+            </div>
+            <div className="min-w-0 flex-1">
+              <Sheet>{projectsSide}</Sheet>
+            </div>
+          </div>
+        </div>
       </div>
+    </>
+  );
+}
+
+function Masthead() {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+        Content Creator
+      </p>
+      <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-white lg:text-3xl">
+        Projects
+      </h1>
+      <p className="mt-2 max-w-2xl text-sm text-white/70">
+        Pick a client, then open a project. Each project holds its own brief, deliverables, tasks and
+        history &mdash; grounded in the crawl Geek-Crawler already performed for that site.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The light sheet the panels sit on.
+ *
+ * Every panel is styled for the app's paper background — `text-foreground` on `bg-surface` with
+ * `border-border`. Dropping them onto the teal would put dark text on a dark ground, so the teal is the
+ * page and this is the sheet. That is what keeps this a layout change rather than a restyle of
+ * everything underneath it.
+ */
+function Sheet({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl bg-[var(--gcc-paper)] p-4 shadow-xl sm:p-6">
+      <div className="flex flex-col gap-4">{children}</div>
     </div>
   );
 }

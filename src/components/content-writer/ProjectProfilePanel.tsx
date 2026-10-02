@@ -96,9 +96,19 @@ function UrlListField({ label, urls }: { label: string; urls: readonly string[] 
 export default function ProjectProfilePanel({
   project,
   onChanged,
+  historyOnly = false,
 }: {
   project: GccProject;
   onChanged: (project: GccProject) => void;
+  /**
+   * Renders the History card instead of the engagement's fields.
+   *
+   * The project workspace gives History its own section, so Profile is the fields and nothing else.
+   * The two were one stacked panel when the whole workflow lived in a single column; they are the same
+   * component still because they read the same project and the same log, and splitting the file would
+   * duplicate that reading for no gain.
+   */
+  historyOnly?: boolean;
 }) {
   // The log is stored with the project it was fetched for. Clearing it synchronously as the
   // effect starts would cost a second render pass; tagging it means a stale response for the
@@ -109,6 +119,7 @@ export default function ProjectProfilePanel({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!historyOnly) return;
     let cancelled = false;
     const forProjectId = project.id;
 
@@ -127,7 +138,7 @@ export default function ProjectProfilePanel({
     return () => {
       cancelled = true;
     };
-  }, [project.id, project.updatedAtUtc]);
+  }, [project.id, project.updatedAtUtc, historyOnly]);
 
   const entries = log?.projectId === project.id ? log.entries : null;
   const entriesError = logError?.projectId === project.id ? logError.message : null;
@@ -179,49 +190,10 @@ export default function ProjectProfilePanel({
     }
   }
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-foreground">{project.name}</h2>
-            {project.description ? (
-              <p className="mt-1 max-w-2xl text-sm text-muted">{project.description}</p>
-            ) : null}
-          </div>
-          <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-wide text-muted">
-            Status
-            <select
-              value={project.status}
-              disabled={saving}
-              onChange={(e) => void handleStatus(e.target.value as GccProjectStatus)}
-              className="rounded-md border border-border bg-white px-3 py-1.5 text-sm font-normal normal-case tracking-normal text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
-            >
-              {GCC_PROJECT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {GCC_PROJECT_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {statusError ? <p className="mt-3 text-sm text-red-600">{statusError}</p> : null}
-
-        <dl className="mt-5 grid gap-4 sm:grid-cols-3">
-          <Field label="Start" value={formatDate(project.startDate)} />
-          <Field label="Due" value={formatDate(project.dueDate)} />
-          <Field label="Finished" value={formatDate(project.finishedDate)} />
-          <Field label="Site" value={project.siteUrl ?? "—"} />
-          <Field label="Run ID" value={project.projectSiteRunId ?? "— no crawl evidence"} />
-        </dl>
-
-        <dl className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
-          <UrlListField label="Partner URLs" urls={project.partnerUrls} />
-          <UrlListField label="Competitor URLs" urls={project.competitorUrls} />
-        </dl>
-      </div>
-
+  // Two cards, one at a time. The workspace mounts this twice -- once for the fields, once for the
+  // log -- so each section shows exactly its own thing and neither scrolls past the other.
+  if (historyOnly) {
+    return (
       <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">History</h3>
 
@@ -282,6 +254,49 @@ export default function ProjectProfilePanel({
           </ol>
         ) : null}
       </div>
-    </div>
+    );
+  }
+
+  return (
+      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-foreground">{project.name}</h2>
+            {project.description ? (
+              <p className="mt-1 max-w-2xl text-sm text-muted">{project.description}</p>
+            ) : null}
+          </div>
+          <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-wide text-muted">
+            Status
+            <select
+              value={project.status}
+              disabled={saving}
+              onChange={(e) => void handleStatus(e.target.value as GccProjectStatus)}
+              className="rounded-md border border-border bg-white px-3 py-1.5 text-sm font-normal normal-case tracking-normal text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+            >
+              {GCC_PROJECT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {GCC_PROJECT_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {statusError ? <p className="mt-3 text-sm text-red-600">{statusError}</p> : null}
+
+        <dl className="mt-5 grid gap-4 sm:grid-cols-3">
+          <Field label="Start" value={formatDate(project.startDate)} />
+          <Field label="Due" value={formatDate(project.dueDate)} />
+          <Field label="Finished" value={formatDate(project.finishedDate)} />
+          <Field label="Site" value={project.siteUrl ?? "—"} />
+          <Field label="Run ID" value={project.projectSiteRunId ?? "— no crawl evidence"} />
+        </dl>
+
+        <dl className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
+          <UrlListField label="Partner URLs" urls={project.partnerUrls} />
+          <UrlListField label="Competitor URLs" urls={project.competitorUrls} />
+        </dl>
+      </div>
   );
 }
