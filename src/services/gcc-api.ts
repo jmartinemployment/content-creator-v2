@@ -124,9 +124,22 @@ export function parseSiteSectionJson(
   }
 }
 
+/**
+ * Saves the brief, and optionally a corrected `topic`.
+ *
+ * The keyword previously reached the server only at mint, inside `ensureCreateId`, which returns early
+ * once a create exists — so editing it afterwards changed a local input and persisted nothing. `topic`
+ * is sent to the create's own column rather than copied into the brief, because Topic is what the SEO
+ * score, the descriptor split, the grounding query and artifact naming all read; a second copy would
+ * drift.
+ */
 export function patchBriefResearch(
   createId: string,
-  body: { briefJson?: string | null; researchJson?: string | null },
+  body: {
+    briefJson?: string | null;
+    researchJson?: string | null;
+    topic?: string | null;
+  },
 ): Promise<GccCreate> {
   return gccRequest<GccCreate>(
     `/api/geek-content-creator/creates/${createId}/brief-research`,
@@ -135,6 +148,9 @@ export function patchBriefResearch(
       body: JSON.stringify({
         briefJson: body.briefJson ?? null,
         researchJson: body.researchJson ?? null,
+        // Omitted rather than nulled when unchanged: null is "leave it" server-side, and sending a
+        // blank string on every brief save would be a write nobody asked for.
+        topic: body.topic?.trim() || null,
       }),
     },
   );

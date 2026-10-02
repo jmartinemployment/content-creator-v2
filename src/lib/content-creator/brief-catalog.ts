@@ -211,6 +211,22 @@ export interface ContentBrief {
    * from a six-month-old one." Set together, once, when a curated SERP seed is confirmed; never
    * hand-edited. Empty when no SERP has ever been confirmed onto this brief.
    */
+  /**
+   * The operator's own framing of this niche's problem — researched by hand, per taxonomy leaf.
+   *
+   * Saved inside the brief deliberately: the brief is already the place operator framing lives
+   * (`writingNotes`, `audienceNotes`, `paaQuestions`), and it persists through the existing
+   * `PATCH creates/{id}/brief-research` with no new route or store.
+   *
+   * Read on the backend by `GccNicheFramingReader`, which lands it in the tool page's opening
+   * `SectionSlot.Guidance` — a field that was null until 2026-10-02, so the writer invented the
+   * problem, its cost and its failure modes on every page.
+   *
+   * There is deliberately no partner-program field. Jeff, 2026-10-02: "Partner program text has no
+   * place in my output." The brief is prompt input, so absence is the only guarantee that cannot
+   * regress.
+   */
+  nicheFraming: NicheFraming;
   serpCapturedKeyword: string;
   /** ISO 8601 timestamp of the confirm, not the page save — this codebase never trusts a client
    * clock for anything it didn't just observe, and confirm is the moment this data entered GCC. */
@@ -219,6 +235,50 @@ export interface ContentBrief {
    * saved Google results page carries no strong client-visible locale signal to extract. Stated
    * explicitly rather than implied, so a real signal can replace it later without a schema change. */
   serpLocale: string;
+}
+
+/** One set of the three things the operator researches. Shared by the category and each tool. */
+export type NicheFramingSet = {
+  /** The problem the reader has today, in the operator's words. */
+  coreProblem: string;
+  /** Where it goes wrong — one per line, the same convention as `paaQuestions`. */
+  painPoints: string;
+  /** What removes the problem, and the shape of the offer. */
+  automationToPitch: string;
+};
+
+export type NicheFraming = NicheFramingSet & {
+  /**
+   * The researched path, e.g. "Accounting -> Cash Flow Forecasting -> Accounts Receivable".
+   * Its first level is a department slug, which is what makes the departmental tool directory
+   * derivable rather than a field nobody sets.
+   */
+  taxonomyPath: string;
+  /**
+   * Per-tool overrides, **keyed by host** ("bill.com"), never by a typed product name.
+   * `GccPartnerToolSlices` buckets evidence by host and names pages through `AnchorLookup`, so a
+   * key of "Bill" would miss that partner's slice and the framing would reach the wrong page or
+   * none — silently, since absent guidance is indistinguishable from none.
+   *
+   * A tool with no entry inherits the category set. Not every tool needs one: the research states
+   * the framing once for the category as often as it states it per tool.
+   */
+  perTool: Record<string, NicheFramingSet>;
+};
+
+export function emptyNicheFramingSet(): NicheFramingSet {
+  return { coreProblem: "", painPoints: "", automationToPitch: "" };
+}
+
+export function emptyNicheFraming(): NicheFraming {
+  return { ...emptyNicheFramingSet(), taxonomyPath: "", perTool: {} };
+}
+
+/** True when a set carries anything at all. An all-blank set is not framing. */
+export function nicheFramingSetHasAny(set: NicheFramingSet): boolean {
+  return Boolean(
+    set.coreProblem.trim() || set.painPoints.trim() || set.automationToPitch.trim(),
+  );
 }
 
 export function emptyContentBrief(): ContentBrief {
@@ -243,6 +303,7 @@ export function emptyContentBrief(): ContentBrief {
     serpUrls: "",
     paaQuestions: "",
     relatedSearches: "",
+    nicheFraming: emptyNicheFraming(),
     serpCapturedKeyword: "",
     serpCapturedAt: "",
     serpLocale: "",
@@ -389,8 +450,50 @@ export function migrateBrief(raw: unknown): ContentBrief {
   base.serpCapturedKeyword = str(p.serpCapturedKeyword);
   base.serpCapturedAt = str(p.serpCapturedAt);
   base.serpLocale = str(p.serpLocale);
+  // Read back explicitly, like every other field. migrateBrief rebuilds from emptyContentBrief, so a
+  // field missing here is saved to the server and then silently wiped on the next load.
+  base.nicheFraming = migrateNicheFraming(p.nicheFraming);
   base.briefVersion = BRIEF_VERSION;
   return base;
+}
+
+function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
+  const set = emptyNicheFramingSet();
+  if (!raw || typeof raw !== "object") return set;
+  const p = raw as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+  set.coreProblem = str(p.coreProblem);
+  set.automationToPitch = str(p.automationToPitch);
+  // Accepts an array as well as lines, matching what the backend reader accepts — a programmatic
+  // writer (a later paste-and-extract acquisition) may store either.
+  set.painPoints = Array.isArray(p.painPoints)
+    ? p.painPoints.filter((x): x is string => typeof x === "string").join("\n")
+    : str(p.painPoints);
+  return set;
+}
+
+function migrateNicheFraming(raw: unknown): NicheFraming {
+  const framing = emptyNicheFraming();
+  if (!raw || typeof raw !== "object") return framing;
+  const p = raw as Record<string, unknown>;
+
+  Object.assign(framing, migrateNicheFramingSet(p));
+  framing.taxonomyPath = typeof p.taxonomyPath === "string"
+    ? p.taxonomyPath
+    : Array.isArray(p.taxonomyPath)
+      ? p.taxonomyPath.filter((x): x is string => typeof x === "string").join(" -> ")
+      : "";
+
+  if (p.perTool && typeof p.perTool === "object") {
+    for (const [host, value] of Object.entries(p.perTool as Record<string, unknown>)) {
+      const key = host.trim().toLowerCase();
+      if (!key) continue;
+      framing.perTool[key] = migrateNicheFramingSet(value);
+    }
+  }
+
+  return framing;
 }
 
 /* ------------------------- summaries / labels ------------------------- */

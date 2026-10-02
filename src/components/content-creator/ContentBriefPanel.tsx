@@ -25,6 +25,7 @@ import {
   type PartnerQuoteReadiness,
 } from "@/services/gcc-api";
 import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
+import NicheFramingPanel from "@/components/content-creator/NicheFramingPanel";
 import {
   applyCuratedSerpToBrief,
   type CuratedSerpSeed,
@@ -403,6 +404,10 @@ export default function ContentBriefPanel({
       // step by hand is what made them disagree.
       await patchBriefResearch(id, {
         briefJson: briefToJson({ ...brief, lengthBand: derivedLengthBand }),
+        // The keyword, every save. Before this it reached the server only at mint, so a corrected
+        // keyword looked accepted and was silently dropped. Blank is ignored server-side, and Topic is
+        // required, so this can only ever refine it -- never clear it.
+        topic: keywordInput.trim() || null,
       });
       setSavedMsg("Brief saved on Content Creator create.");
       onBriefSaved(id, true);
@@ -480,6 +485,13 @@ export default function ContentBriefPanel({
           <span className="ml-2 text-sm font-normal text-muted">Optional</span>
         </summary>
         <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
+
+        {/* Saved inside the brief, through the same PATCH as every other field. */}
+        <NicheFramingPanel
+          projectId={projectId}
+          value={brief.nicheFraming}
+          onChange={(nicheFraming) => patch({ nicheFraming })}
+        />
       </details>
 
       {serpConflicts.length > 0 ? (
