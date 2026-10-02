@@ -233,7 +233,7 @@ export default function ProjectProfilePanel({
                       type="button"
                       onClick={() => void handleDeleteEntry(entry)}
                       disabled={deleting}
-                      className="shrink-0 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                      className="shrink-0 rounded-full px-2 py-1 text-xs font-semibold text-white"
                     >
                       {deleting ? "Deleting…" : "Delete for good?"}
                     </button>
@@ -243,7 +243,7 @@ export default function ProjectProfilePanel({
                       onClick={() => setConfirmingEntryId(entry.id)}
                       aria-label="Delete this history entry"
                       title="Delete this history entry"
-                      className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-muted hover:bg-red-50 hover:text-red-600"
+                      className="shrink-0 rounded-full px-2 py-1 text-xs font-medium"
                     >
                       ✕
                     </button>

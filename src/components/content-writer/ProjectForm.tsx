@@ -599,7 +599,7 @@ export default function ProjectForm({
         <button
           type="submit"
           disabled={isSubmitting || !canSubmit}
-          className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+          className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {isSubmitting ? "Creating..." : "Create Project"}
         </button>

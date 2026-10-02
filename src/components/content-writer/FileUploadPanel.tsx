@@ -270,7 +270,7 @@ export default function FileUploadPanel({
                 type="button"
                 onClick={cancelSerp}
                 disabled={confirming}
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted hover:bg-surface-muted"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold"
               >
                 Cancel
               </button>
@@ -354,7 +354,7 @@ export default function FileUploadPanel({
                   <button
                     type="button"
                     onClick={() => void handleDelete(file.id)}
-                    className="ml-2 shrink-0 text-red-500 hover:underline"
+                    className="ml-2 shrink-0"
                   >
                     Remove
                   </button>
@@ -467,7 +467,7 @@ function SelectionList({
             type="button"
             onClick={onSelectAll}
             disabled={allSelected}
-            className="font-semibold text-brand hover:underline disabled:cursor-default disabled:text-muted disabled:no-underline"
+            className="font-semibold"
           >
             Select all
           </button>
@@ -475,7 +475,7 @@ function SelectionList({
             type="button"
             onClick={onClear}
             disabled={selected.size === 0}
-            className="font-semibold text-muted hover:underline disabled:cursor-default disabled:no-underline"
+            className="font-semibold"
           >
             Clear
           </button>

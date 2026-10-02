@@ -48,7 +48,7 @@ export function AppSidebar() {
         <form action="/api/auth/logout" method="post">
           <button
             type="submit"
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-white/60 hover:bg-white/10 hover:text-white"
+            className="w-full rounded-md px-3 py-2 text-left text-sm"
           >
             Sign out
           </button>

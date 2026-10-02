@@ -235,7 +235,7 @@ export default function ReviewPublishPanel({
       <button
         onClick={handleReview}
         disabled={!canRunReview}
-        className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+        className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
       >
         {isReviewing ? "Reviewing..." : verdicts ? "Re-run review" : "Run review"}
       </button>
@@ -273,7 +273,7 @@ export default function ReviewPublishPanel({
                   type="button"
                   onClick={handleRewriteSelected}
                   disabled={rewritingId !== null || !selectedRewriteVerdictId}
-                  className="rounded-md border border-brand px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/5 disabled:opacity-60"
+                  className="rounded-md border border-brand px-3 py-2 text-sm font-semibold"
                 >
                   {rewritingId === selectedRewriteVerdictId
                     ? "Rewriting with feedback..."
@@ -318,7 +318,7 @@ export default function ReviewPublishPanel({
             type="button"
             disabled={isExporting}
             onClick={handleExport}
-            className="mt-3 rounded-md border border-brand px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/5 disabled:opacity-60"
+            className="mt-3 rounded-md border border-brand px-3 py-2 text-sm font-semibold"
           >
             {isExporting ? "Exporting..." : "Export .html files (.zip)"}
           </button>
@@ -327,7 +327,7 @@ export default function ReviewPublishPanel({
             type="button"
             disabled={isCommitting}
             onClick={handleCommit}
-            className="mt-3 rounded-md border border-brand px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/5 disabled:opacity-60"
+            className="mt-3 rounded-md border border-brand px-3 py-2 text-sm font-semibold"
           >
             {isCommitting ? "Committing..." : "Commit to geekatyourspot"}
           </button>
@@ -442,7 +442,7 @@ function VerdictRow({
           type="button"
           onClick={() => onRewrite(verdict)}
           disabled={isRewriting}
-          className="mt-2 rounded-md border border-brand px-2 py-1 text-xs font-semibold text-brand transition-colors hover:bg-brand/5 disabled:opacity-60"
+          className="mt-2 rounded-md border border-brand px-2 py-1 text-xs font-semibold"
         >
           {isRewriting ? "Rewriting with feedback..." : "Rewrite with feedback"}
         </button>

@@ -223,7 +223,7 @@ export default function ClientsPanel({
             <button
               type="submit"
               disabled={isSubmitting || !canSubmit}
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+              className="rounded-md px-4 py-2 text-sm font-semibold text-white"
             >
               {isSubmitting ? "Creating..." : "Create"}
             </button>
@@ -240,10 +240,6 @@ export default function ClientsPanel({
           const selected = selectedClientId === client.id;
           return (
             <span
-              key={client.id}
-              className={`inline-flex items-center gap-1 rounded-full pl-3 pr-1.5 py-1.5 text-sm font-medium transition-colors ${
-                selected ? "bg-brand text-white" : "bg-background text-foreground hover:bg-border/50"
-              }`}
             >
               <button
                 type="button"
@@ -251,7 +247,7 @@ export default function ClientsPanel({
                   setConfirmingId(null);
                   onSelect(client.id);
                 }}
-                className="font-medium"
+                className="font-medium bg-[#C83803]"
               >
                 {client.name}
                 {!client.publishTarget && (
@@ -272,7 +268,7 @@ export default function ClientsPanel({
                   type="button"
                   onClick={() => void handleDelete(client)}
                   disabled={deletingId === client.id}
-                  className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  className="rounded-full"
                 >
                   {deletingId === client.id ? "Deleting…" : "Delete this client?"}
                 </button>

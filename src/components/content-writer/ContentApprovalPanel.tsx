@@ -112,7 +112,7 @@ export default function ContentApprovalPanel({
               type="button"
               disabled={pending}
               onClick={revoke}
-              className="rounded-md border border-border bg-white px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+              className="rounded-md border border-border bg-white px-3 py-2 text-sm font-medium"
             >
               Revoke approval
             </button>
@@ -125,7 +125,7 @@ export default function ContentApprovalPanel({
           type="button"
           disabled={pending}
           onClick={approve}
-          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
+          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {pending ? "Saving…" : "Content approval"}
         </button>

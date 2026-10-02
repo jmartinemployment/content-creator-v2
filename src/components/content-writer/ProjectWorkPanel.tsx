@@ -307,7 +307,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
             <button
               type="submit"
               disabled={addingTask || taskName.trim().length === 0}
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
             >
               {addingTask ? "Adding…" : "Add task"}
             </button>
@@ -448,7 +448,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
             <button
               type="submit"
               disabled={logging}
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
             >
               {logging ? "Logging…" : "Log time"}
             </button>

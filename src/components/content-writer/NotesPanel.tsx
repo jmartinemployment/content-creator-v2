@@ -58,7 +58,7 @@ export default function NotesPanel({
         <button
           onClick={handleSave}
           disabled={isSaving || !isDirty}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {isSaving ? "Saving..." : "Save"}
         </button>

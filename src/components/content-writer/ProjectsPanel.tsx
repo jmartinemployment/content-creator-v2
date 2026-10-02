@@ -232,7 +232,7 @@ export default function ProjectsPanel({
                   type="button"
                   onClick={() => void handleDelete(project)}
                   disabled={deleting}
-                  className="shrink-0 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  className="shrink-0 rounded-fulltext-xs font-semibold text-white"
                 >
                   {deleting ? "Deleting…" : "Delete for good?"}
                 </button>
@@ -242,7 +242,7 @@ export default function ProjectsPanel({
                   onClick={() => setConfirmingId(project.id)}
                   aria-label={`Delete ${project.name}`}
                   title={`Delete ${project.name}`}
-                  className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-muted hover:bg-red-50 hover:text-red-600"
+                  className="shrink-0 rounded-full px-2 py-1 text-xs font-medium"
                 >
                   ✕
                 </button>

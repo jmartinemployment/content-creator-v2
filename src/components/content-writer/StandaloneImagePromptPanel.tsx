@@ -91,7 +91,7 @@ export default function StandaloneImagePromptPanel({
         type="button"
         disabled={pending || !clientId}
         onClick={run}
-        className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
       >
         {pending ? "Generating…" : "Generate image prompt"}
       </button>

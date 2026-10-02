@@ -166,11 +166,7 @@ export default function DraftRevisePanel({
           type="button"
           disabled={!hasArticle}
           onClick={() => setTarget("TechnicalArticle")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            target === "TechnicalArticle"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Pillar
         </button>
@@ -178,11 +174,7 @@ export default function DraftRevisePanel({
           type="button"
           disabled={!hasBlog}
           onClick={() => setTarget("BlogPost")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            target === "BlogPost"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Blog
         </button>
@@ -190,11 +182,7 @@ export default function DraftRevisePanel({
           type="button"
           disabled={!hasTools}
           onClick={() => setTarget("ToolPost")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            target === "ToolPost"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Tool
         </button>
@@ -202,11 +190,7 @@ export default function DraftRevisePanel({
           type="button"
           disabled={!hasImages}
           onClick={() => setTarget("ImagePrompt")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            target === "ImagePrompt"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Image prompt
         </button>
@@ -306,7 +290,7 @@ export default function DraftRevisePanel({
       >
         {pending ? "Revising…" : "Revise → update draft"}
       </button>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm">{error}</p> : null}
     </section>
   );
 }

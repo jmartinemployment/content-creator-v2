@@ -211,7 +211,7 @@ export default function ProjectDeliverablesPanel({
         <button
           type="submit"
           disabled={adding || !selectedCreateId}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {adding ? "Adding…" : "Add deliverable"}
         </button>
