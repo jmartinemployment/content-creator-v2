@@ -12,36 +12,43 @@
   --gcc-glow: rgba(200, 56, 3, 0.18);
   --background: var(--gcc-paper);
   --foreground: var(--gcc-ink);
-  /* CWV2 theme tokens (ProjectForm / ContentResults) */
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f5f5f7;
-  --color-border: #e8e8ea;
-  --color-border-strong: #c8c8cc;
-  --color-text-primary: #1a1a2c;
-  --color-text-secondary: #6b6b80;
-  --color-text-muted: #a0a0b0;
-  --color-accent: #c83803;
-  --color-accent-hover: #8c2703;
-  --color-brand: #c83803;
-  --color-muted: #6b7280;
+  /* CWV2 source values. Named --cwv2-* so the @theme block below can point AT them.
+     They were named --color-*, which made every @theme entry read `--color-x: var(--color-x)` -- a
+     self-reference, which is a CSS custom-property cycle and resolves to guaranteed-invalid. A utility
+     built on an invalid var falls back to `inherit`, so text-brand could render as the inherited colour
+     instead of Bears orange, and devtools showed no matching declaration to confirm against.
+     Jeff, 2026-10-02: "class text-brand is not identified so I could not confirm it Chicago Bear Orange
+     not red." Values are unchanged; only the indirection is fixed. */
+  --cwv2-bg: #ffffff;
+  --cwv2-surface: #ffffff;
+  --cwv2-surface-muted: #f5f5f7;
+  --cwv2-border: #e8e8ea;
+  --cwv2-border-strong: #c8c8cc;
+  --cwv2-text-primary: #1a1a2c;
+  --cwv2-text-secondary: #6b6b80;
+  --cwv2-text-muted: #a0a0b0;
+  --cwv2-accent: #c83803;
+  --cwv2-accent-hover: #8c2703;
+  /* Chicago Bears orange. Same value as --gcc-accent; both kept so either name resolves. */
+  --cwv2-brand: #c83803;
+  --cwv2-muted: #6b7280;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-surface: var(--color-surface);
-  --color-surface-muted: var(--color-surface-muted);
-  --color-border: var(--color-border);
-  --color-border-strong: var(--color-border-strong);
-  --color-text-primary: var(--color-text-primary);
-  --color-text-secondary: var(--color-text-secondary);
-  --color-text-muted: var(--color-text-muted);
-  --color-accent: var(--color-accent);
-  --color-accent-hover: var(--color-accent-hover);
-  --color-brand: var(--color-brand);
+  --color-surface: var(--cwv2-surface);
+  --color-surface-muted: var(--cwv2-surface-muted);
+  --color-border: var(--cwv2-border);
+  --color-border-strong: var(--cwv2-border-strong);
+  --color-text-primary: var(--cwv2-text-primary);
+  --color-text-secondary: var(--cwv2-text-secondary);
+  --color-text-muted: var(--cwv2-text-muted);
+  --color-accent: var(--cwv2-accent);
+  --color-accent-hover: var(--cwv2-accent-hover);
+  --color-brand: var(--cwv2-brand);
   --color-brand-dark: var(--gcc-accent-deep);
-  --color-muted: var(--color-muted);
+  --color-muted: var(--cwv2-muted);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
@@ -58,13 +65,13 @@ body {
 
 .btn-primary {
   border-radius: 8px;
-  background: var(--color-accent);
+  background: var(--cwv2-accent);
   color: #ffffff;
   font-weight: 600;
 }
 
 .btn-primary:hover {
-  background: var(--color-accent-hover);
+  background: var(--cwv2-accent-hover);
 }
 
 .btn-primary:disabled {
