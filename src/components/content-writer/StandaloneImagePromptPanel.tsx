@@ -102,7 +102,7 @@ export default function StandaloneImagePromptPanel({
             <p className="text-sm font-medium text-foreground">Result</p>
             <button
               type="button"
-              className="text-xs font-semibold text-brand underline"
+              className="text-xs font-semibold text-[#C83803] underline"
               onClick={() => navigator.clipboard.writeText(resultJson)}
             >
               Copy

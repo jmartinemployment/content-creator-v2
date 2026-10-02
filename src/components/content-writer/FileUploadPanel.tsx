@@ -224,7 +224,7 @@ export default function FileUploadPanel({
           </select>
         </label>
 
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-brand/50 bg-brand/5 px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/10">
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-brand/50 bg-brand/5 px-4 py-2 text-sm font-semibold text-[#C83803] hover:bg-brand/10">
           {isUploading
             ? category === "KeywordResult"
               ? "Parsing…"
@@ -343,7 +343,7 @@ export default function FileUploadPanel({
           <div key={group.value} className="rounded-lg border border-border bg-background p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">{group.label}</span>
-              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-[#C83803]">
                 {group.files.length}
               </span>
             </div>

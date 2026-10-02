@@ -97,14 +97,14 @@ export default function NewCreatePage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">
+        <p className="text-sm font-semibold uppercase tracking-wide text-[#C83803]">
           Content Creator
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">New create</h1>
         <p className="mt-2 text-sm text-muted">
           Start from a topic you already have. For site-grounded writing — where the draft
           cites your own section structure —{" "}
-          <Link href="/app/create" className="font-semibold text-brand">
+          <Link href="/app/create" className="font-semibold text-[#C83803]">
             crawl the site first
           </Link>.
         </p>
@@ -160,7 +160,7 @@ export default function NewCreatePage() {
                   checked={selectedContentTypes.includes(t.value)}
                   onChange={() => toggleContentType(t.value)}
                   disabled={disabled || creating}
-                  className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                  className="h-3.5 w-3.5 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
                 />
                 {t.label}
                 {disabled ? " (disabled)" : ""}

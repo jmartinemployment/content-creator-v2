@@ -345,7 +345,7 @@ export default function CreateDraftWorkspace({
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">{loadError}</p>
-        <Link href="/app/creates" className="mt-4 inline-block text-sm text-brand hover:underline">
+        <Link href="/app/creates" className="mt-4 inline-block text-sm text-[#C83803] hover:underline">
           &larr; Back to workflow
         </Link>
       </div>
@@ -519,7 +519,7 @@ export default function CreateDraftWorkspace({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <Link href="/app/creates" className="text-sm text-brand hover:underline">
+      <Link href="/app/creates" className="text-sm text-[#C83803] hover:underline">
         &larr; Back to workflow
       </Link>
 
@@ -566,7 +566,7 @@ export default function CreateDraftWorkspace({
               <button
                 type="button"
                 onClick={() => setBriefOpen((v) => !v)}
-                className="text-sm text-brand underline-offset-2 hover:underline"
+                className="text-sm text-[#C83803] underline-offset-2 hover:underline"
               >
                 {briefOpen ? "Done editing" : "Edit brief"}
               </button>
@@ -815,7 +815,7 @@ export default function CreateDraftWorkspace({
                     className={
                       "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors " +
                       (selected
-                        ? "border-brand bg-brand/10 text-brand"
+                        ? "border-brand bg-brand/10 text-[#C83803]"
                         : "border-border bg-surface text-muted hover:bg-muted/30")
                     }
                   >
@@ -1105,7 +1105,7 @@ function ContentTypePicker({
                 checked={selected.includes(o.value)}
                 disabled={disabled}
                 onChange={() => onToggle(o.value)}
-                className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                className="h-3.5 w-3.5 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
               />
               {o.label}
               {disabled ? " (disabled)" : ""}
@@ -1224,7 +1224,7 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
                       <button
                         type="button"
                         onClick={() => void navigator.clipboard?.writeText(prompt.prompt)}
-                        className="text-xs font-medium text-brand underline"
+                        className="text-xs font-medium text-[#C83803] underline"
                       >
                         Copy
                       </button>
@@ -1426,7 +1426,7 @@ function ArtifactBody({
 
       {html ? (
         <div
-          className="gcc-doc max-h-[32rem] overflow-auto rounded-md border border-border bg-white p-5 text-sm text-foreground [&_a]:text-brand [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_p]:leading-relaxed [&_.gcc-summary]:mb-4 [&_.gcc-summary]:text-base [&_.gcc-summary]:font-medium [&_.gcc-summary]:leading-relaxed [&_.gcc-summary]:text-muted [&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote_cite]:mt-1 [&_blockquote_cite]:block [&_blockquote_cite]:text-xs [&_blockquote_cite]:not-italic [&_blockquote_cite]:text-muted"
+          className="gcc-doc max-h-[32rem] overflow-auto rounded-md border border-border bg-white p-5 text-sm text-foreground [&_a]:text-[#C83803] [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_p]:leading-relaxed [&_.gcc-summary]:mb-4 [&_.gcc-summary]:text-base [&_.gcc-summary]:font-medium [&_.gcc-summary]:leading-relaxed [&_.gcc-summary]:text-muted [&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote_cite]:mt-1 [&_blockquote_cite]:block [&_blockquote_cite]:text-xs [&_blockquote_cite]:not-italic [&_blockquote_cite]:text-muted"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
@@ -1440,7 +1440,7 @@ function ArtifactBody({
           <button
             type="button"
             onClick={() => setShowSchema((v) => !v)}
-            className="mt-4 block text-sm font-medium text-brand hover:underline"
+            className="mt-4 block text-sm font-medium text-[#C83803] hover:underline"
           >
             {showSchema ? "Hide" : "Show"} JSON+LD Schema
           </button>

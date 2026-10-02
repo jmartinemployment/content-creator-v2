@@ -47,7 +47,7 @@ export default function CrawlPanel({
         {isCrawling ? "Crawling..." : crawl ? "Re-crawl Site" : "Crawl Site"}
       </button>
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-4 text-sm">{error}</p>}
 
       {crawl && (
         <dl className="mt-5 grid grid-cols-2 gap-4 rounded-lg bg-background p-4 text-sm sm:grid-cols-3">

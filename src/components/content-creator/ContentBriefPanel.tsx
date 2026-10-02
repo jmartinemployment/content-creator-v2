@@ -479,7 +479,7 @@ export default function ContentBriefPanel({
           system's word; the operator is uploading a saved search results page. */}
       <details className="group mt-6 border-t border-border pt-5">
         <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:content-['']">
-          <span className="text-brand underline-offset-2 group-open:no-underline hover:underline">
+          <span className="text-[#C83803] underline-offset-2 group-open:no-underline hover:underline">
             Add a saved search results page
           </span>
           <span className="ml-2 text-sm font-normal text-muted">Optional</span>

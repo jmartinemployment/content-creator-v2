@@ -194,7 +194,7 @@ export default function WorkflowPage() {
 function Masthead() {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#C83803]">
         Content Creator
       </p>
       <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-white lg:text-3xl">

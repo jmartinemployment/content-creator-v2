@@ -73,7 +73,7 @@ export function AppNavbar() {
               aria-current={isActive(item) ? "page" : undefined}
               className={`-mb-px border-b-2 px-3 py-[1.3rem] text-sm font-medium transition-colors ${
                 isActive(item)
-                  ? "border-brand text-brand"
+                  ? "border-brand text-[#C83803]"
                   : "border-transparent text-muted hover:border-border hover:text-foreground"
               }`}
             >
@@ -85,7 +85,7 @@ export function AppNavbar() {
         <div className="ml-auto hidden items-center gap-4 lg:flex">
           <Link
             href="/"
-            className="text-xs text-muted transition-colors hover:text-brand"
+            className="text-xs text-muted transition-colors hover:text-[#C83803]"
           >
             Marketing site
           </Link>
@@ -127,7 +127,7 @@ export function AppNavbar() {
               aria-current={isActive(item) ? "page" : undefined}
               className={`block rounded-md px-3 py-2.5 text-sm font-medium ${
                 isActive(item)
-                  ? "bg-surface-muted text-brand"
+                  ? "bg-surface-muted text-[#C83803]"
                   : "text-muted"
               }`}
             >

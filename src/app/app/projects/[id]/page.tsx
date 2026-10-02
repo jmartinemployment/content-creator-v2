@@ -111,7 +111,7 @@ export default function ProjectWorkspacePage() {
   return (
     <>
       {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-ink min-h-screen py-5 lg:hidden">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 lg:hidden">
         <div className="px-4">
           <Crumb />
           <h1 className="mt-2 font-display text-2xl font-semibold leading-tight text-white">
@@ -120,7 +120,7 @@ export default function ProjectWorkspacePage() {
           {/* A graphic rule, not text: #c83803 on #0b162a is ~2.5:1, fine for a 3px bar and not for
               anything anyone has to read. */}
           <span className="mt-2 block h-[3px] w-12 rounded-full bg-brand" />
-          {subheading ? <p className="mt-1 text-sm text-line">{subheading}</p> : null}
+          {subheading ? <p className="mt-1 text-sm text-[var(--gcc-line)]">{subheading}</p> : null}
         </div>
 
         {/* A scrolling strip rather than a wrapped row: five labels wrap to three lines on a phone and
@@ -132,11 +132,7 @@ export default function ProjectWorkspacePage() {
               type="button"
               onClick={() => setSection(s.key)}
               aria-current={s.key === section ? "page" : undefined}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                s.key === section
-                  ? "bg-white text-brand shadow-sm"
-                  : "bg-slate text-white hover:bg-navy-raised"
-              }`}
+              className=""
             >
               {s.label}
             </button>
@@ -149,7 +145,7 @@ export default function ProjectWorkspacePage() {
       </div>
 
       {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-ink min-h-screen py-5 hidden lg:block">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 hidden lg:block">
         <div className="mx-auto w-full max-w-[1800px] px-8">
           <Crumb />
           <div className="mt-2 flex items-end justify-between gap-6">
@@ -158,9 +154,9 @@ export default function ProjectWorkspacePage() {
                 {heading}
               </h1>
               <span className="mt-2 block h-[3px] w-14 rounded-full bg-brand" />
-              {subheading ? <p className="mt-1 text-sm text-line">{subheading}</p> : null}
+              {subheading ? <p className="mt-1 text-sm text-[var(--gcc-line)]">{subheading}</p> : null}
             </div>
-            <p className="max-w-md pb-1 text-right text-sm text-line">{active.blurb}</p>
+            <p className="max-w-md pb-1 text-right text-sm text-[var(--gcc-line)]">{active.blurb}</p>
           </div>
 
           {/* A fixed rail, not a fraction: the section list does not get wider usefully, so giving it a
@@ -174,11 +170,7 @@ export default function ProjectWorkspacePage() {
                       type="button"
                       onClick={() => setSection(s.key)}
                       aria-current={s.key === section ? "page" : undefined}
-                      className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                        s.key === section
-                          ? "border-l-[3px] border-brand bg-white text-brand shadow-sm"
-                          : "border-l-[3px] border-transparent text-line hover:bg-slate hover:text-white"
-                      }`}
+                      className=""
                     >
                       {s.label}
                     </button>
@@ -201,7 +193,7 @@ function Crumb() {
   return (
     <Link
       href="/app/workflow"
-      className="text-sm text-line transition-colors hover:text-white"
+      className="text-sm text-[var(--gcc-line)] transition-colors hover:text-white"
     >
       &larr; All projects
     </Link>

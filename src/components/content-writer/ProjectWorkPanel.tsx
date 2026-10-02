@@ -332,7 +332,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
                       checked={taskContentTypes.includes(ct.value)}
                       onChange={() => toggleTaskContentType(ct.value)}
                       disabled={disabled}
-                      className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                      className="h-3.5 w-3.5 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
                     />
                     {ct.label}
                     {disabled ? " (disabled)" : ""}
@@ -354,7 +354,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
               {/* One line per currency, never one number across them: a project whose client
                   changed currency has two real totals. */}
               {totals.billable.map((b) => (
-                <span key={b.currency} className="font-medium text-brand">
+                <span key={b.currency} className="font-medium text-[#C83803]">
                   {money(b.amount, b.currency)}
                 </span>
               ))}
@@ -439,7 +439,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
               type="checkbox"
               checked={billable}
               onChange={(e) => setBillable(e.target.checked)}
-              className="h-4 w-4 rounded border-border text-brand focus:ring-2 focus:ring-brand/20"
+              className="h-4 w-4 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20"
             />
             Billable
           </label>
@@ -473,7 +473,7 @@ export default function ProjectWorkPanel({ project }: { project: GccProject }) {
                     {entry.description ? ` — ${entry.description}` : ""}
                   </span>
                   {entry.billable && entry.rateSnapshot !== null && entry.currency ? (
-                    <span className="text-xs text-brand">
+                    <span className="text-xs text-[#C83803]">
                       {money((entry.minutes / 60) * entry.rateSnapshot, entry.currency)}
                     </span>
                   ) : (

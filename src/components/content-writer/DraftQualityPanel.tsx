@@ -95,11 +95,7 @@ export default function DraftQualityPanel({
           type="button"
           disabled={!result.article}
           onClick={() => setKind("article")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            kind === "article"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Pillar
         </button>
@@ -107,11 +103,7 @@ export default function DraftQualityPanel({
           type="button"
           disabled={!result.blog}
           onClick={() => setKind("blog")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-            kind === "blog"
-              ? "bg-brand text-white"
-              : "border border-border text-foreground disabled:opacity-40"
-          }`}
+          className=""
         >
           Blog
         </button>
@@ -134,7 +126,7 @@ export default function DraftQualityPanel({
             <button
               type="button"
               onClick={() => onApplyFeedback(seo.applyFeedback, contentType)}
-              className="text-sm font-semibold text-brand underline"
+              className="text-sm font-semibold text-[#C83803] underline"
             >
               Apply SEO fixes via revise
             </button>
@@ -163,7 +155,7 @@ export default function DraftQualityPanel({
             <button
               type="button"
               onClick={() => onApplyFeedback(polish.applyFeedback, contentType)}
-              className="text-sm font-semibold text-brand underline"
+              className="text-sm font-semibold text-[#C83803] underline"
             >
               Apply polish fixes via revise
             </button>

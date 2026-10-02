@@ -149,7 +149,7 @@ export default function CreateRepurposePage() {
         <p className="text-sm text-red-600">{loadError}</p>
         <button
           type="button"
-          className="mt-4 text-sm text-brand hover:underline"
+          className="mt-4 text-sm text-[#C83803] hover:underline"
           onClick={() => router.push(`/app/creates/${createId}`)}
         >
           &larr; Back to create
@@ -170,7 +170,7 @@ export default function CreateRepurposePage() {
     <div className="mx-auto max-w-3xl px-4 py-10">
       <Link
         href={`/app/creates/${createId}`}
-        className="text-sm text-brand hover:underline"
+        className="text-sm text-[#C83803] hover:underline"
       >
         &larr; Back to create
       </Link>

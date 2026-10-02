@@ -45,7 +45,7 @@ export default function CreatesListPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand">
+        <p className="text-sm font-semibold uppercase tracking-wide text-[#C83803]">
           Content Creator
         </p>
         <h1 className="mt-1 text-3xl font-bold text-foreground">Creates</h1>
@@ -93,7 +93,7 @@ export default function CreatesListPage() {
                     {c.projectSiteRunId ? " · grounded on a crawl" : ""}
                   </p>
                 </div>
-                <span className="text-sm font-semibold text-brand">Open →</span>
+                <span className="text-sm font-semibold text-[#C83803]">Open →</span>
               </Link>
             </li>
           ))}

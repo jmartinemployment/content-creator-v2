@@ -107,7 +107,7 @@ export default function ClientsPanel({
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="text-sm font-medium text-brand hover:underline"
+          className="text-sm font-medium text-[#C83803] hover:underline"
         >
           {showForm ? "Cancel" : "+ New client"}
         </button>

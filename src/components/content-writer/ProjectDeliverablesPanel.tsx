@@ -155,7 +155,7 @@ export default function ProjectDeliverablesPanel({
               <button
                 type="button"
                 onClick={() => onOpenCreate(d.createId)}
-                className="flex-1 text-left text-sm font-medium text-brand hover:underline"
+                className="flex-1 text-left text-sm font-medium text-[#C83803] hover:underline"
               >
                 {d.name}
               </button>

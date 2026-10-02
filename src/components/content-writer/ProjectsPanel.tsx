@@ -15,7 +15,7 @@ const STATUS_CLASS: Record<GccProjectStatus, string> = {
   planned: "bg-background text-muted",
   active: "bg-green-100 text-green-800",
   on_hold: "bg-amber-100 text-amber-800",
-  finished: "bg-brand/10 text-brand",
+  finished: "bg-brand/10 text-[#C83803]",
   cancelled: "bg-border text-muted line-through",
 };
 
@@ -55,15 +55,15 @@ function dueNote(project: GccProject): { text: string; className: string } | nul
     const overdue = Math.abs(days);
     return {
       text: `${overdue} day${overdue === 1 ? "" : "s"} overdue`,
-      className: "text-brand",
+      className: "text-[#C83803]",
     };
   }
-  // All three due states are #c83803 via text-brand -- Jeff, 2026-10-02. Not Tailwind's amber-700 or
+  // All three due states are #c83803 via text-[#C83803] -- Jeff, 2026-10-02. Not Tailwind's amber-700 or
   // red-600, neither of which is in this property's palette. The wording carries the severity
   // ("1 day overdue" against "due in 3 days"); the colour only says this is the field that needs
   // attention. text-red-600 stays for errors, which is a different thing from a late project.
-  if (days === 0) return { text: "due today", className: "text-brand" };
-  if (days <= 7) return { text: `due in ${days} day${days === 1 ? "" : "s"}`, className: "text-brand" };
+  if (days === 0) return { text: "due today", className: "text-[#C83803]" };
+  if (days <= 7) return { text: `due in ${days} day${days === 1 ? "" : "s"}`, className: "text-[#C83803]" };
   return null;
 }
 
@@ -142,7 +142,7 @@ export default function ProjectsPanel({
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="shrink-0 text-sm font-medium text-brand hover:underline"
+            className="shrink-0 text-sm font-medium text-[#C83803] hover:underline"
           >
             {showForm ? "Cancel" : "+ New Project"}
           </button>
@@ -172,7 +172,7 @@ export default function ProjectsPanel({
         <button
           type="button"
           onClick={() => setShowCancelled((v) => !v)}
-          className="mt-2 text-xs font-medium text-brand hover:underline"
+          className="mt-2 text-xs font-medium text-[#C83803] hover:underline"
         >
           {showCancelled
             ? "Hide cancelled"

@@ -71,7 +71,7 @@ function UrlListField({ label, urls }: { label: string; urls: readonly string[] 
               href={u}
               target="_blank"
               rel="noreferrer"
-              className="break-all font-mono text-xs text-brand hover:underline"
+              className="break-all font-mono text-xs text-[#C83803] hover:underline"
             >
               {u}
             </a>
