@@ -247,7 +247,7 @@ export default function ClientsPanel({
                   setConfirmingId(null);
                   onSelect(client.id);
                 }}
-                className="font-medium bg-[#C83803]"
+                className="bg-[#C83803] text-white font-bold py-2 px-4 rounded"
               >
                 {client.name}
                 {!client.publishTarget && (
@@ -278,9 +278,7 @@ export default function ClientsPanel({
                   onClick={() => setConfirmingId(client.id)}
                   aria-label={`Delete ${client.name}`}
                   title={`Delete ${client.name}`}
-                  className={`rounded-full px-1.5 text-xs leading-none opacity-60 hover:opacity-100 ${
-                    selected ? "hover:bg-white/20" : "hover:bg-border"
-                  }`}
+                  className=""
                 >
                   ×
                 </button>
