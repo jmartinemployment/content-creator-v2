@@ -55,13 +55,13 @@ function dueNote(project: GccProject): { text: string; className: string } | nul
     const overdue = Math.abs(days);
     return {
       text: `${overdue} day${overdue === 1 ? "" : "s"} overdue`,
-      className: "text-red-600",
+      className: "text-brand",
     };
   }
-  // Brand orange (#c83803 via text-brand), not Tailwind's amber-700. Both of these are one state --
-  // "due soon" -- so they take one colour; colouring only "due today" would leave due-in-3-days a
-  // different warm shade and read as a bug. Overdue stays red above: that is a different state, and the
-  // whole point of a warning colour is that it is not the failure colour.
+  // All three due states are #c83803 via text-brand -- Jeff, 2026-10-02. Not Tailwind's amber-700 or
+  // red-600, neither of which is in this property's palette. The wording carries the severity
+  // ("1 day overdue" against "due in 3 days"); the colour only says this is the field that needs
+  // attention. text-red-600 stays for errors, which is a different thing from a late project.
   if (days === 0) return { text: "due today", className: "text-brand" };
   if (days <= 7) return { text: `due in ${days} day${days === 1 ? "" : "s"}`, className: "text-brand" };
   return null;
