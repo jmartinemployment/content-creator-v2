@@ -481,18 +481,48 @@ Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api
 - **Project-site crawling still runs inside GeekAPI**, which is why Chromium is installed into the
   API image (`Dockerfile:33`). That is the one live violation of the boundaries above.
 
-### Input the UI collects and then discards
+### Reachability in this repo — read in full 2026-10-02
 
-Verified 2026-09-18. Not dead endpoints — fields with no destination at all:
+The section that stood here claimed four things about discarded input. **All four were stale**, and it
+was the section most likely to be cited as evidence. Corrected against a full read of `src`:
 
-| Field | Where | What happens |
-|---|---|---|
-| Partner URLs, Competitor URLs | `crawl-client.tsx` | Index-checked on blur, coloured, then forgotten. Never persisted. `startGeekCrawl` is the only function that would take them and has **zero call sites** |
-| Target keyword | `ContentBriefPanel.tsx:317` | Only reaches a body inside `ensureCreateId()`, which short-circuits when a create exists — so on every live path it is dropped |
-| All of `SerpIngestPanel` | orphaned | Zero importers; its `onCurated` has no implementation |
+| The old claim | What is actually true |
+|---|---|
+| Partner/competitor URLs are "index-checked, coloured, then forgotten. Never persisted" in `crawl-client.tsx` | **`crawl-client.tsx` does not exist.** `ProjectForm` collects them, and `createProject`/`updateProject` carry `partnerUrls`/`competitorUrls` to the project row — they are persisted and they are what grounding resolves from |
+| `startGeekCrawl` has "zero call sites" | It is called at **`ProjectForm.tsx:54`** |
+| Target keyword "is dropped on every live path" | It becomes **`create.Topic`** — `ContentBriefPanel.ensureCreateId`: `const topic = keywordInput.trim()`. The real limitation is narrower: once a create exists, `ensureCreateId` short-circuits, so the keyword cannot be *changed* afterwards |
+| `SerpIngestPanel` is "orphaned; zero importers" | **`ContentBriefPanel` imports it** |
+| "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | **There is no `/app/projects/[id]` route.** `src/app/app/` contains only `creates/`, `creates/[id]`, `creates/[id]/repurpose`, `creates/new` and `workflow` |
 
-`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with **no
-inbound link**.
+**The one reachable surface.** `AppSidebar` has a single nav item and `/app` redirects to it, so
+everything starts at **`/app/workflow`**, which renders: `ClientsPanel` → `ProjectsPanel` →
+`ProjectProfilePanel` → `ProjectWorkPanel` → `ProjectDeliverablesPanel` → `CreateDraftWorkspace`
+(→ `ContentBriefPanel` → `SerpIngestPanel`, and `SiteContextBanner`).
+
+**Seven components have no importer at all:** `ContentApprovalPanel`, `CrawlPanel`,
+`DraftQualityPanel`, `DraftRevisePanel`, `FileUploadPanel`, `NotesPanel`,
+`StandaloneImagePromptPanel` — about 1,450 lines.
+
+**Why that matters for dead-call claims.** Most `content-writer-api.ts` functions *do* have callers;
+the callers are those seven unreachable components. So grepping a function name finds a hit and the
+reader concludes it is live. Only these have a live path: `createClient`, `deleteClient`
+(`ClientsPanel`), `deleteProject` (`ProjectsPanel`), `createProject` (`ProjectForm`), `getProject`
+(via `gcc-projects-api`), `downloadHtmlExport` (via `gcc-api`). Everything else is dead or
+**transitively dead**, which is the distinction to state rather than "no caller".
+
+**Also confirmed by the same read**, because these are relied on elsewhere:
+
+- **Five partners is a floor, not a count.** `declared-url-gate.ts` measures it on *usable* URLs, and
+  `GccDeclaredUrlEvidence.WrongCount` is `actual >= required` — *"Five good partners are five good
+  partners whether a sixth was entered or not."* So a project may declare more, and one tool page per
+  usable partner may be more than five.
+- **`angle` is a required brief field** (`brief-catalog.ts` `isContentBriefComplete`), so any
+  angle-driven behaviour always has a real value and never falls back.
+- **The output tabs already support several artifacts per type** — one tab per content type, `(N)` when
+  it has more, and an inner row showing `a.name`. Which is why an artifact's name has to be the
+  product, not the topic: five pages named alike are indistinguishable there.
+- **`GccGenerateResult` has no `refusals` field**, and `setGenerateMsg` is overwritten per hub event —
+  so with several artifacts of one type only the last message survives on screen.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
