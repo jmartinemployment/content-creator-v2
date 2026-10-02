@@ -12,7 +12,7 @@ import { AppNavbar } from "@/components/AppNavbar";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--gcc-paper)] text-[var(--gcc-ink)]">
+    <div className="flex min-h-screen flex-col bg-paper text-ink">
       <AppNavbar />
       <main className="flex-1">{children}</main>
     </div>

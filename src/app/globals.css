@@ -48,6 +48,16 @@
   --color-accent-hover: var(--cwv2-accent-hover);
   --color-brand: var(--cwv2-brand);
   --color-brand-dark: var(--gcc-accent-deep);
+  /* The Chicago Bears palette as named utilities: bg-ink, bg-slate, bg-navy-raised, text-line,
+     bg-paper. Registered here because that is the standard Tailwind v4 way to add a colour -- a
+     @theme entry generates the background, text and border utilities for it, so the class is
+     findable in devtools and resolves in one hop. Reaching into the vars with bg-[var(--gcc-ink)]
+     is an escape hatch: it works, but it names nothing and cannot be inspected. */
+  --color-ink: var(--gcc-ink);
+  --color-slate: var(--gcc-slate);
+  --color-navy-raised: var(--gcc-navy-raised);
+  --color-line: var(--gcc-line);
+  --color-paper: var(--gcc-paper);
   --color-muted: var(--cwv2-muted);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);

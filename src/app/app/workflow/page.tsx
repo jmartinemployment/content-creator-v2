@@ -156,7 +156,7 @@ export default function WorkflowPage() {
   return (
     <>
       {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 lg:hidden">
+      <div className="w-full bg-ink min-h-screen py-5 lg:hidden">
         <div className="px-4">
           <Masthead />
         </div>
@@ -170,7 +170,7 @@ export default function WorkflowPage() {
       </div>
 
       {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 hidden lg:block">
+      <div className="w-full bg-ink min-h-screen py-5 hidden lg:block">
         <div className="mx-auto w-full max-w-[1800px] px-8">
           <Masthead />
           {loadError ? <p className="mt-4 text-sm text-red-200">{loadError}</p> : null}
@@ -194,14 +194,14 @@ export default function WorkflowPage() {
 function Masthead() {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
         Content Creator
       </p>
       <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-white lg:text-3xl">
         Projects
       </h1>
       <span className="mt-2 block h-[3px] w-12 rounded-full bg-brand lg:w-14" />
-      <p className="mt-2 max-w-2xl text-sm text-white/70">
+      <p className="mt-2 max-w-2xl text-sm text-line">
         Pick a client, then open a project. Each project holds its own brief, deliverables, tasks and
         history &mdash; grounded in the crawl Geek-Crawler already performed for that site.
       </p>
