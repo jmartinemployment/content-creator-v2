@@ -58,8 +58,12 @@ function dueNote(project: GccProject): { text: string; className: string } | nul
       className: "text-red-600",
     };
   }
-  if (days === 0) return { text: "due today", className: "text-amber-700" };
-  if (days <= 7) return { text: `due in ${days} day${days === 1 ? "" : "s"}`, className: "text-amber-700" };
+  // Brand orange (#c83803 via text-brand), not Tailwind's amber-700. Both of these are one state --
+  // "due soon" -- so they take one colour; colouring only "due today" would leave due-in-3-days a
+  // different warm shade and read as a bug. Overdue stays red above: that is a different state, and the
+  // whole point of a warning colour is that it is not the failure colour.
+  if (days === 0) return { text: "due today", className: "text-brand" };
+  if (days <= 7) return { text: `due in ${days} day${days === 1 ? "" : "s"}`, className: "text-brand" };
   return null;
 }
 

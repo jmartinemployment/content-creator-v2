@@ -242,9 +242,7 @@ export default function ClientsPanel({
             <span
               key={client.id}
               className={`inline-flex items-center gap-1 rounded-full pl-3 pr-1.5 py-1.5 text-sm font-medium transition-colors ${
-                selected
-                  ? "bg-[var(--gcc-ink)] text-white"
-                  : "bg-background text-foreground hover:bg-border/50"
+                selected ? "bg-brand text-white" : "bg-background text-foreground hover:bg-border/50"
               }`}
             >
               <button
