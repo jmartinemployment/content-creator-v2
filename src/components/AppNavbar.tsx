@@ -23,6 +23,14 @@ const nav: { href: string; label: string; owns: string[] }[] = [
  *
  * A top bar rather than the sidebar it replaces: the sidebar held one nav item and 220px of horizontal
  * space, and the project workspace wants that width. Nav this small does not need a column.
+ *
+ * **White, like the parent's own header.** The mark declares exactly one fill (`#c33`) and lets the rest
+ * inherit, which means black artwork — on the teal this bar shipped with, most of the logo was close to
+ * invisible. The teal stays the page beneath; this is the light header over it.
+ *
+ * The active item is accent *text* with an accent underline, not an accent fill. The parent uses
+ * `#c83803` as a text colour 530 times against 21 background uses, and a solid orange block means "act
+ * here" — reserved for one primary action per view, which a nav item is not.
  */
 export function AppNavbar() {
   const pathname = usePathname();
@@ -35,7 +43,7 @@ export function AppNavbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#025E73] text-white">
+    <header className="sticky top-0 z-30 w-full border-b border-[var(--gcc-line)] bg-white text-[var(--gcc-ink)]">
       <div className="mx-auto flex h-16 w-full max-w-[1800px] items-center gap-6 px-4 sm:px-6 lg:px-8">
         <Link href="/app/workflow" className="flex shrink-0 items-center" aria-label="Geek @ Your Spot">
           {/* Sized to the SVG's own 124×51 ratio so it is never stretched. */}
@@ -55,10 +63,10 @@ export function AppNavbar() {
               key={item.href}
               href={item.href}
               aria-current={isActive(item) ? "page" : undefined}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              className={`-mb-px border-b-2 px-3 py-[1.3rem] text-sm font-medium transition-colors ${
                 isActive(item)
-                  ? "bg-white/15 text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "border-[var(--gcc-accent)] text-[var(--gcc-accent)]"
+                  : "border-transparent text-[var(--gcc-ink)]/65 hover:border-[var(--gcc-line)] hover:text-[var(--gcc-ink)]"
               }`}
             >
               {item.label}
@@ -67,13 +75,16 @@ export function AppNavbar() {
         </nav>
 
         <div className="ml-auto hidden items-center gap-4 lg:flex">
-          <Link href="/" className="text-xs text-white/50 transition-colors hover:text-white/80">
+          <Link
+            href="/"
+            className="text-xs text-[var(--gcc-muted)] transition-colors hover:text-[var(--gcc-accent)]"
+          >
             Marketing site
           </Link>
           <form action="/api/auth/logout" method="post">
             <button
               type="submit"
-              className="rounded-md px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              className="rounded-md px-3 py-2 text-sm text-[var(--gcc-muted)] transition-colors hover:bg-[var(--gcc-paper)] hover:text-[var(--gcc-ink)]"
             >
               Sign out
             </button>
@@ -85,7 +96,7 @@ export function AppNavbar() {
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label="Menu"
-          className="ml-auto rounded-md p-2 text-white/80 hover:bg-white/10 lg:hidden"
+          className="ml-auto rounded-md p-2 text-[var(--gcc-ink)]/70 hover:bg-[var(--gcc-paper)] lg:hidden"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
@@ -99,7 +110,7 @@ export function AppNavbar() {
       </div>
 
       {open ? (
-        <nav className="border-t border-white/10 px-4 pb-3 sm:px-6 lg:hidden">
+        <nav className="border-t border-[var(--gcc-line)] px-4 pb-3 sm:px-6 lg:hidden">
           {nav.map((item) => (
             <Link
               key={item.href}
@@ -107,18 +118,20 @@ export function AppNavbar() {
               onClick={() => setOpen(false)}
               aria-current={isActive(item) ? "page" : undefined}
               className={`block rounded-md px-3 py-2.5 text-sm font-medium ${
-                isActive(item) ? "bg-white/15 text-white" : "text-white/75"
+                isActive(item)
+                  ? "bg-[var(--gcc-paper)] text-[var(--gcc-accent)]"
+                  : "text-[var(--gcc-ink)]/70"
               }`}
             >
               {item.label}
             </Link>
           ))}
-          <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-            <Link href="/" className="px-3 py-2 text-xs text-white/50">
+          <div className="mt-2 flex items-center justify-between border-t border-[var(--gcc-line)] pt-2">
+            <Link href="/" className="px-3 py-2 text-xs text-[var(--gcc-muted)]">
               Marketing site
             </Link>
             <form action="/api/auth/logout" method="post">
-              <button type="submit" className="px-3 py-2 text-sm text-white/70">
+              <button type="submit" className="px-3 py-2 text-sm text-[var(--gcc-muted)]">
                 Sign out
               </button>
             </form>
