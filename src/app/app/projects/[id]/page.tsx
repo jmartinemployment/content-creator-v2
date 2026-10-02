@@ -209,23 +209,31 @@ function Crumb() {
 }
 
 /**
- * The light card the panels sit in.
+ * A layout container, not a surface.
  *
- * Every existing panel is styled for the app's paper background — `text-foreground` on `bg-surface`
- * with `border-border`. Dropping them straight onto the teal would put dark text on a dark ground, so
- * the teal is the page and this is the sheet. That keeps all six panels working unmodified, which is
- * what makes this a layout change rather than a restyle of everything underneath it.
+ * This was a `--gcc-paper` (#f3f6fb) card, which put a grey layer between the navy page and panels that
+ * already draw their own white `bg-surface` card with a border and a shadow — a grey box around a white
+ * box, which muted everything inside it. The panels are the surface; this only stacks them.
+ *
+ * Its own two states still need a card, because they are bare text with no panel around them and would
+ * otherwise be dark text on navy.
  */
 function Surface({ error, children }: { error: string | null; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-[var(--gcc-paper)] p-4 shadow-xl sm:p-6">
-      {error ? (
+  if (error) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
         <p className="text-sm text-red-600">{error}</p>
-      ) : children ? (
-        <div className="flex flex-col gap-6">{children}</div>
-      ) : (
+      </div>
+    );
+  }
+
+  if (!children) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
         <p className="text-sm text-muted">Loading the project…</p>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  return <div className="flex flex-col gap-6">{children}</div>;
 }

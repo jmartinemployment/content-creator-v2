@@ -210,17 +210,12 @@ function Masthead() {
 }
 
 /**
- * The light sheet the panels sit on.
+ * A layout container, not a surface.
  *
- * Every panel is styled for the app's paper background — `text-foreground` on `bg-surface` with
- * `border-border`. Dropping them onto the teal would put dark text on a dark ground, so the teal is the
- * page and this is the sheet. That is what keeps this a layout change rather than a restyle of
- * everything underneath it.
+ * This was a `--gcc-paper` (#f3f6fb) card wrapping panels that already draw their own white
+ * `bg-surface` card — a grey box around a white box, which dulled everything in it. The panels are the
+ * surface; this only stacks them.
  */
 function Sheet({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-[var(--gcc-paper)] p-4 shadow-xl sm:p-6">
-      <div className="flex flex-col gap-4">{children}</div>
-    </div>
-  );
+  return <div className="flex flex-col gap-4">{children}</div>;
 }
