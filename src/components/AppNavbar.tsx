@@ -28,6 +28,14 @@ const nav: { href: string; label: string; owns: string[] }[] = [
  * inherit, which means black artwork — on the teal this bar shipped with, most of the logo was close to
  * invisible. The teal stays the page beneath; this is the light header over it.
  *
+ * **Uses the panel utilities, not the `--gcc-*` vars.** globals.css carries two parallel palettes: the
+ * `--gcc-*` set (`--gcc-line` #d5dde8, `--gcc-muted` #6b7a90, `--gcc-paper` #f3f6fb — all blue-tinted)
+ * and the CWV2 set behind Tailwind's utilities (`border-border` #e8e8ea, `text-muted` #6b7280,
+ * `bg-surface-muted` #f5f5f7 — all neutral). Every panel this bar sits above uses the second set, so
+ * picking from the first put greys and borders a couple of percent off directly against them: visible,
+ * and read as a mistake rather than a choice. The two palettes agreeing on `#c83803` is why the accent
+ * was the one thing that looked right.
+ *
  * The active item is accent *text* with an accent underline, not an accent fill. The parent uses
  * `#c83803` as a text colour 530 times against 21 background uses, and a solid orange block means "act
  * here" — reserved for one primary action per view, which a nav item is not.
@@ -43,7 +51,7 @@ export function AppNavbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-[var(--gcc-line)] bg-white text-[var(--gcc-ink)]">
+    <header className="sticky top-0 z-30 w-full border-b border-border bg-white text-foreground">
       <div className="mx-auto flex h-16 w-full max-w-[1800px] items-center gap-6 px-4 sm:px-6 lg:px-8">
         <Link href="/app/workflow" className="flex shrink-0 items-center" aria-label="Geek @ Your Spot">
           {/* Sized to the SVG's own 124×51 ratio so it is never stretched. */}
@@ -65,8 +73,8 @@ export function AppNavbar() {
               aria-current={isActive(item) ? "page" : undefined}
               className={`-mb-px border-b-2 px-3 py-[1.3rem] text-sm font-medium transition-colors ${
                 isActive(item)
-                  ? "border-[var(--gcc-accent)] text-[var(--gcc-accent)]"
-                  : "border-transparent text-[var(--gcc-ink)]/65 hover:border-[var(--gcc-line)] hover:text-[var(--gcc-ink)]"
+                  ? "border-brand text-brand"
+                  : "border-transparent text-muted hover:border-border hover:text-foreground"
               }`}
             >
               {item.label}
@@ -77,14 +85,14 @@ export function AppNavbar() {
         <div className="ml-auto hidden items-center gap-4 lg:flex">
           <Link
             href="/"
-            className="text-xs text-[var(--gcc-muted)] transition-colors hover:text-[var(--gcc-accent)]"
+            className="text-xs text-muted transition-colors hover:text-brand"
           >
             Marketing site
           </Link>
           <form action="/api/auth/logout" method="post">
             <button
               type="submit"
-              className="rounded-md px-3 py-2 text-sm text-[var(--gcc-muted)] transition-colors hover:bg-[var(--gcc-paper)] hover:text-[var(--gcc-ink)]"
+              className="rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
             >
               Sign out
             </button>
@@ -96,7 +104,7 @@ export function AppNavbar() {
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label="Menu"
-          className="ml-auto rounded-md p-2 text-[var(--gcc-ink)]/70 hover:bg-[var(--gcc-paper)] lg:hidden"
+          className="ml-auto rounded-md p-2 text-muted hover:bg-surface-muted hover:text-foreground lg:hidden"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
@@ -110,7 +118,7 @@ export function AppNavbar() {
       </div>
 
       {open ? (
-        <nav className="border-t border-[var(--gcc-line)] px-4 pb-3 sm:px-6 lg:hidden">
+        <nav className="border-t border-border px-4 pb-3 sm:px-6 lg:hidden">
           {nav.map((item) => (
             <Link
               key={item.href}
@@ -119,19 +127,19 @@ export function AppNavbar() {
               aria-current={isActive(item) ? "page" : undefined}
               className={`block rounded-md px-3 py-2.5 text-sm font-medium ${
                 isActive(item)
-                  ? "bg-[var(--gcc-paper)] text-[var(--gcc-accent)]"
-                  : "text-[var(--gcc-ink)]/70"
+                  ? "bg-surface-muted text-brand"
+                  : "text-muted"
               }`}
             >
               {item.label}
             </Link>
           ))}
-          <div className="mt-2 flex items-center justify-between border-t border-[var(--gcc-line)] pt-2">
-            <Link href="/" className="px-3 py-2 text-xs text-[var(--gcc-muted)]">
+          <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+            <Link href="/" className="px-3 py-2 text-xs text-muted">
               Marketing site
             </Link>
             <form action="/api/auth/logout" method="post">
-              <button type="submit" className="px-3 py-2 text-sm text-[var(--gcc-muted)]">
+              <button type="submit" className="px-3 py-2 text-sm text-muted">
                 Sign out
               </button>
             </form>
