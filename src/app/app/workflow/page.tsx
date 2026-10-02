@@ -200,6 +200,7 @@ function Masthead() {
       <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-white lg:text-3xl">
         Projects
       </h1>
+      <span className="mt-2 block h-[3px] w-12 rounded-full bg-brand lg:w-14" />
       <p className="mt-2 max-w-2xl text-sm text-white/70">
         Pick a client, then open a project. Each project holds its own brief, deliverables, tasks and
         history &mdash; grounded in the crawl Geek-Crawler already performed for that site.

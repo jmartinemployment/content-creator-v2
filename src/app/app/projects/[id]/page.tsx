@@ -117,6 +117,9 @@ export default function ProjectWorkspacePage() {
           <h1 className="mt-2 font-display text-2xl font-semibold leading-tight text-white">
             {heading}
           </h1>
+          {/* A graphic rule, not text: #c83803 on #0b162a is ~2.5:1, fine for a 3px bar and not for
+              anything anyone has to read. */}
+          <span className="mt-2 block h-[3px] w-12 rounded-full bg-brand" />
           {subheading ? <p className="mt-1 text-sm text-white/70">{subheading}</p> : null}
         </div>
 
@@ -131,7 +134,7 @@ export default function ProjectWorkspacePage() {
               aria-current={s.key === section ? "page" : undefined}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 s.key === section
-                  ? "bg-white text-[var(--gcc-ink)]"
+                  ? "bg-white text-brand shadow-sm"
                   : "bg-white/10 text-white/80 hover:bg-white/20"
               }`}
             >
@@ -154,6 +157,7 @@ export default function ProjectWorkspacePage() {
               <h1 className="font-display text-3xl font-semibold leading-tight text-white">
                 {heading}
               </h1>
+              <span className="mt-2 block h-[3px] w-14 rounded-full bg-brand" />
               {subheading ? <p className="mt-1 text-sm text-white/70">{subheading}</p> : null}
             </div>
             <p className="max-w-md pb-1 text-right text-sm text-white/60">{active.blurb}</p>
@@ -172,8 +176,8 @@ export default function ProjectWorkspacePage() {
                       aria-current={s.key === section ? "page" : undefined}
                       className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                         s.key === section
-                          ? "bg-white text-[var(--gcc-ink)] shadow-sm"
-                          : "text-white/75 hover:bg-white/10 hover:text-white"
+                          ? "border-l-[3px] border-brand bg-white text-brand shadow-sm"
+                          : "border-l-[3px] border-transparent text-white/75 hover:bg-white/10 hover:text-white"
                       }`}
                     >
                       {s.label}
