@@ -6,6 +6,7 @@
 import type { ContentBrief } from "@/lib/content-creator/brief-catalog";
 import type { SiteSectionContext } from "@/lib/types";
 import type { SavedSerpParseResult } from "@/lib/content-creator/serp-lens";
+import type { GccPartnerToolReadiness } from "@/services/workflow-tools-hub";
 
 const API_BASE = "/api/cw";
 
@@ -187,6 +188,17 @@ export interface GccGenerateResult {
   artifact?: GccArtifact;
   version?: GccArtifactVersion;
   created?: Array<{ artifact: GccArtifact; version: GccArtifactVersion }>;
+  /**
+   * Per-partner refusals, named. One requested type can be several artifacts — tool is one page per
+   * declared partner — and a partner that could not be grounded refuses its own page while the
+   * others persist.
+   *
+   * This field is why the two missing tool pages had no explanation on 2026-10-02: the backend
+   * computed the reason and sent it, and there was nowhere here to put it, so it was dropped.
+   */
+  refusals?: string[];
+  /** The tool pre-flight that decided which partners were drafted. Empty for every other type. */
+  preflight?: GccPartnerToolReadiness[];
 }
 
 export interface GccSeoReport {

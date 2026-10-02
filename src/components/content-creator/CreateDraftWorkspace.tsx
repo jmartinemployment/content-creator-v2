@@ -31,7 +31,9 @@ import {
   onGccGenerateEvent,
   onGccGenerateReconnected,
   onGccGenerateTypeEvent,
+  onGccGeneratePreflightEvent,
 } from "@/services/workflow-tools-hub";
+import type { GccGeneratePreflightEvent } from "@/services/workflow-tools-hub";
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
@@ -93,6 +95,13 @@ export default function CreateDraftWorkspace({
   const [briefSavedOnServer, setBriefSavedOnServer] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateMsg, setGenerateMsg] = useState<string | null>(null);
+  // Accumulated, never overwritten -- generateMsg is one string, so with five tool events each
+  // refusal replaced the last and the terminal "Generate finished." then wiped them all. Three
+  // pages appeared out of five on 2026-10-02 with nothing on screen saying why, while the backend
+  // had named both reasons and pushed them over the hub.
+  const [generateNotes, setGenerateNotes] = useState<string[]>([]);
+  // The tool pre-flight: which declared partners can be grounded, known before anything is drafted.
+  const [preflight, setPreflight] = useState<GccGeneratePreflightEvent | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
   // The one content-type selection in this component. It mints the create (its first entry
   // becomes StartingContentType) and it is what Generate produces -- not two pickers agreeing
@@ -395,17 +404,28 @@ export default function CreateDraftWorkspace({
 
       onGccGenerateTypeEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
-        setGenerateMsg(
-          evt.status === "failed"
-            ? `${evt.contentType}: ${evt.error ?? "failed"}`
-            : `${evt.contentType} ready.`,
-        );
+        if (evt.status === "failed") {
+          // Appended, not assigned: one type can emit several of these (one per partner for tool),
+          // and each one names a partner the operator would otherwise have to infer from a count.
+          const note = `${evt.contentType}: ${evt.error ?? "failed"}`;
+          setGenerateNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+        } else {
+          setGenerateMsg(`${evt.contentType} ready.`);
+        }
         void reloadRef.current();
+      });
+
+      // Arrives before any tool page is drafted, which is the only moment it is a pre-flight.
+      onGccGeneratePreflightEvent(conn, (evt) => {
+        if (evt.jobId !== generateJobIdRef.current) return;
+        setPreflight(evt);
       });
 
       onGccGenerateEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
         if (evt.status === "ready") {
+          // generateNotes is deliberately untouched: the per-partner refusals are the explanation for
+          // why fewer artifacts appeared than partners were declared, and they outlive the run.
           setGenerateMsg("Generate finished.");
           setGenerating(false);
           void reloadRef.current();
@@ -428,6 +448,8 @@ export default function CreateDraftWorkspace({
   async function runGenerate(acknowledgeStale = false) {
     if (!effectiveCreateId || !canGenerate || saMissingPages) return;
     setGenerateMsg(null);
+    setGenerateNotes([]);
+    setPreflight(null);
     setStalePrompt(null);
     setGenerating(true);
     try {
@@ -461,6 +483,19 @@ export default function CreateDraftWorkspace({
         selectedArtifactIdRef.current = result.created[0]?.artifact.id ?? null;
       } else {
         setGenerateMsg("Generate finished.");
+      }
+
+      // Same two fields the hub pushes, read off the synchronous response for a GeekAPI not running
+      // the job runner -- so the explanation is present on both shapes, not just the live one.
+      if (result.refusals?.length) setGenerateNotes(result.refusals);
+      if (result.preflight?.length) {
+        setPreflight({
+          jobId: "",
+          contentType: "tool",
+          ready: result.preflight.filter((r) => r.ready).length,
+          total: result.preflight.length,
+          partners: result.preflight,
+        });
       }
       await reload();
       setGenerating(false);
@@ -624,6 +659,62 @@ export default function CreateDraftWorkspace({
           ) : null}
           {generateMsg ? (
             <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{generateMsg}</p>
+          ) : null}
+
+          {/* The pre-flight, shown while the ready partners are still being written. It reports what
+              the gate measures -- what extraction FOUND -- because page and paragraph volume do not
+              predict it: a partner with hundreds of pages fails if extraction pulled one feature. */}
+          {preflight ? (
+            <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
+              <p className="text-sm font-medium text-foreground">
+                Partner readiness &mdash; {preflight.ready} of {preflight.total} can be grounded
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {preflight.partners.map((partner) => (
+                  <li key={partner.host} className="text-sm">
+                    <span className="text-foreground">
+                      {partner.ready ? "\u2713" : "\u2717"} {partner.productName}
+                    </span>
+                    <span className="text-muted">
+                      {" \u2014 "}
+                      {partner.populatedCategories} of 22 categories
+                      {partner.pagesFailed > 0
+                        ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
+                        : `, ${partner.pagesAttempted} pages extracted`}
+                      {partner.hasCapabilitySignal ? "" : ", no capability signal"}
+                    </span>
+                    {/* The fault/shortage split, verbatim from the backend. A provider outage and a
+                        thin partner leave identical counts, so only this sentence separates them. */}
+                    {!partner.ready ? (
+                      <span className="mt-0.5 block text-xs text-muted">{partner.coverage}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {preflight.ready < preflight.total ? (
+                <p className="mt-2 text-xs text-muted">
+                  The partners above that cannot be grounded are not drafted. The rest are, and each
+                  is saved on its own.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Named, never a count to be inferred. Each entry is one artifact that was not written
+              and the reason it was not. */}
+          {generateNotes.length > 0 ? (
+            <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+              <p className="text-sm font-medium text-foreground">
+                Not written ({generateNotes.length})
+              </p>
+              <ul className="mt-1 space-y-1">
+                {generateNotes.map((note) => (
+                  <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </Stage>
 

@@ -115,6 +115,37 @@ export type GccGenerateTypeEvent = {
   error?: string | null;
 };
 
+/**
+ * One partner's readiness to ground a tool page, decided before anything is drafted.
+ *
+ * `coverage` is the operator-facing reason and separates the two causes that look identical in the
+ * counts: an extraction *fault* ("the provider call threw") and a partner whose retrieved pages
+ * genuinely carry nothing the schema covers. `pagesFailed > 0` is the fault.
+ */
+export type GccPartnerToolReadiness = {
+  productName: string;
+  host: string;
+  ready: boolean;
+  coverage: string;
+  pagesAttempted: number;
+  pagesFailed: number;
+  populatedCategories: number;
+  hasCapabilitySignal: boolean;
+};
+
+/**
+ * The tool pre-flight, sent BEFORE any tool page is drafted — the whole point is that it arrives
+ * early enough to be acted on. Its own event because a type event's status is terminal
+ * (`ready`/`failed`) and this is neither.
+ */
+export type GccGeneratePreflightEvent = {
+  jobId: string;
+  contentType: string;
+  ready: number;
+  total: number;
+  partners: GccPartnerToolReadiness[];
+};
+
 export async function joinGccGenerate(connection: HubConnection, jobId: string): Promise<void> {
   if (connection.state === HubConnectionState.Disconnected) {
     await connection.start();
@@ -138,6 +169,15 @@ export function onGccGenerateTypeEvent(
   const listener = (raw: unknown) => handler(raw as GccGenerateTypeEvent);
   connection.on("GccGenerateTypeEvent", listener);
   return () => connection.off("GccGenerateTypeEvent", listener);
+}
+
+export function onGccGeneratePreflightEvent(
+  connection: HubConnection,
+  handler: (evt: GccGeneratePreflightEvent) => void,
+): () => void {
+  const listener = (raw: unknown) => handler(raw as GccGeneratePreflightEvent);
+  connection.on("GccGeneratePreflightEvent", listener);
+  return () => connection.off("GccGeneratePreflightEvent", listener);
 }
 
 /**
