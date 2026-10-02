@@ -111,7 +111,7 @@ export default function ProjectWorkspacePage() {
   return (
     <>
       {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[#025E73] min-h-screen py-5 lg:hidden">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 lg:hidden">
         <div className="px-4">
           <Crumb />
           <h1 className="mt-2 font-display text-2xl font-semibold leading-tight text-white">
@@ -131,7 +131,7 @@ export default function ProjectWorkspacePage() {
               aria-current={s.key === section ? "page" : undefined}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 s.key === section
-                  ? "bg-white text-[#025E73]"
+                  ? "bg-white text-[var(--gcc-ink)]"
                   : "bg-white/10 text-white/80 hover:bg-white/20"
               }`}
             >
@@ -146,7 +146,7 @@ export default function ProjectWorkspacePage() {
       </div>
 
       {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[#025E73] min-h-screen py-5 hidden lg:block">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 hidden lg:block">
         <div className="mx-auto w-full max-w-[1800px] px-8">
           <Crumb />
           <div className="mt-2 flex items-end justify-between gap-6">
@@ -172,7 +172,7 @@ export default function ProjectWorkspacePage() {
                       aria-current={s.key === section ? "page" : undefined}
                       className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                         s.key === section
-                          ? "bg-white text-[#025E73] shadow-sm"
+                          ? "bg-white text-[var(--gcc-ink)] shadow-sm"
                           : "text-white/75 hover:bg-white/10 hover:text-white"
                       }`}
                     >

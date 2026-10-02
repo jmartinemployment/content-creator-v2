@@ -156,7 +156,7 @@ export default function WorkflowPage() {
   return (
     <>
       {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[#025E73] min-h-screen py-5 lg:hidden">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 lg:hidden">
         <div className="px-4">
           <Masthead />
         </div>
@@ -170,7 +170,7 @@ export default function WorkflowPage() {
       </div>
 
       {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[#025E73] min-h-screen py-5 hidden lg:block">
+      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 hidden lg:block">
         <div className="mx-auto w-full max-w-[1800px] px-8">
           <Masthead />
           {loadError ? <p className="mt-4 text-sm text-red-200">{loadError}</p> : null}
