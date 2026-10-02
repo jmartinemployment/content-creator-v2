@@ -212,6 +212,42 @@ cheaper — because v1 already holds the single correct output path (`ContentGen
 on. The v2 write path is dormant. Whether it is deleted is open and unexecuted; nothing is removed
 unasked.
 
+## Topic is a descriptor and a keyword
+
+A create's `Topic` is **two fields in one string, split on the first colon.**
+
+```
+"Accounts Payable: Automated Data Entry & Processing"
+ └── descriptor ──┘  └──────── keyword ─────────────┘
+```
+
+| Part | Role |
+|---|---|
+| `Accounts Payable` | **descriptor** — defines the *type* of the keyword. The keyword alone could be medical records or legal discovery; this says which. |
+| `Automated Data Entry & Processing` | **keyword** — the SEO target. It names the **solution**. |
+| `brief.Angle` (e.g. `problem_solution`) | read from the brief, reaches every long-form path. For Problem-Solution the problem is the keyword's **manual form**. |
+| the partner's product | **subject** — the agent of the solution. **Never the Topic.** |
+
+**What a Problem-Solution page argues:** *Manual Data Entry & Processing is a problem because X.
+Automating Data Entry & Processing solves it — with Tool.*
+
+`GccTopic.Parse` is the one parser (`GeekAPI/Services/ContentCreator/GccTopic.cs`). Interpolate the
+**keyword** into any problem frame — never the whole string, and never the descriptor alone.
+
+**Why this is written down rather than re-derived.** Two live defects in one day came from one value
+doing two jobs:
+
+- `toolName: create.Topic` sent partner extraction hunting for a product named after the keyword. Five
+  partners carrying 84–226 quotable spans each and 130 features between them yielded **1 of 22 payload
+  categories**, twice, with two different partner sets.
+- A retrieval query read *"the problem of doing Accounts Payable: Automated Data Entry & Processing
+  manually"* — automated, manually. Splitting the descriptor off was not enough, because the keyword
+  itself names the solution: the keyword goes in as the **subject**, with the manual pain asked for
+  beside it.
+
+Nothing in either repo split Topic before 2026-10-02. That was the gap, not the design — "no code does
+this, therefore it should not be done" reads a defect as an intention.
+
 ## Crawl types
 
 `CrawlTypes` (`GeekApplication/Models/GeekCrawler/CrawlTypes.cs`):
