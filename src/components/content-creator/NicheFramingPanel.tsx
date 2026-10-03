@@ -216,17 +216,20 @@ function FramingFields({
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">Where they fail</span>
-        {/* The unit has to be named. "One per line" is self-evident on a URL field and not here --
-            one what? Each line becomes a separate item in PainPoints, and the writer is told to cover
-            every one in prose, so a paragraph typed in here collapses into a single point. */}
+        {/* Shape-agnostic on purpose. The research arrives three different ways -- several bolded
+            failures each with a paragraph, terse one-liners, or a single unbroken paragraph (Jeff's
+            Bill.com example, 2026-10-03: "They all do not come formatted in that way") -- so demanding
+            any one structure is wrong most of the time. A blank line separates entries when there are
+            several; text without one is a single entry, which is the right reading of a paragraph. */}
         <span className="mt-0.5 block text-xs text-muted">
-          One failure per line &mdash; each becomes its own point the writer has to cover.
+          Paste it however it came. If it is several distinct failures, put a blank line between them;
+          one paragraph stays one point.
         </span>
         <textarea
           value={value.painPoints}
           onChange={(e) => onChange({ painPoints: e.target.value })}
-          rows={5}
-          placeholder={"Nobody owns collections.\nThey expect the accounting system to collect.\nFollow-up depends on someone remembering.\nThey make it hard to pay."}
+          rows={8}
+          placeholder={"They treat approval as an email reply, a verbal instruction, or access to the company bank account. That creates slow approvals, late fees, duplicate payments and no defensible approval history."}
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
       </label>

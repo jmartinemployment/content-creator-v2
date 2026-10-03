@@ -467,8 +467,11 @@ function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
   set.automationToPitch = str(p.automationToPitch);
   // Accepts an array as well as lines, matching what the backend reader accepts — a programmatic
   // writer (a later paste-and-extract acquisition) may store either.
+  // Joined on a BLANK line, because a blank line is the separator: each entry is one failure and may
+  // itself be a paragraph. Joining on a single newline would merge the whole array into one item the
+  // next time it is read back.
   set.painPoints = Array.isArray(p.painPoints)
-    ? p.painPoints.filter((x): x is string => typeof x === "string").join("\n")
+    ? p.painPoints.filter((x): x is string => typeof x === "string").join("\n\n")
     : str(p.painPoints);
   return set;
 }
