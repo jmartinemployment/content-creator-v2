@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createProject,
   updateProject,
@@ -330,6 +330,32 @@ export default function ProjectForm({
   )
     .filter(([, have, need]) => have < need)
     .map(([label, have, need]) => `${label}: ${have} of ${need} with usable crawl evidence`);
+
+  // Edit mode arrives with URLs already declared and nothing blurred, so `indexed` is empty on mount:
+  // projectSiteRunId resolves to null, both evidence shortfalls are non-empty, and canSubmit is false.
+  // The Save button was therefore disabled with no explanation, on a form whose URLs were all fine.
+  //
+  // This asks the index the same question a blur asks -- it does not bypass the gate, it just asks at
+  // the one moment the operator has no reason to trigger it. Creating still asks on blur and again on
+  // submit, unchanged.
+  useEffect(() => {
+    if (!editing) return;
+    let cancelled = false;
+    void (async () => {
+      let answers = indexed;
+      answers = await resolveAnswers("site", siteUrls, answers);
+      if (cancelled) return;
+      answers = await resolveAnswers("partner", partnerUrls, answers);
+      if (cancelled) return;
+      await resolveAnswers("competitor", competitorUrls, answers);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Once per mounted edit form. The URL lists are seeded from the project and the operator's own
+    // edits re-check on blur, so re-running this on every keystroke would be a request per character.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
 
   const canSubmit =
     name.trim().length > 0 &&
