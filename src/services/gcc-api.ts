@@ -299,8 +299,8 @@ export async function downloadCreateHtmlExport(createId: string): Promise<void> 
 
 export function generateGccCreate(
   createId: string,
-  opts?: {
-    provider?: string;
+  opts: {
+    provider: string;
     outputTypes?: string[];
     acknowledgeStaleGrounding?: boolean;
   },
@@ -310,12 +310,12 @@ export function generateGccCreate(
     {
       method: "POST",
       body: JSON.stringify({
-        provider: opts?.provider ?? "OpenAi",
+        provider: opts.provider,
         outputTypes:
-          opts?.outputTypes && opts.outputTypes.length > 0
+          opts.outputTypes && opts.outputTypes.length > 0
             ? opts.outputTypes
             : null,
-        acknowledgeStaleGrounding: opts?.acknowledgeStaleGrounding === true,
+        acknowledgeStaleGrounding: opts.acknowledgeStaleGrounding === true,
       }),
     },
   );
@@ -364,13 +364,22 @@ export const GCC_KEYWORD_CATEGORIES: { value: string; label: string }[] = [
   { value: "GovDomain", label: ".gov page" },
 ];
 
+/**
+ * `provider` is REQUIRED on every call that writes prose.
+ *
+ * It was optional with a `?? "OpenAi"` default, which is a default substituted over a user-selected
+ * value — `.cursor/rules/no-fallbacks.mdc`. Revise is what made that concrete: the Writing model
+ * picker did not reach it, so a draft generated on Anthropic was rewritten entirely by OpenAI and the
+ * stamp recorded "OpenAi" as though it had been chosen. Required means the type refuses a caller that
+ * forgets, instead of the default answering for them.
+ */
 export function reviseGccVersion(
   versionId: string,
   input: {
     feedback: string;
     scope?: "full" | "section";
     sectionPath?: string | null;
-    provider?: string;
+    provider: string;
   },
 ): Promise<GccArtifactVersion> {
   return gccRequest<GccArtifactVersion>(
@@ -381,7 +390,7 @@ export function reviseGccVersion(
         feedback: input.feedback,
         scope: input.scope ?? "full",
         sectionPath: input.sectionPath ?? null,
-        provider: input.provider ?? "OpenAi",
+        provider: input.provider,
       }),
     },
   );

@@ -996,6 +996,11 @@ export default function CreateDraftWorkspace({
                   const next = await reviseGccVersion(version.id, {
                     feedback: feedback.trim(),
                     scope,
+                    // Revise is the only call on this screen that WRITES prose -- polish and seo are
+                    // read-only -- and it was the one the Writing model picker did not reach, so a
+                    // draft generated on Anthropic was rewritten entirely by OpenAI with nothing on
+                    // screen saying so. That silently contaminates the comparison the picker exists for.
+                    provider,
                     sectionPath: scope === "section" ? sectionPath.trim() : null,
                   });
                   setVersion(next);
@@ -1052,6 +1057,7 @@ export default function CreateDraftWorkspace({
                           feedback: fixes,
                           scope: "full",
                           sectionPath: null,
+                          provider,
                         });
                         setVersion(next);
                         await reload();
@@ -1093,6 +1099,7 @@ export default function CreateDraftWorkspace({
                           feedback: fixes,
                           scope: "full",
                           sectionPath: null,
+                          provider,
                         });
                         setVersion(next);
                         await reload();
