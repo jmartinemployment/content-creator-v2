@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
+import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
   AUDIENCE_SEGMENTS,
   BUYING_STAGES,
@@ -77,22 +78,6 @@ function writtenBy(metadataJson?: string | null): string | null {
     // the draft view it belongs to.
     return null;
   }
-}
-
-/**
- * True when every partner failed extraction on every page it attempted.
- *
- * That is a provider fault — a 400, a 429, an outage — and never a statement about the partners. It
- * has to be distinguished because the two produce identical counts: nothing extracted looks exactly
- * like nothing to extract, and the panel led with the second reading twice in one day.
- */
-function everyPartnerFailedExtraction(preflight: {
-  partners: { pagesAttempted: number; pagesFailed: number }[];
-}): boolean {
-  return (
-    preflight.partners.length > 0 &&
-    preflight.partners.every((p) => p.pagesAttempted > 0 && p.pagesFailed >= p.pagesAttempted)
-  );
 }
 
 export default function CreateDraftWorkspace({
@@ -733,7 +718,7 @@ export default function CreateDraftWorkspace({
           {preflight ? (
             <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
               <p className="text-sm font-medium text-foreground">
-                {everyPartnerFailedExtraction(preflight)
+                {everyPartnerFailedExtraction(preflight.partners)
                   ? `Extraction failed for all ${preflight.total} partners — a provider fault, not your data`
                   : `Partner readiness — ${preflight.ready} of ${preflight.total} can be grounded`}
               </p>
@@ -742,7 +727,7 @@ export default function CreateDraftWorkspace({
                   read as "0 of 22 categories ... no capability signal", which is the sentence for a
                   partner whose site is thin. When nothing was extracted the counts describe nothing,
                   so they are not shown. */}
-              {everyPartnerFailedExtraction(preflight) ? (
+              {everyPartnerFailedExtraction(preflight.partners) ? (
                 <p className="mt-1 text-xs text-muted">
                   No partner could be assessed. Category counts are omitted because nothing was
                   extracted to count — the cause is in the error below.
@@ -780,10 +765,18 @@ export default function CreateDraftWorkspace({
                   );
                 })}
               </ul>
-              {preflight.ready < preflight.total ? (
+              {/* "The rest are" is only true when there IS a rest. Gated on ready < total alone, this
+                  printed directly under the all-failed headline and told the operator drafts were
+                  being written for partners that do not exist -- re-creating the false partial-success
+                  reading three lines below its own fix. */}
+              {preflight.ready > 0 && preflight.ready < preflight.total ? (
                 <p className="mt-2 text-xs text-muted">
                   The partners above that cannot be grounded are not drafted. The rest are, and each
                   is saved on its own.
+                </p>
+              ) : preflight.ready === 0 && preflight.total > 0 ? (
+                <p className="mt-2 text-xs text-muted">
+                  No partner could be grounded, so no tool page was drafted.
                 </p>
               ) : null}
             </div>
