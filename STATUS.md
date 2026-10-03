@@ -39,12 +39,35 @@ verification.
 reads uploaded SERP pages into the prompt but has no UI; and `GccV2WriteService` + `Carousel/`, the
 dormant writer and the LinkedIn deck's basis.
 
+## The code review, and what it cost
+
+A max-effort review of the cleanup returned 15 findings. One was a live incident: `363200e` deleted
+twelve `[Http*]` attributes and only three method bodies, leaving nine actions routable with no verb,
+so every request to `/api/geek-content-creator` resolved as `AmbiguousMatchException` — a 500 on the
+API's base path, in production, **with 1,512 tests green**. Fixed in `227edea`; a route-shape test now
+exists (`a2f4339`) and the lesson is recorded in `.cursor/rules/no-unwired-code.mdc`.
+
+Also fixed from that review: a zero-page partner masking a provider fault and a footer contradicting
+its own headline (`b54ece8`); Revise silently rewriting an Anthropic draft through OpenAI and dropping
+the provider stamp (`29706ed`, `f8eb318`) — making `provider` required surfaced **two more** broken
+call sites the review had not found; the diagnosis instruction reaching all seven pillar sections
+instead of the closing (`b5b4a6b`); two fail-open provider paths (`816cda8`); two model-resolution
+sites bypassing the guard (`7962d79`); and the restored `ApiKeyMiddleware` auth test plus deletion of
+the unreachable GitHub skill importer (`acc3a09`).
+
+**The pattern worth remembering** is not any single defect. Four times that day the correct mechanism
+already existed in the repo and a new one was written instead — `BatchClosingInstruction`,
+`GccAngleQuoteProbe`'s id-based quote selection, an export-safety assertion written hours earlier, and
+`ProviderModelGuard`. Each shortcut cost more than the work it avoided.
+
 ## Known open
 
-- **`GccV2SiteHierarchyFromCrawl.Build` now has no caller.** Its only one was the `hierarchy-match`
-  route, deleted because no frontend called it — but `AGENTS.md` describes it as the project-site
-  grounding read path. Either the path was never wired or the doc is aspirational; it is kept
-  pending that call.
+- **Nothing in the live path reads `crawl_pages.Html` — ~98% of a 93 GB corpus.** Verified
+  2026-10-03 across GeekAPI and Geek-Crawler-Rag: the project-site reader is blocks-only by its own
+  doc, grounding goes through the RAG client, the two classes that still read `Html` are reachable
+  only from the dormant v2 cluster, and RAG *projects* the field in its Mongo queries without
+  consuming it. Not acted on — dropping a column against a live corpus is irreversible and is a
+  decision, not a doc edit. See `AGENTS.md` § Crawl types.
 - **`GeneratedByModel` stores the provider name**, not the model (`GccController`). Fine while one
   model is configured per provider; wrong the moment two Anthropic models are compared.
 - **No DI startup validation.** `Program.cs` sets no `ValidateOnBuild`/`ValidateScopes`, so a

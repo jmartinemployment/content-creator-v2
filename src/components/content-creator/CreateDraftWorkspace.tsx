@@ -95,7 +95,8 @@ export default function CreateDraftWorkspace({
   // Only needed to mint a fresh create (the `!effectiveCreateId` branch below) -- once a create
   // exists, the loaded state reads clientId/projectSiteRunId back off the create itself
   // (`detail.clientId`, `detail.projectSiteRunId`), never off these props. Optional so
-  // /app/creates/[id], which always already has a createId, doesn't need to supply them.
+  // A caller that already has a createId does not need to supply them. (The /app/creates routes
+  // that did were deleted 2026-10-03; the workspace is reached from /app/workflow now.)
   clientId?: string;
   projectId?: string;
   projectSiteRunId?: string;
@@ -201,7 +202,7 @@ export default function CreateDraftWorkspace({
   const reload = useCallback(async () => {
     if (!effectiveCreateId) return;
     // No synchronous setState before the first await — see the identical fix and its reasoning
-    // in creates/[id]/repurpose/page.tsx's `load`. Every path below still ends by setting
+    // in the repurpose page's `load` (deleted 2026-10-03). Every path below still ends by setting
     // loadError to its correct value.
     try {
       const d = await getGccCreateDetail(effectiveCreateId);

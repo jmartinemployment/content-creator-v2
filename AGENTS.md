@@ -40,9 +40,16 @@ deploy it, cite its contents as current behaviour, or read a defect there as a l
 
 **Site Analyzer is obsolete. Geek-Crawler-v2 replaced it.** Site structure — headings, heading
 levels, anchors under a heading, related pages — now comes from a Geek-Crawler-v2 `project-site`
-crawl run and is read back by **Run ID**:
-`GET api/geek-content-creator/project-site/runs/{runId}/hierarchy-match`, derived from the crawl by
-`GccV2SiteHierarchyFromCrawl.Build`. Nothing crawls at read time.
+crawl run, read back by **Run ID** from the crawl's typed `blocks` by
+`GccProjectSiteStructureReader`. Nothing crawls at read time.
+
+**The `hierarchy-match` route is gone, and was never called.** This paragraph named
+`GET api/geek-content-creator/project-site/runs/{runId}/hierarchy-match` and
+`GccV2SiteHierarchyFromCrawl.Build` as that read path until 2026-10-03, when both were deleted
+(`363200e`, `c3219ac`) for having no caller — the frontend's `hierarchy-match.ts` is a pure library
+with no fetch in it, and `getProjectSiteStructure` had zero call sites. So the documented path and the
+working one had diverged: structure reaches generation through `GccProjectSiteStructureReader`, not
+through an HTTP route.
 
 Do not call a `site-analyzer` route, restore one, or treat a Site Analyzer profile id as grounding.
 It was retired from the v2 path deliberately (`5072820`) and GeekAPI's v1 route was deleted by
@@ -269,8 +276,8 @@ feed different consumers:
 
 | | Project site | Partner / competitor |
 |---|---|---|
-| Consumer | `GccV2SiteHierarchyFromCrawl.Build` → `GccV2HierarchyToolMatch` | RAG retrieval + quote verification |
-| Must retain | **Raw HTML** — DOM tree, heading levels, anchors under a heading | Verbatim prose |
+| Consumer | `GccProjectSiteStructureReader` | `GccGroundingResolver` → RAG retrieval + quote verification |
+| Must retain | **Typed `blocks`** | Verbatim prose, from `blocks` |
 | Scale | Own site, bounded | 50,000+ pages, scope hard |
 | Failure mode if wrong | Tools/partners silently stop being found — **no error, fewer matches** | Quote verification fails, loudly |
 
@@ -278,12 +285,12 @@ feed different consumers:
 projection (`block_text.derive_plaintext_from_blocks`): block text joined on blank lines, table rows
 on `" | "`, inline markup stripped. Every href, every tag and every heading marker is discarded, so
 h6→anchor tool links, "the keyword matched an h5", and h2 message pillars are unrecoverable **from
-that string**. `Build` filters on `p.Html` for exactly this reason.
+that string**.
 
 The *blocks* are a different matter: `heading.level`, per-block `html` and per-block `anchors` are all
 retained, so structure is recoverable from `blocks` even though it is not recoverable from the
-projection. That is the migration target for `Build` — not a Markdown slice, and not a second text
-projection.
+projection. **That migration is done.** `GccProjectSiteStructureReader` takes the block route and says
+so — *"Blocks, never Html"* — so project-site structure no longer reads raw HTML at all.
 
 **Raw HTML is needed at derivation time, not forever.** Everything project-site grounding consumes
 lives in the derived tree, not the source:
@@ -295,10 +302,28 @@ lives in the derived tree, not the source:
 | Don't repeat ourselves | `RelatedPageDto(Url, Title, Headings[0..4], Excerpt≤120)`, 12 pages max — `BuildPartialInformationGain` |
 | Paragraphs | **not consumed** |
 
-So the rule is: HTML must be present **when `GccV2SiteHierarchyFromCrawl.Build` runs**. Once
-`GccV2PageHierarchy` exists, the HTML for those pages is dead weight and can be dropped. Given
-`crawl_pages.Html` is ~98% of corpus size, that is the difference between project-site being expensive
-once and expensive forever.
+**Open question, and it is worth real money: nothing in the live path still reads `crawl_pages.Html`.**
+
+This section used to say HTML must be present when `GccV2SiteHierarchyFromCrawl.Build` runs. That
+class was deleted on 2026-10-03 (`c3219ac`) for having no caller, which leaves the retention rationale
+citing a consumer that does not exist. Checked at that date:
+
+| Reader | Status |
+|---|---|
+| `GccProjectSiteStructureReader` | live, and **blocks only**, by its own doc |
+| `GccGroundingResolver` | live, goes through `IGeekCrawlerRagClient` — retrieval, not raw HTML |
+| `GccV2GeekCrawlerResearchResolver` (`:396`, `:611`) | reads `page.Html`, but referenced **only** by `ServiceRegistration` — registered, resolved by nothing |
+| `GccV2ProjectSiteGrounding` (`:47`, `:61`) | same: reads `Html`, reachable only from the dormant v2 cluster |
+| Geek-Crawler-Rag | **projects** `Html` in its Mongo queries (`mongo.py:255,344,373`) and carries it on `CrawlPage`, but no extraction path consumes it — ingest is block-based |
+
+So `~98% of a 93 GB corpus` is retained for consumers that were deleted, plus one service that fetches
+the field over the wire and does not use it.
+
+**Not acted on, deliberately.** This was established by reading GeekAPI, Geek-Crawler-Rag and the
+crawl types — not Geek-Crawler-v2's writer, nor any operational tooling, nor whether a future
+`blocks`-gap would need HTML to re-derive. Dropping a column is irreversible against a live corpus and
+is Jeff's call, not a doc edit's. What the doc can state is the thing that was wrong: **the stated
+reason for keeping it no longer holds.**
 
 This does **not** apply to partner/competitor pages, whose HTML is still read at extraction time
 (`GccV2GeekCrawlerResearchResolver.cs:372,583`).
@@ -469,7 +494,8 @@ Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api
   "exactly three frontend calls still 404" at `CreateStartForm.tsx:145,161` and
   `HierarchyContextPanel.tsx:137`, is **false**: `CreateStartForm.tsx` no longer exists, and
   `e6b3701` repointed `HierarchyContextPanel` at the v1 run-id route
-  `project-site/runs/{runId}/hierarchy-match`. There is still **no `site-analyzer` route anywhere in
+  `project-site/runs/{runId}/hierarchy-match` — itself deleted on 2026-10-03 for having no caller, so
+  neither route exists now. There is still **no `site-analyzer` route anywhere in
   GeekAPI** (`582a171` deleted v1's, `5072820` removed the three v2 replacements) and none is wanted
   — **Geek-Crawler-v2 supplies the structure now.** The unreachable client-side scaffolding this
   used to describe — nine proxy routes under `src/app/api/site-analyzer/**`, the matcher entry at
@@ -514,7 +540,7 @@ was the section most likely to be cited as evidence. Corrected against a full re
 | `startGeekCrawl` has "zero call sites" | It is called at **`ProjectForm.tsx:54`** |
 | Target keyword "is dropped on every live path" | It becomes **`create.Topic`** — `ContentBriefPanel.ensureCreateId`: `const topic = keywordInput.trim()`. The real limitation is narrower: once a create exists, `ensureCreateId` short-circuits, so the keyword cannot be *changed* afterwards |
 | `SerpIngestPanel` is "orphaned; zero importers" | **`ContentBriefPanel` imports it** |
-| "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | **There is no `/app/projects/[id]` route.** `src/app/app/` contains only `creates/`, `creates/[id]`, `creates/[id]/repurpose`, `creates/new` and `workflow` |
+| "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | Was true when written and is now inverted: **`/app/projects/[id]` exists** and renders the workspace, while the four `creates/*` routes this row listed were deleted on 2026-10-03 (`8758146`) for being reachable only through two links labelled "Back to workflow" that pointed at them. `src/app/app/` is `projects/[id]` and `workflow` |
 
 **The one reachable surface.** `AppNavbar` has a single nav item and `/app` redirects to it, so
 everything starts at **`/app/workflow`**, which renders: `ClientsPanel` → `ProjectsPanel` →

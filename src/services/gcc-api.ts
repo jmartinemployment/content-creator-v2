@@ -763,16 +763,6 @@ export interface ProjectSiteReadiness {
   reason: string | null;
 }
 
-/**
- * The project site's structure for a Run ID.
- *
- * Served from the crawler's typed `blocks` — heading levels and per-block anchors survive there,
- * where the flat text projection discards them. Nothing re-parses HTML.
- *
- * On the geek-crawler surface because it is crawl data; this app is one consumer of it. A pure read:
- * it returns what Geek-Crawler-v2 already crawled and generates nothing.
- */
-
 export interface SiteHostReference {
   sectionPath: string[];
   pageUrl: string;
