@@ -125,11 +125,18 @@ export default function ProjectWorkspacePage() {
           </div>
         ) : (
           <>
-            <div className="flex justify-end">
+            {/* A solid chip, not a text link. This was text-brand directly on the navy ground --
+                #c83803 on #0b162a is about 2.5:1, so the only control for editing partner and
+                competitor URLs was effectively invisible and went unfound twice. The accent belongs on
+                a light surface; on the navy it needs the surface underneath it. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-line">
+                Site, schedule, partner and competitor URLs.
+              </p>
               <button
                 type="button"
                 onClick={() => go("profile", true)}
-                className="text-sm font-medium text-brand hover:underline"
+                className="rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-brand shadow-sm transition-colors hover:bg-paper"
               >
                 Edit project &amp; URLs
               </button>

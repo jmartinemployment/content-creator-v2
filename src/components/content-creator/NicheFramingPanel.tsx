@@ -114,9 +114,22 @@ export default function NicheFramingPanel({
 
       {partners.length > 0 ? (
         <div className="mt-5">
-          <p className="text-sm font-medium text-foreground">
-            Per tool &mdash; only where the niche genuinely differs
-          </p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">
+              Per tool &mdash; only where the niche genuinely differs
+            </p>
+            {/* Available whether or not partners exist. The link in the empty state below only shows
+                when there are none, so editing an existing set had no route from here -- which is where
+                you are when you notice a wrong partner URL. */}
+            {projectId ? (
+              <Link
+                href={`/app/projects/${projectId}?section=profile&edit=1`}
+                className="text-xs font-medium text-brand hover:underline"
+              >
+                Edit partner URLs &rarr;
+              </Link>
+            ) : null}
+          </div>
           <p className="mt-1 text-xs text-muted">
             Leave a tool alone and it uses the category framing above. Override it when that tool owns a
             distinct slice of the problem &mdash; a segment, a stage, a scale.
