@@ -375,7 +375,7 @@ export default function CreateDraftWorkspace({
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">{loadError}</p>
-        <Link href="/app/creates" className="mt-4 inline-block text-sm text-[#C83803] hover:underline">
+        <Link href="/app/workflow" className="mt-4 inline-block text-sm text-[#C83803] hover:underline">
           &larr; Back to workflow
         </Link>
       </div>
@@ -550,7 +550,7 @@ export default function CreateDraftWorkspace({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <Link href="/app/creates" className="text-sm text-[#C83803] hover:underline">
+      <Link href="/app/workflow" className="text-sm text-[#C83803] hover:underline">
         &larr; Back to workflow
       </Link>
 
