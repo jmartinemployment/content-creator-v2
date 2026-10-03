@@ -79,6 +79,22 @@ function writtenBy(metadataJson?: string | null): string | null {
   }
 }
 
+/**
+ * True when every partner failed extraction on every page it attempted.
+ *
+ * That is a provider fault — a 400, a 429, an outage — and never a statement about the partners. It
+ * has to be distinguished because the two produce identical counts: nothing extracted looks exactly
+ * like nothing to extract, and the panel led with the second reading twice in one day.
+ */
+function everyPartnerFailedExtraction(preflight: {
+  partners: { pagesAttempted: number; pagesFailed: number }[];
+}): boolean {
+  return (
+    preflight.partners.length > 0 &&
+    preflight.partners.every((p) => p.pagesAttempted > 0 && p.pagesFailed >= p.pagesAttempted)
+  );
+}
+
 export default function CreateDraftWorkspace({
   createId,
   clientId,
@@ -717,21 +733,43 @@ export default function CreateDraftWorkspace({
           {preflight ? (
             <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
               <p className="text-sm font-medium text-foreground">
-                Partner readiness &mdash; {preflight.ready} of {preflight.total} can be grounded
+                {everyPartnerFailedExtraction(preflight)
+                  ? `Extraction failed for all ${preflight.total} partners — a provider fault, not your data`
+                  : `Partner readiness — ${preflight.ready} of ${preflight.total} can be grounded`}
               </p>
+              {/* Twice on 2026-10-03 this panel reported a provider outage as five unusable partners:
+                  once for a 400 (temperature deprecated) and once for a 429 (no OpenAI credits). Both
+                  read as "0 of 22 categories ... no capability signal", which is the sentence for a
+                  partner whose site is thin. When nothing was extracted the counts describe nothing,
+                  so they are not shown. */}
+              {everyPartnerFailedExtraction(preflight) ? (
+                <p className="mt-1 text-xs text-muted">
+                  No partner could be assessed. Category counts are omitted because nothing was
+                  extracted to count — the cause is in the error below.
+                </p>
+              ) : null}
               <ul className="mt-2 space-y-1.5">
-                {preflight.partners.map((partner) => (
+                {preflight.partners.map((partner) => {
+                  const allFailed =
+                    partner.pagesAttempted > 0 && partner.pagesFailed >= partner.pagesAttempted;
+                  return (
                   <li key={partner.host} className="text-sm">
                     <span className="text-foreground">
                       {partner.ready ? "\u2713" : "\u2717"} {partner.productName}
                     </span>
                     <span className="text-muted">
                       {" \u2014 "}
-                      {partner.populatedCategories} of 22 categories
-                      {partner.pagesFailed > 0
-                        ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
-                        : `, ${partner.pagesAttempted} pages extracted`}
-                      {partner.hasCapabilitySignal ? "" : ", no capability signal"}
+                      {allFailed ? (
+                        `extraction failed on all ${partner.pagesAttempted} pages`
+                      ) : (
+                        <>
+                          {partner.populatedCategories} of 22 categories
+                          {partner.pagesFailed > 0
+                            ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
+                            : `, ${partner.pagesAttempted} pages extracted`}
+                          {partner.hasCapabilitySignal ? "" : ", no capability signal"}
+                        </>
+                      )}
                     </span>
                     {/* The fault/shortage split, verbatim from the backend. A provider outage and a
                         thin partner leave identical counts, so only this sentence separates them. */}
@@ -739,7 +777,8 @@ export default function CreateDraftWorkspace({
                       <span className="mt-0.5 block text-xs text-muted">{partner.coverage}</span>
                     ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               {preflight.ready < preflight.total ? (
                 <p className="mt-2 text-xs text-muted">
