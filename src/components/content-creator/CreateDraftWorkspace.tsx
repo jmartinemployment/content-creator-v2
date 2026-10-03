@@ -56,6 +56,29 @@ import {
   type GccStaleGroundingError,
 } from "@/services/gcc-api";
 
+/**
+ * The provider named in a version's metadata, or null when it predates the stamp.
+ *
+ * Deliberately no default. Every version generated before this shipped carries no provenance, and
+ * labelling those "OpenAI" would be a guess presented as a record -- in the one place whose entire job is
+ * telling two drafts apart. Unlabelled is honest; wrongly labelled poisons the comparison.
+ */
+function writtenBy(metadataJson?: string | null): string | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed: unknown = JSON.parse(metadataJson);
+    if (!parsed || typeof parsed !== "object") return null;
+    const raw = (parsed as Record<string, unknown>).generatedByProvider;
+    if (typeof raw !== "string" || raw.trim().length === 0) return null;
+    // The stored value is the provider enum name; this is the only place it is shown to a person.
+    return raw === "Anthropic" ? "Anthropic" : raw === "OpenAi" ? "OpenAI" : raw;
+  } catch {
+    // Metadata is written by us, but a version carrying something unparseable is not a reason to fail
+    // the draft view it belongs to.
+    return null;
+  }
+}
+
 export default function CreateDraftWorkspace({
   createId,
   clientId,
@@ -874,6 +897,15 @@ export default function CreateDraftWorkspace({
               </span>
               {approved ? (
                 <span className="text-sm text-[var(--gcc-accent)]">Approved</span>
+              ) : null}
+              {/* Which writer produced this draft. Shown because the whole point of the Writing model
+                  control is comparing two drafts, and with several artifacts per type named after the
+                  product, nothing else on screen distinguishes them -- the alternative is remembering
+                  which setting was selected when Generate was clicked. */}
+              {writtenBy(version.metadataJson) ? (
+                <span className="text-sm text-muted">
+                  Provided by {writtenBy(version.metadataJson)}
+                </span>
               ) : null}
             </div>
             <ArtifactBody
