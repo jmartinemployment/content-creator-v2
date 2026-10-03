@@ -237,10 +237,12 @@ export default function ClientsPanel({
           <p className="text-sm text-muted">No clients yet — create one to get started.</p>
         )}
         {clients.map((client) => {
-          const selected = selectedClientId === client.id;
           return (
-            <span
-            >
+            // key restored: React needs it to track rows across renders, and eslint fails the build
+            // without it. `selected` went with it -- nothing reads it any more, because every chip now
+            // takes the same styling. If the selected client is meant to look different, that is the
+            // place to put it back.
+            <span key={client.id}>
               <button
                 type="button"
                 onClick={() => {

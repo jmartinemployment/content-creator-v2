@@ -198,15 +198,19 @@ export default function ProjectsPanel({
                   : "border-border bg-background hover:border-brand/40"
               }`}
             >
+              {/* Opens the project; it does not select one in place. aria-pressed is gone with the
+                  toggle semantics -- it announced this as a two-state control while it navigates away,
+                  and it looked like one too, which is how a created project ended up with no obvious
+                  way forward (Jeff, 2026-10-03: "Created a project but has no clear path to proceed"). */}
               <button
                 type="button"
                 onClick={() => onSelect(selected ? null : project.id)}
-                aria-current={selected ? "true" : undefined}
-                aria-pressed={selected}
-                className="flex flex-1 flex-col items-start gap-1 text-left"
+                className="group flex flex-1 flex-col items-start gap-1 text-left"
               >
                 <span className="flex w-full flex-wrap items-center gap-2">
-                  <span className="font-medium text-foreground">{project.name}</span>
+                  <span className="font-medium text-foreground group-hover:text-brand">
+                    {project.name}
+                  </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[project.status]}`}
                   >
@@ -222,6 +226,9 @@ export default function ProjectsPanel({
                   {project.siteUrl ? (
                     <span className="break-all">· {project.siteUrl}</span>
                   ) : null}
+                </span>
+                <span className="mt-0.5 text-xs font-medium text-brand">
+                  Open project <span aria-hidden="true">&rarr;</span>
                 </span>
               </button>
 

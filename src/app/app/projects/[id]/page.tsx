@@ -23,8 +23,8 @@ import { ApiError, getProject, type GccProject } from "@/services/gcc-projects-a
  * value and switching breakpoints mid-task keeps your place.
  */
 const SECTIONS = [
-  { key: "profile", label: "Profile", blurb: "The engagement: site, schedule, partners, budget." },
   { key: "content", label: "Brief & Generate", blurb: "The brief, generation, and the drafts it produced." },
+  { key: "profile", label: "Profile", blurb: "The engagement: site, schedule, partners, budget." },
   { key: "deliverables", label: "Deliverables", blurb: "What this project owes, and what has shipped." },
   { key: "tasks", label: "Tasks & Time", blurb: "Work outstanding, and the hours against it." },
   { key: "history", label: "History", blurb: "Every change to this project, append-only." },
@@ -38,7 +38,10 @@ export default function ProjectWorkspacePage() {
 
   const [project, setProject] = useState<GccProject | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [section, setSection] = useState<SectionKey>("profile");
+  // Lands on the work, not on reference. Profile is the engagement's fields -- nothing to act on --
+  // so opening a freshly created project there left no visible next step. The brief is what a new
+  // project needs first, and generate follows it in the same section.
+  const [section, setSection] = useState<SectionKey>("content");
 
   // The create the draft lives on. Resolved by the brief panel, as it was on the workflow page, and
   // reset when the project changes so one project's draft is never shown under another's name.
