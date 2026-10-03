@@ -107,7 +107,7 @@ export default function NicheFramingPanel({
 
       <FramingFields
         legend="For the whole category"
-        hint="Fill this once. Every page in this niche uses it unless you override a tool below."
+        hint="The one problem the whole niche has — not a collection of each tool's. Every page uses this; a tool below overrides only the boxes you fill in."
         value={value}
         onChange={(next) => patch(next)}
       />
@@ -132,7 +132,8 @@ export default function NicheFramingPanel({
           </div>
           <p className="mt-1 text-xs text-muted">
             Leave a tool alone and it uses the category framing above. Override it when that tool owns a
-            distinct slice of the problem &mdash; a segment, a stage, a scale.
+            distinct slice of the problem &mdash; a segment, a stage, a scale. Overrides apply per box:
+            fill only Core Problem and that tool keeps the category&rsquo;s other two.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => {
@@ -158,7 +159,7 @@ export default function NicheFramingPanel({
                     <div className="border-t border-[var(--gcc-border)] px-3 pb-3">
                       <FramingFields
                         legend={`${partner.label}'s niche`}
-                        hint="What slice of the category problem does this tool own?"
+                        hint="What slice of the category problem does this tool own? Leave a box empty to keep the category's."
                         value={set}
                         onChange={(next) => patchPerTool(partner.host, next)}
                       />
