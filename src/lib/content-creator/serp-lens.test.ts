@@ -1,7 +1,7 @@
 import {
   applyCuratedSerpToBrief,
   buildCuratedSerpSeed,
-  curatedSerpHasOrganics,
+  curatedSerpHasQuestions,
   type CuratedSerpSeed,
   type SavedSerpParseResult,
 } from "./serp-lens.ts";
@@ -17,6 +17,13 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
   }
 }
 
+/**
+ * The seed carries questions and nothing else since 2026-10-03. Organic titles, organic URLs,
+ * related searches and three provenance fields were written to the brief and read by nothing;
+ * `plans/remove-unwired-code.md` Phase 1 removed them. The parse result still carries organics and
+ * related searches because it mirrors the API response — the fixture keeps them to prove they are
+ * now ignored rather than absent.
+ */
 const parsed: SavedSerpParseResult = {
   organics: [
     { title: "AI Implementation Guide", url: "https://a.test/guide", position: 1 },
@@ -39,80 +46,59 @@ const parsed: SavedSerpParseResult = {
   parseWarning: null,
 };
 
-// Stage 7: "Zero organics parsed => fail. Never merge an empty result." curatedSerpHasOrganics is
-// the gate this depends on -- prove it actually distinguishes the two cases.
-const withOrganics = buildCuratedSerpSeed(parsed, new Set([0, 1]), new Set([0]), new Set([0]));
-assert(curatedSerpHasOrganics(withOrganics), "a seed built from selected organics has organics");
+// The seed is questions only. A parse result full of organics and related searches must produce a
+// seed carrying neither -- this is the assertion that fails if anyone wires them back up.
+const withQuestions = buildCuratedSerpSeed(parsed, new Set([0]));
+assertEqual(
+  Object.keys(withQuestions).sort(),
+  ["paaQuestions"],
+  "the seed carries questions and nothing else",
+);
+assertEqual(
+  withQuestions.paaQuestions,
+  "What is AI implementation?",
+  "only the selected question is carried",
+);
 
-const noOrganicsSelected = buildCuratedSerpSeed(parsed, new Set(), new Set([0]), new Set([0]));
+// "Never merge an empty result." The gate was curatedSerpHasOrganics; with organics gone it would
+// have been permanently false, disabling Confirm and silently taking the pillar FAQ with it.
+assert(curatedSerpHasQuestions(withQuestions), "a seed with a selected question has questions");
 assert(
-  !curatedSerpHasOrganics(noOrganicsSelected),
-  "a seed with zero organics selected must read as having no organics, even with PAA/related present",
+  !curatedSerpHasQuestions(buildCuratedSerpSeed(parsed, new Set())),
+  "selecting no questions is an empty seed, whatever else the SERP parsed",
 );
 
-// Provenance: stamped on every build, never left for the caller to forget.
-assertEqual(withOrganics.locale, "en-US", "locale is stamped");
-assert(withOrganics.capturedAt.length > 0, "capturedAt is stamped");
-const keyed = buildCuratedSerpSeed(parsed, new Set([0]), new Set(), new Set(), {
-  capturedKeyword: "ai implementation",
-});
-assertEqual(keyed.capturedKeyword, "ai implementation", "capturedKeyword passes through");
+// fill-empty keeps what the operator already wrote, and reports the skip rather than losing it.
+const briefWithQuestions = { ...emptyContentBrief(), paaQuestions: "Typed by hand?" };
+const fillEmpty = applyCuratedSerpToBrief(briefWithQuestions, withQuestions, "fill-empty");
+assertEqual(fillEmpty.brief.paaQuestions, "Typed by hand?", "fill-empty keeps existing questions");
+assertEqual(fillEmpty.conflicts.length, 1, "the skipped field is reported");
+assertEqual(fillEmpty.conflicts[0]!.field, "paaQuestions", "the conflict names the field");
+assertEqual(fillEmpty.conflicts[0]!.offered, "What is AI implementation?", "the conflict carries the offer");
 
-// Merge mode: fill-empty keeps existing content and reports the conflict rather than dropping it.
-const briefWithExistingTitles = { ...emptyContentBrief(), serpTitles: "Operator's own title" };
-const fillEmptyResult = applyCuratedSerpToBrief(briefWithExistingTitles, withOrganics, "fill-empty");
-assertEqual(
-  fillEmptyResult.brief.serpTitles,
-  "Operator's own title",
-  "fill-empty never overwrites existing content",
-);
-assertEqual(fillEmptyResult.conflicts.length, 1, "fill-empty reports exactly one conflict");
-assertEqual(fillEmptyResult.conflicts[0]?.field, "serpTitles", "the conflict names the right field");
-assertEqual(
-  fillEmptyResult.conflicts[0]?.offered,
-  withOrganics.serpTitles,
-  "the conflict carries the value that was not written, so a caller can offer it",
-);
+// replace overwrites and reports nothing, because nothing was skipped.
+const replaced = applyCuratedSerpToBrief(briefWithQuestions, withQuestions, "replace");
+assertEqual(replaced.brief.paaQuestions, "What is AI implementation?", "replace overwrites");
+assertEqual(replaced.conflicts.length, 0, "replace skips nothing, so reports nothing");
 
-// Merge mode: replace overwrites and reports no conflicts (nothing was skipped).
-const replaceResult = applyCuratedSerpToBrief(briefWithExistingTitles, withOrganics, "replace");
-assertEqual(replaceResult.brief.serpTitles, withOrganics.serpTitles, "replace overwrites existing content");
-assertEqual(replaceResult.conflicts.length, 0, "replace never reports conflicts");
+// An empty brief takes the questions with no conflict.
+const seeded = applyCuratedSerpToBrief(emptyContentBrief(), withQuestions, "fill-empty");
+assertEqual(seeded.brief.paaQuestions, "What is AI implementation?", "an empty brief is seeded");
+assertEqual(seeded.conflicts.length, 0, "seeding an empty field is not a conflict");
 
-// Provenance is stamped only when a field was actually written -- never claimed on a no-op call.
-const untouchedBrief = emptyContentBrief();
-const emptySeed: CuratedSerpSeed = {
-  serpTitles: "",
-  serpUrls: "",
-  paaQuestions: "",
-  relatedSearches: "",
-  capturedKeyword: "ai implementation",
-  capturedAt: "2026-01-01T00:00:00.000Z",
-  locale: "en-US",
-};
-const noopResult = applyCuratedSerpToBrief(untouchedBrief, emptySeed, "fill-empty");
-assertEqual(noopResult.brief.serpCapturedAt, "", "no field written => no provenance claimed");
+// An empty seed is a no-op in both modes -- it must never blank a brief that has questions.
+const emptySeed: CuratedSerpSeed = { paaQuestions: "" };
+for (const mode of ["fill-empty", "replace"] as const) {
+  const noop = applyCuratedSerpToBrief(briefWithQuestions, emptySeed, mode);
+  assertEqual(noop.brief.paaQuestions, "Typed by hand?", `an empty seed is a no-op in ${mode}`);
+  assertEqual(noop.conflicts.length, 0, `an empty seed reports no conflict in ${mode}`);
+}
 
-const realResult = applyCuratedSerpToBrief(untouchedBrief, withOrganics, "fill-empty");
-assert(realResult.brief.serpCapturedAt.length > 0, "a field written => provenance is stamped");
-assertEqual(realResult.brief.serpTitles, withOrganics.serpTitles, "the field itself was actually written");
+// Writing notes are the operator's and nothing writes into them. Confirming a SERP used to put
+// "SERP shape: ..." and "Information Gain: ..." there when the field happened to be empty, so a
+// field labelled as your input filled with machine output (Jeff, 2026-09-27: "None of it belongs as
+// a writing note").
+const notes = applyCuratedSerpToBrief(emptyContentBrief(), withQuestions, "fill-empty");
+assertEqual(notes.brief.writingNotes, "", "confirming a SERP never writes writing notes");
 
-// Writing notes are the operator's. Confirming a SERP used to write "SERP shape: ..." and
-// "Information Gain: ..." into them whenever the field was empty, so a field labelled as the
-// operator's input silently carried machine output into the body prompt.
-const shapedSeed: CuratedSerpSeed = {
-  ...withOrganics,
-  shapeGuidance: "Prefer an Angle for SEO that matches (advisory only — do not auto-set)",
-  informationGainSummary: "This site covers 0 related page(s)",
-};
-
-const notesAfterMerge = applyCuratedSerpToBrief(emptyContentBrief(), shapedSeed, "fill-empty");
-assertEqual(notesAfterMerge.brief.writingNotes, "", "a confirmed SERP never writes writing notes");
-
-// And the operator's own note is returned untouched, which the old is-empty guard also got right
-// but only by accident -- it was the reason a typed note suppressed both findings entirely.
-const typed = { ...emptyContentBrief(), writingNotes: "Keep the second half concrete." };
-const notesKept = applyCuratedSerpToBrief(typed, shapedSeed, "fill-empty");
-assertEqual(notesKept.brief.writingNotes, "Keep the second half concrete.", "an operator note survives a merge");
-
-console.log("serp-lens tests passed");
+console.log("serp-lens.test.ts: all assertions passed");

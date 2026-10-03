@@ -4,28 +4,36 @@ import { useMemo, useState } from "react";
 import { parseSavedSerp, ApiError } from "@/services/gcc-api";
 import {
   buildCuratedSerpSeed,
-  curatedSerpHasOrganics,
+  curatedSerpHasQuestions,
   type CuratedSerpSeed,
   type PaaCandidate,
-  type SavedSerpOrganic,
   type SavedSerpParseResult,
 } from "@/lib/content-creator/serp-lens";
-import type { InformationGainNote } from "@/lib/types";
 
+/**
+ * Pick the questions a pillar's FAQ section answers, from a saved Google results page.
+ *
+ * **This used to curate four things and three of them went nowhere.** Organic titles, organic URLs
+ * and related searches were written to the brief and read by nothing -- zero references across every
+ * `.cs` file in GeekAPI, v1 and v2 -- along with three provenance fields recording when a SERP
+ * nobody read was captured. `.cursor/rules/no-unwired-code.mdc` had listed it since 2026-09-27
+ * ("SERP ingest changed nothing"). Removed 2026-10-03, `plans/remove-unwired-code.md` Phase 1.
+ *
+ * The questions are the half that does something: they become the pillar's FAQ section
+ * (`GccGenerateService:2407`) and license headings against PAA (`:3120`). So the panel is named for
+ * that now -- "SERP ingest" described where the data came from, not what it is for, which is why its
+ * output looked inert when three quarters of it was.
+ */
 export function SerpIngestPanel({
   gapTopic,
-  informationGain,
   onCurated,
 }: {
   gapTopic: string;
-  informationGain?: InformationGainNote | null;
   onCurated: (seed: CuratedSerpSeed | null) => void;
 }) {
   const [raw, setRaw] = useState("");
   const [parsed, setParsed] = useState<SavedSerpParseResult | null>(null);
-  const [selectedOrganics, setSelectedOrganics] = useState<Set<number>>(new Set());
   const [selectedPaa, setSelectedPaa] = useState<Set<number>>(new Set());
-  const [selectedRelated, setSelectedRelated] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +43,9 @@ export function SerpIngestPanel({
     try {
       const result = await parseSavedSerp(content, gapTopic);
       setParsed(result);
-      setSelectedOrganics(new Set(result.organics.map((_, i) => i)));
+      // Pre-checked on the parser's own relevance call, so the common case is confirm-and-go. The
+      // weak ones are listed and unchecked rather than hidden -- the operator overrules the parser,
+      // not the other way round.
       setSelectedPaa(
         new Set(
           result.peopleAlsoAsk
@@ -43,7 +53,6 @@ export function SerpIngestPanel({
             .filter((i) => i >= 0),
         ),
       );
-      setSelectedRelated(new Set(result.relatedSearches.map((_, i) => i)));
       onCurated(null);
     } catch (e: unknown) {
       setParsed(null);
@@ -72,40 +81,31 @@ export function SerpIngestPanel({
     reader.readAsText(file);
   }
 
-  const curatedPreview = useMemo(() => {
-    if (!parsed) return null;
-    const gain = mergeInformationGain(
-      informationGain,
-      parsed.organics.filter((_, i) => selectedOrganics.has(i)),
-    );
-    return buildSeed(
-      parsed,
-      selectedOrganics,
-      selectedPaa,
-      selectedRelated,
-      gapTopic,
-      gain,
-    );
-  }, [parsed, selectedOrganics, selectedPaa, selectedRelated, gapTopic, informationGain]);
+  const curatedPreview = useMemo(
+    () => (parsed ? buildCuratedSerpSeed(parsed, selectedPaa) : null),
+    [parsed, selectedPaa],
+  );
 
   function confirm() {
-    // Stage 7: "Zero organics parsed => fail. Never merge an empty result." A curatedPreview can
-    // exist (parsed is non-null) with every organic left unchecked -- that must not seed the brief.
-    if (!curatedPreview || !curatedSerpHasOrganics(curatedPreview)) {
-      setError("Select at least one organic result before confirming — an empty SERP is never merged.");
+    // Never merge an empty result. A curatedPreview can exist with every question unchecked, and
+    // seeding the brief with nothing would read as a confirmed-empty FAQ rather than no FAQ.
+    if (!curatedPreview || !curatedSerpHasQuestions(curatedPreview)) {
+      setError("Select at least one question before confirming — an empty set is never merged.");
       return;
     }
     setError(null);
     onCurated(curatedPreview);
   }
 
+  const canConfirm = !!curatedPreview && curatedSerpHasQuestions(curatedPreview);
+
   return (
     <div className="mt-4 space-y-3 rounded-md border border-[var(--gcc-line)] bg-[var(--gcc-surface-muted,#f8faf9)] p-4">
-      <p className="text-sm font-semibold text-foreground">SERP ingest (saved results page)</p>
+      <p className="text-sm font-semibold text-foreground">FAQ questions from a saved results page</p>
       <p className="text-xs text-[var(--gcc-muted)]">
-        Run the keyword search in your browser, save the results page, and upload it. Prefer{" "}
-        <strong>page 1</strong> for People Also Ask. Confirm the shortlist before start create —
-        nothing seeds without your confirm.
+        Run the keyword search in your browser, save the results page, and upload it. The People Also
+        Ask questions you confirm become the pillar&rsquo;s FAQ section &mdash; a pillar with no
+        questions here gets no FAQ. Prefer <strong>page 1</strong>; page 2 usually has no PAA.
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -149,56 +149,6 @@ export function SerpIngestPanel({
             </p>
           ) : null}
 
-          <div>
-            <p className="font-medium">SERP shape</p>
-            <p className="text-xs text-[var(--gcc-muted)]">{parsed.shape.guidance}</p>
-            {parsed.shape.dominantFormats.length > 0 ? (
-              <p className="mt-1 text-xs">
-                Formats: {parsed.shape.dominantFormats.join(", ")}
-              </p>
-            ) : null}
-          </div>
-
-          {informationGain || parsed ? (
-            <div>
-              <p className="font-medium">Information Gain</p>
-              <p className="text-xs text-[var(--gcc-muted)]">
-                {mergeInformationGain(
-                  informationGain,
-                  parsed.organics.filter((_, i) => selectedOrganics.has(i)),
-                ).summary}
-              </p>
-              {(informationGain?.thisSiteCovers.length ?? 0) > 0 ? (
-                <ul className="mt-1 list-disc pl-5 text-xs text-[var(--gcc-muted)]">
-                  {informationGain!.thisSiteCovers.slice(0, 5).map((c) => (
-                    <li key={c}>{c}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {parsed.organics.filter((_, i) => selectedOrganics.has(i)).length > 0 ? (
-                <ul className="mt-1 list-disc pl-5 text-xs text-[var(--gcc-muted)]">
-                  {mergeInformationGain(
-                    informationGain,
-                    parsed.organics.filter((_, i) => selectedOrganics.has(i)),
-                  ).competitorOpens.slice(0, 5).map((c) => (
-                    <li key={c}>Competitor: {c}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-
-          <CandidateList
-            title="Organic results"
-            items={parsed.organics.map(
-              (o: SavedSerpOrganic) => `${o.title} — ${o.url}`,
-            )}
-            selected={selectedOrganics}
-            onToggle={(i) =>
-              setSelectedOrganics((prev) => toggleSet(prev, i))
-            }
-          />
-
           <CandidateList
             title="People Also Ask"
             items={parsed.peopleAlsoAsk.map(
@@ -209,20 +159,13 @@ export function SerpIngestPanel({
             onToggle={(i) => setSelectedPaa((prev) => toggleSet(prev, i))}
           />
 
-          <CandidateList
-            title="Related searches"
-            items={parsed.relatedSearches}
-            selected={selectedRelated}
-            onToggle={(i) => setSelectedRelated((prev) => toggleSet(prev, i))}
-          />
-
           <button
             type="button"
             onClick={confirm}
-            disabled={!curatedPreview || !curatedSerpHasOrganics(curatedPreview)}
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+            disabled={!canConfirm}
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Confirm SERP shortlist for create
+            Confirm questions for this brief
           </button>
         </div>
       ) : null}
@@ -280,60 +223,4 @@ function toggleSet(prev: Set<number>, i: number): Set<number> {
   if (next.has(i)) next.delete(i);
   else next.add(i);
   return next;
-}
-
-function buildSeed(
-  parsed: SavedSerpParseResult,
-  organics: Set<number>,
-  paa: Set<number>,
-  related: Set<number>,
-  capturedKeyword: string,
-  informationGain?: InformationGainNote | null,
-): CuratedSerpSeed {
-  return buildCuratedSerpSeed(parsed, organics, paa, related, {
-    informationGainSummary: informationGain?.summary,
-    capturedKeyword,
-  });
-}
-
-/** Merge crawl-side Information Gain with competitor opens from curated organics. */
-function mergeInformationGain(
-  base: InformationGainNote | null | undefined,
-  organics: SavedSerpOrganic[],
-): InformationGainNote {
-  const thisSite = base?.thisSiteCovers ?? [];
-  const siteHosts = new Set(
-    thisSite
-      .map((line) => {
-        const m = line.match(/^https?:\/\/([^/\s:]+)/i);
-        return m?.[1]?.toLowerCase() ?? null;
-      })
-      .filter(Boolean) as string[],
-  );
-
-  const opens: string[] = [];
-  for (const o of organics.slice(0, 10)) {
-    try {
-      const host = new URL(o.url).host.toLowerCase();
-      if (siteHosts.has(host)) continue;
-      opens.push(`${o.title} (${o.url})`);
-    } catch {
-      opens.push(`${o.title} (${o.url})`);
-    }
-  }
-
-  const summary =
-    thisSite.length === 0 && opens.length === 0
-      ? base?.summary ??
-        "Upload a saved SERP and load section context to build an Information Gain note."
-      : opens.length === 0
-        ? base?.summary ??
-          `This site covers ${thisSite.length} related page(s). Confirm SERP organics to list competitor opens.`
-        : `This site covers ${thisSite.length} related page(s); ${opens.length} SERP competitor result(s) to differentiate against.`;
-
-  return {
-    thisSiteCovers: thisSite,
-    competitorOpens: opens,
-    summary,
-  };
 }

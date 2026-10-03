@@ -198,19 +198,7 @@ export interface ContentBrief {
   eeatSignals: EeatSignal[];
   lengthBand: LengthBandKey | "";
   writingNotes: string;
-  /** One organic title per line (uploaded/curated SERP index). */
-  serpTitles: string;
-  /** One absolute http(s) organic URL per line (uploaded/curated; paired with titles). */
-  serpUrls: string;
-  /** One PAA question per line (operator-curated; never auto-dumped). */
   paaQuestions: string;
-  /** One related search per line (uploaded/curated). */
-  relatedSearches: string;
-  /**
-   * Provenance for the four SERP fields above — Stage 7: "otherwise nobody can tell a fresh SERP
-   * from a six-month-old one." Set together, once, when a curated SERP seed is confirmed; never
-   * hand-edited. Empty when no SERP has ever been confirmed onto this brief.
-   */
   /**
    * The operator's own framing of this niche's problem — researched by hand, per taxonomy leaf.
    *
@@ -227,14 +215,6 @@ export interface ContentBrief {
    * regress.
    */
   nicheFraming: NicheFraming;
-  serpCapturedKeyword: string;
-  /** ISO 8601 timestamp of the confirm, not the page save — this codebase never trusts a client
-   * clock for anything it didn't just observe, and confirm is the moment this data entered GCC. */
-  serpCapturedAt: string;
-  /** Always "en-US" today: GccSavedSerpParser parses whatever locale operator saved, unlabeled: a
-   * saved Google results page carries no strong client-visible locale signal to extract. Stated
-   * explicitly rather than implied, so a real signal can replace it later without a schema change. */
-  serpLocale: string;
 }
 
 /** One set of the three things the operator researches. Shared by the category and each tool. */
@@ -324,14 +304,8 @@ export function emptyContentBrief(): ContentBrief {
     eeatSignals: EEAT_SIGNALS.map((s) => s.value),
     lengthBand: "",
     writingNotes: "",
-    serpTitles: "",
-    serpUrls: "",
     paaQuestions: "",
-    relatedSearches: "",
     nicheFraming: emptyNicheFraming(),
-    serpCapturedKeyword: "",
-    serpCapturedAt: "",
-    serpLocale: "",
   };
 }
 
@@ -468,13 +442,7 @@ export function migrateBrief(raw: unknown): ContentBrief {
       return acc;
     }, [])
     .join("\n");
-  base.serpTitles = str(p.serpTitles);
-  base.serpUrls = str(p.serpUrls);
   base.paaQuestions = str(p.paaQuestions);
-  base.relatedSearches = str(p.relatedSearches);
-  base.serpCapturedKeyword = str(p.serpCapturedKeyword);
-  base.serpCapturedAt = str(p.serpCapturedAt);
-  base.serpLocale = str(p.serpLocale);
   // Read back explicitly, like every other field. migrateBrief rebuilds from emptyContentBrief, so a
   // field missing here is saved to the server and then silently wiped on the next load.
   base.nicheFraming = migrateNicheFraming(p.nicheFraming);
@@ -529,15 +497,6 @@ function migrateNicheFraming(raw: unknown): NicheFraming {
   return framing;
 }
 
-/* ------------------------- summaries / labels ------------------------- */
-
-function labelFor(
-  options: readonly { value: string; label: string }[],
-  value: string,
-): string {
-  return options.find((o) => o.value === value)?.label ?? value;
-}
-
 /** Required fields for fail-closed Generate (inline validation). */
 export function contentBriefMissingFields(brief: ContentBrief): string[] {
   const missing: string[] = [];
@@ -559,108 +518,6 @@ export function isContentBriefComplete(brief: ContentBrief): boolean {
 }
 
 /** Structured BRIEF block for prompts / research upload. */
-export function buildBriefBlock(brief: ContentBrief, targetKeyword: string): string {
-  const eeat =
-    brief.eeatSignals.length > 0
-      ? brief.eeatSignals.map((s) => labelFor(EEAT_SIGNALS, s)).join(", ")
-      : "(none)";
-
-  const lines = [
-    "=== BRIEF ===",
-    `Target keyword: ${targetKeyword.trim()}`,
-    `Primary intent: ${labelFor(PRIMARY_INTENTS, brief.primaryIntent)}`,
-  ];
-  if (brief.secondaryIntent) {
-    lines.push(`Secondary intent: ${labelFor(SECONDARY_INTENTS, brief.secondaryIntent)}`);
-  }
-  lines.push(
-    `Buying stage (Full Funnel): ${labelFor(BUYING_STAGES, brief.buyingStage)}`,
-    `Audience segment: ${labelFor(AUDIENCE_SEGMENTS, brief.audienceSegment)}`,
-    `Audience notes: ${brief.audienceNotes.trim()}`,
-    "If notes conflict with segment, follow notes.",
-    `Angle: ${labelFor(CONTENT_ANGLES, brief.angle)}`,
-    `CTA type: ${labelFor(CTA_TYPES, brief.ctaType)}`,
-  );
-  if (brief.ctaLabel.trim()) {
-    lines.push(`CTA label: ${brief.ctaLabel.trim()}`);
-  }
-  lines.push(
-    `Tone of voice: ${labelFor(TONES_OF_VOICE, brief.toneOfVoice)}`,
-    `E-E-A-T signals: ${eeat}`,
-    `Length band: ${brief.lengthBand}`,
-  );
-  if (brief.writingNotes.trim()) {
-    lines.push(`Writing notes: ${brief.writingNotes.trim()}`);
-  }
-
-  const titles = splitLines(brief.serpTitles);
-  if (titles.length) {
-    lines.push("SERP organic titles (uploaded/curated):");
-    for (const t of titles) lines.push(`- ${t}`);
-  }
-  const urls = splitLines(brief.serpUrls);
-  if (urls.length) {
-    lines.push("SERP organic URLs (uploaded/curated):");
-    for (const t of urls) lines.push(`- ${t}`);
-  }
-  const related = splitLines(brief.relatedSearches);
-  if (related.length) {
-    lines.push("Related searches (uploaded/curated):");
-    for (const t of related) lines.push(`- ${t}`);
-  }
-  const paa = splitLines(brief.paaQuestions);
-  if (paa.length) {
-    lines.push("People Also Ask (operator-curated):");
-    for (const t of paa) lines.push(`- ${t}`);
-  }
-  if (titles.length || urls.length || related.length || paa.length) {
-    if (brief.serpCapturedAt.trim()) {
-      lines.push(
-        `SERP captured: ${brief.serpCapturedAt.trim()} for keyword "${brief.serpCapturedKeyword.trim()}" (${brief.serpLocale.trim() || "locale unknown"}).`,
-      );
-    } else {
-      lines.push(
-        "SERP capture date unknown — this data predates provenance stamping; treat as possibly stale.",
-      );
-    }
-  }
-
-  return lines.join("\n");
-}
-
-export function formatBriefAsHtml(brief: ContentBrief, targetKeyword: string): string {
-  const block = buildBriefBlock(brief, targetKeyword);
-  const paragraphs = block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => `<p>${escapeHtml(line)}</p>`)
-    .join("\n");
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Content Brief</title></head>
-<body>
-<h1>Content Brief</h1>
-${paragraphs}
-</body>
-</html>`;
-}
-
-function splitLines(text: string): string[] {
-  return text
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 export function loadBriefFromStorage(projectId: string): ContentBrief | null {
   if (typeof window === "undefined") return null;
   try {

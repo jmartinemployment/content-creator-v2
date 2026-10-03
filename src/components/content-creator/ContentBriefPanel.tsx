@@ -52,10 +52,7 @@ function computeLocalBrief(targetKeyword: string): ContentBrief {
 }
 
 const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
-  serpTitles: "SERP organic titles",
-  serpUrls: "SERP organic URLs",
   paaQuestions: "People Also Ask",
-  relatedSearches: "Related searches",
 };
 
 /**
@@ -265,11 +262,7 @@ export default function ContentBriefPanel({
               // Prefer server brief, but keep locally seeded SERP/notes if server fields are empty.
               const merged = {
                 ...parsed,
-                serpTitles: parsed.serpTitles.trim() || localBrief.serpTitles,
-                serpUrls: parsed.serpUrls.trim() || localBrief.serpUrls,
                 paaQuestions: parsed.paaQuestions.trim() || localBrief.paaQuestions,
-                relatedSearches:
-                  parsed.relatedSearches.trim() || localBrief.relatedSearches,
                 writingNotes: parsed.writingNotes.trim() || localBrief.writingNotes,
               };
               setBrief(merged);
