@@ -103,6 +103,13 @@ export default function CreateDraftWorkspace({
   // The tool pre-flight: which declared partners can be grounded, known before anything is drafted.
   const [preflight, setPreflight] = useState<GccGeneratePreflightEvent | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
+  // Which provider writes. Defaults to OpenAi, which is what gcc-api sent unconditionally before this
+  // control existed -- so leaving it alone reproduces today's behaviour exactly.
+  //
+  // Only WRITING follows this. Extraction resolves its provider through the backend's GetDefault(), takes
+  // no provider argument, and stays on LlmProviders__DefaultProvider -- so switching here changes who
+  // writes the prose and not what it is grounded on, which is the only way the comparison means anything.
+  const [provider, setProvider] = useState<"OpenAi" | "Anthropic">("OpenAi");
   // The one content-type selection in this component. It mints the create (its first entry
   // becomes StartingContentType) and it is what Generate produces -- not two pickers agreeing
   // by hand.
@@ -455,6 +462,7 @@ export default function CreateDraftWorkspace({
     try {
       const result = await generateGccCreate(effectiveCreateId, {
         outputTypes,
+        provider,
         acknowledgeStaleGrounding: acknowledgeStale,
       });
 
@@ -600,6 +608,25 @@ export default function CreateDraftWorkspace({
           {/* Lives here rather than inside the brief: it is the choice Generate acts on, and inside
               the brief it disappeared the moment the brief was collapsed. */}
           <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
+          <div className="mt-4 border-t border-border pt-4">
+            <label className="block">
+              <span className="text-sm font-medium text-foreground">Writing model</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Who writes the prose. Grounding does not change &mdash; partner and competitor extraction
+                stays on its own configured provider either way, so the same evidence reaches both.
+              </span>
+              <select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value === "Anthropic" ? "Anthropic" : "OpenAi")}
+                disabled={generating}
+                className="mt-1.5 rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground disabled:opacity-40"
+              >
+                <option value="OpenAi">OpenAI</option>
+                <option value="Anthropic">Anthropic</option>
+              </select>
+            </label>
+          </div>
 
           {/* The one filled accent on this page. The parent site uses orange as a text colour 530
               times and as a fill 21 -- a solid fill there means "act here", so it belongs to the
