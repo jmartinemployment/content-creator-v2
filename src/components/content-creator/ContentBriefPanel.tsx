@@ -485,14 +485,18 @@ export default function ContentBriefPanel({
           <span className="ml-2 text-sm font-normal text-muted">Optional</span>
         </summary>
         <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
-
-        {/* Saved inside the brief, through the same PATCH as every other field. */}
-        <NicheFramingPanel
-          projectId={projectId}
-          value={brief.nicheFraming}
-          onChange={(nicheFraming) => patch({ nicheFraming })}
-        />
       </details>
+
+      {/* Outside the disclosure above, deliberately. It was mounted directly after SerpIngestPanel and
+          got swept inside when that panel was wrapped in <details>, so the niche fields ended up hidden
+          behind a toggle labelled "Add a saved search results page" -- which is not what they are, and
+          is why they could not be found. Saved inside the brief, through the same PATCH as every other
+          field. */}
+      <NicheFramingPanel
+        projectId={projectId}
+        value={brief.nicheFraming}
+        onChange={(nicheFraming) => patch({ nicheFraming })}
+      />
 
       {serpConflicts.length > 0 ? (
         <div className="mt-3 space-y-2 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 p-3 text-xs text-foreground">
