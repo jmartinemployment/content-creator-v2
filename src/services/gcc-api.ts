@@ -253,12 +253,6 @@ export function getGccCreateDetail(id: string): Promise<GccCreateDetail> {
   return gccRequest<GccCreateDetail>(`/api/geek-content-creator/creates/${id}`);
 }
 
-export function listGccArtifacts(createId: string): Promise<GccArtifact[]> {
-  return gccRequest<GccArtifact[]>(
-    `/api/geek-content-creator/artifacts?createId=${encodeURIComponent(createId)}`,
-  );
-}
-
 export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[]> {
   return gccRequest<GccArtifactVersion[]>(
     `/api/geek-content-creator/versions?artifactId=${encodeURIComponent(artifactId)}`,
@@ -362,17 +356,6 @@ export type GccParsedSerpPage = {
   parseWarning: string | null;
 };
 
-export type GccKeywordSource = {
-  id: string;
-  fileName: string;
-  category: string;
-  headingCount: number;
-  paragraphCount: number;
-  questionCount: number;
-  /** Only set for category "KeywordResult" — organics/related/shape from GccSavedSerpParser. */
-  serpPage: GccParsedSerpPage | null;
-};
-
 /** Upload categories: Keyword result (SERP) parses via GccSavedSerpParser; the rest are articles. */
 export const GCC_KEYWORD_CATEGORIES: { value: string; label: string }[] = [
   { value: "KeywordResult", label: "Keyword result page" },
@@ -380,52 +363,6 @@ export const GCC_KEYWORD_CATEGORIES: { value: string; label: string }[] = [
   { value: "EduDomain", label: ".edu page" },
   { value: "GovDomain", label: ".gov page" },
 ];
-
-/**
- * Upload a research file to a create. Uploading is the research action — the file is parsed
- * server-side into the create's ResearchJson, which Generate reads. Multipart (no JSON header).
- */
-export async function uploadCreateKeywordSource(
-  createId: string,
-  category: string,
-  file: File,
-): Promise<GccKeywordSource> {
-  const form = new FormData();
-  form.append("category", category);
-  form.append("file", file);
-  let res: Response;
-  try {
-    res = await fetch(
-      `${API_BASE}/api/geek-content-creator/creates/${createId}/keyword-sources`,
-      { method: "POST", body: form },
-    );
-  } catch {
-    throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
-  }
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new ApiError(detail || res.statusText, res.status);
-  }
-  return (await res.json()) as GccKeywordSource;
-}
-
-export function listCreateKeywordSources(
-  createId: string,
-): Promise<GccKeywordSource[]> {
-  return gccRequest<GccKeywordSource[]>(
-    `/api/geek-content-creator/creates/${createId}/keyword-sources`,
-  );
-}
-
-export function deleteCreateKeywordSource(
-  createId: string,
-  sourceId: string,
-): Promise<void> {
-  return gccRequest<void>(
-    `/api/geek-content-creator/creates/${createId}/keyword-sources/${sourceId}`,
-    { method: "DELETE" },
-  );
-}
 
 export function reviseGccVersion(
   versionId: string,
@@ -473,33 +410,6 @@ export function approveGccVersion(
   return gccRequest(`/api/geek-content-creator/versions/${versionId}/approve`, {
     method: "POST",
     body: JSON.stringify({ notes: notes ?? null }),
-  });
-}
-
-export function generateGccTools(input: {
-  createId: string;
-  toolNames: string[];
-  brief?: string | null;
-  sourceArtifactId?: string | null;
-  provider?: string;
-}): Promise<{ created?: Array<{ artifact: GccArtifact; version: GccArtifactVersion }> }> {
-  const names = input.toolNames.map((n) => n.trim()).filter(Boolean);
-  if (names.length === 0) {
-    throw new ApiError("toolNames required (non-empty after trim)", 400);
-  }
-  if (!input.sourceArtifactId && !input.brief?.trim()) {
-    throw new ApiError("brief required when no sourceArtifactId", 400);
-  }
-  return gccRequest("/api/geek-content-creator/tools/generate", {
-    method: "POST",
-    body: JSON.stringify({
-      createId: input.createId,
-      toolNames: names,
-      selectedNames: names,
-      brief: input.brief?.trim() || null,
-      sourceArtifactId: input.sourceArtifactId || null,
-      provider: input.provider ?? "OpenAi",
-    }),
   });
 }
 
@@ -732,30 +642,6 @@ export function parseSavedSerp(
   });
 }
 
-export interface GccClient {
-  id: string;
-  name: string;
-  notes: string | null;
-  createdAtUtc: string;
-  updatedAtUtc: string;
-}
-
-export function getGccClientByName(name: string): Promise<GccClient | null> {
-  return gccRequest<GccClient>(`/api/geek-content-creator/clients?name=${encodeURIComponent(name.trim())}`, {
-    method: "GET",
-  }).catch(() => null);
-}
-
-export function createGccClient(input: { name: string; notes?: string }): Promise<GccClient> {
-  return gccRequest<GccClient>("/api/geek-content-creator/clients", {
-    method: "POST",
-    body: JSON.stringify({
-      name: input.name.trim(),
-      notes: input.notes || null,
-    }),
-  });
-}
-
 export const GCC_CREATE_STORAGE_PREFIX = "gcc-create-id:";
 
 export interface GeekCrawlerRunSnapshot {
@@ -826,32 +712,6 @@ export function startGeekCrawl(
   });
 }
 
-/** One URL per line; blank lines and stray whitespace dropped. */
-export function parseSeedLines(raw: string): string[] {
-  return raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-/** Cancel a crawl run. Used to undo a partially-started batch. */
-export function cancelGeekCrawl(runId: string): Promise<GeekCrawlerRunSnapshot> {
-  return gccRequest<GeekCrawlerRunSnapshot>(
-    `/api/geek-crawler/crawls/${encodeURIComponent(runId)}/cancel`,
-    { method: "POST" },
-  );
-}
-
-/** Crawl runs owned by the signed-in user, newest first. */
-export function listGeekCrawls(
-  crawlType?: "partner" | "competitors" | "local" | "project-site",
-  limit = 50,
-): Promise<GeekCrawlerRunSnapshot[]> {
-  const q = new URLSearchParams({ limit: String(limit) });
-  if (crawlType) q.set("crawlType", crawlType);
-  return gccRequest<GeekCrawlerRunSnapshot[]>(`/api/geek-crawler/crawls?${q.toString()}`);
-}
-
 export interface HostIndexed {
   url: string;
   host: string | null;
@@ -895,25 +755,6 @@ export interface ProjectSiteReadiness {
 }
 
 /**
- * Whether a project site has crawl evidence a create can use, and the Run ID that holds it.
- *
- * Distinct from `checkHostsIndexed`, which asks the vector store whether a host has anything at
- * all. This runs the same retrieval PLAN runs, so a crawl that completed but fetched or indexed
- * nothing reports not-ready here instead of passing the gate and failing later.
- *
- * The run id is the reason the project URL goes through this call: Create is handed a Run ID, never
- * a URL, and only a resolved run names the crawl that was committed for it.
- */
-export function checkProjectSiteReadiness(
-  projectUrl: string,
-): Promise<ProjectSiteReadiness> {
-  return gccRequest<ProjectSiteReadiness>(
-    "/api/geek-content-creator/project-site/readiness",
-    { method: "POST", body: JSON.stringify({ projectUrl }) },
-  );
-}
-
-/**
  * The project site's structure for a Run ID.
  *
  * Served from the crawler's typed `blocks` — heading levels and per-block anchors survive there,
@@ -922,35 +763,6 @@ export function checkProjectSiteReadiness(
  * On the geek-crawler surface because it is crawl data; this app is one consumer of it. A pure read:
  * it returns what Geek-Crawler-v2 already crawled and generates nothing.
  */
-
-/**
- * One anchor, with the prose it sits inside.
- *
- * The crawler records an anchor as `{ label, href }` and nothing else — no rel, no title, no
- * target. `context` is not part of the anchor: it is the text of the block the anchor appeared in,
- * which is the only thing that says what the link is about. A bare "Learn more" means nothing
- * without the sentence around it.
- */
-export interface SiteStructureLink {
-  label: string;
-  href: string;
-  context: string;
-  /** The containing block's kind: paragraph, listItem, heading, row, and so on. */
-  contextKind: string;
-}
-
-export interface SiteStructureNode {
-  level: number;
-  headingText: string;
-  paragraphs: string[];
-  links: SiteStructureLink[];
-  children: SiteStructureNode[];
-}
-
-export interface SiteStructurePage {
-  pageUrl: string;
-  roots: SiteStructureNode[];
-}
 
 export interface SiteHostReference {
   sectionPath: string[];
@@ -974,36 +786,6 @@ export interface SiteCrossReference {
   /** Anchors whose href would not resolve. Counted, not dropped. */
   unresolvedAnchors: number;
 }
-
-export interface SiteStructure {
-  runId: string;
-  builtAtUtc: string;
-  /** Pages the run holds. */
-  pagesConsidered: number;
-  /**
-   * Pages left out because extraction produced no blocks.
-   *
-   * Non-zero is an extraction failure, not an empty site — the server reports it rather than
-   * quietly returning a shorter tree.
-   */
-  pagesWithoutBlocks: number;
-  pages: SiteStructurePage[];
-  /**
-   * Which outside hosts this site reaches, and from where.
-   *
-   * Derived server-side in the same pass that builds the tree, not stored. A stored copy could only
-   * drift: a re-crawl reuses the run id and refills its pages in place, so anything keyed on that id
-   * would keep describing a corpus that no longer exists.
-   */
-  crossReference: SiteCrossReference;
-}
-
-export function getProjectSiteStructure(runId: string): Promise<SiteStructure> {
-  return gccRequest<SiteStructure>(
-    `/api/geek-crawler/crawls/${encodeURIComponent(runId)}/site-structure`,
-  );
-}
-
 
 /** One partner's answer to the question the brief's Angle demands of the block quotation. */
 export interface PartnerQuoteFinding {
