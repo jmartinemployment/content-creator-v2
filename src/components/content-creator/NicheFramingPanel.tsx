@@ -112,6 +112,43 @@ export default function NicheFramingPanel({
         onChange={(next) => patch(next)}
       />
 
+      <fieldset className="mt-5">
+        <legend className="text-sm font-medium text-foreground">
+          Practical client diagnosis &mdash; the closing
+        </legend>
+        {/* Category-level, with no per-tool override, and that is the data rather than a shortcut:
+            every question is about the reader's own operation and none names a product, so there is
+            nothing for a partner to override. Hence it sits out here and not in FramingFields. */}
+        <p className="mt-0.5 text-xs text-muted">
+          The questions you would actually ask a prospect. The page ends by handing these to the reader
+          to run against their own operation, so the ask is what they do with the answers &mdash; instead
+          of the &ldquo;consider your options&rdquo; ending every draft produced before this field existed.
+        </p>
+
+        <label className="mt-3 block">
+          <span className="text-sm text-foreground">One question per line</span>
+          {/* One per line, the opposite of "Where they fail" above, and said plainly because the two
+              boxes sit a few inches apart and look identical. A failure is a paragraph; a question is
+              a line. */}
+          <span className="mt-0.5 block text-xs text-muted">
+            One per line here &mdash; unlike &ldquo;Where they fail&rdquo; above, where a blank line
+            separates entries. Blank lines are ignored. The writer uses these as written, or a subset if
+            the length will not carry them all, and may not invent another.
+          </span>
+          <textarea
+            value={value.diagnosisQuestions}
+            onChange={(e) => patch({ diagnosisQuestions: e.target.value })}
+            rows={8}
+            placeholder={
+              "How many invoices per month require someone's approval?\n" +
+              "Who approves spending, and what happens when they are unavailable?\n" +
+              "Is there an audit trail sufficient to answer \u201cwho approved this payment and why?\u201d"
+            }
+            className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
+          />
+        </label>
+      </fieldset>
+
       {partners.length > 0 ? (
         <div className="mt-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">

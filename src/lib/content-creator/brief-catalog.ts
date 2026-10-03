@@ -241,7 +241,15 @@ export interface ContentBrief {
 export type NicheFramingSet = {
   /** The problem the reader has today, in the operator's words. */
   coreProblem: string;
-  /** Where it goes wrong — one per line, the same convention as `paaQuestions`. */
+  /**
+   * Where it goes wrong — one failure per **paragraph**, separated by a blank line.
+   *
+   * Not one per line: the research states a failure as a lead plus the paragraph explaining it, and
+   * splitting on every newline turned one failure into four fragments too thin to argue from. The
+   * backend reader is `GccNicheFramingReader.ReadParagraphs`, which splits on `\n\s*\n` — this comment
+   * said "one per line, the same convention as `paaQuestions`" for a day after that stopped being
+   * true, which is the kind of false claim about a live format `.cursor/rules` exists to forbid.
+   */
   painPoints: string;
   /** What removes the problem, and the shape of the offer. */
   automationToPitch: string;
@@ -254,6 +262,23 @@ export type NicheFraming = NicheFramingSet & {
    * derivable rather than a field nobody sets.
    */
   taxonomyPath: string;
+  /**
+   * The practical client diagnosis: discovery questions the page's closing hands the reader to run
+   * against their own operation. **One question per line.**
+   *
+   * One per line, not one per paragraph — the opposite of `painPoints`, and deliberately so. A failure
+   * mode is a paragraph; a discovery question is a line. Read by
+   * `GccNicheFramingReader.DiagnosisQuestions`, which splits accordingly.
+   *
+   * On the outer type rather than inside `NicheFramingSet`, which makes it **category-level with no
+   * per-tool override** by construction. That is a property of the data, not a simplification: every
+   * question is about the reader's own process ("How many invoices per month require someone's
+   * approval?") and none names a product, so there is nothing for a partner to override.
+   *
+   * It reaches `ClosingCallToActionInstruction`, which had always demanded one plain ask while
+   * supplying nothing for that ask to be about — so pillar, blog and tool all gain it at once.
+   */
+  diagnosisQuestions: string;
   /**
    * Per-tool overrides, **keyed by host** ("bill.com"), never by a typed product name.
    * `GccPartnerToolSlices` buckets evidence by host and names pages through `AnchorLookup`, so a
@@ -271,7 +296,7 @@ export function emptyNicheFramingSet(): NicheFramingSet {
 }
 
 export function emptyNicheFraming(): NicheFraming {
-  return { ...emptyNicheFramingSet(), taxonomyPath: "", perTool: {} };
+  return { ...emptyNicheFramingSet(), taxonomyPath: "", diagnosisQuestions: "", perTool: {} };
 }
 
 /** True when a set carries anything at all. An all-blank set is not framing. */
@@ -482,6 +507,11 @@ function migrateNicheFraming(raw: unknown): NicheFraming {
   const p = raw as Record<string, unknown>;
 
   Object.assign(framing, migrateNicheFramingSet(p));
+  framing.diagnosisQuestions = Array.isArray(p.diagnosisQuestions)
+    ? p.diagnosisQuestions.filter((x): x is string => typeof x === "string").join("\n")
+    : typeof p.diagnosisQuestions === "string"
+      ? p.diagnosisQuestions
+      : "";
   framing.taxonomyPath = typeof p.taxonomyPath === "string"
     ? p.taxonomyPath
     : Array.isArray(p.taxonomyPath)
