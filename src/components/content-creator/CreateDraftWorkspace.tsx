@@ -427,6 +427,30 @@ export default function CreateDraftWorkspace({
    * progressively rather than all at once when the slowest one lands; the job event is what ends
    * the run. Handlers read reload through its ref so they never close over a stale copy.
    */
+  /** The job's recorded aggregate -- `{ created, refusals, preflight }` -- or null when the event
+   *  carries none or it will not parse. Never the raw string: a body that does not parse is not a
+   *  list of refusals. */
+  function parseGenerateResultJson(
+    raw: string | null | undefined,
+  ): { refusals?: string[]; preflight?: GccGeneratePreflightEvent["partners"] } | null {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return null;
+      const obj = parsed as { refusals?: unknown; preflight?: unknown };
+      return {
+        refusals: Array.isArray(obj.refusals)
+          ? obj.refusals.filter((r): r is string => typeof r === "string")
+          : undefined,
+        preflight: Array.isArray(obj.preflight)
+          ? (obj.preflight as GccGeneratePreflightEvent["partners"])
+          : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function attachToGenerateJob(jobId: string) {
     generateJobIdRef.current = jobId;
     let conn = hubRef.current;
@@ -456,8 +480,37 @@ export default function CreateDraftWorkspace({
       onGccGenerateEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
         if (evt.status === "ready") {
-          // generateNotes is deliberately untouched: the per-partner refusals are the explanation for
-          // why fewer artifacts appeared than partners were declared, and they outlive the run.
+          // The aggregate the job recorded, read back here as well as from the live per-type events.
+          // Those events are live-only: a socket that dropped mid-draft (the 1006 case) and rejoined
+          // missed every refusal pushed while it was away, so three tool tabs appeared with no
+          // explanation. resultJson carries the same refusals and the same pre-flight, which the
+          // coordinator stores for exactly this reason; this handler never read it.
+          const recorded = parseGenerateResultJson(evt.resultJson);
+          const recordedRefusals = recorded?.refusals ?? [];
+          const recordedPreflight = recorded?.preflight ?? [];
+          if (recordedRefusals.length > 0) {
+            setGenerateNotes((prev) => {
+              const next = [...prev];
+              for (const refusal of recordedRefusals) {
+                // The live event names the type ("tool: Bill: ..."); the recorded refusal is the
+                // per-partner text alone, and only tool pages refuse per partner.
+                const note = `tool: ${refusal}`;
+                if (!next.includes(note)) next.push(note);
+              }
+              return next;
+            });
+          }
+          if (recordedPreflight.length > 0) {
+            setPreflight((prev) =>
+              prev ?? {
+                jobId: evt.jobId,
+                contentType: "tool",
+                ready: recordedPreflight.filter((r) => r.ready).length,
+                total: recordedPreflight.length,
+                partners: recordedPreflight,
+              },
+            );
+          }
           setGenerateMsg("Generate finished.");
           setGenerating(false);
           void reloadRef.current();
