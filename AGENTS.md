@@ -459,9 +459,12 @@ Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api
   1,747 lines, `[Route("api/geek-content-creator")]`, **30 routes**. Restored in two steps:
   `714ef8d` (+1,175, minus Site Analyzer) then `998f5ad` (the 7 Project endpoints retired
   2026-08-06).
-- **The "~15 dead endpoints" claim was true and is now false.** Verified 2026-09-18 by diffing every
-  frontend call against the live route table: **all 26** `api/geek-content-creator/*` endpoints the
-  frontend calls exist. Do not re-copy that number out of an older doc.
+- **Route counts change; re-run rather than re-copy.** `GccController` carried 36 routes until
+  2026-10-03, when 12 that nothing live reached were deleted (`363200e`) — leaving 24. The live
+  surface is whatever this prints:
+  `grep -ohE '`/api/geek-content-creator[^`]*' src/services/*.ts`. A literal-path grep of the backend
+  proves nothing: these clients build URLs by interpolation, so a route as written never appears in
+  any source file.
 - **No Site Analyzer call remains in this repo** — verified 2026-09-20. The claim that stood here,
   "exactly three frontend calls still 404" at `CreateStartForm.tsx:145,161` and
   `HierarchyContextPanel.tsx:137`, is **false**: `CreateStartForm.tsx` no longer exists, and
@@ -513,21 +516,31 @@ was the section most likely to be cited as evidence. Corrected against a full re
 | `SerpIngestPanel` is "orphaned; zero importers" | **`ContentBriefPanel` imports it** |
 | "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | **There is no `/app/projects/[id]` route.** `src/app/app/` contains only `creates/`, `creates/[id]`, `creates/[id]/repurpose`, `creates/new` and `workflow` |
 
-**The one reachable surface.** `AppSidebar` has a single nav item and `/app` redirects to it, so
+**The one reachable surface.** `AppNavbar` has a single nav item and `/app` redirects to it, so
 everything starts at **`/app/workflow`**, which renders: `ClientsPanel` → `ProjectsPanel` →
 `ProjectProfilePanel` → `ProjectWorkPanel` → `ProjectDeliverablesPanel` → `CreateDraftWorkspace`
-(→ `ContentBriefPanel` → `SerpIngestPanel`, and `SiteContextBanner`).
+(→ `ContentBriefPanel` → `SerpIngestPanel`, and `SiteContextBanner`). `/app/projects/[id]` renders
+the same workspace under its "Brief & Generate" section.
 
-**Seven components have no importer at all:** `ContentApprovalPanel`, `CrawlPanel`,
-`DraftQualityPanel`, `DraftRevisePanel`, `FileUploadPanel`, `NotesPanel`,
-`StandaloneImagePromptPanel` — about 1,450 lines.
+**The unreachable components are gone — removed 2026-10-03** (`a5ea3d7`), with
+`plans/remove-unwired-code.md` Phase 2. There were **nine**, not seven, and **1,888 lines**, not
+~1,450: this section had missed `ReviewPublishPanel` (452) and `AppSidebar` (65). Do not re-copy
+either number; re-run the check.
 
-**Why that matters for dead-call claims.** Most `content-writer-api.ts` functions *do* have callers;
-the callers are those seven unreachable components. So grepping a function name finds a hit and the
-reader concludes it is live. Only these have a live path: `createClient`, `deleteClient`
-(`ClientsPanel`), `deleteProject` (`ProjectsPanel`), `createProject` (`ProjectForm`), `getProject`
-(via `gcc-projects-api`), `downloadHtmlExport` (via `gcc-api`). Everything else is dead or
-**transitively dead**, which is the distinction to state rather than "no caller".
+**`content-writer-api.ts` is gone too** (`8758146`), along with `/app/creates/*`. Six of its nine
+importers were those dead components and the other three were those routes, which were themselves
+reachable only through two links labelled "Back to workflow" that pointed at them — corrected in
+`fb166f5`. Client CRUD now exists once, in `gcc-projects-api`.
+
+**The lesson this section exists for, restated.** A grep hit on a dead path reads exactly like a hit
+on a live one, and the way out is never a bare name search:
+
+- **Resolve by import.** `grep -rln 'from "@/services/<module>"'`, then check what that file uses.
+  `createClient` existed in two modules; searching the name found the live one and cleared the dead
+  one.
+- **Quote the glob.** `--include=*.tsx` unquoted fails in zsh and returns zero for everything, which
+  reads as "all dead". During the 2026-10-03 audit it reported 30 live functions as dead.
+- **Dead and transitively dead are different claims.** Say which.
 
 **Also confirmed by the same read**, because these are relied on elsewhere:
 
