@@ -192,7 +192,11 @@ export default function ProjectWorkspacePage() {
               type="button"
               onClick={() => go(s.key)}
               aria-current={s.key === section ? "page" : undefined}
-              className=""
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                s.key === section
+                  ? "bg-white text-brand shadow-sm"
+                  : "bg-slate text-white hover:bg-navy-raised"
+              }`}
             >
               {s.label}
             </button>
@@ -230,7 +234,11 @@ export default function ProjectWorkspacePage() {
                       type="button"
                       onClick={() => go(s.key)}
                       aria-current={s.key === section ? "page" : undefined}
-                      className=""
+                      className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                        s.key === section
+                          ? "border-l-[3px] border-brand bg-white text-brand shadow-sm"
+                          : "border-l-[3px] border-transparent text-line hover:bg-slate hover:text-white"
+                      }`}
                     >
                       {s.label}
                     </button>

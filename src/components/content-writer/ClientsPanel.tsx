@@ -280,7 +280,7 @@ export default function ClientsPanel({
                   onClick={() => setConfirmingId(client.id)}
                   aria-label={`Delete ${client.name}`}
                   title={`Delete ${client.name}`}
-                  className=""
+                  className="rounded-full px-1.5 text-xs leading-none opacity-70 hover:opacity-100"
                 >
                   ×
                 </button>
