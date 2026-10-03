@@ -7,6 +7,7 @@ import {
   type NicheFraming,
   type NicheFramingSet,
 } from "@/lib/content-creator/brief-catalog";
+import Link from "next/link";
 import { getProject } from "@/services/gcc-projects-api";
 
 /**
@@ -156,9 +157,17 @@ export default function NicheFramingPanel({
           </ul>
         </div>
       ) : projectId ? (
+        // The fix goes where the problem shows up. Without this the message states a blocker and leaves
+        // the form that resolves it in another section, with nothing pointing at it.
         <p className="mt-4 text-xs text-muted">
-          This project declares no partner URLs, so there are no tools to override. The category framing
-          above still reaches every page.
+          This project declares no partner URLs, so there are no tools to override &mdash; and no tool
+          pages can be generated without them. The category framing above still reaches every page.{" "}
+          <Link
+            href={`/app/projects/${projectId}?section=profile&edit=1`}
+            className="font-medium text-brand hover:underline"
+          >
+            Add partner URLs &rarr;
+          </Link>
         </p>
       ) : null}
     </section>

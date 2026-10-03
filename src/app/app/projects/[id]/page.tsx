@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
@@ -35,6 +35,8 @@ type SectionKey = (typeof SECTIONS)[number]["key"];
 
 export default function ProjectWorkspacePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const search = useSearchParams();
   const projectId = params.id;
 
   const [project, setProject] = useState<GccProject | null>(null);
@@ -42,8 +44,20 @@ export default function ProjectWorkspacePage() {
   // Lands on the work, not on reference. Profile is the engagement's fields -- nothing to act on --
   // so opening a freshly created project there left no visible next step. The brief is what a new
   // project needs first, and generate follows it in the same section.
-  const [section, setSection] = useState<SectionKey>("content");
-  const [editing, setEditing] = useState(false);
+  // Section and edit mode live in the URL, not in state. Two reasons: a section becomes linkable, so
+  // somewhere else in the app can send you straight to the one that matters -- which is how the brief's
+  // "no partner URLs" message can point at the form that fixes it -- and the back button works.
+  const sectionParam = search.get("section");
+  const section: SectionKey =
+    SECTIONS.find((s) => s.key === sectionParam)?.key ?? "content";
+  const editing = search.get("edit") === "1";
+
+  function go(next: SectionKey, edit = false) {
+    const q = new URLSearchParams();
+    q.set("section", next);
+    if (edit) q.set("edit", "1");
+    router.replace(`/app/projects/${projectId}?${q.toString()}`, { scroll: false });
+  }
 
   // The create the draft lives on. Resolved by the brief panel, as it was on the workflow page, and
   // reset when the project changes so one project's draft is never shown under another's name.
@@ -91,7 +105,7 @@ export default function ProjectWorkspacePage() {
               <h2 className="text-lg font-semibold text-foreground">Edit project</h2>
               <button
                 type="button"
-                onClick={() => setEditing(false)}
+                onClick={() => go("profile")}
                 className="text-sm font-medium text-brand hover:underline"
               >
                 Cancel
@@ -104,7 +118,7 @@ export default function ProjectWorkspacePage() {
                 project={project}
                 onCreated={(saved) => {
                   setProject(saved);
-                  setEditing(false);
+                  go("profile");
                 }}
               />
             </div>
@@ -114,7 +128,7 @@ export default function ProjectWorkspacePage() {
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setEditing(true)}
+                onClick={() => go("profile", true)}
                 className="text-sm font-medium text-brand hover:underline"
               >
                 Edit project &amp; URLs
@@ -136,7 +150,7 @@ export default function ProjectWorkspacePage() {
       case "deliverables":
         return <ProjectDeliverablesPanel project={project} onOpenCreate={(id) => {
           setCreateId(id);
-          setSection("content");
+          go("content");
         }} />;
       case "tasks":
         return <ProjectWorkPanel project={project} />;
@@ -176,7 +190,7 @@ export default function ProjectWorkspacePage() {
             <button
               key={s.key}
               type="button"
-              onClick={() => setSection(s.key)}
+              onClick={() => go(s.key)}
               aria-current={s.key === section ? "page" : undefined}
               className=""
             >
@@ -214,7 +228,7 @@ export default function ProjectWorkspacePage() {
                   <li key={s.key}>
                     <button
                       type="button"
-                      onClick={() => setSection(s.key)}
+                      onClick={() => go(s.key)}
                       aria-current={s.key === section ? "page" : undefined}
                       className=""
                     >
