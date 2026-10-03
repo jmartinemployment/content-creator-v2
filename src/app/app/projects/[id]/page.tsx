@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import ProjectForm from "@/components/content-writer/ProjectForm";
 import ProjectProfilePanel from "@/components/content-writer/ProjectProfilePanel";
 import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
 import ProjectDeliverablesPanel from "@/components/content-writer/ProjectDeliverablesPanel";
@@ -42,6 +43,7 @@ export default function ProjectWorkspacePage() {
   // so opening a freshly created project there left no visible next step. The brief is what a new
   // project needs first, and generate follows it in the same section.
   const [section, setSection] = useState<SectionKey>("content");
+  const [editing, setEditing] = useState(false);
 
   // The create the draft lives on. Resolved by the brief panel, as it was on the workflow page, and
   // reset when the project changes so one project's draft is never shown under another's name.
@@ -79,7 +81,48 @@ export default function ProjectWorkspacePage() {
     if (!project) return null;
     switch (section) {
       case "profile":
-        return <ProjectProfilePanel project={project} onChanged={setProject} />;
+        // Editing runs through ProjectForm, the same component that creates a project, so the index
+        // gate travels with it: every partner and competitor URL must still have a usable crawl, and
+        // the site URL still has to resolve the run the project is grounded on. A separate URL editor
+        // would have skipped that and let a partner be declared with no evidence behind it.
+        return editing ? (
+          <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-lg font-semibold text-foreground">Edit project</h2>
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="mt-4 border-t border-border pt-4">
+              <ProjectForm
+                key={project.id}
+                clientId={project.clientId}
+                project={project}
+                onCreated={(saved) => {
+                  setProject(saved);
+                  setEditing(false);
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Edit project &amp; URLs
+              </button>
+            </div>
+            <ProjectProfilePanel project={project} onChanged={setProject} />
+          </>
+        );
       case "content":
         return (
           <CreateDraftWorkspace

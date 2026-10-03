@@ -180,7 +180,22 @@ export function createProject(input: CreateProjectInput): Promise<GccProject> {
   });
 }
 
-export type UpdateProjectInput = Omit<CreateProjectInput, "clientId" | "idempotencyKey">;
+/**
+ * Everything the PUT needs — including `status` and `finishedDate`.
+ *
+ * Those two were omitted, and the server assigns them unconditionally:
+ * `entity.Status = command.Status; entity.FinishedDate = command.FinishedDate;`
+ * (`GccProjectRepository.UpdateAsync`). So a PUT without them blanked a project's status, and status
+ * carries a CHECK constraint. Never hit only because this function had no caller until the project
+ * form gained an edit mode. The PUT replaces the row; it is not a patch, so every field travels.
+ */
+export type UpdateProjectInput = Omit<
+  CreateProjectInput,
+  "clientId" | "idempotencyKey"
+> & {
+  status: GccProjectStatus;
+  finishedDate?: string | null;
+};
 
 export function updateProject(id: string, input: UpdateProjectInput): Promise<GccProject> {
   return projectsRequest<GccProject>(`${PROJECTS}/${encodeURIComponent(id)}`, {
@@ -199,6 +214,10 @@ export function updateProject(id: string, input: UpdateProjectInput): Promise<Gc
       estimatedHours: input.estimatedHours ?? null,
       budget: input.budget ?? null,
       budgetCurrency: input.budgetCurrency ?? null,
+      // Sent, not omitted. The server assigns these unconditionally, so leaving them out of the body
+      // clears them rather than preserving them.
+      status: input.status,
+      finishedDate: input.finishedDate ?? null,
     }),
   });
 }

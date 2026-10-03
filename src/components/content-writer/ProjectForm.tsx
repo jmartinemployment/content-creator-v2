@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createProject, ApiError, type GccProject } from "@/services/gcc-projects-api";
+import {
+  createProject,
+  updateProject,
+  ApiError,
+  type GccProject,
+} from "@/services/gcc-projects-api";
 import { checkHostsIndexed, startGeekCrawl, type HostIndexed } from "@/services/gcc-api";
 import { unindexedUrls, usableUrls } from "@/lib/declared-url-gate";
 
@@ -152,15 +157,28 @@ function IndexReport({
 export default function ProjectForm({
   clientId,
   onCreated,
+  project,
 }: {
   clientId: string;
+  /** Called with the created project, or the updated one when editing. */
   onCreated: (project: GccProject) => void;
+  /**
+   * An existing project to edit. Omit to create a new one.
+   *
+   * Edit runs through this form rather than a second URL editor on purpose: the index gate below is
+   * the whole value of declaring a URL — every partner and competitor must have an indexed crawl, and
+   * the site URL resolves the run the project is grounded on. A separate editor would either
+   * duplicate that or, far more likely, skip it and let a partner be saved with no evidence behind it.
+   */
+  project?: GccProject;
 }) {
-  const [name, setName] = useState("");
-  const [siteUrl, setSiteUrl] = useState("");
-  const [startDate, setStartDate] = useState(today);
-  const [dueDate, setDueDate] = useState("");
-  const [description, setDescription] = useState("");
+  const editing = project !== undefined;
+
+  const [name, setName] = useState(project?.name ?? "");
+  const [siteUrl, setSiteUrl] = useState(project?.siteUrl ?? "");
+  const [startDate, setStartDate] = useState(project?.startDate ?? today);
+  const [dueDate, setDueDate] = useState(project?.dueDate ?? "");
+  const [description, setDescription] = useState(project?.description ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,8 +187,9 @@ export default function ProjectForm({
   // check shipped and the block did not, so a partner could be declared with nothing indexed and
   // the gap only surfaced at generate time, as a refusal reading "a partner with no evidence gives
   // the writer nothing to say about it". Declaring one is what obliges the writer to name it.
-  const [partnerSeeds, setPartnerSeeds] = useState("");
-  const [competitorSeeds, setCompetitorSeeds] = useState("");
+  // One per line, which is the shape the textareas take and the shape the lists are stored in.
+  const [partnerSeeds, setPartnerSeeds] = useState((project?.partnerUrls ?? []).join("\n"));
+  const [competitorSeeds, setCompetitorSeeds] = useState((project?.competitorUrls ?? []).join("\n"));
   const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
   // Per field, not per form. One shared pair of flags meant a check on the site URL rendered
   // "Checking the index…" under partners and competitors too, which with the gate live would
@@ -376,22 +395,47 @@ export default function ProjectForm({
 
     setIsSubmitting(true);
     try {
-      const project = await createProject({
-        clientId,
-        idempotencyKey,
-        name,
-        startDate,
-        dueDate: dueDate || null,
-        description: description.trim() || null,
-        siteUrl: siteUrls[0] ?? null,
-        projectSiteRunId: runId,
-        partnerUrls: partnersToSave,
-        competitorUrls: competitorsToSave,
-      });
+      // Everything above this point -- the index resolution, the site-run refusal, the partner and
+      // competitor floors -- applies identically either way. Editing a project cannot be a way to get
+      // URLs in that creating one would have rejected.
+      const saved = editing
+        ? await updateProject(project.id, {
+            name,
+            startDate,
+            code: project.code,
+            description: description.trim() || null,
+            siteUrl: siteUrls[0] ?? null,
+            projectSiteRunId: runId,
+            department: project.department,
+            partnerUrls: partnersToSave,
+            competitorUrls: competitorsToSave,
+            dueDate: dueDate || null,
+            estimatedHours: project.estimatedHours,
+            budget: project.budget,
+            budgetCurrency: project.budgetCurrency,
+            // Carried through unchanged. The PUT replaces the row, and the server assigns both
+            // unconditionally, so omitting them would blank the project's status -- which is managed in
+            // the profile panel, not here.
+            status: project.status,
+            finishedDate: project.finishedDate,
+          })
+        : await createProject({
+            clientId,
+            idempotencyKey,
+            name,
+            startDate,
+            dueDate: dueDate || null,
+            description: description.trim() || null,
+            siteUrl: siteUrls[0] ?? null,
+            projectSiteRunId: runId,
+            partnerUrls: partnersToSave,
+            competitorUrls: competitorsToSave,
+          });
 
       // A fresh key, so the next project started here is a new one rather than a repeat of this.
+      // Harmless when editing, which does not use it.
       setIdempotencyKey(crypto.randomUUID());
-      onCreated(project);
+      onCreated(saved);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(
@@ -400,7 +444,11 @@ export default function ProjectForm({
       } else if (err instanceof ApiError && err.status === 403) {
         setError("Your sign-in predates project access. Sign out and back in, then try again.");
       } else {
-        setError(err instanceof ApiError ? err.message : "Could not create the project.");
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : `Could not ${editing ? "save" : "create"} the project.`,
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -601,7 +649,13 @@ export default function ProjectForm({
           disabled={isSubmitting || !canSubmit}
           className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
-          {isSubmitting ? "Creating..." : "Create Project"}
+          {isSubmitting
+            ? editing
+              ? "Saving..."
+              : "Creating..."
+            : editing
+              ? "Save changes"
+              : "Create Project"}
         </button>
         {/* The refusal, at the point of action and with its reason. Creating a project whose
             declared URLs have no crawl behind them only defers the failure to generate time, where
