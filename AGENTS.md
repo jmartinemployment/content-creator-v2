@@ -475,7 +475,26 @@ Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api
   turns up only historical comments explaining a rename (`types.ts`) and this cleanup itself
   (`ContentBriefPanel.tsx`) — no live reference.
 - **Drafting is OFF by default** — `ContentCreatorV2:DraftingEnabled=false` stops every create before
-  the first paid model call, after the free evidence gates. Model default is `gpt-4o-mini`.
+  the first paid model call, after the free evidence gates.
+- **Three models, by task class, not one.** `OpenAiOptions.ResolveModel(LlmTaskClass)` picks per call;
+  each specific setting falls back to `Model` when empty, so an unset one is not a broken one. Live in
+  Railway production (`GeekAPI`), 2026-10-03:
+
+  | Setting | Task class | Value | What runs on it |
+  |---|---|---|---|
+  | `LlmProviders__OpenAi__Model` | `Writing` (**the default**) | `gpt-4o` | all prose — ledes, bodies, every `ChatCompletionRequest` that does not say otherwise |
+  | `LlmProviders__OpenAi__ExtractionModel` | `Extraction` | `gpt-4o-mini` | structured extraction over crawled pages — the bulk of call volume, no prose judgement |
+  | `LlmProviders__OpenAi__UtilityModel` | `Utility` | `gpt-4o-mini` | short structured work; only three call sites set it (`ContentPromptBuilder:2497`, `:2539`, `:2806`) |
+
+  This line used to read *"Model default is `gpt-4o-mini`"*, which was wrong in both halves and
+  misleading in a way that cost real time: it named the cheap model as the default, so a
+  `ledeType: "problem_solution"` failure on 2026-10-03 was first attributed to a weak model echoing a
+  nearby token. **The lede is `Writing`** — `ChatCompletionRequest.TaskClass` defaults to
+  `LlmTaskClass.Writing` (`ProviderModels.cs:60`) and no lede prompt overrides it — so that failure was
+  `gpt-4o`, and the cause was a genuinely ambiguous prompt rather than a cheap model. Read
+  `ResolveModel` and the request's `TaskClass` before attributing anything to a model.
+- **Anthropic is `claude-sonnet-5`** (`AnthropicOptions.Model`) and has no task-class split — one model
+  for everything on that provider. Which provider is live is `LlmProviders__DefaultProvider`.
 - **`GET /api/geek-content-creator/creates` returns 500** — the route exists; the throw is inside
   `ListCreatesAsync`. It is where every create lands after it is made.
 - **Project-site crawling still runs inside GeekAPI**, which is why Chromium is installed into the
