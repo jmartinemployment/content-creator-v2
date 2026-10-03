@@ -132,8 +132,9 @@ export default function NicheFramingPanel({
           </div>
           <p className="mt-1 text-xs text-muted">
             Leave a tool alone and it uses the category framing above. Override it when that tool owns a
-            distinct slice of the problem &mdash; a segment, a stage, a scale. Overrides apply per box:
-            fill only Core Problem and that tool keeps the category&rsquo;s other two.
+            distinct slice of the problem &mdash; a segment, a stage, a scale. Core Problem and Automation
+            replace the category&rsquo;s; pain points are <em>added</em> to them, since the category&rsquo;s
+            are true of every tool in the niche. Leave a box empty and nothing changes for that tool.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => {
