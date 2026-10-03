@@ -216,14 +216,19 @@ function FramingFields({
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">Where they fail</span>
+        {/* The unit has to be named. "One per line" is self-evident on a URL field and not here --
+            one what? Each line becomes a separate item in PainPoints, and the writer is told to cover
+            every one in prose, so a paragraph typed in here collapses into a single point. */}
+        <span className="mt-0.5 block text-xs text-muted">
+          One failure per line &mdash; each becomes its own point the writer has to cover.
+        </span>
         <textarea
           value={value.painPoints}
           onChange={(e) => onChange({ painPoints: e.target.value })}
           rows={5}
-          placeholder={"One per line.\nNobody owns collections.\nThey expect the accounting system to collect.\nThey make it hard to pay."}
+          placeholder={"Nobody owns collections.\nThey expect the accounting system to collect.\nFollow-up depends on someone remembering.\nThey make it hard to pay."}
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
-        <span className="mt-1 block text-xs text-muted">One per line.</span>
       </label>
 
       <label className="mt-3 block">
