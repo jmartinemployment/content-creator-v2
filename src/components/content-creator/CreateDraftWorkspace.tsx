@@ -86,6 +86,7 @@ export default function CreateDraftWorkspace({
   projectId,
   projectSiteRunId,
   onCreateMinted,
+  onStartNew,
 }: {
   // Null before a create exists. Mint-through-review is one lifecycle now, in one component, so
   // clientId/projectId/projectSiteRunId are threaded from the caller exactly once regardless of
@@ -101,6 +102,9 @@ export default function CreateDraftWorkspace({
   projectId?: string;
   projectSiteRunId?: string;
   onCreateMinted?: (createId: string) => void;
+  /** Leave this create and open an empty brief. The create id lives in the URL now, so a reload no
+   *  longer starts a new piece -- this is the deliberate way to. */
+  onStartNew?: () => void;
 }) {
   // The id this workspace actually operates on: the prop once a create exists, or one just minted
   // by the brief panel below, before the parent's own createId state (if it tracks one at all)
@@ -639,9 +643,20 @@ export default function CreateDraftWorkspace({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <Link href="/app/workflow" className="text-sm text-[#C83803] hover:underline">
-        &larr; Back to workflow
-      </Link>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <Link href="/app/workflow" className="text-sm text-[#C83803] hover:underline">
+          &larr; Back to workflow
+        </Link>
+        {onStartNew ? (
+          <button
+            type="button"
+            onClick={onStartNew}
+            className="text-sm text-[#C83803] underline-offset-2 hover:underline"
+          >
+            Start a new piece
+          </button>
+        ) : null}
+      </div>
 
       {/* The title was an ALL-CAPS tracked eyebrow over a bold sans heading, with the state below it
           as one sentence joined by middle dots: "Create 8f0c… · brief saved · research saved ·

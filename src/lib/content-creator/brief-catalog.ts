@@ -529,6 +529,15 @@ export function loadBriefFromStorage(projectId: string): ContentBrief | null {
   }
 }
 
+export function clearBriefFromStorage(key: string | null): void {
+  if (typeof window === "undefined" || !key) return;
+  try {
+    localStorage.removeItem(CONTENT_BRIEF_STORAGE_PREFIX + key);
+  } catch {
+    /* ignore disabled storage */
+  }
+}
+
 export function saveBriefToStorage(projectId: string, brief: ContentBrief): void {
   if (typeof window === "undefined") return;
   try {

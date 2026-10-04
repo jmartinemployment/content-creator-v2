@@ -52,16 +52,23 @@ export default function ProjectWorkspacePage() {
     SECTIONS.find((s) => s.key === sectionParam)?.key ?? "content";
   const editing = search.get("edit") === "1";
 
-  function go(next: SectionKey, edit = false) {
+  // The create the draft lives on, in the URL for the same reasons as the section. It was component
+  // state, so a reload dropped it and the operator landed on an empty brief with no way back to the
+  // piece they were working on. The URL is scoped to this project, so one project's create is never
+  // shown under another's name.
+  const createId = search.get("create");
+
+  function go(next: SectionKey, edit = false, create: string | null = createId) {
     const q = new URLSearchParams();
     q.set("section", next);
     if (edit) q.set("edit", "1");
+    if (create) q.set("create", create);
     router.replace(`/app/projects/${projectId}?${q.toString()}`, { scroll: false });
   }
 
-  // The create the draft lives on. Resolved by the brief panel, as it was on the workflow page, and
-  // reset when the project changes so one project's draft is never shown under another's name.
-  const [createId, setCreateId] = useState<string | null>(null);
+  function openCreate(id: string | null) {
+    go("content", false, id);
+  }
 
   useEffect(() => {
     if (!projectId) return;
@@ -147,18 +154,19 @@ export default function ProjectWorkspacePage() {
       case "content":
         return (
           <CreateDraftWorkspace
+            // One mount per create. The workspace holds a just-minted id in its own state until the
+            // URL catches up, so without a remount "Start a new piece" would leave it on the old one.
+            key={createId ?? "new"}
             createId={createId}
             clientId={project.clientId}
             projectId={project.id}
             projectSiteRunId={project.projectSiteRunId ?? undefined}
-            onCreateMinted={setCreateId}
+            onCreateMinted={openCreate}
+            onStartNew={() => openCreate(null)}
           />
         );
       case "deliverables":
-        return <ProjectDeliverablesPanel project={project} onOpenCreate={(id) => {
-          setCreateId(id);
-          go("content");
-        }} />;
+        return <ProjectDeliverablesPanel project={project} onOpenCreate={openCreate} />;
       case "tasks":
         return <ProjectWorkPanel project={project} />;
       case "history":

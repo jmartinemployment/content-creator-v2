@@ -16,6 +16,7 @@ import {
   loadBriefFromStorage,
   migrateBrief,
   saveBriefToStorage,
+  clearBriefFromStorage,
   toneAllowed,
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
@@ -32,23 +33,25 @@ import {
   type SerpMergeConflict,
 } from "@/lib/content-creator/serp-lens";
 import {
-  GCC_CREATE_STORAGE_PREFIX,
   briefToJson,
   createGccCreate,
   getGccCreate,
   patchBriefResearch,
 } from "@/services/gcc-api";
 /**
- * What's saved locally for this keyword. Used to seed a Site Analyzer handoff (gap reason +
- * curated SERP) — that handoff writer has had zero callers since the gap-pick flow was removed
- * (`b2a7fc8`), so the handoff-reading branch that used to live here was dead: it could never see
- * a value. Removed with `src/lib/site-section-storage.ts` rather than left as an always-false
- * check, per `plans/remove-site-analyzer.md`.
+ * The unsaved draft of a brief, kept in this browser so a reload does not lose it.
+ *
+ * Keyed by project and create, never by keyword. It was keyed `kw:${targetKeyword}`, and before a
+ * create exists the keyword is "", so every pre-create brief on every project shared one key -- one
+ * project's niche framing seeded the next project's brief. With no project there is no key, and
+ * nothing is stored.
  */
-function computeLocalBrief(targetKeyword: string): ContentBrief {
-  const stored = loadBriefFromStorage(targetKeyword || "draft");
-  const fromKw = loadBriefFromStorage(`kw:${targetKeyword}`);
-  return fromKw ?? stored ?? emptyContentBrief();
+function briefDraftKey(projectId: string | undefined, createId: string | null | undefined): string | null {
+  return projectId ? `${projectId}:${createId ?? "new"}` : null;
+}
+
+function computeLocalBrief(storageKey: string | null): ContentBrief {
+  return (storageKey ? loadBriefFromStorage(storageKey) : null) ?? emptyContentBrief();
 }
 
 const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
@@ -199,11 +202,12 @@ export default function ContentBriefPanel({
   onBriefSaved: (createId: string, complete: boolean) => void;
   onBriefValidityChange: (complete: boolean) => void;
 }) {
-  // Identifies "which keyword/create this component is currently hydrated for". A \0 separator
-  // keeps ("ab", "") distinct from ("a", "b") — the two pieces are never ambiguous once joined.
-  const hydrationKey = `${targetKeyword}\0${createIdProp ?? ""}`;
+  // Which project/create this component is hydrated for. The keyword is deliberately not part of it:
+  // the keyword is editable after mint, and a corrected keyword is the same brief, not a new one.
+  const storageKey = briefDraftKey(projectId, createIdProp);
+  const hydrationKey = `${projectId ?? ""}\0${createIdProp ?? ""}`;
 
-  const [brief, setBrief] = useState<ContentBrief>(() => computeLocalBrief(targetKeyword));
+  const [brief, setBrief] = useState<ContentBrief>(() => computeLocalBrief(storageKey));
   // The prop always wins when given; internalCreateId is what a fresh create's id (minted by
   // ensureCreateId, or resolved from localStorage during hydration) lives in when there is no
   // prop yet. createId itself is derived below, not stored — an effect syncing the prop into
@@ -227,7 +231,7 @@ export default function ContentBriefPanel({
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [serpConflicts, setSerpConflicts] = useState<SerpMergeConflict[]>([]);
 
-  // Re-seeds the local brief when targetKeyword/createIdProp actually change after mount. This
+  // Re-seeds the local brief when projectId/createIdProp actually change after mount. This
   // runs during render — React's own pattern for "adjusting state when a prop changes" — rather
   // than in an effect: an effect firing setBrief only after the fact would paint one frame of the
   // previous keyword's brief first. The useState initializer above already covers the first render,
@@ -236,24 +240,18 @@ export default function ContentBriefPanel({
   const [hydratedForKey, setHydratedForKey] = useState(hydrationKey);
   if (hydrationKey !== hydratedForKey) {
     setHydratedForKey(hydrationKey);
-    const recomputed = computeLocalBrief(targetKeyword);
-    setBrief(recomputed);
-    saveBriefToStorage(`kw:${targetKeyword}`, recomputed);
+    setBrief(computeLocalBrief(storageKey));
   }
 
   useEffect(() => {
     let cancelled = false;
-    const localBrief = computeLocalBrief(targetKeyword);
+    const localBrief = computeLocalBrief(storageKey);
 
     (async () => {
-      let cid: string | null = createIdProp ?? null;
-      if (!cid) {
-        try {
-          cid = localStorage.getItem(GCC_CREATE_STORAGE_PREFIX + targetKeyword);
-        } catch {
-          /* ignore */
-        }
-      }
+      // The create comes from the caller, and the caller has it from the URL -- the one place it
+      // lives. Never resolve a create from browser storage by keyword: a keyword is not scoped to a
+      // project, so that lookup would open another project's create.
+      const cid: string | null = createIdProp ?? null;
       if (cid) {
         setInternalCreateId(cid);
         try {
@@ -269,7 +267,7 @@ export default function ContentBriefPanel({
                 writingNotes: parsed.writingNotes.trim() || localBrief.writingNotes,
               };
               setBrief(merged);
-              saveBriefToStorage(`kw:${targetKeyword}`, merged);
+              if (storageKey) saveBriefToStorage(storageKey, merged);
             } catch {
               /* keep local brief */
             }
@@ -290,7 +288,7 @@ export default function ContentBriefPanel({
     };
     // onBriefSaved is stable enough from parent; avoid re-hydrate loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKeyword, createIdProp]);
+  }, [storageKey, createIdProp]);
 
   const missing = useMemo(() => contentBriefMissingFields(brief), [brief]);
   const complete = missing.length === 0;
@@ -306,7 +304,7 @@ export default function ContentBriefPanel({
   const derivedLengthBand = lengthBandForContentType(effectiveContentType);
 
   function persistLocal(next: ContentBrief) {
-    saveBriefToStorage(`kw:${targetKeyword}`, next);
+    if (storageKey) saveBriefToStorage(storageKey, next);
   }
 
   // Stage 7: the only caller of applyCuratedSerpToBrief anywhere in this codebase -- everything
@@ -369,11 +367,6 @@ export default function ContentBriefPanel({
       projectSiteRunId: projectSiteRunId || null,
     });
     setInternalCreateId(created.id);
-    try {
-      localStorage.setItem(GCC_CREATE_STORAGE_PREFIX + keywordInput, created.id);
-    } catch {
-      /* ignore */
-    }
     return created.id;
   }
 
@@ -406,6 +399,9 @@ export default function ContentBriefPanel({
         topic: keywordInput.trim() || null,
       });
       setSavedMsg("Brief saved on Content Creator create.");
+      // A brief that just minted its create now lives on the server, under that create. Left in
+      // the project's "new" slot, it would seed the next new create on this project.
+      if (!createIdProp) clearBriefFromStorage(briefDraftKey(projectId, null));
       onBriefSaved(id, true);
     } catch (err) {
       setError(

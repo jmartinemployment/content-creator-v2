@@ -607,8 +607,6 @@ export function parseSavedSerp(
   });
 }
 
-export const GCC_CREATE_STORAGE_PREFIX = "gcc-create-id:";
-
 export interface HostIndexed {
   url: string;
   host: string | null;
