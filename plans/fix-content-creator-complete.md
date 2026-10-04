@@ -131,7 +131,7 @@ output. No wave starts until the previous wave's proof has been read.
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
@@ -523,7 +523,7 @@ it. Remove the reads, the column stays until a later migration.
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
@@ -597,7 +597,7 @@ controller is behind `InternalServicePolicy`; no other project references `Conte
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
@@ -735,7 +735,7 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
   Size the request budget from the profile, not the sitemap. Count `offSitemapAdmitted` and
   `offSitemapSuppressed` in `CrawlReport`.
 - Done when: a re-crawl of ramp.com fetches `/products`, `/bill-pay`, `/accounting-automation`; of
-  bill.com `/pricing`; of lightyear.cloud `/features/*`; and each report states how many off-sitemap
+  bill.com `/pricing`; of a third declared partner its dropped product pages; and each report states how many off-sitemap
   pages were admitted.
 - Depends on: C2 lands in the same change.
 
@@ -777,7 +777,7 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
@@ -975,7 +975,7 @@ hit, in `architecture.md`, saying it is forbidden.
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
@@ -1117,7 +1117,7 @@ paragraph, the HTML-retention paragraph.
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 

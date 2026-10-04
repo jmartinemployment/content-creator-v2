@@ -130,7 +130,7 @@ paragraph, the HTML-retention paragraph.
 | Wave | Geek-Crawler-Rag | Geek-Crawler-v2 | GeekAPI | GeekRepository | content-creator-v2 |
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
-| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
+| 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / a third declared partner | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
 | 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
