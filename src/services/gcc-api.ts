@@ -213,6 +213,8 @@ export interface GccGenerateResult {
    * computed the reason and sent it, and there was nowhere here to put it, so it was dropped.
    */
   refusals?: string[];
+  /** Pieces that were saved with a gap the operator should see, prefixed by type. */
+  warnings?: string[];
   /** The tool pre-flight that decided which partners were drafted. Empty for every other type. */
   preflight?: GccPartnerToolReadiness[];
 }

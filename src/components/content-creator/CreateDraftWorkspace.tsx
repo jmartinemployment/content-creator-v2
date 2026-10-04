@@ -125,6 +125,10 @@ export default function CreateDraftWorkspace({
   // pages appeared out of five on 2026-10-02 with nothing on screen saying why, while the backend
   // had named both reasons and pushed them over the hub.
   const [generateNotes, setGenerateNotes] = useState<string[]>([]);
+  // Pieces that were saved with a gap: a pillar that never named a partner after a retry, a closing
+  // without the scheduler link. These used to refuse the whole draft; the draft is now saved and the
+  // gap is said here, so the operator has the known-good page and knows what to add to it.
+  const [generateWarnings, setGenerateWarnings] = useState<string[]>([]);
   // The tool pre-flight: which declared partners can be grounded, known before anything is drafted.
   const [preflight, setPreflight] = useState<GccGeneratePreflightEvent | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
@@ -432,15 +436,22 @@ export default function CreateDraftWorkspace({
    *  list of refusals. */
   function parseGenerateResultJson(
     raw: string | null | undefined,
-  ): { refusals?: string[]; preflight?: GccGeneratePreflightEvent["partners"] } | null {
+  ): {
+    refusals?: string[];
+    warnings?: string[];
+    preflight?: GccGeneratePreflightEvent["partners"];
+  } | null {
     if (!raw) return null;
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (!parsed || typeof parsed !== "object") return null;
-      const obj = parsed as { refusals?: unknown; preflight?: unknown };
+      const obj = parsed as { refusals?: unknown; warnings?: unknown; preflight?: unknown };
       return {
         refusals: Array.isArray(obj.refusals)
           ? obj.refusals.filter((r): r is string => typeof r === "string")
+          : undefined,
+        warnings: Array.isArray(obj.warnings)
+          ? obj.warnings.filter((w): w is string => typeof w === "string")
           : undefined,
         preflight: Array.isArray(obj.preflight)
           ? (obj.preflight as GccGeneratePreflightEvent["partners"])
@@ -465,6 +476,9 @@ export default function CreateDraftWorkspace({
           // and each one names a partner the operator would otherwise have to infer from a count.
           const note = `${evt.contentType}: ${evt.error ?? "failed"}`;
           setGenerateNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+        } else if (evt.status === "warning") {
+          const note = `${evt.contentType}: ${evt.error ?? "written with a gap"}`;
+          setGenerateWarnings((prev) => (prev.includes(note) ? prev : [...prev, note]));
         } else {
           setGenerateMsg(`${evt.contentType} ready.`);
         }
@@ -487,7 +501,16 @@ export default function CreateDraftWorkspace({
           // coordinator stores for exactly this reason; this handler never read it.
           const recorded = parseGenerateResultJson(evt.resultJson);
           const recordedRefusals = recorded?.refusals ?? [];
+          const recordedWarnings = recorded?.warnings ?? [];
           const recordedPreflight = recorded?.preflight ?? [];
+          if (recordedWarnings.length > 0) {
+            // Already prefixed by type on the backend ("pillar: ...").
+            setGenerateWarnings((prev) => {
+              const next = [...prev];
+              for (const warning of recordedWarnings) if (!next.includes(warning)) next.push(warning);
+              return next;
+            });
+          }
           if (recordedRefusals.length > 0) {
             setGenerateNotes((prev) => {
               const next = [...prev];
@@ -534,6 +557,7 @@ export default function CreateDraftWorkspace({
     if (!effectiveCreateId || !canGenerate || saMissingPages) return;
     setGenerateMsg(null);
     setGenerateNotes([]);
+    setGenerateWarnings([]);
     setPreflight(null);
     setStalePrompt(null);
     setGenerating(true);
@@ -574,6 +598,7 @@ export default function CreateDraftWorkspace({
       // Same two fields the hub pushes, read off the synchronous response for a GeekAPI not running
       // the job runner -- so the explanation is present on both shapes, not just the live one.
       if (result.refusals?.length) setGenerateNotes(result.refusals);
+      if (result.warnings?.length) setGenerateWarnings(result.warnings);
       if (result.preflight?.length) {
         setPreflight({
           jobId: "",
@@ -805,7 +830,9 @@ export default function CreateDraftWorkspace({
                           {partner.populatedCategories} of 22 categories
                           {partner.pagesFailed > 0
                             ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
-                            : `, ${partner.pagesAttempted} pages extracted`}
+                            : partner.reused
+                              ? `, ${partner.pagesAttempted} pages reused from the bank`
+                              : `, ${partner.pagesAttempted} pages extracted`}
                           {partner.hasCapabilitySignal ? "" : ", no capability signal"}
                         </>
                       )}
@@ -845,6 +872,23 @@ export default function CreateDraftWorkspace({
               </p>
               <ul className="mt-1 space-y-1">
                 {generateNotes.map((note) => (
+                  <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Saved, with a gap named. Distinct from "Not written": these pieces exist and can be
+              opened below; the line says what to add to them. */}
+          {generateWarnings.length > 0 ? (
+            <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+              <p className="text-sm font-medium text-foreground">
+                Written with a gap ({generateWarnings.length})
+              </p>
+              <ul className="mt-1 space-y-1">
+                {generateWarnings.map((note) => (
                   <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
                     {note}
                   </li>

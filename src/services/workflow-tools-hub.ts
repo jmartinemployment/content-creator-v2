@@ -110,7 +110,9 @@ export type GccGenerateEvent = {
 export type GccGenerateTypeEvent = {
   jobId: string;
   contentType: string;
-  status: "ready" | "failed" | string;
+  /** "warning": the piece was saved, and `error` names a gap it ships with (a partner it never
+   *  named, a closing without the scheduler link). Not an outcome -- that arrived as "ready". */
+  status: "ready" | "failed" | "warning" | string;
   artifact?: unknown;
   error?: string | null;
 };
@@ -131,6 +133,9 @@ export type GccPartnerToolReadiness = {
   pagesFailed: number;
   populatedCategories: number;
   hasCapabilitySignal: boolean;
+  /** The extraction was read from the bank rather than paid for on this run. */
+  reused?: boolean;
+  bankedAtUtc?: string | null;
 };
 
 /**
