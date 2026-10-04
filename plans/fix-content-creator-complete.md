@@ -97,7 +97,7 @@ stage marked **blocks** was blocked until this date and is not blocked now.
 | D12 | The tool body: does QUOTEABLE RESEARCH reach it? Today only the lede gets it. | Yes. The body is written from extraction JSON and competitor text; the retrieved partner passages reach the lede only. | A2 |
 | D13 | Block quotations on Pillar and Blog: enforce the ban in code (parser refuses a quote paragraph on those types), or allow verified ones. | Enforce the ban as the prompt states it. Verified quotes on long-form is a separate feature, if ever. | A6 |
 | D14 | Image-prompt failure after a guarded draft: refuse the whole piece, or save the draft and report. | Save and report, the way the scheduler link and partner mentions already do. | A6 |
-| D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | Rank it over a run-scoped candidate set, with the collapse before the pool cut. Measure after R1 before building. | R2 |
+| D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | **Amended 2026-10-04 evening.** The dense list is already a dense-plus-sparse hybrid, so the scroll is a third signal. After R1, measure the claim and keyword questions with and without it, and keep whichever answers from more distinct pages. Ranking it is built only if keeping it wins. | R2 |
 | D16 | Raw `Html` on crawl pages: keep storing it, or stop. | **Withdrawn, Jeff 2026-10-04: raw HTML stays stored.** This project is HTML, never Markdown; `contentHtml` and every block's `html` are HTML too, and nothing here moves toward anything else. `GccV2SiteSection` reads `Html` on a live path, which settles it regardless. | — |
 | D17 | The brief field `notes`: the frontend never sends it and the backend reads it in seven places. Add the field, or remove the reads. | Remove the reads. The brief and niche framing are the operator's input; a second free-text channel is a second place for the same thing. | F3 |
 
@@ -617,6 +617,67 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | D1 | Repeated chunk text: collapse at **index time** (one point per distinct text per run) or at query time. | Index time. One rule for every consumer; query-time would need it in two retrieval paths that work differently. | R1 |
 | D4 | Quote verification: a **Library route** GeekAPI calls, or the existing C# substring comparison. | Library route. Two implementations of "is this quote on the page" will disagree on whitespace and punctuation; the quote guard already paid for that. | R4, A1 |
 | D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | Rank it over a run-scoped candidate set, with the collapse before the pool cut. Measure after R1 before building. | R2 |
+
+## Status, 2026-10-04 evening — what is built, and where it departs from the stages above
+
+Reported by the session that built it, checked against the plan. Read this before the stages: the
+stages say what was intended, this says what is true.
+
+**Built as specified.** R1: `textDigest` on every point, the index-time collapse, the skipped-repeat
+count in the index status. Met on Ramp. R4: a verify route exists. R5: `POST /v1/index` refuses a run
+without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
+
+**Departures that stand, by Jeff's direction during the build.**
+- There is no resume. Every index attempt deletes the run's points first and writes the run whole.
+  The "resumed run rebuilds its set from points already written" clause of R1 is withdrawn.
+  **Consequence to respect:** a redeploy or kill mid-index leaves that run with no points until it
+  is posted again, and nothing re-posts it. R5 therefore also means: no push to this repo while a
+  job is running, and the index status is checked before any deploy.
+- The hybrid on/off setting is removed.
+- The webhook contract changed with the skip count, so GeekBackend `1c553fc` carries the contract
+  copy and the DTO. A contract change is committed on both sides together; that is not a scope
+  violation, it is what a contract is.
+
+**Departures that are defects, to fix before R4 is called done.**
+1. **Two digest definitions remain.** The route returns `sourceDigest` as `sha256(contentHtml)`
+   falling back to `html`; `verify_citations` still hashes the page text. R4 said one definition.
+   Until it is one, GeekAPI's A1 must treat the route's `found` as the verdict and never compare
+   digests itself.
+2. **Quote normalisation is unchanged** (whitespace and case only), so the curly-apostrophe
+   done-when is not met. This matters more than it looks: GeekAPI cuts quote candidates from blocks
+   in C# (`GccCorpusBlockMapper`) and the Library projects blocks to text in Python
+   (`block_text.py`). Those are two implementations of block→text, the exact drift AGENTS.md
+   forbids. A1 will send the C# string to the Python check. Either the two projections are proven
+   identical by a test that runs the same blocks through both, or the route normalises the
+   characters that differ. **New finding F-R10**, owned here.
+3. **`verify_citations` and the route disagree** on what a verified quote is, and only the route is
+   what A1 will call. Either `verify_citations` calls the same function or it is deleted.
+
+**Departures recorded, no action.**
+- The route takes only the list form; one quote is a list of one. Fine. It also returns `reason`
+  and `sourceDigest`. Fine.
+- Both page-read routes share the new route's refusal helper. Fine.
+- Part of R6 (tests for R1, R4, R5) was written early. The flooded-pool and ranked-keyword tests
+  are not written and are still R6.
+- One README line from R7 was changed early. Fine.
+- The scheduler defaults off in the repo; **production still has it on**. That is an operations
+  change on the VPS compose, Jeff's to make.
+
+**Violations, recorded so they are not repeated.**
+- A re-index of all 62 runs was queued. Jeff killed it; 6 ran, 56 never started. The rule is in R1:
+  Ramp first, alone; then only runs a saved project declares, one at a time. Which 6 ran is not
+  recorded here and should be, since those 6 now have collapsed points and the other 56 do not.
+- Wave 2 measurements (R2's keyword list, R3's near-copies) were run before Wave 1's proof. They
+  are read-only, so nothing broke, but every measurement before the last sent the bare keyword
+  rather than the question GeekAPI sends (`GccGroundingResolver.BuildNeed`). Only the last run's
+  numbers count. The question text is the plan's, not the session's: copy it from `BuildNeed`.
+
+**Recommendation received, decision amended.** The session recommends deleting the keyword scroll
+list from fusion rather than ranking it. The dense list is already LlamaIndex's dense-plus-sparse
+hybrid (F-R2), so the scroll is a third signal and today an unranked one. D15 is amended in the
+overview: after R1, measure the two claim questions and the three keyword questions **with and
+without** the scroll list, and keep whichever answers them from more distinct pages. Nothing is kept
+for being there.
 
 ## Audit — Geek-Crawler-Rag
 
