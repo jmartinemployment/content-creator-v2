@@ -121,6 +121,18 @@ filtered by `projectId`, which the create row carries), open the most recent, an
 a list to switch between; "Start a new piece" stays. The review's acceptance of the deleted lookup
 was wrong and is withdrawn.
 
+**F13 — The brief saves itself to the server, and the screen says which copy it is showing.**
+(Found 2026-10-04 from the code, after Jeff's last server-side brief proved to be 9/16.) The server
+write has only ever happened on the "Save brief for generate" click. Every field change writes
+browser storage at once (`persistLocal`), so the panel looked saved whether or not it was. Before
+F1, a reload lost the create id (state, plus a storage key written under one name and read under
+another), so the next Save found no create and **minted a new one**: later briefs may sit on newer
+`gcc_creates` rows, not the one last looked at. And on open, a server brief **replaces** a local
+draft regardless of which is newer. Fix: once a create exists, the brief PATCHes itself after a short
+pause with the version it read (F8), the panel shows one of "Saved to the server at HH:MM", "Local
+draft only, not saved" or "The server copy is newer than this draft", and hydration never replaces a
+newer local draft with an older server brief without asking. Depends on F8 and F12.
+
 **F6 — AGENTS.md corrections.** (F-F9, F-C9) The page chain, the `refusals` field, the re-crawl
 paragraph, the HTML-retention paragraph.
 
