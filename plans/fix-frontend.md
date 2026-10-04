@@ -131,7 +131,11 @@ another), so the next Save found no create and **minted a new one**: later brief
 draft regardless of which is newer. Fix: once a create exists, the brief PATCHes itself after a short
 pause with the version it read (F8), the panel shows one of "Saved to the server at HH:MM", "Local
 draft only, not saved" or "The server copy is newer than this draft", and hydration never replaces a
-newer local draft with an older server brief without asking. Depends on F8 and F12.
+newer local draft with an older server brief without asking. **Generate is disabled while the draft
+differs from the server copy** ("unsaved changes, save first"): today `briefReady` is
+`!!detail.briefJson || briefSavedOnServer`, so any brief on the server, however old, enables Generate,
+and the backend then reads `brief_json` from the row, never the screen, so unsaved edits reach no
+generate. Depends on F8 and F12.
 
 **F6 — AGENTS.md corrections.** (F-F9, F-C9) The page chain, the `refusals` field, the re-crawl
 paragraph, the HTML-retention paragraph.
