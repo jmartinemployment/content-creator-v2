@@ -20,12 +20,13 @@ The existing `GccProject` gains:
 | `topic` | `string \| null` | The keyword (GR1) |
 | `researchJson` | `string \| null` | (GR1) |
 | `siteSectionJson` | `string \| null` | (GR1) |
-| `version` | `number` | The concurrency token (xmin) the brief editor sends back as `expectedVersion` |
+| `version` | `number` | The brief's own counter (`brief_version`), which the Save button sends back as `expectedVersion` |
 | `briefSavedAtUtc` | `string \| null` | When the current brief revision was saved; null before the first |
 
-**One question for GeekAPI:** if `version` is the row's xmin, a Profile save (PUT) also changes it,
-so a brief save after a Profile edit in another tab is refused as stale. That is safe (refused,
-never overwritten) but noisy. A brief-only token avoids it; either works with this contract.
+**The wire names do not change.** The counter replaces the row's xmin (Jeff's instruction to the
+GeekBackend session, 2026-10-04), so a Profile save no longer makes the brief editor's read stale. It
+is still called `version` on the project read and in the save response, and `expectedVersion` in the
+save request. The frontend is coded against those three names.
 
 ## 2. Save the brief — GA1
 
