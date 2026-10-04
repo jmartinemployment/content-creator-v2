@@ -53,6 +53,9 @@ controller is behind `InternalServicePolicy`; no other project references `Conte
 - **GeekRepository:** migrations apply on a fresh database and on the live one; D4's rule test green.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 

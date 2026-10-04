@@ -396,8 +396,13 @@ cutter, same selection rule; or the claim is removed and the probe is described 
 ## Verification
 
 - **GeekAPI:** `dotnet build` zero errors; `dotnet test` green (1,540 today, rising); for every guard
+  a mutation test that disables it and shows a test go red; for every prompt sentence that asserts a
+  safety property, a line of code named beside it in the test that enforces it.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 
@@ -469,6 +474,9 @@ controller is behind `InternalServicePolicy`; no other project references `Conte
 - **GeekRepository:** migrations apply on a fresh database and on the live one; D4's rule test green.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 
@@ -567,8 +575,12 @@ or empty `blocks`, so nothing downstream loses a page it could have used.
 ## Verification
 
 - **Geek-Crawler-v2:** `tsx --test` green including the new `sitemap.test.ts`; the three re-crawls in
+  C1 with their reports; no counter in the report that nothing increments.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 
@@ -680,8 +692,12 @@ hit, in `architecture.md`, saying it is forbidden.
 ## Verification
 
 - **Geek-Crawler-Rag:** `uv run pytest` green; `/health` ok after deploy; the Ramp re-index numbers in
+  R1; the two claim questions answered from Melio product pages after R2/R3.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 
@@ -768,8 +784,12 @@ paragraph, the HTML-retention paragraph.
 ## Verification
 
 - **content-creator-v2:** `tsc --noEmit` and `eslint` clean; a reload mid-generate shows the running
+  job; a version with a warning shows it when reopened a day later.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 

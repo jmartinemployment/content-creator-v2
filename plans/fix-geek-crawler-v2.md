@@ -80,8 +80,12 @@ or empty `blocks`, so nothing downstream loses a page it could have used.
 ## Verification
 
 - **Geek-Crawler-v2:** `tsx --test` green including the new `sitemap.test.ts`; the three re-crawls in
+  C1 with their reports; no counter in the report that nothing increments.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 

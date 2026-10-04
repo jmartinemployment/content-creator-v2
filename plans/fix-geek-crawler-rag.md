@@ -93,8 +93,12 @@ hit, in `architecture.md`, saying it is forbidden.
 ## Verification
 
 - **Geek-Crawler-Rag:** `uv run pytest` green; `/health` ok after deploy; the Ramp re-index numbers in
+  R1; the two claim questions answered from Melio product pages after R2/R3.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 

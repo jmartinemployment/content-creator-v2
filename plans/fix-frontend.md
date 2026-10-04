@@ -68,8 +68,12 @@ paragraph, the HTML-retention paragraph.
 ## Verification
 
 - **content-creator-v2:** `tsc --noEmit` and `eslint` clean; a reload mid-generate shows the running
+  job; a version with a warning shows it when reopened a day later.
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
+  five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set
+  and one ads set, or refuses each by name; Jeff reads them; every quote on every page is found on
+  the page it cites.
 
 ## Where this project sits in the order
 
