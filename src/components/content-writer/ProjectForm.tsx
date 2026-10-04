@@ -469,9 +469,9 @@ export default function ProjectForm({
           the same way ClientsPanel's inline create form has none either. */}
       <p className="text-sm text-muted">
         A project is one engagement for this client: a name, a schedule, and the site it targets.
-        Content Creator does not crawl — Geek-Crawler does, from its own submit form, on the machine
-        it runs on. Each URL below is checked against the index when you leave the field, to confirm
-        that evidence already exists; a red line is a crawl to go and start there, then re-check.
+      </p>
+      <p className="mt-1 text-sm text-muted">
+        This app starts no crawl; start one in Geek-Crawler-v2, then re-check here.
       </p>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -489,7 +489,7 @@ export default function ProjectForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
           Site URL
           <span className="text-xs font-normal text-muted">
-            The site this content must not duplicate. Crawl it in Geek-Crawler as{" "}
+            The site this content must not duplicate. Crawl it in Geek-Crawler-v2 as{" "}
             <span className="font-mono">project-site</span>.
           </span>
           <input
@@ -566,7 +566,7 @@ export default function ProjectForm({
           writer to name it, so a partner with no evidence is a page it has nothing to say about.
           Five of each, and being indexed is not enough: a crawl that was blocked at its first page
           still puts a row in the index and gives the writer nothing, so each line shows the pages
-          and chunks behind it. Crawl a red one in Geek-Crawler as{" "}
+          and chunks behind it. Crawl a red one in Geek-Crawler-v2 as{" "}
           <span className="font-mono">partner</span> or <span className="font-mono">competitors</span>
           , one URL per crawl — so those counts describe that host and not a batch it was bundled
           into.
@@ -645,7 +645,7 @@ export default function ProjectForm({
               <>
                 {" "}
                 {/* All three fields, including the site. Re-check is the only action a URL without
-                    evidence has now that the crawl is started in Geek-Crawler, and the site was the
+                    evidence has now that the crawl is started in Geek-Crawler-v2, and the site was the
                     one field it skipped — which is the field whose run id the gate actually reads,
                     so a finished project-site crawl could not be picked up without reloading. */}
                 <button
