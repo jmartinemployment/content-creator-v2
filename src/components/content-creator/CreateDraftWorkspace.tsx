@@ -119,8 +119,14 @@ export default function CreateDraftWorkspace({
   const [briefFormComplete, setBriefFormComplete] = useState(false);
   const [briefSavedOnServer, setBriefSavedOnServer] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [generateMsg, setGenerateMsg] = useState<string | null>(null);
-  // Accumulated, never overwritten -- generateMsg is one string, so with five tool events each
+  // The run's progress, one line per event, in the order they arrived. It was one string, overwritten
+  // per hub event, so with several artifacts of one type only the last "ready" survived on screen and
+  // the run's history was whatever happened to arrive last.
+  const [generateMsgs, setGenerateMsgs] = useState<string[]>([]);
+  const pushGenerateMsg = useCallback((msg: string) => {
+    setGenerateMsgs((prev) => (prev.includes(msg) ? prev : [...prev, msg]));
+  }, []);
+  // Accumulated, never overwritten -- generateMsg was one string, so with five tool events each
   // refusal replaced the last and the terminal "Generate finished." then wiped them all. Three
   // pages appeared out of five on 2026-10-02 with nothing on screen saying why, while the backend
   // had named both reasons and pushed them over the hub.
@@ -480,7 +486,7 @@ export default function CreateDraftWorkspace({
           const note = `${evt.contentType}: ${evt.error ?? "written with a gap"}`;
           setGenerateWarnings((prev) => (prev.includes(note) ? prev : [...prev, note]));
         } else {
-          setGenerateMsg(`${evt.contentType} ready.`);
+          pushGenerateMsg(`${evt.contentType} ready.`);
         }
         void reloadRef.current();
       });
@@ -534,7 +540,7 @@ export default function CreateDraftWorkspace({
               },
             );
           }
-          setGenerateMsg("Generate finished.");
+          pushGenerateMsg("Generate finished.");
           setGenerating(false);
           void reloadRef.current();
           // Ready and failed are terminal: there is nothing further to hear, so the socket is closed
@@ -542,8 +548,11 @@ export default function CreateDraftWorkspace({
           closeHub();
         } else if (evt.status === "failed") {
           // The refusal or fault verbatim -- the whole point of the job carrying its error.
-          setGenerateMsg(evt.error ?? "Generate failed.");
+          pushGenerateMsg(evt.error ?? "Generate failed.");
           setGenerating(false);
+          // A failed job can still have persisted the pieces that finished before it failed. Without
+          // a reload they stayed hidden until the operator refreshed the page.
+          void reloadRef.current();
           closeHub();
         }
       });
@@ -555,7 +564,7 @@ export default function CreateDraftWorkspace({
 
   async function runGenerate(acknowledgeStale = false) {
     if (!effectiveCreateId || !canGenerate || saMissingPages) return;
-    setGenerateMsg(null);
+    setGenerateMsgs([]);
     setGenerateNotes([]);
     setGenerateWarnings([]);
     setPreflight(null);
@@ -572,7 +581,7 @@ export default function CreateDraftWorkspace({
       // true until a terminal job event arrives, so the button reflects real state rather than
       // "the POST returned".
       if (result.jobId) {
-        setGenerateMsg(
+        pushGenerateMsg(
           outputTypes.length > 1
             ? `Generating ${outputTypes.length} content items — each appears as it finishes.`
             : "Generating — this runs in the background.",
@@ -584,15 +593,15 @@ export default function CreateDraftWorkspace({
       // Inline shapes, for a GeekAPI not yet running the job runner. This frontend deploys first
       // on purpose, so there is never a moment where the two disagree.
       if (result.artifact && result.version) {
-        setGenerateMsg(
+        pushGenerateMsg(
           `Created ${result.artifact.type} \u201c${result.artifact.name}\u201d v${result.version.versionNumber}.`,
         );
         selectedArtifactIdRef.current = result.artifact.id;
       } else if (result.created?.length) {
-        setGenerateMsg(`Generated ${result.created.length} artifact(s).`);
+        pushGenerateMsg(`Generated ${result.created.length} artifact(s).`);
         selectedArtifactIdRef.current = result.created[0]?.artifact.id ?? null;
       } else {
-        setGenerateMsg("Generate finished.");
+        pushGenerateMsg("Generate finished.");
       }
 
       // Same two fields the hub pushes, read off the synchronous response for a GeekAPI not running
@@ -614,9 +623,9 @@ export default function CreateDraftWorkspace({
       const stale = parseStaleGroundingError(err);
       if (stale) {
         setStalePrompt(stale);
-        setGenerateMsg(null);
+        setGenerateMsgs([]);
       } else {
-        setGenerateMsg(
+        pushGenerateMsg(
           err instanceof ApiError
             ? err.message
             : err instanceof Error
@@ -787,8 +796,14 @@ export default function CreateDraftWorkspace({
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
           ) : null}
-          {generateMsg ? (
-            <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{generateMsg}</p>
+          {generateMsgs.length > 0 ? (
+            <ul className="mt-3 space-y-0.5">
+              {generateMsgs.map((msg) => (
+                <li key={msg} className="whitespace-pre-wrap text-sm text-foreground">
+                  {msg}
+                </li>
+              ))}
+            </ul>
           ) : null}
 
           {/* The pre-flight, shown while the ready partners are still being written. It reports what
@@ -1129,10 +1144,18 @@ export default function CreateDraftWorkspace({
                   SEO score {seo.score} · {seo.wordCount} words · density{" "}
                   {seo.keywordDensityPercent.toFixed(1)}%
                 </p>
+                {/* The keyword the report actually scored against. Every check below is relative to
+                    it, and nothing on screen said which string that was. */}
+                <p className="mt-1 text-muted">
+                  Scored against &ldquo;{seo.targetKeyword}&rdquo;
+                </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
                   {seo.checks.map((c) => (
                     <li key={c.id}>
                       {c.passed ? "✓" : "✗"} {c.label}: {c.detail}
+                      {!c.passed && c.fixHint ? (
+                        <span className="block text-foreground">{c.fixHint}</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -1177,6 +1200,9 @@ export default function CreateDraftWorkspace({
                   {polish.checks.map((c) => (
                     <li key={c.id}>
                       {c.passed ? "✓" : "✗"} {c.label}: {c.detail}
+                      {!c.passed && c.fixHint ? (
+                        <span className="block text-foreground">{c.fixHint}</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -1580,10 +1606,19 @@ function ArtifactBody({
   // jsonLdSchema for a tool page); renderArtifactBody only draws title + body.
   let metaDescription = "";
   let jsonLdSchema = "";
+  // The gap a piece was saved with, as the generator recorded it in the envelope. The workspace
+  // already showed these -- but only from the live hub events of the run that wrote them, so reopening
+  // the draft a day later showed a pillar missing a partner with nothing saying so.
+  let warnings: string[] = [];
   try {
     const parsed = JSON.parse(bodyDocumentJson) as Record<string, unknown>;
     if (typeof parsed?.metaDescription === "string") metaDescription = parsed.metaDescription;
     if (typeof parsed?.jsonLdSchema === "string") jsonLdSchema = parsed.jsonLdSchema;
+    if (Array.isArray(parsed?.warnings)) {
+      warnings = parsed.warnings.filter(
+        (w): w is string => typeof w === "string" && w.trim().length > 0,
+      );
+    }
   } catch {
     /* a body that will not parse still renders below */
   }
@@ -1603,6 +1638,21 @@ function ArtifactBody({
 
   return (
     <div className="mt-4">
+      {warnings.length > 0 ? (
+        <div className="mb-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+          <p className="text-sm font-medium text-foreground">
+            Written with a gap ({warnings.length})
+          </p>
+          <ul className="mt-1 space-y-1">
+            {warnings.map((w) => (
+              <li key={w} className="whitespace-pre-wrap text-sm text-foreground">
+                {w}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {metaDescription ? (
         <p className="mb-2 text-sm text-muted">{metaDescription}</p>
       ) : null}
