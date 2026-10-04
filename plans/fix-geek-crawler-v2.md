@@ -41,7 +41,7 @@ chose to list them; that is the right line. (1) `maxDepth` stays null, because `
 caps deliberately and the ledger counts depth refusals so a cap can be measured before it is set.
 Accepted. (2) The patterns and the cap of 50 were chosen without the measurement the stage asked
 for, because the session has no Mongo access. Accepted as a first value; **the first three re-crawls
-(ramp, bill, lightyear) report `refused.directoryCap` and `refused.<trap>` per directory, and the
+(ramp, bill, a third declared partner) report `refused.directoryCap` and `refused.<trap>` per directory, and the
 numbers decide whether 50 and the four rules stand.**
 
 **C3 — done, placed differently, and the placement is right.** Counters live in a discovery ledger
@@ -81,7 +81,8 @@ fixture asserts the off-sitemap link is admitted.
   with Jeff's approval.
 
 **Not done here, by design.** Nothing re-crawled: the session has no crawl access. The three
-re-crawls in C1's done-when are Jeff's to start, one at a time, and their ledgers are the measurement
+re-crawls in C1's done-when (ramp, bill, a third declared partner; lightyear.cloud is no longer
+offered and is not crawled) are Jeff's to start, one at a time, and their ledgers are the measurement
 C2 still owes.
 
 **Since the review (Geek-Crawler-v2 session).**
@@ -133,7 +134,7 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
 - Change: the allowlist was also the trap defence. Replace it with the minimum that the measured
   corpus needs: a path-pattern denylist (calendar, faceted and paginated listings), a per-directory
   admitted-page cap for `other`-tier directories, and `maxDepth` set per profile rather than null.
-  Measured on ramp, bill, lightyear and the two sites with the most `other`-tier pages.
+  Measured on ramp, bill, a third declared partner and the two declared sites with the most `other`-tier pages.
 - Depends on: nothing; ships with C1.
 
 **C3 — Counters are persisted.** (F-C4)
