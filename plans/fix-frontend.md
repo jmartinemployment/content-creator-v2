@@ -60,6 +60,21 @@ taxonomy path's first level rather than hard-coding `"marketing"`.
 **F5 — Dead code and honest copy.** (F-F7, F-F8) Delete `crawlOne`, `startGeekCrawl`, the dead
 exports; the project form says in one line where a crawl is started and that this app starts none.
 
+**F7 — The brief panel sends the provider** the workspace has selected to `brief/partner-quote-readiness`.
+(From the GeekBackend review, 2026-10-04.)
+
+**F8 — The brief save sends the version it read** (`ExpectedVersion`) and shows the 409 as "the
+brief changed under you; reload" rather than overwriting.
+
+**F9 — `grounding:` warnings render under the readiness block**, not under "Written with a gap",
+which names pieces.
+
+**F10 — Per-type progress before the batch save.** The workspace shows "drafted, saving" on the
+per-type progress event and the artifact on the outcome event, so a long run is never blank.
+
+**F11 — Revise switches to `POST versions/{id}/revise-job`**, with section scope sent as
+`sectionPath`, and the old route is deleted in the same change.
+
 **F6 — AGENTS.md corrections.** (F-F9, F-C9) The page chain, the `refusals` field, the re-crawl
 paragraph, the HTML-retention paragraph.
 

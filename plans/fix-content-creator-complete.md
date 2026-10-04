@@ -240,6 +240,104 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | D13 | Block quotations on Pillar and Blog: enforce the ban in code (parser refuses a quote paragraph on those types), or allow verified ones. | Enforce the ban as the prompt states it. Verified quotes on long-form is a separate feature, if ever. | A6 |
 | D14 | Image-prompt failure after a guarded draft: refuse the whole piece, or save the draft and report. | Save and report, the way the scheduler link and partner mentions already do. | A6 |
 
+## Status, 2026-10-04 evening — Waves 1–3 built uncommitted; reviewed from the report
+
+The GeekBackend session built A1 interim, A2, A5, A6, A7, A16, D1, A1 full's shape, A4-adjacent
+pieces, A8, A9, A10, A11, A12, A13, A14, D2 and D3 in one uncommitted working tree, on Jeff's
+"continue". There is no diff to read, so this is a review of its own report. Verdicts: **keep**,
+**change** (before commit), **run first** (a precondition), **follow-up** (another project's stage).
+
+**Process.**
+- Commit by stage, in wave order, as separate commits, and push the Wave 1 commits first. The
+  Accounts Payable generate runs on that deployment and is read before Wave 2 and Wave 3 commits are
+  pushed. The gate is honoured retroactively; the code is not thrown away.
+- **Run first:** the create-owners route it added (`GET internal/create-owners`) against production,
+  before A9 ships. If any `gcc_creates` row's owner is not the operator's `sub` (or the worker
+  service id, which is the same id today), A9 waits.
+
+**Contract changes.**
+- Probe route requires `provider`; the frontend does not send it; the button returns 400. **Change:**
+  `provider` optional on that route, absent meaning `LlmProviders__DefaultProvider`, which is the
+  configured setting and what the probe used before, not a fallback. **Follow-up F7:** the brief
+  panel sends the workspace's provider.
+- `GccCreateDto.version`, optional `ExpectedVersion`, 409 on stale. **Keep.** **Follow-up F8:** the
+  brief save sends the version it read; until it does, the brief save is still last-writer-wins.
+- `GccQuoteablePage.RetrievalScore` in `research_json`; tool envelope `provenance`; readiness
+  `pagesDigest`; job status `ready`; refusal text changes. **Keep.**
+- Retrieval warnings pushed as warning events under the label `grounding`. **Keep**, with
+  **follow-up F9:** the workspace renders `grounding:` warnings under the readiness block, not under
+  "Written with a gap", which names pieces.
+
+**A6, one combined retry and the guard function.**
+- One retry naming every finding, replacing up to four per-guard retries. **Keep.**
+- The rule for keeping the retry: "fewer refusals, or a strict subset". **Change:** strict subset
+  only. "Fewer" lets a retry swap one failure for a new one and be kept.
+- Link allowlist widened to partner page URLs from QUOTEABLE RESEARCH and any page on the
+  publisher's hosts. **Keep.** Rule 2 tells the writer to link partner pages; the plan omitted them.
+- Figure evidence widened to the brief, topic, notes, the serialized generation context and the
+  outline. **Change:** brief, topic and notes yes; the generation context and the outline no. Both
+  carry instruction numbers (word floors, density targets, "600-850 words"), and a check that
+  licenses "3,000" because the prompt said it is a check that licenses nothing. The figure grammar
+  has to be written down: what counts as a figure (percentages, currency, counts with a unit,
+  multipliers, numbers of three or more digits) and what does not (ordinals, list numerals, headings,
+  years in a cite, version numbers). Changing `ScriptedBody` headings from digits to letters so the
+  check passes is the fixture dodging the check; the grammar fixes it instead.
+- Tool quotation gets one retry before refusal; the product-name check is in the tool guard and
+  retried. **Keep.** A retry naming the finding is not a repair.
+- Pillar FAQ before the body; tool FAQ after the first draft and carried through the retry. **Keep.**
+
+**A5.** Unreachable-index refusal: **keep.** "Zero passages for a declared partner refuses for all
+types, including tool": **change.** For tool the outcome is per partner (page written, or a named
+soft refusal), and a whole-type refusal would undo "four pages and one named refusal". Pillar and
+blog refuse; tool refuses that partner.
+
+**A7.** Dormant adapter edited, `ProviderSchemaName` v5, tests replaced. **Keep.**
+
+**A1 interim.** One more "verified" sentence removed from the tool body prompt; `VerifiedAnswer`
+field name kept until A1 full. **Keep.**
+
+**D1.** `xmin` as the concurrency token with an empty migration, not `RowVersion`. **Keep**; that is
+the correct Postgres shape. Changed-columns-only writes, keyword-source routes carrying the
+version: **keep.**
+
+**D2, D3.** Status check constraint, partial unique index for one running job per create, RESTRICT
+foreign keys, evidence written once per version, extra job endpoints, create deletion cascading to
+evidence and jobs, a list of model ids. **Keep.** Evidence rows at about 1 MB per piece: fine for
+now; a retention rule is a later stage, not this one.
+
+**A13, A14.** Unavailable provider reports every page failed, not an empty document: **keep**,
+that is fail-closed. The ledger renamed and "tracking the current piece ambiently through the call
+chain": **check before commit.** Multi-type generation fans out with `Task.WhenAll`; ambient state
+is correct only if it is set inside each type's task, not before the fan-out. A test with two
+types in parallel asserting each version records only its own models is the proof. A14 taken as
+"advisory": **keep**; it was the plan's stated alternative.
+
+**A10, A11, A12.** Startup fails every job still `running`, assuming one GeekAPI instance:
+**keep**, and write the assumption where the code is, since Railway can scale it. New batch route
+`POST creates/{id}/generated` beside the per-artifact routes: **keep.** Per-type outcome events now
+fire only after the batch write: **change.** A twenty-minute run must not show nothing until the
+end. Push a per-type progress event when a piece is drafted (no artifact yet), then the outcome
+events after the batch write. **Follow-up F10:** the workspace shows "drafted, saving" for the
+first and keeps "each appears as it finishes" honest.
+
+**A8.** The interim and the full rebuild both built; the full one is `POST versions/{id}/revise-job`
+beside the old route. **Keep as a transition, with an end:** **follow-up F11** switches the
+workspace to the new route, and the old route is deleted in the same change. Section scope keeps
+stored metadata and JSON-LD: **keep**; "regenerated" in the stage was for full scope. Section
+matching by H2 heading text and splicing: **change.** Match by section path or index, which the
+workspace already carries as `sectionPath`; two sections can share a heading. Revise refused for
+types other than pillar, blog and tool: **keep.**
+
+**A9.** Content Creator routes accept only GeekOAuth bearer tokens, so `X-Geek-User-Id` cannot
+reach them: **keep**; better than disabling the header, which other services use.
+`ValidateAudience` left false because GeekOAuth tokens carry no audience: **keep**, recorded as the
+reason. Ownership failures return 404: **keep.** Tools jobs record their owner for `JoinToolsJob`:
+**keep.**
+
+**New follow-ups created by this review:** F7 (probe provider), F8 (brief version), F9 (grounding
+warnings placement), F10 (drafted-then-saved events), F11 (switch Revise route, delete the old) in
+`fix-frontend.md`; the figure grammar and the ambient-ledger test here under A6 and A13.
+
 ## Audit — GeekAPI
 
 | Id | Finding | Where |
@@ -587,6 +685,19 @@ fixture asserts the off-sitemap link is admitted.
 re-crawls in C1's done-when are Jeff's to start, one at a time, and their ledgers are the measurement
 C2 still owes.
 
+**Since the review (Geek-Crawler-v2 session).**
+- `d8e4341`: `failure-archive.test.ts`, "an unwritable archive aborts before the purge", no longer
+  depends on file permissions. It puts a regular file where `failures/` belongs, so the archive
+  write fails with `EEXIST` for any user, root included (checked by calling `archiveRun` directly).
+  The test is not skipped, so the ordering rule is still asserted in the root container.
+  `failure-archive.ts` is unchanged. Unit 341 of 341, integration 11 of 11.
+- Correction to C1 above: it is the off-sitemap product and evidence links that go to the front of
+  the queue (`filterEnqueueUrls`, `forefront`). Sitemap URLs are queued as start URLs in tier order.
+- Gap in the measurement C2 owes: the ledger counts `refused.directoryCap` and each
+  `refused.<trap>` as run totals. It does not break them down by directory, so a re-crawl can report
+  the totals but not which directories hit the cap of 50. Getting the per-directory breakdown means a
+  change to `discovery-ledger.ts`. Per the instruction to stop, it is not made; it needs a decision.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
@@ -737,8 +848,21 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
 
 **Violations, recorded so they are not repeated.**
 - A re-index of all 62 runs was queued. Jeff killed it; 6 ran, 56 never started. The rule is in R1:
-  Ramp first, alone; then only runs a saved project declares, one at a time. Which 6 ran is not
-  recorded here and should be, since those 6 now have collapsed points and the other 56 do not.
+  Ramp first, alone; then only runs a saved project declares, one at a time. The 6 that ran, each
+  `complete`, attempt 2, finished 14:25–14:26 UTC, and each deleted and rewritten whole (every
+  point carries `textDigest`; point count equals `chunksUpserted`, checked in Qdrant):
+
+  | Run | Site | Crawl type | Points | Repeats skipped |
+  |---|---|---|---|---|
+  | `c60dc645-d9cc-4287-8372-d5783373ac3d` | airbase.com | partner | 4 | 0 |
+  | `d880fb46-e36a-4411-96c0-dbdfa7f3b751` | fnshiftsolutions.com | competitors | 492 | 11 |
+  | `44ba341c-5be1-405d-b748-79c6a6934c16` | lightyear.cloud | partner | 346 | 24 |
+  | `324af3f2-9ada-4f34-a186-16563dfc04d2` | highnote.com | competitors | 772 | 35 |
+  | `dbd75d19-ad75-4ee8-b5b7-7f5a665faa65` | dost.io | competitors | 914 | 386 |
+  | `67ac7054-5be3-473c-91ba-30095ffea909` | invoiced.com | partner | 1,136 | 521 |
+
+  These 6 and Ramp have collapsed points; the other 56 do not. Nothing else is re-indexed except
+  by R1's rule.
 - Wave 2 measurements (R2's keyword list, R3's near-copies) were run before Wave 1's proof. They
   are read-only, so nothing broke, but every measurement before the last sent the bare keyword
   rather than the question GeekAPI sends (`GccGroundingResolver.BuildNeed`). Only the last run's
@@ -913,6 +1037,21 @@ taxonomy path's first level rather than hard-coding `"marketing"`.
 
 **F5 — Dead code and honest copy.** (F-F7, F-F8) Delete `crawlOne`, `startGeekCrawl`, the dead
 exports; the project form says in one line where a crawl is started and that this app starts none.
+
+**F7 — The brief panel sends the provider** the workspace has selected to `brief/partner-quote-readiness`.
+(From the GeekBackend review, 2026-10-04.)
+
+**F8 — The brief save sends the version it read** (`ExpectedVersion`) and shows the 409 as "the
+brief changed under you; reload" rather than overwriting.
+
+**F9 — `grounding:` warnings render under the readiness block**, not under "Written with a gap",
+which names pieces.
+
+**F10 — Per-type progress before the batch save.** The workspace shows "drafted, saving" on the
+per-type progress event and the artifact on the outcome event, so a long run is never blank.
+
+**F11 — Revise switches to `POST versions/{id}/revise-job`**, with section scope sent as
+`sectionPath`, and the old route is deleted in the same change.
 
 **F6 — AGENTS.md corrections.** (F-F9, F-C9) The page chain, the `refusals` field, the re-crawl
 paragraph, the HTML-retention paragraph.
