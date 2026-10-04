@@ -358,14 +358,6 @@ export type GccParsedSerpPage = {
   parseWarning: string | null;
 };
 
-/** Upload categories: Keyword result (SERP) parses via GccSavedSerpParser; the rest are articles. */
-export const GCC_KEYWORD_CATEGORIES: { value: string; label: string }[] = [
-  { value: "KeywordResult", label: "Keyword result page" },
-  { value: "Wikipedia", label: "Wikipedia" },
-  { value: "EduDomain", label: ".edu page" },
-  { value: "GovDomain", label: ".gov page" },
-];
-
 /**
  * `provider` is REQUIRED on every call that writes prose.
  *
@@ -421,44 +413,6 @@ export function approveGccVersion(
   return gccRequest(`/api/geek-content-creator/versions/${versionId}/approve`, {
     method: "POST",
     body: JSON.stringify({ notes: notes ?? null }),
-  });
-}
-
-export interface GccMixRequest {
-  blog?: boolean;
-  techArticle?: boolean;
-  emailCount?: number;
-  linkedInCount?: number;
-  xCount?: number;
-  instagramCount?: number;
-  metaAdsCount?: number;
-  googleAdsCount?: number;
-  aiToolNames?: string[] | null;
-  aiToolBrief?: string | null;
-  imagePrompts?: boolean;
-  provider?: string;
-}
-
-export function repurposeGccVersion(
-  versionId: string,
-  mix: GccMixRequest,
-): Promise<{ created?: unknown[] }> {
-  return gccRequest(`/api/geek-content-creator/versions/${versionId}/repurpose`, {
-    method: "POST",
-    body: JSON.stringify({
-      blog: mix.blog ?? false,
-      techArticle: mix.techArticle ?? false,
-      emailCount: mix.emailCount ?? 0,
-      linkedInCount: mix.linkedInCount ?? 0,
-      xCount: mix.xCount ?? 0,
-      instagramCount: mix.instagramCount ?? 0,
-      metaAdsCount: mix.metaAdsCount ?? 0,
-      googleAdsCount: mix.googleAdsCount ?? 0,
-      aiToolNames: mix.aiToolNames ?? null,
-      aiToolBrief: mix.aiToolBrief ?? null,
-      imagePrompts: mix.imagePrompts ?? false,
-      provider: mix.provider ?? "OpenAi",
-    }),
   });
 }
 
@@ -654,74 +608,6 @@ export function parseSavedSerp(
 }
 
 export const GCC_CREATE_STORAGE_PREFIX = "gcc-create-id:";
-
-export interface GeekCrawlerRunSnapshot {
-  runId: string;
-  crawlType: string;
-  status: string;
-  seedUrls: string[];
-  errorSummary: string | null;
-  createdAtUtc?: string;
-  startedAtUtc?: string | null;
-  completedAtUtc?: string | null;
-}
-
-/**
- * Start a Geek-Crawler run for a third-party crawl type.
- *
- * partner and competitors answer different questions and are never one crawl: partner pages are
- * evidence to cite, competitor pages are the angle. They are started separately so a failure in
- * one does not silently take the other's seeds with it.
- */
-export interface StartCrawlResult {
-  run: GeekCrawlerRunSnapshot;
-  seedsAccepted: number;
-  rejected: { raw: string; reason: string }[];
-}
-
-/**
- * Start a crawl for **one** URL. Returns the run, plus the refusal if the server would not take it.
- *
- * **No live caller since 2026-09-29, deliberately. Do not wire one back to this route.**
- * `POST /api/geek-crawler/crawls` wakes `GeekCrawlerWorker`, a crawler running inside the GeekAPI
- * container, and that path runs no extractor: the pages it writes to Mongo carry `Html` with
- * `contentHtml` and `blocks` both null, and the completion patch sets `Status`, `HostProgressJson`
- * and `CompletedAtUtc` without ever stamping `ContentReadyAt`. RAG indexes from `blocks` and treats
- * their absence as unindexable, and its scheduler filters candidates on `ContentReadyAt`, so a run
- * started here can finish successfully and still leave `RagPagesEnglish` and `RagChunksUpserted`
- * null — the two numbers the declared-URL gate reads. The call succeeded; the crawl could not
- * count. Full trace: `plans/geekapi-crawls-never-reach-rag.md`.
- *
- * The fix is not to extract blocks in GeekAPI — that is a second implementation of
- * `Geek-Crawler-v2/src/crawl/extract-content.ts`, and block segmentation decides chunk boundaries,
- * so quotes retrieved from one segmentation would be verified against the other. Crawling is
- * Geek-Crawler-v2's, and it is local-only by design (shared cloud IPs get flagged by bot managers),
- * so GeekAPI cannot call it either. Until it grows a queue-claim path the operator starts
- * project-site, partner and competitors crawls in its own submit form, which already offers all
- * three types, and Content Creator reads the result back through the index check.
- *
- * Kept rather than deleted because the shape is right and only the destination is wrong: when that
- * queue-claim route exists, this is the one function whose URL changes.
- *
- * One run, one URL — the signature is the rule, because a comment was not.
- * `AGENTS.md` has said "Run ID = one URL" since the slot model was written, and the server still
- * accepts a seed list and hashes the sorted set into a single `seedKey`. Five partner URLs sent
- * together become one run with one `RagChunksUpserted`, so "does this partner have usable
- * evidence" stops being answerable — the number belongs to the batch, not the host.
- *
- * The rejected list rides on success on purpose: a run that quietly crawled 9 of 12 seeds and said
- * nothing is how a corpus ends up smaller than the operator believes it is. With one seed it can
- * only ever name that one.
- */
-export function startGeekCrawl(
-  crawlType: "partner" | "competitors" | "local" | "project-site",
-  url: string,
-): Promise<StartCrawlResult> {
-  return gccRequest<StartCrawlResult>("/api/geek-crawler/crawls", {
-    method: "POST",
-    body: JSON.stringify({ crawlType, seeds: [url] }),
-  });
-}
 
 export interface HostIndexed {
   url: string;

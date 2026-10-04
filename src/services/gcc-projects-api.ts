@@ -348,13 +348,6 @@ export function createClient(input: ClientDetailsInput): Promise<GccClient> {
   });
 }
 
-export function updateClient(id: string, input: ClientDetailsInput): Promise<GccClient> {
-  return projectsRequest<GccClient>(`${CLIENTS}/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: JSON.stringify({ id, ...clientBody(input) }),
-  });
-}
-
 /**
  * Delete a client.
  *

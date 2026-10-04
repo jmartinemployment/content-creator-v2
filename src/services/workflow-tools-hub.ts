@@ -4,19 +4,7 @@ import {
   HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
-import type { GeneratedContentSet, ToolsGenerationJob } from "@/lib/types";
 import { apiConfig } from "@/lib/config";
-
-export type ToolsJobEvent = {
-  jobId: string;
-  projectId: string;
-  kind: string;
-  status: string;
-  completed: number;
-  total: number;
-  error?: string | null;
-  contentSet?: GeneratedContentSet | null;
-};
 
 function hubUrl(): string {
   const override = process.env.NEXT_PUBLIC_WORKFLOW_HUB_URL?.trim();
@@ -32,19 +20,6 @@ async function hubAccessToken(): Promise<string> {
   return body.accessToken;
 }
 
-export function mapToolsJobEvent(evt: ToolsJobEvent): ToolsGenerationJob {
-  return {
-    jobId: evt.jobId,
-    projectId: evt.projectId,
-    kind: evt.kind,
-    status: evt.status,
-    completed: evt.completed,
-    total: evt.total,
-    error: evt.error ?? null,
-    contentSet: evt.contentSet ?? null,
-  };
-}
-
 export function createWorkflowHubConnection(): HubConnection {
   return new HubConnectionBuilder()
     .withUrl(hubUrl(), { accessTokenFactory: hubAccessToken })
@@ -53,46 +28,12 @@ export function createWorkflowHubConnection(): HubConnection {
     .build();
 }
 
-export async function joinToolsJob(connection: HubConnection, jobId: string): Promise<void> {
-  if (connection.state === HubConnectionState.Disconnected) {
-    await connection.start();
-  }
-  await connection.invoke("JoinToolsJob", jobId);
-}
-
-export function onToolsJobEvent(
-  connection: HubConnection,
-  handler: (evt: ToolsJobEvent) => void,
-): () => void {
-  const listener = (raw: unknown) => handler(raw as ToolsJobEvent);
-  connection.on("ToolsJobEvent", listener);
-  return () => connection.off("ToolsJobEvent", listener);
-}
-
-export function onToolsJobHubReconnected(
-  connection: HubConnection,
-  getJobId: () => string,
-): () => void {
-  const handler = async () => {
-    try {
-      const jobId = getJobId();
-      if (!jobId) return;
-      await connection.invoke("JoinToolsJob", jobId);
-    } catch {
-      /* caller may surface connection errors separately */
-    }
-  };
-  connection.onreconnected(handler);
-  return () => connection.off("reconnected", handler);
-}
-
 /* ---------------------------------------------------------------------------
  * Content Creator generate.
  *
- * Same hub and same connection factory as tools generation above -- generate moved off a held-open
- * HTTP request because one run is partner extraction plus a multi-call write per selected content
- * type, which outlives any gateway between here and GeekAPI. See
- * plans/generate-async-signalr.md.
+ * Generate moved off a held-open HTTP request because one run is partner extraction plus a
+ * multi-call write per selected content type, which outlives any gateway between here and GeekAPI.
+ * See plans/generate-async-signalr.md.
  * ------------------------------------------------------------------------ */
 
 /** Overall job status. `resultJson` carries the aggregate once status is "ready". */

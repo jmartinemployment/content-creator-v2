@@ -7,62 +7,18 @@ import {
   ApiError,
   type GccProject,
 } from "@/services/gcc-projects-api";
-import { checkHostsIndexed, startGeekCrawl, type HostIndexed } from "@/services/gcc-api";
+import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
 import { unindexedUrls, usableUrls } from "@/lib/declared-url-gate";
 
 /** The three URL fields, each with its own check state so one field's error is not shown on all. */
 type FieldKey = "site" | "partner" | "competitor";
 
-/** The crawl each field's URLs belong to. One run per URL, so this is per URL, not per batch. */
 /**
  * How many URLs each list must carry (Jeff, 2026-09-29). Five is what a pillar names and what a
  * comparison needs to be a comparison; the site is one because it is the page this content must not
  * duplicate. All three pass the same test — only the count differs.
  */
 const REQUIRED: Record<FieldKey, number> = { site: 1, partner: 5, competitor: 5 };
-
-const CRAWL_TYPE: Record<FieldKey, "project-site" | "partner" | "competitors"> = {
-  site: "project-site",
-  partner: "partner",
-  competitor: "competitors",
-};
-
-/**
- * Start one crawl through GeekAPI, and return the line the operator would read.
- *
- * **Unreachable on purpose since 2026-09-29, and kept so re-pointing it is one call site.**
- * `plans/geekapi-crawls-never-reach-rag.md` has the trace; the short version is that
- * `POST /api/geek-crawler/crawls` wakes a crawler inside the API container which runs no extractor,
- * so the pages it writes carry `Html` and no `blocks`, and the completion patch never stamps
- * `ContentReadyAt`. RAG treats a page without `blocks` as unindexable and its scheduler filters on
- * `ContentReadyAt`, so this call could raise a run id and never raise the pages or chunks the
- * operator is gated on. An action that cannot succeed is worse than none: it reads as the supported
- * way to fix a red line.
- *
- * It is not deleted because the shape is right and only the destination is wrong. When
- * Geek-Crawler-v2 grows a queue-claim path (Option A in that plan), what changes is the route this
- * posts to, and the three call sites that were removed come back as they were.
- *
- * One run, one URL — not a batch of the field's lines. A run's chunk and page counts are the run's,
- * so a run covering five partner hosts can say it indexed four hundred chunks while the one partner
- * you care about contributed none of them.
- *
- * Starting a crawl never made the URL indexed either: it takes minutes, and the index answers only
- * once it finishes. So the line it returns says what it did and leaves the URL red until a re-check
- * says otherwise — the gate is about evidence existing, not about a crawl having been requested.
- */
-// Unused is the intended state, per the comment above. Left as a standing lint warning it would
-// eventually be "fixed" by deleting, which is the one outcome this is written to prevent.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function crawlOne(field: FieldKey, url: string): Promise<string> {
-  try {
-    const result = await startGeekCrawl(CRAWL_TYPE[field], url);
-    const refused = result.rejected.find((r) => r.raw === url);
-    return refused ? `refused: ${refused.reason}` : "crawl started — re-check once it finishes";
-  } catch (e) {
-    return e instanceof Error ? `could not start: ${e.message}` : "could not start the crawl";
-  }
-}
 
 /** One URL per line; blanks dropped. Parsing only — validity is the index's answer. */
 function parseLines(raw: string): string[] {
@@ -84,12 +40,8 @@ function today(): string {
  * can exist for it, and it lands red beside a well-formed URL that was never crawled. The operator
  * does the same thing about both.
  *
- * It reports and offers no action, which is the point. A red line used to carry a "Crawl it" button
- * that could never turn it green: the crawl it started ran inside GeekAPI, which writes `Html` and
- * no `blocks` and never stamps `ContentReadyAt`, so RAG had nothing to index and the pages and
- * chunks this line reads stayed null however long the operator waited
- * (`plans/geekapi-crawls-never-reach-rag.md`). Where the crawl does happen is on the field's own
- * helper line, once, because the crawl type is per field and not per URL.
+ * It reports and offers no action, which is the point: this app starts no crawl. Where the crawl does
+ * happen is on the field's own helper line, once, because the crawl type is per field and not per URL.
  */
 function IndexReport({
   urls,
