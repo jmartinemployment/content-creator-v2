@@ -75,12 +75,10 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
   rather than the question GeekAPI sends (`GccGroundingResolver.BuildNeed`). Only the last run's
   numbers count. The question text is the plan's, not the session's: copy it from `BuildNeed`.
 
-**Recommendation received, decision amended.** The session recommends deleting the keyword scroll
+**Recommendation received, decision made.** The session recommends deleting the keyword scroll
 list from fusion rather than ranking it. The dense list is already LlamaIndex's dense-plus-sparse
-hybrid (F-R2), so the scroll is a third signal and today an unranked one. D15 is amended in the
-overview: after R1, measure the two claim questions and the three keyword questions **with and
-without** the scroll list, and keep whichever answers them from more distinct pages. Nothing is kept
-for being there.
+hybrid (F-R2), so the scroll is a third signal and today an unranked one. Jeff deferred the decision; it is made: delete it (D15 in the overview, R2 below). The measurement
+after deletion is the check that nothing regressed, not the decider.
 
 ## Audit — Geek-Crawler-Rag
 
@@ -123,12 +121,14 @@ hit, in `architecture.md`, saying it is forbidden.
   job in flight (F-R6), and a run that failed mid-index is a run the writer cannot use until it is
   posted again. Runs no project declares are left as they are until a project declares them.
 
-**R2 — Lexical retrieval is ranked.** (F-R3; D15)
-- Change: replace the id-order scroll with a run-scoped candidate fetch (`MatchText`, larger limit)
-  ranked by the existing in-process BM25, so the lexical list is a relevance list before fusion.
-- Done when: a keyword that appears on 50 pages of a run returns the pages where it is densest, not
-  the 30 lowest ids. A test pins it.
-- Depends on: R1, and a measurement after R1 of what Ramp returns before deciding the limit.
+**R2 — The keyword scroll list is deleted.** (F-R3; D15, decided 2026-10-04)
+- Change: remove `search_text` from the query path and the lexical list from fusion, so the
+  candidates are the dense-plus-sparse hybrid list alone, with the in-process BM25 re-rank over it
+  kept. Delete the scroll, its synthetic scores, and `hybrid_lexical_limit`.
+- Done when: after the deletion, on the re-indexed Ramp run, the three keyword questions and the two
+  claim questions return at least as many distinct pages as before it. If any returns fewer, that is
+  reported with the numbers before anything is put back; nothing is put back without them.
+- Depends on: R1.
 
 **R3 — Collapse before the cut, and measure near-copies.** (F-R2)
 - Change: run the text collapse before the pool is cut to 40, and backfill from the fetched lists.
