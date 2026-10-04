@@ -1,9 +1,9 @@
-# Fix Content Creator — content-creator-v2 (frontend)
+# Fix Content Creator — the frontend (this repository)
 
 **Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
-and the retired-plans list are in [`fix-content-creator.md`](fix-content-creator.md). This file is
+and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
 self-contained for content-creator-v2 (frontend): its audit findings, its decisions, its stages, and how each is proven.
 
 Grounded in the code read on 2026-10-04 (GeekBackend `de0bb7e`, content-creator-v2 `5d0cfbe`,

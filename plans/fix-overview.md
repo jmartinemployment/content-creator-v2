@@ -1,4 +1,7 @@
-# Fix Content Creator — the plan, by project
+# Fix Content Creator — overview
+
+The six files: this overview, then one per project: `fix-geekapi.md`, `fix-geekrepository.md`,
+`fix-geek-crawler-v2.md`, `fix-geek-crawler-rag.md`, `fix-frontend.md` (this repository's UI).
 
 **Written 2026-10-04. Status: for review. Nothing in Sections 3–5 is built.**
 
@@ -108,7 +111,7 @@ The audit findings and the stages are in the project files, so each project's ow
 | Geek-Crawler-v2 | [`fix-geek-crawler-v2.md`](fix-geek-crawler-v2.md) |
 | GeekAPI | [`fix-geekapi.md`](fix-geekapi.md) |
 | GeekRepository | [`fix-geekrepository.md`](fix-geekrepository.md) |
-| content-creator-v2 (frontend) | [`fix-content-creator-v2-frontend.md`](fix-content-creator-v2-frontend.md) |
+| content-creator-v2 (frontend) | [`fix-frontend.md`](fix-frontend.md) |
 
 Finding ids (`F-C1` crawler, `F-R1` RAG, `F-A1` GeekAPI, `F-D1` GeekRepository, `F-F1` frontend)
 and stage ids (`R1`, `C1`, `A1`, `D1`, `F1`) are shared across all six files. The pattern every
