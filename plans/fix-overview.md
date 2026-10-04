@@ -112,6 +112,7 @@ The audit findings and the stages are in the project files, so each project's ow
 | GeekAPI | [`fix-geekapi.md`](fix-geekapi.md) |
 | GeekRepository | [`fix-geekrepository.md`](fix-geekrepository.md) |
 | content-creator-v2 (frontend) | [`fix-frontend.md`](fix-frontend.md) |
+| Persistence, all projects (runs first) | [`fix-persistence.md`](fix-persistence.md) |
 
 Finding ids (`F-C1` crawler, `F-R1` RAG, `F-A1` GeekAPI, `F-D1` GeekRepository, `F-F1` frontend)
 and stage ids (`R1`, `C1`, `A1`, `D1`, `F1`) are shared across all six files. The pattern every
@@ -121,6 +122,9 @@ code enforces.** The audit looked for that shape specifically.
 ---
 
 ## 4. Order
+
+**Jeff, 2026-10-04: no Generate is run until persistence is fixed.** Wave P0 in `fix-persistence.md` ships before the Wave 1 proof below, and the proof runs on top of it.
+
 
 Stages with no dependency start now and run in parallel across projects. Each wave ends the same
 way: one real Generate on the Accounts Payable create, all seven live types, and Jeff reads the
