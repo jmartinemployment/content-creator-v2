@@ -325,47 +325,43 @@ crawl types — not Geek-Crawler-v2's writer, nor any operational tooling, nor w
 is Jeff's call, not a doc edit's. What the doc can state is the thing that was wrong: **the stated
 reason for keeping it no longer holds.**
 
-This does **not** apply to partner/competitor pages, whose HTML is still read at extraction time
-(`GccV2GeekCrawlerResearchResolver.cs:372,583`).
+**Partner and competitor pages are no exception.** Two paragraphs here said they were — "HTML is
+still read at extraction time", "`crawl_pages.Html` is load-bearing" — citing
+`GccV2GeekCrawlerResearchResolver`, the same class the table above records as resolved by nothing.
+They contradicted the table and the table was right. Re-checked 2026-10-04 at GeekBackend `de0bb7e`:
+every remaining reader of a crawl page's `Html` in GeekAPI (`GccV2BrandKitBuilder`,
+`GccV2ProjectSiteKnowledgeService`, `GccV2SiteSection.BuildSectionFromCrawlPages`) is registered or
+declared and called by nothing on the live path. Whether new crawls stop storing it is decision D16 in
+`plans/fix-overview.md`, executed as C6 — Jeff's call, after R4 pins the RAG digest to `contentHtml`.
 
-`crawl_pages.Html` is load-bearing: partner/competitor extraction reads it directly
-(`GccV2GeekCrawlerResearchResolver.cs:372,583`) and it is ~98% of corpus size. Do not drop it for
-space until extraction moves to `blocks`.
-
-## One project URL, one run. Re-crawl refills it in place.
+## One project URL, one published run. A re-crawl publishes a new one.
 
 A crawl cannot run inside a database transaction — it takes minutes to hours, Mongo's
 multi-document transactions default to a 60-second lifetime, and crawl documents carry multi-MB HTML.
-So the run row is the unit of bookkeeping, and its **id is stable for the life of the URL**.
+So the run row is the unit of bookkeeping, and **publishing is a single-document status flip**.
 
-**A slot `(ownerUserId, crawlType, seedKey)` owns exactly one run, and re-crawl reuses it.**
-`StartCrawlAsync` computes `seedKey`, resolves the slot with
-`GetRunForSlotAsync(owner, type, seedKey, publishedOnly: false)`, and hands any hit to
-`RequeueExistingRunAsync`, which patches **the same run id** back to `pending`. A new run row is
-created only when the slot is empty. (Verified 2026-09-20, GeekBackend `f675e22`,
-`GeekCrawlerService.cs`.)
+**Every crawl gets a fresh run id; the slot's published run is replaced at commit.** This section
+said the opposite until 2026-10-04 — "re-crawl reuses the same run id and refills it in place", via
+`StartCrawlAsync` → `RequeueExistingRunAsync` → `ClearRunCrawlDataAsync`. That is not the live path.
+Crawls arrive from Geek-Crawler-v2 through `GeekCrawlerIngestController`, which (GeekBackend
+`de0bb7e`):
 
-| Status in slot | What re-crawl does |
+| Step | What happens |
 |---|---|
-| `pending` / `running` | Cancelled, `TryRecoverOrphanAsync`, re-woken — same id |
-| `external` | Forced to `pending` so the .NET worker takes over — same id |
-| `failed` | Resumed, **saved pages kept** — a failed run is partial, not wrong |
-| `complete` / `cancelled` | `ClearRunCrawlDataAsync(existing.Id)`, then the crawl refills the same id |
+| Start | `CreateRunAsync` — *"Always a fresh run. The published run for this slot, if any, stays readable until the new one commits."* |
+| Crawl | Pages are written into that staging run; the published run is never touched |
+| Commit (`status=complete`) | Refused without `contentReadyAt`; the slot's outgoing published run is found with `GetRunForSlotAsync(..., publishedOnly: true)` and the new run's status flip is the publish |
+| After commit | The outgoing run is purged; a purge that fails is reported as `supersededAwaitingPurge`, not as a failed crawl |
 
-**Clearing a complete run's pages and re-crawling into the same id is correct, not a bug.** The
-alternative — a fresh run per crawl, the old one retired afterwards — is what was tried before, and
-it accumulated runs until the corpus was unmanageable. A site has one current crawl; the id that
-names it should not churn every time it is refreshed.
+The reason is written in the controller: the in-place shape cleared the good corpus up front, so a
+crawl that died at page 3 of 2,500 left the operator with neither the old data nor the new.
 
-That is what makes the **client record** the right home for a Run ID. The value is stable, so it is
-stored once when the operator confirms the site, not re-resolved per request and not copied onto
-every project.
-
-**The consequence to respect: a Run ID is not evidence.** Between the clear and the next commit the
-run exists and its corpus does not. So readers gate on **status**, never on the id resolving —
-`publishedOnly` is the mechanism, and a run mid-refill must read as not-ready rather than as an empty
-success. This is the same fail-closed rule as everywhere else, applied to the window a re-crawl opens
-on purpose.
+**The consequence to respect: a stored Run ID names the crawl that was published when it was
+stored.** `gcc_projects.project_site_run_id` is resolved by `ProjectForm`'s index check at save time;
+after a re-crawl commits, that id names a superseded run and then a purged one. Readers still gate on
+**status** — `publishedOnly` — never on an id resolving. How a stored id is re-resolved after a
+re-crawl is not established here; `plans/fix-geekapi.md` F-A16 records that `create.ProjectSiteRunId`
+and `project.ProjectSiteRunId` can already disagree. Check before relying on either.
 
 ## The client owns the runs. A Run ID names one URL, never a client.
 
@@ -537,16 +533,17 @@ was the section most likely to be cited as evidence. Corrected against a full re
 | The old claim | What is actually true |
 |---|---|
 | Partner/competitor URLs are "index-checked, coloured, then forgotten. Never persisted" in `crawl-client.tsx` | **`crawl-client.tsx` does not exist.** `ProjectForm` collects them, and `createProject`/`updateProject` carry `partnerUrls`/`competitorUrls` to the project row — they are persisted and they are what grounding resolves from |
-| `startGeekCrawl` has "zero call sites" | It is called at **`ProjectForm.tsx:54`** |
+| `startGeekCrawl` has "zero call sites" | It was called by `crawlOne` in `ProjectForm`, itself unreachable since 2026-09-29. Both were deleted 2026-10-04 (F5): this app starts no crawl |
 | Target keyword "is dropped on every live path" | It becomes **`create.Topic`** — `ContentBriefPanel.ensureCreateId`: `const topic = keywordInput.trim()`. The real limitation is narrower: once a create exists, `ensureCreateId` short-circuits, so the keyword cannot be *changed* afterwards |
 | `SerpIngestPanel` is "orphaned; zero importers" | **`ContentBriefPanel` imports it** |
 | "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | Was true when written and is now inverted: **`/app/projects/[id]` exists** and renders the workspace, while the four `creates/*` routes this row listed were deleted on 2026-10-03 (`8758146`) for being reachable only through two links labelled "Back to workflow" that pointed at them. `src/app/app/` is `projects/[id]` and `workflow` |
 
-**The one reachable surface.** `AppNavbar` has a single nav item and `/app` redirects to it, so
-everything starts at **`/app/workflow`**, which renders: `ClientsPanel` → `ProjectsPanel` →
-`ProjectProfilePanel` → `ProjectWorkPanel` → `ProjectDeliverablesPanel` → `CreateDraftWorkspace`
-(→ `ContentBriefPanel` → `SerpIngestPanel`, and `SiteContextBanner`). `/app/projects/[id]` renders
-the same workspace under its "Brief & Generate" section.
+**The reachable surfaces.** `AppNavbar` has a single nav item and `/app` redirects to it, so
+everything starts at **`/app/workflow`**, which renders `ClientsPanel` and `ProjectsPanel` only.
+Opening a project navigates to **`/app/projects/[id]`**, which renders the rest: `ProjectProfilePanel`,
+`ProjectWorkPanel`, `ProjectDeliverablesPanel` and `CreateDraftWorkspace` (→ `ContentBriefPanel` →
+`SerpIngestPanel`, and `SiteContextBanner`). This paragraph used to put the whole chain on
+`/app/workflow`.
 
 **The unreachable components are gone — removed 2026-10-03** (`a5ea3d7`), with
 `plans/remove-unwired-code.md` Phase 2. There were **nine**, not seven, and **1,888 lines**, not
@@ -579,8 +576,10 @@ on a live one, and the way out is never a bare name search:
 - **The output tabs already support several artifacts per type** — one tab per content type, `(N)` when
   it has more, and an inner row showing `a.name`. Which is why an artifact's name has to be the
   product, not the topic: five pages named alike are indistinguishable there.
-- **`GccGenerateResult` has no `refusals` field**, and `setGenerateMsg` is overwritten per hub event —
-  so with several artifacts of one type only the last message survives on screen.
+- **`GccGenerateResult` carries `refusals`, and `warnings` since 2026-10-04** (`gcc-api.ts`). The
+  workspace accumulates both, and since F4 the progress lines too (`generateMsgs`), so with several
+  artifacts of one type no message overwrites another. A version's `warnings` also live in its
+  envelope and are shown whenever the version is opened, not only during the run that wrote it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
