@@ -69,9 +69,7 @@ export function createGccCreate(input: {
   projectId?: string | null;
   startingContentType?: string | null;
   topic: string;
-  notes?: string | null;
   projectSiteRunId?: string | null;
-  department?: string | null;
 }): Promise<GccCreate> {
   return gccRequest<GccCreate>("/api/geek-content-creator/creates", {
     method: "POST",
@@ -80,9 +78,11 @@ export function createGccCreate(input: {
       projectId: input.projectId ?? null,
       startingContentType: input.startingContentType ?? null,
       topic: input.topic,
-      notes: input.notes ?? null,
       projectSiteRunId: input.projectSiteRunId ?? null,
-      department: input.department?.trim() || "marketing",
+      // No department and no notes. Department was hard-coded to "marketing" here, a value nobody
+      // chose; GeekAPI derives it from the brief's taxonomy path (GccContentPath.DepartmentFor), and
+      // a second derivation here would be a second slug rule to drift. Notes had no field anywhere
+      // in this app, so it was always null (D17: the brief and niche framing are the operator's input).
     }),
   });
 }

@@ -173,6 +173,7 @@ export default function ContentBriefPanel({
   projectId,
   projectSiteRunId,
   targetKeyword,
+  keywordLocked = false,
   createId: createIdProp,
   startingContentType,
   onBriefSaved,
@@ -186,6 +187,8 @@ export default function ContentBriefPanel({
   projectId?: string;
   projectSiteRunId?: string;
   targetKeyword: string;
+  /** True once anything has been generated on this create; the keyword is fixed from then on. */
+  keywordLocked?: boolean;
   /** When set, brief saves onto this create (does not open a second create). */
   createId?: string | null;
   /** The content type this brief is for, chosen in the one picker the parent owns. Used only to
@@ -443,22 +446,23 @@ export default function ContentBriefPanel({
         until required fields are saved.
       </p>
 
-      {/* What this create is about. Editable up until a create exists: ensureCreateId reads it
-          exactly once, to mint the create's topic, and returns early forever after — so once
-          createId is set, further edits here are cosmetic and change nothing on the server. */}
+      {/* What this create is about. ensureCreateId mints the create's topic from it, and every brief
+          save after that writes it again through patchBriefResearch's `topic` -- so it stays
+          editable, and saved, until the first generate. After that it is fixed: the pages already
+          written were written for this keyword. */}
       <div className="mt-5">
         <label className={labelClass}>
           Target keyword
           <input
             value={keywordInput}
             onChange={(e) => setKeywordInput(e.target.value)}
-            disabled={!!createId}
+            disabled={keywordLocked}
             placeholder="ai chatbot implementation cost"
             className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
           />
-          {createId ? (
+          {keywordLocked ? (
             <span className="text-xs font-normal text-muted">
-              Set when this create was started — no longer editable.
+              Fixed once content has been generated from it.
             </span>
           ) : null}
         </label>

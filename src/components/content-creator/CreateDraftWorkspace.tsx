@@ -701,8 +701,17 @@ export default function CreateDraftWorkspace({
         <>
           <ContentBriefPanel
             clientId={detail.clientId}
+            // The project this workspace is mounted under. It was passed only before the create
+            // existed, so once one did, per-tool framing overrides could not be edited and the
+            // partner-quote check said "No project on this create". The create detail carries no
+            // project id; every create opened here is one of this project's deliverables.
+            projectId={projectId}
             projectSiteRunId={detail.projectSiteRunId ?? undefined}
             targetKeyword={detail.topic}
+            // The keyword is the create's topic, and every brief save writes it. It stops being
+            // editable once something has been generated from it -- after that, a new keyword would
+            // describe pages that were written for the old one.
+            keywordLocked={detail.artifacts.length > 0}
             createId={effectiveCreateId}
             startingContentType={outputTypes[0] ?? detail.startingContentType ?? undefined}
             onBriefValidityChange={setBriefFormComplete}
