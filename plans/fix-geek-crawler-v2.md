@@ -84,6 +84,19 @@ fixture asserts the off-sitemap link is admitted.
 re-crawls in C1's done-when are Jeff's to start, one at a time, and their ledgers are the measurement
 C2 still owes.
 
+**Since the review (Geek-Crawler-v2 session).**
+- `d8e4341`: `failure-archive.test.ts`, "an unwritable archive aborts before the purge", no longer
+  depends on file permissions. It puts a regular file where `failures/` belongs, so the archive
+  write fails with `EEXIST` for any user, root included (checked by calling `archiveRun` directly).
+  The test is not skipped, so the ordering rule is still asserted in the root container.
+  `failure-archive.ts` is unchanged. Unit 341 of 341, integration 11 of 11.
+- Correction to C1 above: it is the off-sitemap product and evidence links that go to the front of
+  the queue (`filterEnqueueUrls`, `forefront`). Sitemap URLs are queued as start URLs in tier order.
+- Gap in the measurement C2 owes: the ledger counts `refused.directoryCap` and each
+  `refused.<trap>` as run totals. It does not break them down by directory, so a re-crawl can report
+  the totals but not which directories hit the cap of 50. Getting the per-directory breakdown means a
+  change to `discovery-ledger.ts`. Per the instruction to stop, it is not made; it needs a decision.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
