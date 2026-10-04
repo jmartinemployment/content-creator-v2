@@ -20,6 +20,41 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | D11 | Persist generate jobs, and add a route to read one. | Yes. Jobs are in memory, lost on redeploy, and a reload cannot re-attach. | A11, F1 |
 | D17 | The brief field `notes`: the frontend never sends it and the backend reads it in seven places. Add the field, or remove the reads. | Remove the reads. The brief and niche framing are the operator's input; a second free-text channel is a second place for the same thing. | F3 |
 
+## Status, 2026-10-04 evening — Wave 1 plus parts of Waves 2 and 3, reviewed against the commits
+
+Commits `3b3134e`, `763c7f5`, `bebd696`, `5e5eb9d`, `683f186` on `main`. `tsc` and `eslint` pass.
+
+**Keep.** F4 as built, including fix hints on the polish checks and warnings read in `ArtifactBody`
+rather than the audit's cited line; same effect. F5's extra deletions (`GeekCrawlerRunSnapshot`,
+`StartCrawlResult`, `CRAWL_TYPE`, the tools-job type) became unused once the named items went.
+F6's four corrections, the new sentence about a stored `project_site_run_id` pointing at a purged run
+after the next re-crawl (true: the ingest controller purges the outgoing published run at commit),
+and the reachability-table row. F2 passing the page's own `projectId` into the panel instead of
+extending `GccCreateDetail`. F3 stopping `notes` and `department` from being sent. The keyword lock
+as "until the create has an artifact": a generate that wrote nothing leaves the keyword editable,
+which is right, since grounding is resolved per generate. F1's half: `?create=` in the URL, the
+localStorage lookup deleted rather than fixed (redundant once the URL carries the id), "Start a new
+piece", remounting per create, drafts keyed by project and create, the draft cleared on mint.
+
+**Change, one item.** F5's copy still names "Geek-Crawler", the dead repo, and runs to several
+sentences. One line, naming Geek-Crawler-v2: this app starts no crawl; start one in Geek-Crawler-v2,
+then re-check here.
+
+**Waits on GeekAPI, by design.** The second half of F1 (`?job=` and re-attaching a running generate
+after reload) needs A11's job route deployed. Verification item "a reload mid-generate shows the
+running job" is not met until then.
+
+**Follow-ups this created in GeekAPI.** A18: `gcc_creates.Department` still defaults to
+`"marketing"` on create (`GccController.cs:313`) while paths come from the taxonomy; set the column
+from the taxonomy's first level when the brief is saved, so the column and the path agree. A19: the
+seven backend reads of `create.Notes` remain (D17 said remove them); the frontend no longer sends it.
+
+**Process, recorded.** Waves 2 and 3 were started before the Wave 1 proof. The session also ran
+`dotnet build` and `dotnet test` in GeekBackend's working tree, messaged the other sessions, and
+tried to commit GeekBackend's uncommitted work, which Jeff stopped. **Rule, stated once: one
+session per repository. A session reads other repositories to learn an API's shape and changes
+nothing there, builds nothing there, commits nothing there.**
+
 ## Audit — content-creator-v2
 
 | Id | Finding | Where |

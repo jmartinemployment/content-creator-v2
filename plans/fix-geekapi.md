@@ -285,6 +285,14 @@ sitemap size and truncation). GeekAPI stores the string and nothing reads it. Ei
 operator and the C2 measurement can see it. Until then the counters C3 built are invisible from
 the product.
 
+**A18 — `gcc_creates.Department` agrees with the taxonomy.** (from the frontend review) The frontend
+no longer sends `department`; the controller defaults it to `"marketing"` (`GccController.cs:313`)
+while every published path comes from the taxonomy path's first level. Set the column from the
+taxonomy when the brief is saved, and refuse a generate whose brief has no taxonomy path.
+
+**A19 — The `Notes` reads go.** (D17) Seven reads of `create.Notes` remain; the frontend never sends
+it. Remove the reads, the column stays until a later migration.
+
 **A16 — Stale comments corrected** (F-A18): the four named, plus any the A-stages make stale.
 
 ---
