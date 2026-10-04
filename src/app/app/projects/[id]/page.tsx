@@ -9,6 +9,7 @@ import ProjectWorkPanel from "@/components/content-writer/ProjectWorkPanel";
 import ProjectDeliverablesPanel from "@/components/content-writer/ProjectDeliverablesPanel";
 import CreateDraftWorkspace from "@/components/content-creator/CreateDraftWorkspace";
 import { ApiError, getProject, type GccProject } from "@/services/gcc-projects-api";
+import { listGccCreates, type GccCreate } from "@/services/gcc-api";
 
 /**
  * One project, everything it owns.
@@ -55,10 +56,12 @@ export default function ProjectWorkspacePage() {
   // The create the draft lives on, in the URL for the same reasons as the section. It was component
   // state, so a reload dropped it and the operator landed on an empty brief with no way back to the
   // piece they were working on. The URL is scoped to this project, so one project's create is never
-  // shown under another's name.
-  const createId = search.get("create");
+  // shown under another's name. `new` is an explicit empty brief; no value at all means "open this
+  // project's most recent piece", resolved below.
+  const createParam = search.get("create");
+  const createId = createParam && createParam !== "new" ? createParam : null;
 
-  function go(next: SectionKey, edit = false, create: string | null = createId) {
+  function go(next: SectionKey, edit = false, create: string | null = createParam) {
     const q = new URLSearchParams();
     q.set("section", next);
     if (edit) q.set("edit", "1");
@@ -67,8 +70,46 @@ export default function ProjectWorkspacePage() {
   }
 
   function openCreate(id: string | null) {
-    go("content", false, id);
+    go("content", false, id ?? "new");
   }
+
+  // This project's pieces, newest first. A project opened from the list used to land on an empty
+  // "new" brief, its existing creates reachable only through Deliverables or a hand-typed URL (F12).
+  const [creates, setCreates] = useState<GccCreate[] | null>(null);
+  const [createsError, setCreatesError] = useState<string | null>(null);
+  const [createsLoadedFor, setCreatesLoadedFor] = useState(0);
+
+  useEffect(() => {
+    if (!project) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listGccCreates(project.clientId);
+        if (cancelled) return;
+        setCreates(
+          rows
+            .filter((c) => c.projectId === project.id)
+            .sort((a, b) => b.updatedAtUtc.localeCompare(a.updatedAtUtc)),
+        );
+        setCreatesError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setCreatesError(err instanceof Error ? err.message : "Could not load this project's pieces.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [project, createsLoadedFor]);
+
+  // No create in the URL: open the most recent piece, or an empty brief when there is none.
+  useEffect(() => {
+    if (section !== "content" || createParam !== null || creates === null) return;
+    const q = new URLSearchParams();
+    q.set("section", "content");
+    q.set("create", creates[0]?.id ?? "new");
+    router.replace(`/app/projects/${projectId}?${q.toString()}`, { scroll: false });
+  }, [section, createParam, creates, projectId, router]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -152,7 +193,27 @@ export default function ProjectWorkspacePage() {
           </>
         );
       case "content":
+        // Until it is known which piece to open, nothing is shown: an empty brief here would mint a
+        // second create beside the one the operator came back for.
+        if (createParam === null) {
+          return createsError ? (
+            <p className="rounded-xl border border-border bg-surface p-6 text-sm text-foreground">
+              This project&rsquo;s pieces could not be loaded, so none was opened: {createsError}{" "}
+              <button
+                type="button"
+                onClick={() => openCreate(null)}
+                className="text-brand underline"
+              >
+                Start a new piece
+              </button>
+            </p>
+          ) : (
+            <p className="text-sm text-line">Opening this project&rsquo;s latest piece…</p>
+          );
+        }
         return (
+          <>
+          <PieceSwitcher creates={creates} currentId={createId} onOpen={openCreate} />
           <CreateDraftWorkspace
             // One mount per create. The workspace holds a just-minted id in its own state until the
             // URL catches up, so without a remount "Start a new piece" would leave it on the old one.
@@ -161,9 +222,13 @@ export default function ProjectWorkspacePage() {
             clientId={project.clientId}
             projectId={project.id}
             projectSiteRunId={project.projectSiteRunId ?? undefined}
-            onCreateMinted={openCreate}
+            onCreateMinted={(id) => {
+              openCreate(id);
+              setCreatesLoadedFor((n) => n + 1);
+            }}
             onStartNew={() => openCreate(null)}
           />
+          </>
         );
       case "deliverables":
         return <ProjectDeliverablesPanel project={project} onOpenCreate={openCreate} />;
@@ -311,4 +376,39 @@ function Surface({ error, children }: { error: string | null; children: React.Re
   }
 
   return <div className="flex flex-col gap-6">{children}</div>;
+}
+
+/**
+ * Every piece on this project, to switch between. The most recent opens by itself; this is how the
+ * others are reached without going through Deliverables.
+ */
+function PieceSwitcher({
+  creates,
+  currentId,
+  onOpen,
+}: {
+  creates: GccCreate[] | null;
+  currentId: string | null;
+  onOpen: (id: string) => void;
+}) {
+  if (!creates || creates.length < 2) return null;
+  return (
+    <label className="mb-4 flex flex-wrap items-center gap-2 text-sm text-line">
+      Pieces on this project
+      <select
+        value={currentId ?? ""}
+        onChange={(e) => {
+          if (e.target.value) onOpen(e.target.value);
+        }}
+        className="rounded-md border border-border bg-white px-3 py-1.5 text-sm text-foreground"
+      >
+        {currentId === null ? <option value="">New piece</option> : null}
+        {creates.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.topic} — {new Date(c.updatedAtUtc).toLocaleDateString()}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
