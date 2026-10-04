@@ -1020,7 +1020,8 @@ and the reachability-table row. F2 passing the page's own `projectId` into the p
 extending `GccCreateDetail`. F3 stopping `notes` and `department` from being sent. The keyword lock
 as "until the create has an artifact": a generate that wrote nothing leaves the keyword editable,
 which is right, since grounding is resolved per generate. F1's half: `?create=` in the URL, the
-localStorage lookup deleted rather than fixed (redundant once the URL carries the id), "Start a new
+localStorage lookup deleted rather than fixed (**withdrawn: see F12** -- nothing puts the id in the
+URL on first open, so existing projects opened empty), "Start a new
 piece", remounting per create, drafts keyed by project and create, the draft cleared on mint.
 
 **Change, one item.** F5's copy still names "Geek-Crawler", the dead repo, and runs to several
@@ -1096,6 +1097,16 @@ per-type progress event and the artifact on the outcome event, so a long run is 
 
 **F11 — Revise switches to `POST versions/{id}/revise-job`**, with section scope sent as
 `sectionPath`, and the old route is deleted in the same change.
+
+**F12 — An existing project opens on its existing work.** (Regression from F1, found 2026-10-04.)
+Before F1 the brief panel showed a draft from a browser-storage key shared across projects; F1
+keyed drafts per project and create and moved the create id into the URL, both correct, but
+deleted the storage lookup, so a project opened from the list lands on an empty "new" brief and its
+creates are reachable only through Deliverables → Open or a hand-typed `?create=`. Fix: when the
+project page opens without `?create=`, load the project's creates (`GET /creates?clientId=`,
+filtered by `projectId`, which the create row carries), open the most recent, and show the rest as
+a list to switch between; "Start a new piece" stays. The review's acceptance of the deleted lookup
+was wrong and is withdrawn.
 
 **F6 — AGENTS.md corrections.** (F-F9, F-C9) The page chain, the `refusals` field, the re-crawl
 paragraph, the HTML-retention paragraph.
