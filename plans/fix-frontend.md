@@ -1,5 +1,8 @@
 # Fix Content Creator — the frontend (this repository)
 
+> **2026-10-04: F1, F12, F13 and the create-keyed work are re-keyed to the project by `fix-project-persistence.md` (GF1 to GF6). Read that file first; where it and this one disagree, it wins.**
+
+
 **Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order

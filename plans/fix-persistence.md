@@ -1,3 +1,6 @@
+> **SUPERSEDED 2026-10-04 by `fix-project-persistence.md`.** This plan keyed everything on the create, which
+> is the wrong unit: the project is. Kept only so nothing cites it as current.
+
 # Save everything to the database
 
 **Written 2026-10-04. Status: for review. Nothing here is built.**
