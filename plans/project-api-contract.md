@@ -71,8 +71,20 @@ are: `GET versions?artifactId=`, `POST versions/{id}/revise`, `/approve`, `GET v
 
 `GET projects/{id}/export/html` → the zip `creates/{id}/export/html` returns today, for the project.
 
-## 6. Deliverables — open, not decided here
+## 6. Deliverables — a named, dated promise on the project, no create
 
-`gcc_deliverables` is keyed by `create_id` until GR4 (P1), and the Deliverables panel attaches a
-create from a picker. GF1 says no create is visible anywhere. Until GR4 adds `artifact_id`, the
-frontend leaves the Deliverables panel as it is. Say if it should change in P0.
+Jeff, 2026-10-04: "Creates, it is project." The Deliverables panel attached a create from a picker; it
+no longer does. A deliverable is a name and a due date on the project.
+
+`POST projects/{id}/deliverables`
+
+```json
+{ "name": "Pillar page and five tool pages", "dueDate": "2026-10-31" }
+```
+
+- No `createId`. The route requires one today; it must stop requiring it.
+- `GccDeliverable` drops `createId`. `type` becomes optional: it was derived from the create's
+  starting content type, which the project does not have.
+- `GET projects/{id}/deliverables` and `PUT .../deliverables/{id}/status` are unchanged.
+- GR4's `gcc_deliverables.artifact_id` is still available for linking a delivered draft later; the
+  frontend does not send it.
