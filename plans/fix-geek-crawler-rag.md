@@ -54,6 +54,13 @@ hit, in `architecture.md`, saying it is forbidden.
   questions in Jeff's 2026-10-04 table returns at least 10 passages from at least 10 pages; the two
   claim questions that returned one passage return more than one.
 - Depends on: nothing. Constraint: a push deploys and recreates the container; not while indexing runs.
+- **Which runs get re-indexed, and how.** Existing runs keep their duplicate points until re-indexed.
+  The order is: the Ramp run first, alone, as the measurement above. Then only the runs that a
+  saved project declares as a partner or competitor, one at a time, through `POST /v1/index`, each
+  one checked at `GET /v1/index/{run_id}` before the next is posted. Never the whole corpus, never the
+  `requeue-stranded.sh` cron, never several at once: the queue is in-process, a redeploy kills the
+  job in flight (F-R6), and a run that failed mid-index is a run the writer cannot use until it is
+  posted again. Runs no project declares are left as they are until a project declares them.
 
 **R2 — Lexical retrieval is ranked.** (F-R3; D15)
 - Change: replace the id-order scroll with a run-scoped candidate fetch (`MatchText`, larger limit)
