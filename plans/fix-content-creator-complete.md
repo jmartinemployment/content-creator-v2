@@ -1113,8 +1113,9 @@ was wrong and is withdrawn.
 write has only ever happened on the "Save brief for generate" click. Every field change writes
 browser storage at once (`persistLocal`), so the panel looked saved whether or not it was. Before
 F1, a reload lost the create id (state, plus a storage key written under one name and read under
-another), so the next Save found no create and **minted a new one**: later briefs may sit on newer
-`gcc_creates` rows, not the one last looked at. And on open, a server brief **replaces** a local
+another), so the next Save found no create and **would mint a new one**. Whether that ever happened
+is not established: Jeff reports the last server-side brief is dated 9/16, and a mint would leave a
+newer row. The code allows it; the data has not shown it. And on open, a server brief **replaces** a local
 draft regardless of which is newer. Fix: once a create exists, the brief PATCHes itself after a short
 pause with the version it read (F8), the panel shows one of "Saved to the server at HH:MM", "Local
 draft only, not saved" or "The server copy is newer than this draft", and hydration never replaces a
