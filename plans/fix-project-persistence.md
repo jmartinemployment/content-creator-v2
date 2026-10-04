@@ -56,7 +56,7 @@ the project already holds the site URL, the run id and the partner list the writ
 | J2 | **The brief, keyword and research move onto the project** (`gcc_projects`: `brief_json`, `topic`, `research_json`, `site_section_json`). The project's own `project_site_run_id` is the only run id; the create's copy is dropped. |
 | J3 | **Any draft saves.** Completeness gates Generate only; the backend already allows it. |
 | J4 | **Autosave.** Two seconds after the last change, with the version the editor read; a stale write is refused with a message, never overwritten. |
-| J5 | **Every save is kept.** Append-only `gcc_project_revisions`. Manual saves insert; autosaves coalesce to one per ten minutes per person. |
+| J5 | **Every save is kept, and no revision row is ever edited or deleted.** Append-only `gcc_project_revisions`: every save, manual or autosave, inserts a new row. The one exception to inserting is a save whose `brief_json` and `topic` are byte-identical to the project's newest revision: it stores nothing, because there is nothing to keep, and the response returns that existing revision. (Jeff vetoed merging autosaves into one row, 2026-10-04: merging overwrites a state.) |
 | J6 | **Generate is `POST projects/{id}/generate`.** The output types are chosen each run. There is no starting content type, and the brief carries no length band: it is derived per output type at generate time. |
 | J7 | **A version records the brief revision it was generated from.** The workspace shows "generated from the brief saved at …". |
 | J8 | **Authorization is the project's.** Brief, generate, versions and approvals sit under `ManagePolicy`, like Profile. The earlier per-create owner check (D8, A9) is withdrawn. |
