@@ -164,7 +164,15 @@ buffer, and a test that no rendered page contains a GUID other than the project 
 
 **P0 — before any Generate:** GF4 first, then GR1, GR2, GR3 (report, backup, backfill), GA1, GF1, GF2,
 GF3, and GA2 so Generate reads the project's brief. The old create routes stay live and untouched
-until P2.
+until P2. **During P0, drafts are still stored under a create row**, which the server ensures exists
+for each project: the newest create after the backfill, or one minted server-side on the first
+Generate. The client never mints one, never sees its id, and never sends it. GR4 in P1 re-keys drafts
+to the project and the row stops mattering.
+
+**Deploy order inside P0, because pushing to `main` deploys:** GeekRepository first (columns, revisions,
+report), then GeekAPI (GA1, GA2, both additive), then the frontend (GF4, GF2, GF1, GF3). The frontend
+does not switch to a project route before GeekAPI has deployed it. Jeff takes the Supabase backup and
+reads the unassigned report before the backfill runs.
 
 **P1:** GR4, GR5, GA3, GA4, GA5, and the evidence, jobs and all-or-nothing work from the GeekBackend
 session re-keyed.
