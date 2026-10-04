@@ -121,6 +121,22 @@ filtered by `projectId`, which the create row carries), open the most recent, an
 a list to switch between; "Start a new piece" stays. The review's acceptance of the deleted lookup
 was wrong and is withdrawn.
 
+**F12 correction, 2026-10-04, from reading `8ac0b24`.** As built, F12 can still open an empty brief on
+a project that has pieces, and its claim that an empty brief "can't mint a duplicate" is overstated.
+(1) The page filters the list with `c.projectId === project.id`. `gcc_creates.project_id` was added
+on 2026-09-21 as a nullable column with no backfill, so every create made before that date has a
+null project and is **excluded**: the oldest work does not appear in the list or the switcher.
+(2) The list route returns only creates whose `OwnerUserId` equals the caller's id, so a create
+minted under any other id is hidden, the list is empty, and the page opens "new". (3) The guard stops
+only the *implicit* mint; Save on `?create=new` still mints beside an existing piece, with no
+warning that pieces exist. (4) "Most recent" is by `updatedAtUtc`, which a keyword-source upload or a
+status change also moves. **Fix:** the switcher lists this client's creates that have no project
+under "Older pieces, not linked to a project" and opens them (generate on one refuses with its reason
+until it is linked); the "new piece" action says how many pieces already exist on the project and
+asks before minting; the picker orders by creation date, not last write; and an empty list when the
+create-owners check (A9's route) shows rows under another owner is reported on screen, not shown as
+an empty project.
+
 **F13 — The brief saves itself to the server, and the screen says which copy it is showing.**
 (Found 2026-10-04 from the code, after Jeff's last server-side brief proved to be 9/16.) The server
 write has only ever happened on the "Save brief for generate" click. Every field change writes
