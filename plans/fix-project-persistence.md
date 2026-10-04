@@ -56,12 +56,12 @@ the project already holds the site URL, the run id and the partner list the writ
 | J1 | **One project is one keyword and one brief.** A second keyword is a second project. Generate adds versions to the project. |
 | J2 | **The brief, keyword and research move onto the project** (`gcc_projects`: `brief_json`, `topic`, `research_json`, `site_section_json`). The project's own `project_site_run_id` is the only run id; the create's copy is dropped. |
 | J3 | **Any draft saves.** Completeness gates Generate only; the backend already allows it. |
-| J4 | **One Save button. No autosave** (Jeff, 2026-10-04). The brief is written only when Save is clicked, with the version the editor read; a stale write is refused with a message, never overwritten. |
+| J4 | **One Save button** (Jeff, 2026-10-04). The brief is written only when Save is clicked, with the version the editor read; a stale write is refused with a message, never overwritten. |
 | J5 | **Every Save click is kept as a revision, and no revision row is ever edited or deleted.** Append-only `gcc_project_revisions`; each click inserts a row. A click whose `brief_json` and `topic` are byte-identical to the project's newest revision stores nothing and returns that existing revision. The operator sees only the Save button and the saved-at time; revisions exist so a version can name the brief it was written from (J7). |
 | J6 | **Generate is `POST projects/{id}/generate`.** The output types are chosen each run. There is no starting content type, and the brief carries no length band: it is derived per output type at generate time. |
 | J7 | **A version records the brief revision it was generated from.** The workspace shows "generated from the brief saved at …". |
 | J8 | **Authorization is the project's.** Brief, generate, versions and approvals sit under `ManagePolicy`, like Profile. The earlier per-create owner check (D8, A9) is withdrawn. |
-| J9 | **No browser storage for the brief.** The page loads from the database. There is no recover feature (Jeff, 2026-10-04). Existing `gcc-content-brief:` keys are left in the browser untouched: the app never reads, writes or deletes them. |
+| J9 | **No browser storage for the brief.** The page loads from the database (Jeff, 2026-10-04). Existing `gcc-content-brief:` keys are left in the browser untouched: the app never reads, writes or deletes them. |
 | J10 | **Raw inputs are kept as received** (SERP paste, uploaded files) in `gcc_inputs`, immutable, hashed, 2 MB each, keyed by project. |
 | J11 | **Existing creates are folded in, never deleted** (the rule in 3.1). Creates with no project are reported to Jeff and left alone. |
 | J12 | **Backups are Jeff's to verify.** A Supabase backup is taken before the migration runs and its time is recorded here. |
@@ -143,16 +143,16 @@ Deliverables, Tasks & Time, History.
 
 **GF2 — One Save button.** The brief form edits the project directly, with no mint step; keyword and brief
 are one form. Save writes it (GA1). Beside the button, one line: "Saved to the server at 14:32" or
-"Unsaved changes". Leaving the page with unsaved changes shows the browser's warning. No autosave, no
+"Unsaved changes". Leaving the page with unsaved changes shows the browser's warning. Nothing else writes the brief, no
 browser storage, no merge between server and local (J4, J9).
 
 **GF3 — Generate waits on the save** and reads "Generated from the brief saved at …" (J7). Output types
 and provider are chosen on the page each run.
 
-**GF4 — Withdrawn.** Recover from this browser is not built (Jeff, 2026-10-04).
+**GF4 — Withdrawn** (Jeff, 2026-10-04).
 
 **GF5 — Remove** the piece switcher (`8ac0b24`), the create-keyed storage keys and
-`onCreateMinted`/`openCreate`. Remove the autosave and the browser-storage reads and writes from `05ba040`;
+`onCreateMinted`/`openCreate`. Remove every write of the brief other than the Save button, and the browser-storage reads and writes, from `05ba040`;
 keep the save-state line and re-key it to the project.
 
 **GF6 — A test** that scans `src` for `localStorage` and `sessionStorage` calls and fails on any in the brief code, and a test that no rendered page contains a GUID other than the project id and the labelled Run ID.
