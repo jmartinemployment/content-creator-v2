@@ -11,9 +11,11 @@ Geek-Crawler-v2 `a08ac9e`, Geek-Crawler-Rag `9afef9c`) and in Jeff's stated deci
 earlier plan. Every `file:line` is a pointer to re-check at the commit named, not a fact that survives
 the next commit.
 
-## Decisions this project waits on
+## Decisions this project rests on
 
-| # | Decision | Recommendation | Blocks |
+Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row's recommendation is the decision. Nothing here is blocked on a decision now.
+
+| # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D2 | Links the sitemap omits: admit **every** same-origin link under the existing quotas, or only product/evidence-tier links. | Admit every link under the quotas, and raise the request budget off the sitemap size. The tier list is a priority order, not a whitelist. | C1 |
 | D16 | Raw `Html` on crawl pages: keep storing it, or stop. Nothing live in GeekAPI reads it; RAG reads it only as a digest fallback when `contentHtml` is empty, which ingest already refuses. | Stop storing it on new crawls once R4 pins the digest to `contentHtml`. A storage decision over a live corpus, so Jeff's call. | C6 |
@@ -90,5 +92,5 @@ or empty `blocks`, so nothing downstream loses a page it could have used.
 | 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
-Stages here with no dependency start now. A wave does not start until the previous wave's end-to-end
-proof has been read.
+Stages here with no dependency on another stage start now. A wave does not start until the previous
+wave's end-to-end proof has been read.

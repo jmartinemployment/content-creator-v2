@@ -11,9 +11,11 @@ Geek-Crawler-v2 `a08ac9e`, Geek-Crawler-Rag `9afef9c`) and in Jeff's stated deci
 earlier plan. Every `file:line` is a pointer to re-check at the commit named, not a fact that survives
 the next commit.
 
-## Decisions this project waits on
+## Decisions this project rests on
 
-| # | Decision | Recommendation | Blocks |
+Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row's recommendation is the decision. Nothing here is blocked on a decision now.
+
+| # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D10 | Persist the evidence behind every version (prompts, passages, candidate list, extraction digest, readiness). | Yes, in Postgres through GeekRepository, one row per version. Every diagnosis this week was archaeology on a 60-character excerpt. | A10, D2 |
 
@@ -61,5 +63,5 @@ controller is behind `InternalServicePolicy`; no other project references `Conte
 | 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
-Stages here with no dependency start now. A wave does not start until the previous wave's end-to-end
-proof has been read.
+Stages here with no dependency on another stage start now. A wave does not start until the previous
+wave's end-to-end proof has been read.

@@ -69,11 +69,14 @@ discussion, not in code.
 
 ---
 
-## 1. Decisions needed before building
+## 1. Decisions — made 2026-10-04
 
-Each has a recommendation. A decision marked **blocks** stops the stage it names until made.
+**Jeff, 2026-10-04: "I have insufficient knowledge and defer these decisions to your
+recommendations."** So each row's recommendation is the decision. The rows are kept as written, with
+the reasoning, so a later reader can see what was chosen and why, and can reopen one by name. A
+stage marked **blocks** was blocked until this date and is not blocked now.
 
-| # | Decision | Recommendation | Blocks |
+| # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D1 | Repeated chunk text: collapse at **index time** (one point per distinct text per run) or at query time. | Index time. One rule for every consumer; query-time would need it in two retrieval paths that work differently. | R1 |
 | D2 | Links the sitemap omits: admit **every** same-origin link under the existing quotas, or only product/evidence-tier links. | Admit every link under the quotas, and raise the request budget off the sitemap size. The tier list is a priority order, not a whitelist. | C1 |

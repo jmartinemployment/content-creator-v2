@@ -11,9 +11,11 @@ Geek-Crawler-v2 `a08ac9e`, Geek-Crawler-Rag `9afef9c`) and in Jeff's stated deci
 earlier plan. Every `file:line` is a pointer to re-check at the commit named, not a fact that survives
 the next commit.
 
-## Decisions this project waits on
+## Decisions this project rests on
 
-| # | Decision | Recommendation | Blocks |
+Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row's recommendation is the decision. Nothing here is blocked on a decision now.
+
+| # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D11 | Persist generate jobs, and add a route to read one. | Yes. Jobs are in memory, lost on redeploy, and a reload cannot re-attach. | A11, F1 |
 | D17 | The brief field `notes`: the frontend never sends it and the backend reads it in seven places. Add the field, or remove the reads. | Remove the reads. The brief and niche framing are the operator's input; a second free-text channel is a second place for the same thing. | F3 |
@@ -78,5 +80,5 @@ paragraph, the HTML-retention paragraph.
 | 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
-Stages here with no dependency start now. A wave does not start until the previous wave's end-to-end
-proof has been read.
+Stages here with no dependency on another stage start now. A wave does not start until the previous
+wave's end-to-end proof has been read.
