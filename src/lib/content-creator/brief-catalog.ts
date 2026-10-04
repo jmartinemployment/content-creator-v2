@@ -517,36 +517,6 @@ export function isContentBriefComplete(brief: ContentBrief): boolean {
   return contentBriefMissingFields(brief).length === 0;
 }
 
-/** Structured BRIEF block for prompts / research upload. */
-export function loadBriefFromStorage(projectId: string): ContentBrief | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(CONTENT_BRIEF_STORAGE_PREFIX + projectId);
-    if (!raw) return null;
-    return migrateBrief(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-export function clearBriefFromStorage(key: string | null): void {
-  if (typeof window === "undefined" || !key) return;
-  try {
-    localStorage.removeItem(CONTENT_BRIEF_STORAGE_PREFIX + key);
-  } catch {
-    /* ignore disabled storage */
-  }
-}
-
-export function saveBriefToStorage(projectId: string, brief: ContentBrief): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(CONTENT_BRIEF_STORAGE_PREFIX + projectId, JSON.stringify(brief));
-  } catch {
-    /* ignore quota / disabled storage */
-  }
-}
-
 /* ------------------------------------------------------------------ *
  * Content Length Targets (merged from lib/content-writer/types.ts)   *
  * ------------------------------------------------------------------ */

@@ -13,6 +13,7 @@ import {
   AUDIENCE_SEGMENTS,
   BUYING_STAGES,
   CONTENT_ANGLES,
+  contentBriefMissingFields,
   CONTENT_LENGTH_TARGETS,
   CTA_TYPES,
   lengthBandForContentType,
@@ -21,6 +22,7 @@ import {
   TONES_OF_VOICE,
 } from "@/lib/content-creator/brief-catalog";
 import ContentBriefPanel from "./ContentBriefPanel";
+import { localDraftDiffers } from "@/lib/content-creator/brief-drafts";
 import {
   toGeneratedContentSet,
   type GeneratedContentGroup,
@@ -38,6 +40,7 @@ import type { GccGeneratePreflightEvent } from "@/services/workflow-tools-hub";
 import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
+  briefRevisionSavedAt,
   downloadCreateHtmlExport,
   generateGccCreate,
   getGccCreateDetail,
@@ -120,8 +123,13 @@ export default function CreateDraftWorkspace({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [briefFormComplete, setBriefFormComplete] = useState(false);
-  const [briefSavedOnServer, setBriefSavedOnServer] = useState(false);
+  // Whether the brief on screen is the brief the server holds. Generate reads brief_json from the
+  // row, never the screen, so a brief edited after its last save would generate from the old copy.
+  // True while the brief is collapsed: it can only be collapsed when it is saved.
+  const [briefSynced, setBriefSynced] = useState(true);
+  // The brief opens by itself once, on first load, when it needs the operator: no brief on the server
+  // yet, or this browser holding a draft that differs from it.
+  const briefOpenDecidedRef = useRef(false);
   const [generating, setGenerating] = useState(false);
   // The run's progress, one line per event, in the order they arrived. It was one string, overwritten
   // per hub event, so with several artifacts of one type only the last "ready" survived on screen and
@@ -222,7 +230,12 @@ export default function CreateDraftWorkspace({
       const d = await getGccCreateDetail(effectiveCreateId);
       setDetail(d);
       setLoadError(null);
-      setBriefSavedOnServer(!!d.briefJson);
+      if (!briefOpenDecidedRef.current) {
+        briefOpenDecidedRef.current = true;
+        if (!d.briefJson || localDraftDiffers(projectId, d.id, d.briefJson, d.topic)) {
+          setBriefOpen(true);
+        }
+      }
       // Generate's checkboxes (outputTypes, below) are never seeded from the create's starting
       // type. That type was a decision made at mint time, for Brief; Generate is a separate, later
       // decision about what to produce right now, and pre-checking a box the operator never
@@ -254,7 +267,7 @@ export default function CreateDraftWorkspace({
             : "Could not load create.",
       );
     }
-  }, [effectiveCreateId, loadVersionFor]);
+  }, [effectiveCreateId, loadVersionFor, projectId]);
 
   // reload is called through a ref rather than by name so this effect is not itself classified as
   // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
@@ -298,13 +311,16 @@ export default function CreateDraftWorkspace({
   // reason to make anyone press a button to find out the score. They run whenever a version is on
   // screen, which covers Generate, Revise, and switching between drafts. Failure is silent: a score
   // that cannot be computed is not a reason to put an error banner over a finished draft.
+  // Keyed on the topic, not the whole create: every autosave updates detail's brief, and re-scoring an
+  // unchanged draft on each one is wasted work.
+  const scoredTopic = detail?.topic;
   useEffect(() => {
-    if (!version || !detail) return;
+    if (!version || !scoredTopic) return;
     let live = true;
     void (async () => {
       try {
         const [nextSeo, nextPolish] = await Promise.all([
-          seoGccVersion(version.id, detail.topic),
+          seoGccVersion(version.id, scoredTopic),
           polishGccVersion(version.id),
         ]);
         if (!live) return;
@@ -317,7 +333,7 @@ export default function CreateDraftWorkspace({
     return () => {
       live = false;
     };
-  }, [version, detail]);
+  }, [version, scoredTopic]);
 
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);
@@ -359,10 +375,10 @@ export default function CreateDraftWorkspace({
             targetKeyword=""
             startingContentType={outputTypes[0]}
             onBriefValidityChange={setBriefValid}
-            onBriefSaved={(newCreateId) => {
-              if (!newCreateId) return;
-              setMintedCreateId(newCreateId);
-              onCreateMinted?.(newCreateId);
+            onBriefSaved={(saved) => {
+              if (!saved.minted) return;
+              setMintedCreateId(saved.createId);
+              onCreateMinted?.(saved.createId);
             }}
           />
         </Stage>
@@ -377,10 +393,10 @@ export default function CreateDraftWorkspace({
           </button>
           <p className="mt-3 text-sm text-muted">
             {outputTypes.length === 0
-              ? "Choose at least one thing to write, then save the brief."
+              ? "Choose at least one thing to write. The piece is created once it has a target keyword and a content type."
               : briefValid
-                ? "Save the brief to create the piece. Generate runs after that."
-                : "Fill the brief's required fields, then save it."}
+                ? "The piece is created and saved once it has a target keyword. Generate runs after that."
+                : "The piece is created once it has a target keyword. Generate needs the brief's required fields filled."}
           </p>
         </Stage>
       </div>
@@ -413,16 +429,16 @@ export default function CreateDraftWorkspace({
     // Nothing chosen yet: open on a tab that has something in it rather than on an empty Pillar.
     ?? contentSet.find((g) => g.artifacts.length > 0)
     ?? contentSet[0];
-  const briefReady = !!detail.briefJson || briefSavedOnServer;
+  const briefReady = !!detail.briefJson;
+  // What Generate will read: the server's brief_json, kept current by the panel's onBriefSaved.
+  const savedBriefMissing = contentBriefMissingFields(migrateBrief(safeParse(detail.briefJson)));
   const researchReady = !!detail.researchJson;
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
-  // briefFormComplete is the form's own validity, reported by ContentBriefPanel while it is mounted.
-  // Collapsing the brief unmounts that panel, so the signal went false and took Generate with it --
-  // the button disabled itself the moment the brief was folded away. The saved brief is the real
-  // authority anyway: the server refuses an incomplete save, so briefReady already means complete.
-  // The form's opinion only matters while someone is editing it.
-  const canGenerate = briefReady && (briefOpen ? briefFormComplete : true);
+  // Generate reads the saved brief, so it needs that brief complete and the screen to match it. It
+  // was `!!detail.briefJson || briefSavedOnServer`: any brief on the server, however old, enabled
+  // Generate, and edits made since the last save reached no generate.
+  const canGenerate = briefReady && savedBriefMissing.length === 0 && briefSynced;
   // A create grounded on a project-site crawl requires relatedPages on its persisted site
   // section; domain-only grounding (a crawl id with no section) does not.
   const saMissingPages =
@@ -701,7 +717,10 @@ export default function CreateDraftWorkspace({
               <button
                 type="button"
                 onClick={() => setBriefOpen((v) => !v)}
-                className="text-sm text-[#C83803] underline-offset-2 hover:underline"
+                // Collapsing unmounts the panel, and with it the autosave. Only a saved brief folds.
+                disabled={briefOpen && !briefSynced}
+                title={briefOpen && !briefSynced ? "Waiting for the brief to save" : undefined}
+                className="text-sm text-[#C83803] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {briefOpen ? "Done editing" : "Edit brief"}
               </button>
@@ -729,11 +748,17 @@ export default function CreateDraftWorkspace({
             keywordLocked={detail.artifacts.length > 0}
             createId={effectiveCreateId}
             startingContentType={outputTypes[0] ?? detail.startingContentType ?? undefined}
-            onBriefValidityChange={setBriefFormComplete}
-            onBriefSaved={(_id, ok) => {
-              setBriefSavedOnServer(ok);
-              void reload();
-            }}
+            onSyncChange={setBriefSynced}
+            // What the server now holds, folded into the create on screen so the summary, the header
+            // and Generate's gate read the saved copy without refetching the whole create every two
+            // seconds of typing.
+            onBriefSaved={(saved) =>
+              setDetail((d) =>
+                d
+                  ? { ...d, briefJson: saved.briefJson, topic: saved.topic, updatedAtUtc: saved.updatedAtUtc }
+                  : d,
+              )
+            }
           />
 
         </>
@@ -815,8 +840,16 @@ export default function CreateDraftWorkspace({
               project&rsquo;s site, then start the create again.
             </p>
           ) : null}
-          {!canGenerate ? (
-            <p className="mt-3 text-sm text-muted">Save the brief first.</p>
+          {!briefSynced ? (
+            <p className="mt-3 text-sm text-muted">
+              The brief has changes the server does not have yet. Generate waits until they are saved.
+            </p>
+          ) : !briefReady ? (
+            <p className="mt-3 text-sm text-muted">Nothing is saved in the brief yet.</p>
+          ) : savedBriefMissing.length > 0 ? (
+            <p className="mt-3 text-sm text-muted">
+              The saved brief is missing: {savedBriefMissing.join(", ")}.
+            </p>
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
           ) : null}
@@ -1076,6 +1109,16 @@ export default function CreateDraftWorkspace({
                   Provided by {writtenBy(version.metadataJson)}
                 </span>
               ) : null}
+              {/* Which brief this draft was written from, as GeekAPI recorded it on the version
+                  (fix-persistence SA3). Absent on versions written before that was recorded --
+                  said as absent, never guessed from the brief on screen now. */}
+              <span className="text-sm text-muted">
+                {briefRevisionSavedAt(version.metadataJson)
+                  ? `Generated from the brief saved at ${new Date(
+                      briefRevisionSavedAt(version.metadataJson) as string,
+                    ).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+                  : "Which brief this was generated from was not recorded"}
+              </span>
             </div>
             <ArtifactBody
               bodyDocumentJson={version.bodyDocumentJson}

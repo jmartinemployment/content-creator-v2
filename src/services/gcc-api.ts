@@ -32,6 +32,13 @@ export interface GccCreate {
   status: string;
   createdAtUtc: string;
   updatedAtUtc: string;
+  /** The project that owns this create. Carried by the list route and the create/save responses;
+   *  the detail route does not send it. */
+  projectId?: string | null;
+  /** The row version this copy was read at, sent back as `expectedVersion` on a save so a write from
+   *  a stale copy is refused (409) instead of overwriting. Carried by the list route and the
+   *  create/save responses; the detail route does not send it. */
+  version?: number;
 }
 
 export interface GccSerpIndex {
@@ -98,6 +105,19 @@ export function getGccCreate(id: string): Promise<GccCreate> {
   return gccRequest<GccCreate>(`/api/geek-content-creator/creates/${id}`);
 }
 
+/**
+ * The create's row version, read from the list route -- the only read that carries it.
+ *
+ * Null when the create is not in this client's list. A save needs this value to be refused when
+ * stale, so a caller that gets null must not save: writing without it is the last-writer-wins
+ * overwrite the version exists to prevent.
+ */
+export async function getGccCreateVersion(clientId: string, createId: string): Promise<number | null> {
+  const rows = await listGccCreates(clientId);
+  const row = rows.find((r) => r.id === createId);
+  return typeof row?.version === "number" ? row.version : null;
+}
+
 export function parseSiteSectionJson(
   json: string | null | undefined,
 ): SiteSectionContext | null {
@@ -133,12 +153,23 @@ export function parseSiteSectionJson(
  * score, the descriptor split, the grounding query and artifact naming all read; a second copy would
  * drift.
  */
+/** Why a brief was written: a click, the two-second autosave, or a draft recovered from this browser. */
+export type BriefSaveKind = "manual" | "autosave" | "recovered";
+
+/**
+ * The status GeekAPI answers when the create changed after the caller read it. Nothing was saved.
+ */
+export const BRIEF_STALE_STATUS = 409;
+
 export function patchBriefResearch(
   createId: string,
   body: {
-    briefJson?: string | null;
-    researchJson?: string | null;
+    briefJson: string;
     topic?: string | null;
+    /** The `version` the caller's copy was read at. Required: a save without it cannot be refused
+     *  when stale, and would overwrite whatever changed since. */
+    expectedVersion: number;
+    kind: BriefSaveKind;
   },
 ): Promise<GccCreate> {
   return gccRequest<GccCreate>(
@@ -146,14 +177,36 @@ export function patchBriefResearch(
     {
       method: "PATCH",
       body: JSON.stringify({
-        briefJson: body.briefJson ?? null,
-        researchJson: body.researchJson ?? null,
+        briefJson: body.briefJson,
         // Omitted rather than nulled when unchanged: null is "leave it" server-side, and sending a
         // blank string on every brief save would be a write nobody asked for.
         topic: body.topic?.trim() || null,
+        expectedVersion: body.expectedVersion,
+        // Recorded on the revision once GeekAPI writes revisions (fix-persistence SA1).
+        kind: body.kind,
       }),
     },
   );
+}
+
+/**
+ * When the brief a version was generated from was saved, from the version's metadata.
+ *
+ * The key is this frontend's half of fix-persistence SA3: GeekAPI records the brief revision a
+ * generate read on every version's `metadata_json`. Null until it does, and for every version
+ * written before it.
+ */
+export const BRIEF_REVISION_SAVED_AT_KEY = "briefRevisionSavedAtUtc";
+
+export function briefRevisionSavedAt(metadataJson: string | null | undefined): string | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed = JSON.parse(metadataJson) as Record<string, unknown> | null;
+    const raw = parsed?.[BRIEF_REVISION_SAVED_AT_KEY];
+    return typeof raw === "string" && raw.trim() ? raw : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface GccArtifact {
