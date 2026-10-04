@@ -179,6 +179,14 @@ cutter, same selection rule; or the claim is removed and the probe is described 
   `Services/ContentCreator` and renamed without the `V2` prefix.
 - Done when: `grep -rl ContentCreatorV2 --include=*.cs` returns nothing.
 
+**A17 — The crawl discovery ledger is readable.** (from Geek-Crawler-v2 C3, 2026-10-04) The crawler
+now writes a discovery ledger into `HostProgressJson` on every terminal transition (discovered,
+enqueued by source, fetched, budget, refusals by rule, off-sitemap counts, per-section counts,
+sitemap size and truncation). GeekAPI stores the string and nothing reads it. Either type it onto
+`GeekCrawlerRunReport` (which today drops unknown fields) or return it on the run read, so the
+operator and the C2 measurement can see it. Until then the counters C3 built are invisible from
+the product.
+
 **A16 — Stale comments corrected** (F-A18): the four named, plus any the A-stages make stale.
 
 ---

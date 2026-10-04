@@ -20,6 +20,70 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | D2 | Links the sitemap omits: admit **every** same-origin link under the existing quotas, or only product/evidence-tier links. | Admit every link under the quotas, and raise the request budget off the sitemap size. The tier list is a priority order, not a whitelist. | C1 |
 | D16 | Raw `Html` on crawl pages: keep storing it, or stop. | **Withdrawn, Jeff 2026-10-04: raw HTML stays stored.** This project is HTML, never Markdown; `contentHtml` and every block's `html` are HTML too, and nothing here moves toward anything else. `GccV2SiteSection` reads `Html` on a live path, which settles it regardless. | — |
 
+## Status, 2026-10-04 evening — reviewed against the commits, not the report
+
+Commits `195e2df`, `4954d4d`, `d7e48c5`, `639c049`, `1f8d4be`, `f1356d9`, `c854667`, `106b8b9` on
+`main`. Unit suite: 340 of 341 pass; the one failure (`failure-archive.test.ts`, "an unwritable
+archive aborts before the purge") fails identically at `a08ac9e`, before any of this, and is an
+environment artefact: the test makes a directory unwritable and the container runs as root, which
+can write anywhere. Not this work's defect; it should skip or assert differently when euid is 0.
+
+**C1 — done, and better than specified.** The allowlist at `sitemap.ts:273` is gone; membership is
+by a normalised key, so trailing-slash, case and www variants of a listed URL no longer read as
+off-sitemap (the exact-match flaw F-C1 noted); the budget comes from the profile, never the sitemap
+(`cheerio-runner.ts:217-221`); off-sitemap admitted and suppressed are counted. Sitemap product and
+evidence links go to the front of the queue. Accepted.
+
+**C2 — done, with two departures that stand.** Trap rules are pagination, facet, search and calendar
+(`link-trap.ts`), plus a cap of 50 pages per directory for `other`-tier pages, applied to links the
+sitemap omits, or to every link when there is no sitemap. Sitemap entries are exempt because the site
+chose to list them; that is the right line. (1) `maxDepth` stays null, because `03a53ce` removed depth
+caps deliberately and the ledger counts depth refusals so a cap can be measured before it is set.
+Accepted. (2) The patterns and the cap of 50 were chosen without the measurement the stage asked
+for, because the session has no Mongo access. Accepted as a first value; **the first three re-crawls
+(ramp, bill, lightyear) report `refused.directoryCap` and `refused.<trap>` per directory, and the
+numbers decide whether 50 and the four rules stand.**
+
+**C3 — done, placed differently, and the placement is right.** Counters live in a discovery ledger
+(`discovery-ledger.ts`): discovered, enqueued by source, fetched, enqueued-not-fetched, budget and
+whether it was exhausted, refused by rule, off-sitemap admitted and suppressed, per-section admitted
+and suppressed, sitemap present/size/truncated. It is written to `hostProgressJson` (persisted by
+GeekAPI as `HostProgressJson`), to the failure archive, to `run.json` (so `recordRejectStats` now has
+a caller) and to a log line. Not to `CrawlReport`, because GeekAPI deserialises that into the typed
+record `GeekCrawlerRunReport` and would drop unknown fields. Correct call. **Follow-up, GeekAPI
+plan:** either type the discovery report onto `GeekCrawlerRunReport` or expose `HostProgressJson`
+to the operator; today nothing in GeekAPI reads the ledger. Refusal counts are now distinct URLs,
+which is what C3 asked. `enqueueSuppressedSectionQuota` is removed; nothing in GeekBackend read it.
+
+**C4 — done, early.** One vocabulary (`section-vocabulary.ts`) read by both the classifier and the
+quotas, which is the "one table" option. Behaviour changes are the drift fixes the stage named:
+`customer-case-studies` is now capped at 250 like the others, singular `/calculator/` and
+`/generator/` are capped, `/page/` is an archive, `rate-tables` narrowed to `local-` and `zip-`.
+One edge: the quota scan stops at the leftmost named section, so `/faq/blog/x` is `faq` (evidence,
+uncapped) rather than `blog`. Acceptable; evidence directories carry no cap by design. **Built in
+Wave 1 against the plan's Wave 2 placement.** Recorded; the work itself is per plan.
+
+**C5 — done.** `sitemap.test.ts` exists (321 lines in `195e2df`, extended since); the integration
+fixture asserts the off-sitemap link is admitted.
+
+**Outside the plan, accepted.**
+- `639c049`: on a site with no sitemap, harvested links now pass the locale filter, the section
+  quotas and the editorial share, in tier order. They were admitted ungated, so the share gate
+  built for lightyear's 129-of-148 blog crawl never saw the URLs that pass contributed. Consistent
+  with C1's principle. Expect the editorial share of no-sitemap crawls to fall; that is the gate
+  working.
+- `1f8d4be`, `106b8b9`: resume UI, routes, helpers, test and mocks deleted. The crawler refuses
+  resume (`cheerio-runner.ts:100-110`), so the controls were dead surface.
+- Locale filtering consolidated into `filterEnqueueUrls`; `run.json` now records
+  `pagesRejectedRequiresJavascript`; a cancel integration test; `KNOWN_GAPS.md` rewritten;
+  code-review fixes applied.
+- `c854667`: README and audits updated; three completed plans deleted in this repo's `plans/`,
+  with Jeff's approval.
+
+**Not done here, by design.** Nothing re-crawled: the session has no crawl access. The three
+re-crawls in C1's done-when are Jeff's to start, one at a time, and their ledgers are the measurement
+C2 still owes.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
