@@ -68,8 +68,21 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
 
 **Violations, recorded so they are not repeated.**
 - A re-index of all 62 runs was queued. Jeff killed it; 6 ran, 56 never started. The rule is in R1:
-  Ramp first, alone; then only runs a saved project declares, one at a time. Which 6 ran is not
-  recorded here and should be, since those 6 now have collapsed points and the other 56 do not.
+  Ramp first, alone; then only runs a saved project declares, one at a time. The 6 that ran, each
+  `complete`, attempt 2, finished 14:25–14:26 UTC, and each deleted and rewritten whole (every
+  point carries `textDigest`; point count equals `chunksUpserted`, checked in Qdrant):
+
+  | Run | Site | Crawl type | Points | Repeats skipped |
+  |---|---|---|---|---|
+  | `c60dc645-d9cc-4287-8372-d5783373ac3d` | airbase.com | partner | 4 | 0 |
+  | `d880fb46-e36a-4411-96c0-dbdfa7f3b751` | fnshiftsolutions.com | competitors | 492 | 11 |
+  | `44ba341c-5be1-405d-b748-79c6a6934c16` | lightyear.cloud | partner | 346 | 24 |
+  | `324af3f2-9ada-4f34-a186-16563dfc04d2` | highnote.com | competitors | 772 | 35 |
+  | `dbd75d19-ad75-4ee8-b5b7-7f5a665faa65` | dost.io | competitors | 914 | 386 |
+  | `67ac7054-5be3-473c-91ba-30095ffea909` | invoiced.com | partner | 1,136 | 521 |
+
+  These 6 and Ramp have collapsed points; the other 56 do not. Nothing else is re-indexed except
+  by R1's rule.
 - Wave 2 measurements (R2's keyword list, R3's near-copies) were run before Wave 1's proof. They
   are read-only, so nothing broke, but every measurement before the last sent the bare keyword
   rather than the question GeekAPI sends (`GccGroundingResolver.BuildNeed`). Only the last run's
