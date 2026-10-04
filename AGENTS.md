@@ -219,9 +219,36 @@ cheaper — because v1 already holds the single correct output path (`ContentGen
 on. The v2 write path is dormant. Whether it is deleted is open and unexecuted; nothing is removed
 unasked.
 
+## The project is the unit. No create is visible.
+
+**Jeff, 2026-10-04: the unique key is the Project ID. The project contains the Brief, Generate and
+Profile.** A project is one keyword and one brief; a second keyword is a second project. Plan:
+`plans/fix-project-persistence.md`. Wire contract: `plans/project-api-contract.md`.
+
+| Concern | The method |
+|---|---|
+| The page | `/app/projects/<id>?section=…` and nothing else. No `create` parameter, no create id on screen, no list of pieces |
+| The brief and keyword | Loaded from the project, written to it when **Save** is clicked — `patchProjectBrief` → `PATCH projects/{id}/brief`, with the `version` it was read at |
+| A stale save | Refused (409) with the server's sentence. Nothing is overwritten |
+| An incomplete brief | Saves. Completeness gates Generate only |
+| Save state | One line beside the button: "Saved to the server at HH:MM" or "Unsaved changes"; the browser warns on leaving with unsaved changes |
+| Generate | `generateProject` → `POST projects/{id}/generate`; off while the brief has unsaved changes or the saved brief is missing a required field |
+| Drafts | `listProjectArtifacts` → `GET projects/{id}/artifacts` |
+| Deliverables | A name and a due date on the project. Nothing is attached |
+
+**The Save button is the only thing that writes the brief, and nothing about the brief is kept in the
+browser** (Jeff, 2026-10-04). `src/no-browser-storage.test.ts` fails on any `localStorage` or
+`sessionStorage` use under `src`. Do not add a second way to write the brief.
+
+**`gcc_creates` came first and is why the UI once showed both.** It is in the initial migration
+(2026-08-01); projects arrived 2026-09-21 and were joined to it by a nullable `project_id`. During the
+plan's P0 the server still keeps a create row under each project to hold its drafts. The client never
+mints one, never sees its id and never sends it, and this repo has no create client code.
+
 ## Topic is a descriptor and a keyword
 
-A create's `Topic` is **two fields in one string, split on the first colon.**
+The topic — the project's keyword field, `create.Topic` in GeekAPI's generation code — is **two fields
+in one string, split on the first colon.**
 
 ```
 "Accounts Payable: Automated Data Entry & Processing"
@@ -466,8 +493,8 @@ removed is the ungroundedness, not the writer.
 "the v2 codebase writes, whatever it costs", this section is wrong and the decision reverts to
 hardening v2. Full reasoning and evidence: `plans/grounded-generation-and-serp.md` Stage 1.
 
-Concretely, `/app/workflow` generates through `CreateDraftWorkspace` on `gcc-api`
-(`generateGccCreate` / `reviseGccVersion` / `polishGccVersion` / `seoGccVersion` /
+Concretely, `/app/projects/[id]` generates through `ProjectContentWorkspace` on `gcc-api`
+(`generateProject` / `reviseGccVersion` / `polishGccVersion` / `seoGccVersion` /
 `approveGccVersion`). The v1 generate calls in `content-writer-api.ts` —
 `generatePillarPlanContent`, `generatePillarBodyContent`, `generateBlogContent`,
 `generateSocialPack`, `generateColdOutreachContent`, `generateImagePromptsContent`,
@@ -534,14 +561,14 @@ was the section most likely to be cited as evidence. Corrected against a full re
 |---|---|
 | Partner/competitor URLs are "index-checked, coloured, then forgotten. Never persisted" in `crawl-client.tsx` | **`crawl-client.tsx` does not exist.** `ProjectForm` collects them, and `createProject`/`updateProject` carry `partnerUrls`/`competitorUrls` to the project row — they are persisted and they are what grounding resolves from |
 | `startGeekCrawl` has "zero call sites" | It was called by `crawlOne` in `ProjectForm`, itself unreachable since 2026-09-29. Both were deleted 2026-10-04 (F5): this app starts no crawl |
-| Target keyword "is dropped on every live path" | It becomes **`create.Topic`** — `ContentBriefPanel.ensureCreateId`: `const topic = keywordInput.trim()`. The real limitation is narrower: once a create exists, `ensureCreateId` short-circuits, so the keyword cannot be *changed* afterwards |
+| Target keyword "is dropped on every live path" | It is the project's **`topic`**: `ContentBriefPanel` sends it with the brief on every Save (`patchProjectBrief`). It is editable until the project has a draft, and fixed after — the pages already written were written for it |
 | `SerpIngestPanel` is "orphaned; zero importers" | **`ContentBriefPanel` imports it** |
 | "`/app/projects/[id]` and its eight panels sit behind a collapsed `<details>` on a route with no inbound link" | Was true when written and is now inverted: **`/app/projects/[id]` exists** and renders the workspace, while the four `creates/*` routes this row listed were deleted on 2026-10-03 (`8758146`) for being reachable only through two links labelled "Back to workflow" that pointed at them. `src/app/app/` is `projects/[id]` and `workflow` |
 
 **The reachable surfaces.** `AppNavbar` has a single nav item and `/app` redirects to it, so
 everything starts at **`/app/workflow`**, which renders `ClientsPanel` and `ProjectsPanel` only.
 Opening a project navigates to **`/app/projects/[id]`**, which renders the rest: `ProjectProfilePanel`,
-`ProjectWorkPanel`, `ProjectDeliverablesPanel` and `CreateDraftWorkspace` (→ `ContentBriefPanel` →
+`ProjectWorkPanel`, `ProjectDeliverablesPanel` and `ProjectContentWorkspace` (→ `ContentBriefPanel` →
 `SerpIngestPanel`, and `SiteContextBanner`). This paragraph used to put the whole chain on
 `/app/workflow`.
 
