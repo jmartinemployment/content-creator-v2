@@ -236,8 +236,9 @@ screenshot shows it: the project is named "Accounts Payable: Automated Approval 
 
 **A project is the unit.** Its Profile, its Brief, every Generate and every draft belong to it and are
 addressed by its Project ID alone. The database holds every input the operator types and every output
-the system produces. Browser storage is a crash buffer, never the only copy. A screen never shows
-something the database does not hold without saying so. Data goes GeekAPI → GeekRepository →
+the system produces. The brief is written to the database when the operator clicks **Save**, and at no other time. The
+screen loads from the database, never from browser storage. While there are unsaved changes the page
+says so. Data goes GeekAPI → GeekRepository →
 Supabase, schema `content_creator`.
 
 **What the operator sees:** the project's name, and Profile, Brief & Generate, Deliverables, Tasks &
@@ -269,12 +270,12 @@ the project already holds the site URL, the run id and the partner list the writ
 | J1 | **One project is one keyword and one brief.** A second keyword is a second project. Generate adds versions to the project. |
 | J2 | **The brief, keyword and research move onto the project** (`gcc_projects`: `brief_json`, `topic`, `research_json`, `site_section_json`). The project's own `project_site_run_id` is the only run id; the create's copy is dropped. |
 | J3 | **Any draft saves.** Completeness gates Generate only; the backend already allows it. |
-| J4 | **Autosave.** Two seconds after the last change, with the version the editor read; a stale write is refused with a message, never overwritten. |
-| J5 | **Every save is kept, and no revision row is ever edited or deleted.** Append-only `gcc_project_revisions`: every save, manual or autosave, inserts a new row. The one exception to inserting is a save whose `brief_json` and `topic` are byte-identical to the project's newest revision: it stores nothing, because there is nothing to keep, and the response returns that existing revision. (Jeff vetoed merging autosaves into one row, 2026-10-04: merging overwrites a state.) |
+| J4 | **One Save button. No autosave** (Jeff, 2026-10-04). The brief is written only when Save is clicked, with the version the editor read; a stale write is refused with a message, never overwritten. |
+| J5 | **Every Save click is kept as a revision, and no revision row is ever edited or deleted.** Append-only `gcc_project_revisions`; each click inserts a row. A click whose `brief_json` and `topic` are byte-identical to the project's newest revision stores nothing and returns that existing revision. The operator sees only the Save button and the saved-at time; revisions exist so a version can name the brief it was written from (J7). |
 | J6 | **Generate is `POST projects/{id}/generate`.** The output types are chosen each run. There is no starting content type, and the brief carries no length band: it is derived per output type at generate time. |
 | J7 | **A version records the brief revision it was generated from.** The workspace shows "generated from the brief saved at …". |
 | J8 | **Authorization is the project's.** Brief, generate, versions and approvals sit under `ManagePolicy`, like Profile. The earlier per-create owner check (D8, A9) is withdrawn. |
-| J9 | **Browser storage stays a crash buffer**, one key per project, compared by time with the server on open, never silently overwritten either way. The existing `gcc-content-brief:` drafts are recoverable (SF6 stays, re-keyed). |
+| J9 | **No browser storage for the brief.** The page loads from the database. There is no recover feature (Jeff, 2026-10-04). Existing `gcc-content-brief:` keys are left in the browser untouched: the app never reads, writes or deletes them. |
 | J10 | **Raw inputs are kept as received** (SERP paste, uploaded files) in `gcc_inputs`, immutable, hashed, 2 MB each, keyed by project. |
 | J11 | **Existing creates are folded in, never deleted** (the rule in 3.1). Creates with no project are reported to Jeff and left alone. |
 | J12 | **Backups are Jeff's to verify.** A Supabase backup is taken before the migration runs and its time is recorded here. |
@@ -293,7 +294,7 @@ calls it.
 not touch them: it writes only the Profile columns, and the brief route writes only the brief columns.
 
 **GR2 — `gcc_project_revisions`.** `id`, `project_id` (FK, RESTRICT), `kind`
-(`manual` | `autosave` | `recovered` | `backfill`), `brief_json`, `topic`, `saved_by`, `saved_at`;
+(`manual` | `backfill`), `brief_json`, `topic`, `saved_by`, `saved_at`;
 index on `(project_id, saved_at desc)`. Written in the same `SaveChanges` as the project update.
 
 **GR3 — Backfill, with a report first.** For each create that has a `project_id`:
@@ -326,8 +327,7 @@ A test pins the rule.
 
 ### 3.2 GeekAPI
 
-**GA1 — Project brief route.** `PATCH projects/{id}/brief` takes `briefJson`, `topic`, `expectedVersion`
-and `kind`; writes a revision; returns the new version and revision time; 409 with "This project was
+**GA1 — Project brief route.** `PATCH projects/{id}/brief` takes `briefJson`, `topic` and `expectedVersion`; writes a revision; returns the new version and revision time; 409 with "This project was
 changed after you loaded it" on a stale write. It accepts an incomplete brief. Under `ManagePolicy`.
 
 **GA2 — Generate by project.** `POST projects/{id}/generate` with the output types and provider.
@@ -355,28 +355,25 @@ create id on the screen, no "Pieces on this project", no "Start a new piece". Th
 `pillar`, `No research` and the create id is removed. Sections stay: Brief & Generate, Profile,
 Deliverables, Tasks & Time, History.
 
-**GF2 — The brief edits the project directly,** with no mint step. Keyword and brief are one form.
-Autosave (J4), the always-visible save state ("Saved to the server at 14:32" / "Local draft, not yet
-saved" / "The server copy is newer than this draft"), a warning when leaving with the second state
-showing, and hydration that never picks silently between server and local (J9).
+**GF2 — One Save button.** The brief form edits the project directly, with no mint step; keyword and brief
+are one form. Save writes it (GA1). Beside the button, one line: "Saved to the server at 14:32" or
+"Unsaved changes". Leaving the page with unsaved changes shows the browser's warning. No autosave, no
+browser storage, no merge between server and local (J4, J9).
 
 **GF3 — Generate waits on the save** and reads "Generated from the brief saved at …" (J7). Output types
 and provider are chosen on the page each run.
 
-**GF4 — Recover from this browser** (SF6, re-keyed to the project): lists every `gcc-content-brief:`
-key with its keyword and last-changed time, saves one as a `recovered` revision on this project, and
-never deletes a key. It stays until Jeff says he has what he needs. **This is the first thing built.**
+**GF4 — Withdrawn.** Recover from this browser is not built (Jeff, 2026-10-04).
 
 **GF5 — Remove** the piece switcher (`8ac0b24`), the create-keyed storage keys and
-`onCreateMinted`/`openCreate`. Keep the autosave and save-state work from `05ba040`; re-key it to the
-project.
+`onCreateMinted`/`openCreate`. Remove the autosave and the browser-storage reads and writes from `05ba040`;
+keep the save-state line and re-key it to the project.
 
-**GF6 — A test** that scans `src` for storage calls and fails on any key outside the project crash
-buffer, and a test that no rendered page contains a GUID other than the project id and the labelled Run ID.
+**GF6 — A test** that scans `src` for `localStorage` and `sessionStorage` calls and fails on any in the brief code, and a test that no rendered page contains a GUID other than the project id and the labelled Run ID.
 
 ## 4. Order, and the gate
 
-**P0 — before any Generate:** GF4 first, then GR1, GR2, GR3 (report, backup, backfill), GA1, GF1, GF2,
+**P0 — before any Generate:** GR1, GR2, GR3 (report, backup, backfill), GA1, GF1, GF2,
 GF3, and GA2 so Generate reads the project's brief. The old create routes stay live and untouched
 until P2. **During P0, drafts are still stored under a create row**, which the server ensures exists
 for each project: the newest create after the backfill, or one minted server-side on the first
@@ -384,7 +381,7 @@ Generate. The client never mints one, never sees its id, and never sends it. GR4
 to the project and the row stops mattering.
 
 **Deploy order inside P0, because pushing to `main` deploys:** GeekRepository first (columns, revisions,
-report), then GeekAPI (GA1, GA2, both additive), then the frontend (GF4, GF2, GF1, GF3). The frontend
+report), then GeekAPI (GA1, GA2, both additive), then the frontend (GF2, GF1, GF3). The frontend
 does not switch to a project route before GeekAPI has deployed it. Jeff takes the Supabase backup and
 reads the unassigned report before the backfill runs.
 
@@ -401,10 +398,9 @@ uncommitted work stays uncommitted until it is re-keyed.
 
 The first four are the P0 gate.
 
-1. Type the brief and the niche framing, click nothing, hard-reload: everything is there and the line
-   says it was saved.
-2. Cut the network mid-edit: the line says "Local draft"; restore it: the draft saves and nothing is
-   lost.
+1. Type the brief and the niche framing, click Save, hard-reload: everything is there and the line
+   says when it was saved.
+2. Type, do not click Save, close the tab: the browser warns. Nothing is written anywhere until Save.
 3. Edit the same project in two tabs: the second save is refused with the 409 text, nothing is
    overwritten, and both revisions are kept.
 4. The URL, and the rendered page, contain no create id anywhere. The only identifiers on screen are
@@ -417,8 +413,7 @@ The first four are the P0 gate.
    own date; the unassigned report lists exactly the creates with no project; nothing was deleted.
 8. Upload a keyword file twice: one `gcc_inputs` row holding the exact text.
 9. The bundle is valid JSON and contains each of the above.
-10. Recover: the old `kw:` key's content becomes a `recovered` revision on the project, and the key is
-    still in the browser afterwards.
+10. Withdrawn with GF4.
 
 ## 6. Not decided here
 

@@ -24,7 +24,7 @@ The existing `GccProject` gains:
 | `briefSavedAtUtc` | `string \| null` | When the current brief revision was saved; null before the first |
 
 **One question for GeekAPI:** if `version` is the row's xmin, a Profile save (PUT) also changes it,
-so a brief autosave after a Profile edit in another tab is refused as stale. That is safe (refused,
+so a brief save after a Profile edit in another tab is refused as stale. That is safe (refused,
 never overwritten) but noisy. A brief-only token avoids it; either works with this contract.
 
 ## 2. Save the brief — GA1
@@ -32,7 +32,7 @@ never overwritten) but noisy. A brief-only token avoids it; either works with th
 `PATCH projects/{id}/brief`
 
 ```json
-{ "briefJson": "…", "topic": "…", "expectedVersion": 123, "kind": "manual | autosave | recovered" }
+{ "briefJson": "…", "topic": "…", "expectedVersion": 123 }
 ```
 
 - `200` → `{ "version": 124, "revisionId": "<guid>", "savedAtUtc": "…", "topic": "…" }`
