@@ -98,7 +98,7 @@ stage marked **blocks** was blocked until this date and is not blocked now.
 | D13 | Block quotations on Pillar and Blog: enforce the ban in code (parser refuses a quote paragraph on those types), or allow verified ones. | Enforce the ban as the prompt states it. Verified quotes on long-form is a separate feature, if ever. | A6 |
 | D14 | Image-prompt failure after a guarded draft: refuse the whole piece, or save the draft and report. | Save and report, the way the scheduler link and partner mentions already do. | A6 |
 | D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | Rank it over a run-scoped candidate set, with the collapse before the pool cut. Measure after R1 before building. | R2 |
-| D16 | Raw `Html` on crawl pages: keep storing it, or stop. Nothing live in GeekAPI reads it; RAG reads it only as a digest fallback when `contentHtml` is empty, which ingest already refuses. | Stop storing it on new crawls once R4 pins the digest to `contentHtml`. A storage decision over a live corpus, so Jeff's call. | C6 |
+| D16 | Raw `Html` on crawl pages: keep storing it, or stop. | **Withdrawn, Jeff 2026-10-04: raw HTML stays stored.** This project is HTML, never Markdown; `contentHtml` and every block's `html` are HTML too, and nothing here moves toward anything else. `GccV2SiteSection` reads `Html` on a live path, which settles it regardless. | — |
 | D17 | The brief field `notes`: the frontend never sends it and the backend reads it in seven places. Add the field, or remove the reads. | Remove the reads. The brief and niche framing are the operator's input; a second free-text channel is a second place for the same thing. | F3 |
 
 ---
@@ -132,7 +132,7 @@ output. No wave starts until the previous wave's proof has been read.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Wave 1 is the set that removes false promises and silent drops without redesigning anything. Wave 2
@@ -410,7 +410,7 @@ cutter, same selection rule; or the claim is removed and the probe is described 
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous
@@ -484,7 +484,7 @@ controller is behind `InternalServicePolicy`; no other project references `Conte
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous
@@ -513,7 +513,7 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D2 | Links the sitemap omits: admit **every** same-origin link under the existing quotas, or only product/evidence-tier links. | Admit every link under the quotas, and raise the request budget off the sitemap size. The tier list is a priority order, not a whitelist. | C1 |
-| D16 | Raw `Html` on crawl pages: keep storing it, or stop. Nothing live in GeekAPI reads it; RAG reads it only as a digest fallback when `contentHtml` is empty, which ingest already refuses. | Stop storing it on new crawls once R4 pins the digest to `contentHtml`. A storage decision over a live corpus, so Jeff's call. | C6 |
+| D16 | Raw `Html` on crawl pages: keep storing it, or stop. | **Withdrawn, Jeff 2026-10-04: raw HTML stays stored.** This project is HTML, never Markdown; `contentHtml` and every block's `html` are HTML too, and nothing here moves toward anything else. `GccV2SiteSection` reads `Html` on a live path, which settles it regardless. | — |
 
 ## Audit — Geek-Crawler-v2
 
@@ -566,9 +566,7 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
 **C5 — Sitemap tests.** (F-C5) `sitemap.test.ts` for `filterEnqueueUrls`, `initialCrawlUrls`,
 `loadSiteMapForSeed`; the integration fixture asserts the off-sitemap link is admitted.
 
-**C6 — Raw HTML storage.** (F-C8; D16) After R4 pins the digest to `contentHtml`, new crawls stop
-sending `Html`. Existing pages are Jeff's call. Ingest already refuses a page with blank `contentHtml`
-or empty `blocks`, so nothing downstream loses a page it could have used.
+**C6 — withdrawn.** Raw `Html` stays stored (Jeff, 2026-10-04: this project is HTML, never Markdown). `GccV2SiteSection` reads it on a live GeekAPI path. F-C8 stands as a measurement of storage, not as a task.
 
 ---
 
@@ -588,7 +586,7 @@ or empty `blocks`, so nothing downstream loses a page it could have used.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous
@@ -712,7 +710,7 @@ hit, in `architecture.md`, saying it is forbidden.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous
@@ -804,7 +802,7 @@ paragraph, the HTML-retention paragraph.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous

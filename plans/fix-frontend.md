@@ -81,7 +81,7 @@ paragraph, the HTML-retention paragraph.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous

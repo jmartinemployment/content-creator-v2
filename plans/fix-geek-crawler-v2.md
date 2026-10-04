@@ -18,7 +18,7 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 | # | Decision | Decided (per the recommendation) | Unblocks |
 |---|---|---|---|
 | D2 | Links the sitemap omits: admit **every** same-origin link under the existing quotas, or only product/evidence-tier links. | Admit every link under the quotas, and raise the request budget off the sitemap size. The tier list is a priority order, not a whitelist. | C1 |
-| D16 | Raw `Html` on crawl pages: keep storing it, or stop. Nothing live in GeekAPI reads it; RAG reads it only as a digest fallback when `contentHtml` is empty, which ingest already refuses. | Stop storing it on new crawls once R4 pins the digest to `contentHtml`. A storage decision over a live corpus, so Jeff's call. | C6 |
+| D16 | Raw `Html` on crawl pages: keep storing it, or stop. | **Withdrawn, Jeff 2026-10-04: raw HTML stays stored.** This project is HTML, never Markdown; `contentHtml` and every block's `html` are HTML too, and nothing here moves toward anything else. `GccV2SiteSection` reads `Html` on a live path, which settles it regardless. | — |
 
 ## Audit — Geek-Crawler-v2
 
@@ -71,9 +71,7 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
 **C5 — Sitemap tests.** (F-C5) `sitemap.test.ts` for `filterEnqueueUrls`, `initialCrawlUrls`,
 `loadSiteMapForSeed`; the integration fixture asserts the off-sitemap link is admitted.
 
-**C6 — Raw HTML storage.** (F-C8; D16) After R4 pins the digest to `contentHtml`, new crawls stop
-sending `Html`. Existing pages are Jeff's call. Ingest already refuses a page with blank `contentHtml`
-or empty `blocks`, so nothing downstream loses a page it could have used.
+**C6 — withdrawn.** Raw `Html` stays stored (Jeff, 2026-10-04: this project is HTML, never Markdown). `GccV2SiteSection` reads it on a live GeekAPI path. F-C8 stands as a measurement of storage, not as a task.
 
 ---
 
@@ -93,7 +91,7 @@ or empty `blocks`, so nothing downstream loses a page it could have used.
 |---|---|---|---|---|---|
 | 1 — stop the bleeding | R1, R4, R5 | C1+C2, C3, C5 | A1 interim, A2, A5, A6, A7, A16 | D1 | F4, F5, F6 |
 | 2 — verify | R2, R3 (measure), R6 | C4, re-crawl ramp / bill / lightyear | A1 full, A4, A13, A14 | D2, D3, D4 | F2, F3 |
-| 3 — the gate | R7 | C6 (after D16) | A3, A8, A9, A10, A11, A12 | — | F1 |
+| 3 — the gate | R7 | — | A3, A8, A9, A10, A11, A12 | — | F1 |
 | 4 — delete | — | — | A15 | — | — |
 
 Stages here with no dependency on another stage start now. A wave does not start until the previous
