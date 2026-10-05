@@ -17,11 +17,16 @@ import { ApiError, getProject, type GccProject } from "@/services/gcc-projects-a
  * history, tasks, time, deliverables and the whole brief-to-generate pipeline — and had stopped fitting.
  * Workflow is now the picker; this is the work.
  *
- * **Two layouts, not one responsive tree.** Desktop puts the section list in a rail beside the content;
+ * **Two sets of chrome, one section.** Desktop puts the section list in a rail beside the content;
  * mobile puts it in a scrolling tab strip above it. Those are different structures rather than the same
- * structure at two widths, so they are written separately and switched with `lg:hidden` /
- * `hidden lg:block`. The selected section is page state, so whichever layout is mounted reads the same
- * value and switching breakpoints mid-task keeps your place.
+ * structure at two widths, so the heading and the section list are written twice and switched with
+ * `lg:hidden` / `hidden lg:block`.
+ *
+ * **The section itself is rendered once.** It used to be rendered inside each layout, on the reasoning
+ * that "whichever layout is mounted reads the same value" -- but both were always mounted, and CSS only
+ * hid one. So every section existed twice: two brief editors with their own unsaved state, two reads of
+ * the project, its drafts, their versions and both scores on every visit, and after a Generate one copy
+ * that knew about it and one that did not. Only what is stateless is duplicated now.
  */
 const SECTIONS = [
   { key: "content", label: "Brief & Generate", blurb: "The brief, generation, and the drafts it produced." },
@@ -163,10 +168,10 @@ export default function ProjectWorkspacePage() {
     : null;
 
   return (
-    <>
-      {/* ── MOBILE ─────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 lg:hidden">
-        <div className="px-4">
+    <div className="min-h-screen w-full bg-[var(--gcc-ink)] py-5">
+      <div className="lg:mx-auto lg:w-full lg:max-w-[1800px] lg:px-8">
+        {/* ── PHONE: heading and tab strip ───────────────────────────────────── */}
+        <div className="px-4 lg:hidden">
           <Crumb />
           <h1 className="mt-2 font-display text-2xl font-semibold leading-tight text-white">
             {heading}
@@ -179,7 +184,7 @@ export default function ProjectWorkspacePage() {
 
         {/* A scrolling strip rather than a wrapped row: five labels wrap to three lines on a phone and
             push the content below the fold. Edge-to-edge with inset padding so it reads as scrollable. */}
-        <nav className="mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden">
           {SECTIONS.map((s) => (
             <button
               key={s.key}
@@ -197,14 +202,8 @@ export default function ProjectWorkspacePage() {
           ))}
         </nav>
 
-        <div className="mt-4 px-3">
-          <Surface error={loadError}>{body()}</Surface>
-        </div>
-      </div>
-
-      {/* ── DESKTOP ────────────────────────────────────────────────────────── */}
-      <div className="w-full bg-[var(--gcc-ink)] min-h-screen py-5 hidden lg:block">
-        <div className="mx-auto w-full max-w-[1800px] px-8">
+        {/* ── DESKTOP: heading ───────────────────────────────────────────────── */}
+        <div className="hidden lg:block">
           <Crumb />
           <div className="mt-2 flex items-end justify-between gap-6">
             <div>
@@ -216,38 +215,39 @@ export default function ProjectWorkspacePage() {
             </div>
             <p className="max-w-md pb-1 text-right text-sm text-[var(--gcc-line)]">{active.blurb}</p>
           </div>
+        </div>
 
+        {/* ── THE SECTION, MOUNTED ONCE ──────────────────────────────────────── */}
+        <div className="mt-4 px-3 lg:mt-5 lg:flex lg:items-start lg:gap-6 lg:px-0">
           {/* A fixed rail, not a fraction: the section list does not get wider usefully, so giving it a
               percentage would steal space from the content as the viewport grows. */}
-          <div className="mt-5 flex items-start gap-6">
-            <nav className="sticky top-[5.5rem] w-56 shrink-0">
-              <ul className="space-y-1">
-                {SECTIONS.map((s) => (
-                  <li key={s.key}>
-                    <button
-                      type="button"
-                      onClick={() => go(s.key)}
-                      aria-current={s.key === section ? "page" : undefined}
-                      className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                        s.key === section
-                          ? "border-l-[3px] border-brand bg-white text-brand shadow-sm"
-                          : "border-l-[3px] border-transparent text-line hover:bg-slate hover:text-white"
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+          <nav className="sticky top-[5.5rem] hidden w-56 shrink-0 lg:block">
+            <ul className="space-y-1">
+              {SECTIONS.map((s) => (
+                <li key={s.key}>
+                  <button
+                    type="button"
+                    onClick={() => go(s.key)}
+                    aria-current={s.key === section ? "page" : undefined}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                      s.key === section
+                        ? "border-l-[3px] border-brand bg-white text-brand shadow-sm"
+                        : "border-l-[3px] border-transparent text-line hover:bg-slate hover:text-white"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-            <div className="min-w-0 flex-1">
-              <Surface error={loadError}>{body()}</Surface>
-            </div>
+          <div className="min-w-0 lg:flex-1">
+            <Surface error={loadError}>{body()}</Surface>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
