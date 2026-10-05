@@ -56,6 +56,37 @@ save request. The frontend is coded against those three names.
   `briefRevisionSavedAtUtc` (J7). The workspace shows "Generated from the brief saved at …" from the
   second.
 
+### 3a. What a Generate saves — changed 2026-10-05 (GeekBackend `62efbad`)
+
+**A Generate rewrites the project's pages; it does not add drafts.** J1 says "Generate adds versions
+to the project", and until this date every Generate created a new artifact for every piece, beside
+the last run's and under the same name. Now:
+
+- A project has one page (artifact) per content type and name. A piece whose page exists becomes
+  that page's next version, and the page returns to `draft`; a piece with no page creates it.
+- A run's pieces are saved in one write, all or none. A failed run saves nothing.
+- The run's result is the record of what it saved: the terminal `GccGenerateEvent`'s `resultJson`
+  is `{ "created": [{ "artifact", "version" }], "refusals", "preflight", "warnings" }`, or the bare
+  `{ "artifact", "version" }` when the run wrote exactly one piece with nothing else to report.
+  **Do not work out what a run saved by comparing artifact ids before and after**: a run that
+  rewrites six pages creates no new artifact.
+- Each `preflight` entry carries `totalCategories` beside `populatedCategories`.
+- A pillar or blog that links a tool page the project does not have carries that in its own
+  `warnings` (`5671288`).
+
+### 3b. The newest run, read back — A11 (GeekBackend `5248c22`)
+
+`GET projects/{id}/generate/latest`
+
+- `200` → `{ "run": null }` for a project that has never run, otherwise
+  `{ "run": { "jobId", "status": "running | ready | failed", "requestedTypes", "provider",
+  "startedAtUtc", "finishedAtUtc", "briefRevisionSavedAtUtc", "resultJson", "error" } }`.
+- The workspace reads it once when it opens: a `running` run is rejoined with
+  `JoinGccGenerate(jobId)`, which replies with the run's current state; an ended one is shown with
+  what it recorded. Nothing is polled.
+- The plan's A11 route was `GET creates/{id}/jobs/{jobId}`; the page knows its project and not a job
+  id, so it asks by project.
+
 ## 4. The project's drafts — not in the plan's P0, needed by it
 
 GF1 removes the create from the page, and today the only read of a create's drafts is
@@ -63,6 +94,10 @@ GF1 removes the create from the page, and today the only read of a create's draf
 
 `GET projects/{id}/artifacts` → `GccArtifact[]` (the existing artifact shape), every artifact of every
 create on the project until GR4 lands, then the project's own.
+
+Since 2026-10-05 (`62efbad`) each entry also carries `latestVersionNumber` and `latestVersionAtUtc`,
+and the list is ordered by the second, most recently written first. `createdAtUtc` is when the page
+was first made, which stops being when its text was written the first time a Generate rewrites it.
 
 The version routes the workspace already uses are keyed by artifact or version id and stay as they
 are: `GET versions?artifactId=`, `POST versions/{id}/revise`, `/approve`, `GET versions/{id}/seo`,
