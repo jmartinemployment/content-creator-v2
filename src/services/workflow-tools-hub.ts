@@ -73,6 +73,12 @@ export type GccPartnerToolReadiness = {
   pagesAttempted: number;
   pagesFailed: number;
   populatedCategories: number;
+  /**
+   * How many categories `populatedCategories` is out of -- the number the gate counts across, sent
+   * with the count. The page had "of 22" written into it and went on saying 22 after the schema
+   * dropped to twenty. Absent on a run recorded before the server sent it.
+   */
+  totalCategories?: number;
   hasCapabilitySignal: boolean;
   /** The extraction was read from the bank rather than paid for on this run. */
   reused?: boolean;

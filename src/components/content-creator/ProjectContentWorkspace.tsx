@@ -1493,7 +1493,11 @@ function GenerateRunReport({
                     `extraction failed on all ${partner.pagesAttempted} pages`
                   ) : (
                     <>
-                      {partner.populatedCategories} of 22 categories
+                      {/* The total comes with the count. Where a recorded run carries none, the
+                          count is given alone rather than against a number this page assumes. */}
+                      {typeof partner.totalCategories === "number"
+                        ? `${partner.populatedCategories} of ${partner.totalCategories} categories`
+                        : `${partner.populatedCategories} categories`}
                       {partner.pagesFailed > 0
                         ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
                         : partner.reused
