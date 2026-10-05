@@ -39,6 +39,7 @@ is the order. Section 5 is how each piece is proven.
 | **Fail closed. No middle states. No fallbacks.** A draft saved with its gap named is not a middle state; a draft silently thinned is. | AGENTS.md; Jeff 2026-09-27 (CTA), 2026-10-04 (partner mentions) |
 | **Tool equals Pillar on every measure.** Quality beats count, and the floor is still a floor. | Jeff, 2026-09-22, 2026-09-28 |
 | **A quotation is the partner's published words, chosen by number from spans the system cut.** The model never types a quote. | Design, enforced 2026-10-03 |
+| **A tool page's path carries the keyword; its on-page title is `{Product}: {Keyword}`.** Path: `{tool base}/{department}/{descriptor}/{keyword}/{product}`, e.g. `/tools/accounting/accounts-payable/automated-approval-workflows/ramp`. The title on the page (h1, title tag, JSON-LD name) reads `Ramp: Automated Approval Workflows`; the artifact name and the slug stay the product. Pillar and blog paths are unchanged. | Jeff, 2026-10-04 |
 | **Service boundaries.** Crawling is Geek-Crawler-v2's. Retrieval and verification are Geek-Crawler-Rag's; it never generates. Generation is GeekAPI's. Data is GeekRepository's. Content Creator passes a run id and displays results; it has no crawler and no browser. | AGENTS.md |
 | **Content types.** Twenty, listed below. Seven are live. A disabled type is enabled only when its spine, its gate, and one real proof exist. | Jeff, 2026-10-04 |
 
