@@ -1,4 +1,4 @@
-import { draftWrittenLabel, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
+import { draftWrittenLabel, lastRunLines, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -76,3 +76,41 @@ assertEqual(
 assertEqual(runSavedLine(6), "It saved 6 drafts. The first is open below.", "a run that saved several");
 assertEqual(runSavedLine(1), "It saved 1 draft. It is open below.", "a run that saved one");
 assertEqual(runSavedLine(0), "It saved no drafts.", "a run that finished with every page refused");
+
+// The 2:32 PM run on "test", read back after a reload.
+assertEqual(
+  lastRunLines(
+    {
+      status: "ready",
+      finishedAtUtc: "2026-10-05T18:32:07Z",
+      resultJson: JSON.stringify({ created: [{ artifact: { id: "a" } }, { artifact: { id: "b" } }], refusals: ["x"] }),
+    },
+    now,
+    NY,
+    "en-US",
+  ),
+  ["The last Generate finished at 2:32 PM. It saved 2 drafts."],
+  "an ended run says when it finished and what it saved",
+);
+// The 2:11 PM run, which failed on the length band.
+assertEqual(
+  lastRunLines(
+    { status: "failed", finishedAtUtc: "2026-10-05T18:14:30Z", error: "InvalidOperationException: brief required: missing lengthBand" },
+    now,
+    NY,
+    "en-US",
+  ),
+  ["The last Generate failed at 2:14 PM: InvalidOperationException: brief required: missing lengthBand"],
+  "a failed run says why, in the words it failed with",
+);
+assertEqual(
+  lastRunLines({ status: "ready", finishedAtUtc: "2026-10-03T22:15:00Z", resultJson: null }, now, NY, "en-US"),
+  ["The last Generate finished at Oct 3, 6:15 PM."],
+  "a run from another day carries its date, and a result that is not there claims nothing",
+);
+assertEqual(
+  lastRunLines({ status: "failed", finishedAtUtc: null, error: "  " }, now, NY, "en-US"),
+  ["The last Generate failed: no reason was recorded."],
+  "a failure with no reason says there is none",
+);
+

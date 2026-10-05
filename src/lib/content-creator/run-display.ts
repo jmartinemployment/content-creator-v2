@@ -94,3 +94,29 @@ export function runSavedLine(saved: number): string {
   if (saved === 0) return "It saved no drafts.";
   return saved === 1 ? "It saved 1 draft. It is open below." : `It saved ${saved} drafts. The first is open below.`;
 }
+
+/**
+ * A project's last Generate, as the page says it when it opens: that it ended, when, and what it
+ * left -- the lines that used to exist only while the page that watched the run stayed open.
+ *
+ * Not "open below": on a page that has just loaded, nothing was opened by that run.
+ */
+export function lastRunLines(
+  run: { status: string; finishedAtUtc?: string | null; resultJson?: string | null; error?: string | null },
+  now: Date = new Date(),
+  timeZone?: string,
+  locale?: string,
+): string[] {
+  const when = run.finishedAtUtc ? draftWrittenLabel(run.finishedAtUtc, now, timeZone, locale) : "";
+  const at = when ? ` at ${when}` : "";
+
+  if (run.status === "failed") {
+    return [`The last Generate failed${at}: ${run.error?.trim() || "no reason was recorded."}`];
+  }
+
+  const saved = savedByRun(run.resultJson);
+  if (saved === null) return [`The last Generate finished${at}.`];
+  const count = saved.length === 0 ? "no drafts" : saved.length === 1 ? "1 draft" : `${saved.length} drafts`;
+  return [`The last Generate finished${at}. It saved ${count}.`];
+}
+

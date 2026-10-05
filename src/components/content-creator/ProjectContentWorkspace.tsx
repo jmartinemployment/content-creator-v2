@@ -11,6 +11,7 @@ import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
   draftWrittenLabel,
+  lastRunLines,
   runSavedLine,
   savedByRun,
   timeOfDay,
@@ -62,6 +63,7 @@ import {
   briefRevisionSavedAt,
   downloadProjectHtmlExport,
   generateProject,
+  getLatestProjectRun,
   listProjectArtifacts,
   listGccVersions,
   parseSiteSectionJson,
@@ -330,6 +332,17 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     void reloadRef.current();
   }, [projectId]);
 
+  // The project's newest Generate is read once when the workspace opens -- see resumeLatestRun.
+  // Through a ref for the same reason reload is: the function is made anew on each render, and the
+  // read happens once per project, not once per render.
+  const resumeLatestRunRef = useRef<(() => Promise<void>) | null>(null);
+  useEffect(() => {
+    resumeLatestRunRef.current = resumeLatestRun;
+  });
+  useEffect(() => {
+    void resumeLatestRunRef.current?.();
+  }, [projectId]);
+
   /**
    * Close the hub, from wherever.
    *
@@ -503,6 +516,96 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   }
 
   /**
+   * Put what an ended run recorded on the page: what it refused by name, the gaps it saved with, and
+   * the partner pre-flight. Added to what is already shown, never over it -- the live events of a
+   * run this page watched and the record of that run say the same things, and each is listed once.
+   */
+  function showRecorded(resultJson: string | null | undefined, jobId: string) {
+    const recorded = parseGenerateResultJson(resultJson);
+    const recordedRefusals = recorded?.refusals ?? [];
+    const recordedWarnings = recorded?.warnings ?? [];
+    const recordedPreflight = recorded?.preflight ?? [];
+    if (recordedWarnings.length > 0) {
+      // Already prefixed by type on the backend ("pillar: ...").
+      setGenerateWarnings((prev) => {
+        const next = [...prev];
+        for (const warning of recordedWarnings) if (!next.includes(warning)) next.push(warning);
+        return next;
+      });
+    }
+    if (recordedRefusals.length > 0) {
+      setGenerateNotes((prev) => {
+        const next = [...prev];
+        for (const refusal of recordedRefusals) {
+          // The live event names the type ("tool: Bill: ..."); the recorded refusal is the
+          // per-partner text alone, and only tool pages refuse per partner.
+          const note = `tool: ${refusal}`;
+          if (!next.includes(note)) next.push(note);
+        }
+        return next;
+      });
+    }
+    if (recordedPreflight.length > 0) {
+      setPreflight((prev) =>
+        prev ?? {
+          jobId,
+          contentType: "tool",
+          ready: recordedPreflight.filter((r) => r.ready).length,
+          total: recordedPreflight.length,
+          partners: recordedPreflight,
+        },
+      );
+    }
+  }
+
+  /**
+   * Read the project's newest Generate when the workspace opens, and pick up from it.
+   *
+   * A run going now is rejoined: the indicator comes up with the time the run really started, and
+   * the hub sends the run's current state on joining, so a run that ended a moment ago ends here
+   * too. A run that has ended is shown with what it recorded -- when it finished, what it saved,
+   * what it refused and why -- which until now was on the page only for as long as the page that
+   * watched the run stayed open.
+   */
+  async function resumeLatestRun() {
+    let latest;
+    try {
+      latest = await getLatestProjectRun(projectId);
+    } catch (err) {
+      // Said, not swallowed: without this read the page does not know whether a run is going.
+      const reason = err instanceof Error ? err.message : String(err);
+      pushGenerateMsg(
+        `This page could not read whether a Generate is running on this project (${reason}). Reload it before pressing Generate.`,
+      );
+      return;
+    }
+    if (!latest) return;
+
+    if (latest.status === "running") {
+      setRunIndicatorHidden(false);
+      setGenerateRun({
+        types: latest.requestedTypes,
+        accepted: true,
+        startedAt: new Date(latest.startedAtUtc),
+      });
+      try {
+        await attachToGenerateJob(latest.jobId);
+      } catch (err) {
+        if (generateJobIdRef.current !== null) {
+          const reason = err instanceof Error ? err.message : String(err);
+          stopFollowing(
+            `A Generate is running on this project, but this page could not connect to follow it (${reason})`,
+          );
+        }
+      }
+      return;
+    }
+
+    for (const line of lastRunLines(latest)) pushGenerateMsg(line);
+    showRecorded(latest.resultJson, latest.jobId);
+  }
+
+  /**
    * This page can no longer hear the run, and the run may well still be going. The indicator comes
    * down and the reason is said: a page that cannot hear a run cannot go on saying it is running,
    * and must not say it has stopped either.
@@ -560,41 +663,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           // missed every refusal pushed while it was away, so three tool tabs appeared with no
           // explanation. resultJson carries the same refusals and the same pre-flight, which the
           // coordinator stores for exactly this reason; this handler never read it.
-          const recorded = parseGenerateResultJson(evt.resultJson);
-          const recordedRefusals = recorded?.refusals ?? [];
-          const recordedWarnings = recorded?.warnings ?? [];
-          const recordedPreflight = recorded?.preflight ?? [];
-          if (recordedWarnings.length > 0) {
-            // Already prefixed by type on the backend ("pillar: ...").
-            setGenerateWarnings((prev) => {
-              const next = [...prev];
-              for (const warning of recordedWarnings) if (!next.includes(warning)) next.push(warning);
-              return next;
-            });
-          }
-          if (recordedRefusals.length > 0) {
-            setGenerateNotes((prev) => {
-              const next = [...prev];
-              for (const refusal of recordedRefusals) {
-                // The live event names the type ("tool: Bill: ..."); the recorded refusal is the
-                // per-partner text alone, and only tool pages refuse per partner.
-                const note = `tool: ${refusal}`;
-                if (!next.includes(note)) next.push(note);
-              }
-              return next;
-            });
-          }
-          if (recordedPreflight.length > 0) {
-            setPreflight((prev) =>
-              prev ?? {
-                jobId: evt.jobId,
-                contentType: "tool",
-                ready: recordedPreflight.filter((r) => r.ready).length,
-                total: recordedPreflight.length,
-                partners: recordedPreflight,
-              },
-            );
-          }
+          showRecorded(evt.resultJson, evt.jobId);
           pushGenerateMsg(`Generate finished at ${timeOfDay(new Date())}.`);
           endRun(savedByRun(evt.resultJson));
         } else if (evt.status === "failed") {

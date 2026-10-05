@@ -139,6 +139,34 @@ export function briefRevisionSavedAt(metadataJson: string | null | undefined): s
   }
 }
 
+/** A Generate on a project, as the server holds it. */
+export interface GccProjectRun {
+  /** What the page joins on the hub to follow a run that is still going. */
+  jobId: string;
+  status: "running" | "ready" | "failed" | string;
+  requestedTypes: string[];
+  provider: string;
+  startedAtUtc: string;
+  finishedAtUtc?: string | null;
+  briefRevisionSavedAtUtc: string;
+  /** What an ended run recorded: what it saved, what it refused by name, the pre-flight, the gaps. */
+  resultJson?: string | null;
+  error?: string | null;
+}
+
+/**
+ * The project's newest Generate -- the one going now, or the last to end -- or null when it has
+ * never run. Read once when the workspace opens: a run reports over the hub, which only a page that
+ * was open at the time hears, so without this a reload during a run shows nothing running and a
+ * reload after one loses what it reported.
+ */
+export async function getLatestProjectRun(projectId: string): Promise<GccProjectRun | null> {
+  const body = await gccRequest<{ run: GccProjectRun | null }>(
+    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/latest`,
+  );
+  return body.run ?? null;
+}
+
 /** Every draft on the project (contract §4). */
 export function listProjectArtifacts(projectId: string): Promise<GccArtifact[]> {
   return gccRequest<GccArtifact[]>(
