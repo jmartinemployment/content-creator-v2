@@ -128,6 +128,42 @@ each run's `hostProgressJson` discovery ledger. ramp.com (`4563f7ec`) still runn
   list and not measured.
 - Neither the cap of 50 nor the four rules changed. Undecided until ramp.com reports.
 
+**ramp.com, 2026-10-05.** Run `4563f7ec` did not finish on its own. At 13:02 UTC one
+`pages/batch` write hit undici's connect timeout (`UND_ERR_CONNECT_TIMEOUT`, 10 s, to
+`api.geekatyourspot.com`). The coordinator latched it and ended the crawl, and the same latch
+blocked the failed-status patch, so the run sat `external` on GeekAPI and `running` locally. Jeff
+had it completed as it stood: a `complete` patch built from its post-mortem, carrying the real
+report and discovery ledger, published 2,150 pages at 14:27:00 UTC and retired run `f8a3aa8c`
+(2,025 pages). Its ledger, cut short by the failure, so partial:
+
+| | ramp.com `4563f7ec` |
+|---|---|
+| discovered | 4,310 |
+| enqueued (seed / sitemap / link) | 2,483 (1 / 2,158 / 324) |
+| fetched / pages saved | 2,452 / 2,150 |
+| enqueued, not fetched | 31 |
+| budget exhausted | no |
+| off-sitemap admitted / suppressed | 322 / 127 |
+| refused: section | 1,810 (blog 1,408 over its 250 cap, archive 204, webinars 129, community 68) |
+| refused: directoryCap / facet / locale / calendar / pagination | 6 / 4 / 4 / 2 / 1 |
+| refused: share | 0 |
+| section admitted | blog 250, customers 124, community 10, case-studies 5, tools 3, free-tools 2, learn 2, faq 1, press 1, news 1, resources 1, insights 1 |
+| sitemap | 3,857 URLs, not truncated |
+
+Across all three re-crawls the trap rules refused 14 URLs and the cap of 50 refused 22 (16 on bill,
+6 on ramp). Neither is binding. Both stand as they are unless the plan creator decides otherwise.
+
+**`fabb42f` (Geek-Crawler-v2): an interrupted run is deleted, whatever interrupted it (Jeff,
+2026-10-05).** This replaces "keep for re-post" (`archiveFailure`), which nothing could re-post:
+there is no command and no retained payload.
+- A run that fails on a GeekAPI write now purges, post-mortem first. Its `deleteRun` bypasses the
+  latched coordinator, so it is still sent.
+- A run whose process died is deleted by the startup orphan pass, through the same function as
+  `DELETE /crawls/:runId`, where before it was only marked failed locally.
+- Unit 341 of 341, integration 11 of 11.
+- The wider durable-delivery redesign (outbox and SignalR ingest) was planned and then dropped by
+  Jeff in favour of this smallest change.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
