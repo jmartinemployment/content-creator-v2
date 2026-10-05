@@ -155,6 +155,14 @@ export interface GccArtifact {
   status: string;
   createdAtUtc: string;
   updatedAtUtc: string;
+  /**
+   * The page's newest version: its number, and when it was written. On the project's draft list.
+   *
+   * A project has one page per type and name, and a Generate rewrites it as a new version, so
+   * `createdAtUtc` -- when the page was first made -- is not when the text on it was written.
+   */
+  latestVersionNumber?: number | null;
+  latestVersionAtUtc?: string | null;
 }
 
 export interface GccArtifactVersion {

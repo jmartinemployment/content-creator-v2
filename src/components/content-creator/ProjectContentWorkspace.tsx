@@ -1026,11 +1026,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                     }
                   >
                     {a.name || a.id.slice(0, 8)}
-                    {/* Every Generate writes its drafts beside the earlier ones under the same
-                        names, so two pillars are two buttons reading the same thing. The time is
-                        what tells them apart. */}
-                    {draftWrittenLabel(a.createdAtUtc) ? (
-                      <span className="font-normal"> · {draftWrittenLabel(a.createdAtUtc)}</span>
+                    {/* When the text on this page was written: its newest version's time, not the
+                        day the page was first made. A Generate rewrites the pages it can and refuses
+                        the ones it cannot, so the pages of one tab are not all from one run -- and
+                        the time is what says which ones the last run left as they were. */}
+                    {a.latestVersionAtUtc && draftWrittenLabel(a.latestVersionAtUtc) ? (
+                      <span className="font-normal"> · {draftWrittenLabel(a.latestVersionAtUtc)}</span>
                     ) : null}
                     {a.status?.toLowerCase() === "approved" ? " ✓" : ""}
                   </button>
