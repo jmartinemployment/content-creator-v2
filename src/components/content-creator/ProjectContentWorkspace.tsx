@@ -11,8 +11,8 @@ import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
   draftWrittenLabel,
-  draftsFromRun,
   runSavedLine,
+  savedByRun,
   timeOfDay,
 } from "@/lib/content-creator/run-display";
 import {
@@ -199,14 +199,11 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // returns 202 and reports over SignalR -- see plans/generate-async-signalr.md.
   const hubRef = useRef<HubConnection | null>(null);
   const generateJobIdRef = useRef<string | null>(null);
-  // The drafts that were on the page when the run now going was started; null when they could not
-  // be read then. What the run saved is whatever is on the project afterwards and not in here.
-  const runDraftsBeforeRef = useRef<ReadonlySet<string> | null>(null);
-  // Set when a run ends and taken by the next read of the drafts, which is the first moment what
-  // the run saved can be told from what was already there.
-  const runEndedRef = useRef<{ draftsBefore: ReadonlySet<string> | null; failed: boolean } | null>(
-    null,
-  );
+  // Set when a run ends and taken by the next read of the drafts: the pages the run recorded
+  // saving, in the order it wrote them, or null when that is not known. A Generate rewrites the
+  // project's pages as new versions, so what a run saved is not a new draft to be found in the
+  // list -- it is what the run says it wrote.
+  const runEndedRef = useRef<{ savedIds: string[] | null } | null>(null);
   // Counts reads of the project. Only the newest one is shown: a run's last events each start a read
   // within a second of one another, and an earlier one answering late would otherwise put an older
   // list of drafts back on the page.
@@ -287,28 +284,25 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       // selection.
       //
       // That case was written down here and never built for a run that reports over the hub, which
-      // is every run. So a finished Generate left the page on the draft that was open before it --
-      // the same name, the same tab, eight hours older -- and the new one was a second, identical
-      // button beside it (Jeff, 2026-10-05: "New Run same as before", "And copy is identical").
+      // is every run. So a finished Generate left the page on the draft that was open before it
+      // (Jeff, 2026-10-05: "New Run same as before", "And copy is identical").
       const ended = runEndedRef.current;
       runEndedRef.current = null;
-      const savedByRun =
-        ended?.draftsBefore && drafts.error === null
-          ? draftsFromRun(d.artifacts, ended.draftsBefore)
-          : null;
-      if (ended && savedByRun) pushGenerateMsg(runSavedLine(savedByRun.length, ended.failed));
+      const savedIds = ended?.savedIds ?? null;
+      if (savedIds) pushGenerateMsg(runSavedLine(savedIds.length));
+      const firstSaved = savedIds ? d.artifacts.find((a) => a.id === savedIds[0]) : undefined;
       // The tab follows the draft: a tab picked before the run would otherwise stay open on a type
-      // the newest draft is not in.
-      if (savedByRun?.[0]) setSelectedType(null);
+      // the run's first draft is not in.
+      if (firstSaved) setSelectedType(null);
       const stillExists = selectedArtifactIdRef.current
         ? d.artifacts.find((a) => a.id === selectedArtifactIdRef.current)
         : undefined;
       // No type preference -- picking "blog" (or any other type) over whatever else exists is
-      // exactly the silent default this session removed everywhere else. The newest draft a run
-      // just saved wins; then whatever the operator most recently selected (stillExists, above);
-      // absent both, just the first artifact in the list, not the first one that happens to match
-      // a preferred type.
-      const target = savedByRun?.[0] ?? stillExists ?? d.artifacts[0] ?? null;
+      // exactly the silent default this session removed everywhere else. The first draft a run just
+      // saved wins; then whatever the operator most recently selected (stillExists, above); absent
+      // both, just the first artifact in the list, not the first one that happens to match a
+      // preferred type.
+      const target = firstSaved ?? stillExists ?? d.artifacts[0] ?? null;
       await loadVersionFor(target);
     } catch (err) {
       // An older read failing says nothing about the newer one now on its way.
@@ -493,15 +487,14 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   }
 
   /**
-   * The run is over. What it saved is whatever the next read of the drafts holds that was not there
-   * when it started -- reload() works that out, says it, and opens the newest of them.
+   * The run is over. `savedIds` is what it recorded saving, or null when that is not known -- a run
+   * that failed, or whose result did not arrive. reload() says how many and opens the first.
    *
    * Refs and stable setters only: the hub handlers that call this are made once per connection and
    * outlive the render that made them.
    */
-  function endRun(failed: boolean) {
-    runEndedRef.current = { draftsBefore: runDraftsBeforeRef.current, failed };
-    runDraftsBeforeRef.current = null;
+  function endRun(savedIds: string[] | null) {
+    runEndedRef.current = { savedIds };
     setGenerateRun(null);
     void reloadRef.current();
     // Ready and failed are terminal: there is nothing further to hear, so the socket is closed
@@ -515,7 +508,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
    * and must not say it has stopped either.
    */
   function stopFollowing(reason: string) {
-    runDraftsBeforeRef.current = null;
     pushGenerateMsg(
       `${reason}, so it can no longer say whether the run is still going. Reload the page in a few minutes: whatever the run saved will be there, each draft labelled with the time it was written.`,
     );
@@ -604,13 +596,13 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             );
           }
           pushGenerateMsg(`Generate finished at ${timeOfDay(new Date())}.`);
-          endRun(false);
+          endRun(savedByRun(evt.resultJson));
         } else if (evt.status === "failed") {
           // The refusal or fault verbatim -- the whole point of the job carrying its error.
           pushGenerateMsg(evt.error ?? "Generate failed.");
-          // A failed job can still have persisted the pieces that finished before it failed. Without
-          // a reload they stayed hidden until the operator refreshed the page.
-          endRun(true);
+          // Nothing is claimed about what a failed run saved: its result never arrived. The drafts
+          // are read again all the same, so whatever is on the project is what is on the page.
+          endRun(null);
         }
       });
 
@@ -627,7 +619,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             pushGenerateMsg(
               "The server no longer has this run. That is what a restart of the server leaves behind: a restart stops any run that is going.",
             );
-            endRun(true);
+            endRun(null);
             return;
           }
           stopFollowing(`This page reconnected but could not rejoin the run (${reason})`);
@@ -644,10 +636,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     setGenerateWarnings([]);
     setPreflight(null);
     setStalePrompt(null);
-    // What is on the project now, so what this run saves can be told from it afterwards. Unknown
-    // when the drafts could not be read -- and then nothing is claimed about what the run saved.
-    runDraftsBeforeRef.current =
-      draftsError === null && detail ? new Set(detail.artifacts.map((a) => a.id)) : null;
     runEndedRef.current = null;
     setRunIndicatorHidden(false);
     setGenerateRun({ types: outputTypes, accepted: false, startedAt: new Date() });
@@ -708,7 +696,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           partners: result.preflight,
         });
       }
-      runDraftsBeforeRef.current = null;
       await reload();
       setGenerateRun(null);
     } catch (err) {
@@ -725,7 +712,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               : "Generate failed",
         );
       }
-      runDraftsBeforeRef.current = null;
       setGenerateRun(null);
     }
   }

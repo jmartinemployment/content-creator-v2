@@ -1,4 +1,4 @@
-import { draftWrittenLabel, draftsFromRun, runSavedLine, timeOfDay } from "./run-display.ts";
+import { draftWrittenLabel, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -40,29 +40,39 @@ assertEqual(
 
 assertEqual(draftWrittenLabel("not a date", now, NY, "en-US"), "", "an unreadable time is no label, not a wrong one");
 
-// The afternoon run on "test": new drafts beside the morning's, listed newest first.
-const before = new Set(["pillar-am", "blog-am", "tool-am"]);
+// What a finished run recorded. Three pieces, in the order they were written.
 assertEqual(
-  draftsFromRun(
-    [{ id: "tool-pm" }, { id: "blog-pm" }, { id: "pillar-pm" }, { id: "tool-am" }, { id: "blog-am" }, { id: "pillar-am" }],
-    before,
-  ).map((d) => d.id),
-  ["tool-pm", "blog-pm", "pillar-pm"],
-  "the drafts a run saved are the ones that were not there before it, newest first",
+  savedByRun(
+    JSON.stringify({
+      created: [
+        { artifact: { id: "pillar" }, version: { versionNumber: 2 } },
+        { artifact: { id: "blog" }, version: { versionNumber: 2 } },
+        { artifact: { id: "tool-ramp" }, version: { versionNumber: 1 } },
+      ],
+      refusals: ["Approvalmax: Refused"],
+    }),
+  ),
+  ["pillar", "blog", "tool-ramp"],
+  "the pages a run saved are the ones its own result lists, rewritten pages included",
 );
-// The 2:11 PM run was refused and saved nothing: there is no new draft to move to.
+// One piece and nothing else to report: the server sends the piece itself.
 assertEqual(
-  draftsFromRun([{ id: "pillar-am" }, { id: "blog-am" }, { id: "tool-am" }], before),
-  [],
-  "a run that saved nothing leaves the page where it was",
+  savedByRun(JSON.stringify({ artifact: { id: "pillar" }, version: { versionNumber: 3 } })),
+  ["pillar"],
+  "a run that wrote one piece records it bare",
+);
+// Every tool page refused: the list is there and it is empty.
+assertEqual(savedByRun(JSON.stringify({ created: [], refusals: ["a", "b"] })), [], "a run that saved nothing says so");
+// Not known is not "nothing".
+assertEqual(savedByRun(null), null, "no result is not a result of nothing");
+assertEqual(savedByRun("not json"), null, "a result that will not parse is not known");
+assertEqual(savedByRun(JSON.stringify({ refusals: [] })), null, "a result with no list of pieces is not known");
+assertEqual(
+  savedByRun(JSON.stringify({ created: [{ artifact: { id: "pillar" } }, { version: {} }] })),
+  null,
+  "a list with a piece that names no page is not vouched for",
 );
 
-assertEqual(runSavedLine(6, false), "It saved 6 drafts. The newest is open below.", "a run that saved several");
-assertEqual(runSavedLine(1, false), "It saved 1 draft. It is open below.", "a run that saved one");
-assertEqual(runSavedLine(0, false), "It saved no drafts.", "a run that finished with every page refused");
-assertEqual(runSavedLine(0, true), "Nothing was saved.", "a failed run saves nothing");
-assertEqual(
-  runSavedLine(2, true),
-  "It saved 2 drafts before it failed. The newest is open below.",
-  "a run that failed part-way through saving says what it left",
-);
+assertEqual(runSavedLine(6), "It saved 6 drafts. The first is open below.", "a run that saved several");
+assertEqual(runSavedLine(1), "It saved 1 draft. It is open below.", "a run that saved one");
+assertEqual(runSavedLine(0), "It saved no drafts.", "a run that finished with every page refused");

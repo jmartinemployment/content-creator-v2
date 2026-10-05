@@ -7,8 +7,8 @@
  * thing with nothing between them but the order. The old one read as the new one -- "the copy is
  * identical" -- because it was the old one.
  *
- * Two facts fix that, and both are the draft's own: when it was written, and whether it is from the
- * run that just finished.
+ * Two facts fix that: when a draft was written, which is the draft's own, and what the run that
+ * just finished saved, which the run records.
  */
 
 /**
@@ -43,29 +43,54 @@ export function draftWrittenLabel(
 }
 
 /**
- * The drafts a run saved: the ones on the project now that were not there when it started, in the
- * order given. The server lists drafts newest first, so the first of these is the newest.
+ * The drafts a finished run saved, as the run itself recorded them: the ids of the pages it wrote,
+ * in the order it wrote them. Null when the record carries no such list or will not parse -- which
+ * is "not known", and nothing is then claimed about what the run saved.
  *
- * A run that was refused saves nothing, and then this is empty and the page stays on the draft the
- * operator was reading rather than moving to a different old one.
+ * Read from the run's own result rather than worked out by comparing the project's drafts before
+ * and after. A Generate rewrites a project's existing pages as new versions, so a run that rewrote
+ * six pages leaves no new draft to find and a before-and-after comparison reports that it saved
+ * nothing.
+ *
+ * Two shapes, both the server's: `{ created: [{ artifact, version }, ...] }`, and a bare
+ * `{ artifact, version }` when the run wrote exactly one piece with nothing else to report.
  */
-export function draftsFromRun<T extends { id: string }>(
-  drafts: readonly T[],
-  idsBeforeTheRun: ReadonlySet<string>,
-): T[] {
-  return drafts.filter((draft) => !idsBeforeTheRun.has(draft.id));
+export function savedByRun(resultJson: string | null | undefined): string[] | null {
+  if (!resultJson) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(resultJson);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const idOf = (piece: unknown): string | null => {
+    if (!piece || typeof piece !== "object") return null;
+    const artifact = (piece as { artifact?: unknown }).artifact;
+    if (!artifact || typeof artifact !== "object") return null;
+    const id = (artifact as { id?: unknown }).id;
+    return typeof id === "string" && id.length > 0 ? id : null;
+  };
+
+  const created = (parsed as { created?: unknown }).created;
+  if (Array.isArray(created)) {
+    const ids = created.map(idOf);
+    // A list with a piece that names no page is not a list this can vouch for.
+    return ids.every((id): id is string => id !== null) ? ids : null;
+  }
+
+  const only = idOf(parsed);
+  return only === null ? null : [only];
 }
 
 /**
- * What a run left behind, in a sentence -- the answer to "did anything change?".
+ * What a finished run left behind, in a sentence -- the answer to "did anything change?".
  *
- * A run whose types all pass saves every draft together at the end; one that fails saves none. So
- * "saved no drafts" after a failure is the expected outcome, and after a success it means every
- * page was refused, each by name, in the list under it.
+ * A run saves every draft together at the end, so "saved no drafts" means every page it tried was
+ * refused, each by name, in the list under it.
  */
-export function runSavedLine(saved: number, failed: boolean): string {
-  if (saved === 0) return failed ? "Nothing was saved." : "It saved no drafts.";
-  const count = saved === 1 ? "1 draft" : `${saved} drafts`;
-  const where = saved === 1 ? "It is open below." : "The newest is open below.";
-  return failed ? `It saved ${count} before it failed. ${where}` : `It saved ${count}. ${where}`;
+export function runSavedLine(saved: number): string {
+  if (saved === 0) return "It saved no drafts.";
+  return saved === 1 ? "It saved 1 draft. It is open below." : `It saved ${saved} drafts. The first is open below.`;
 }
