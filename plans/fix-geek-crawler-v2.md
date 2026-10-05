@@ -98,6 +98,36 @@ C2 still owes.
   the totals but not which directories hit the cap of 50. Getting the per-directory breakdown means a
   change to `discovery-ledger.ts`. Per the instruction to stop, it is not made; it needs a decision.
 
+**Re-crawl measurements, 2026-10-05.** Crawler process started 07:57 local, after `d8e4341`. Read from
+each run's `hostProgressJson` discovery ledger. ramp.com (`4563f7ec`) still running when recorded.
+
+| | lightyear.cloud `84f4f34f` | bill.com `e17ef3c0` |
+|---|---|---|
+| discovered | 322 | 2,115 |
+| enqueued (seed / sitemap / link) | 134 (1 / 23 / 110) | 665 (1 / 396 / 268) |
+| fetched / pages saved | 134 / 116 | 665 / 602 |
+| enqueued, not fetched | 0 | 0 |
+| budget exhausted | no (134 of 2,500) | no (665 of 2,500) |
+| off-sitemap admitted / suppressed | 107 / 58 | 228 / 60 |
+| refused: share | 184 | 1,428 |
+| refused: directoryCap | 0 | 16 |
+| refused: pagination / facet / search / calendar | 0 / 0 / 0 / 0 | 2 / 2 / 0 / 0 |
+| refused: section | 0 | 2 |
+| refused: locale / invalid / depth | 4 / 0 / 0 | 0 / 0 / 0 |
+| section admitted | blog 5, resources 21 | case-studies 227, resource-center 35, blog 31, learn 6, guides 5, press 4, tools 2, templates 1, resources 1, articles 1 |
+| section suppressed | none | webinars 1, events 1 |
+| sitemap | 155 URLs, not truncated | 1,827 URLs, not truncated |
+
+- C1 done-when, lightyear.cloud: met. 10 `/features/*` pages fetched.
+- C1 done-when, bill.com: met, but the done-when names the wrong URL. bill.com has no `/pricing`; it
+  301-redirects to `/product/pricing`, which the sitemap lists, the homepage links, and the crawl
+  fetched. The done-when should read `/product/pricing`.
+- The share gate is the dominant refusal on both runs. The trap rules refused 4 URLs in total and
+  the cap of 50 refused 16, all on bill.com. Which directory hit the cap is not in the ledger (see
+  the gap above); `/find-an-accountant/`, at 49 saved pages, is the likely one, inferred from the page
+  list and not measured.
+- Neither the cap of 50 nor the four rules changed. Undecided until ramp.com reports.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
