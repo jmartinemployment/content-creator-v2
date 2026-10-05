@@ -7,7 +7,7 @@ import {
   ApiError,
   type GccProject,
 } from "@/services/gcc-projects-api";
-import { checkHostsIndexed, type HostIndexed } from "@/services/gcc-api";
+import { checkHostsIndexed, type DeclaredUrlList, type HostIndexed } from "@/services/gcc-api";
 import { unindexedUrls, usableUrls } from "@/lib/declared-url-gate";
 
 /** The three URL fields, each with its own check state so one field's error is not shown on all. */
@@ -19,6 +19,24 @@ type FieldKey = "site" | "partner" | "competitor";
  * duplicate. All three pass the same test — only the count differs.
  */
 const REQUIRED: Record<FieldKey, number> = { site: 1, partner: 5, competitor: 5 };
+
+/**
+ * The list each field is, as the index names it. Sent with every check: a URL is usable as a member
+ * of the list it is entered in, because that is how Generate searches its crawl.
+ */
+const LIST: Record<FieldKey, DeclaredUrlList> = {
+  site: "project-site",
+  partner: "partner",
+  competitor: "competitors",
+};
+
+/**
+ * The index's answers, per field. Not one map for the form: the same URL entered as a partner and as
+ * a competitor is two questions with two answers.
+ */
+type Answers = Record<FieldKey, Record<string, HostIndexed>>;
+
+const NO_ANSWERS: Answers = { site: {}, partner: {}, competitor: {} };
 
 /** One URL per line; blanks dropped. Parsing only — validity is the index's answer. */
 function parseLines(raw: string): string[] {
@@ -142,7 +160,7 @@ export default function ProjectForm({
   // One per line, which is the shape the textareas take and the shape the lists are stored in.
   const [partnerSeeds, setPartnerSeeds] = useState((project?.partnerUrls ?? []).join("\n"));
   const [competitorSeeds, setCompetitorSeeds] = useState((project?.competitorUrls ?? []).join("\n"));
-  const [indexed, setIndexed] = useState<Record<string, HostIndexed>>({});
+  const [indexed, setIndexed] = useState<Answers>(NO_ANSWERS);
   // Per field, not per form. One shared pair of flags meant a check on the site URL rendered
   // "Checking the index…" under partners and competitors too, which with the gate live would
   // misreport which field is blocking.
@@ -181,7 +199,7 @@ export default function ProjectForm({
   // page is indexed and gives a writer nothing -- and asking the weaker one here while every other
   // line asks the stronger one let a site read green, hand over a Run ID, and still be refused by
   // the server. One row, one verdict.
-  const siteRow = siteUrls[0] ? indexed[siteUrls[0]] : undefined;
+  const siteRow = siteUrls[0] ? indexed.site[siteUrls[0]] : undefined;
   const projectSiteRunId = siteRow?.usable ? siteRow.runId : null;
 
   /**
@@ -195,20 +213,20 @@ export default function ProjectForm({
   async function resolveAnswers(
     field: FieldKey,
     urls: string[],
-    known: Record<string, HostIndexed>,
-  ): Promise<Record<string, HostIndexed>> {
-    const pending = urls.filter((u) => known[u] === undefined);
+    known: Answers,
+  ): Promise<Answers> {
+    const pending = urls.filter((u) => known[field][u] === undefined);
     if (pending.length === 0) return known;
     setChecking((prev) => ({ ...prev, [field]: true }));
     setIndexErrors((prev) => ({ ...prev, [field]: null }));
     try {
-      const rows = await checkHostsIndexed(pending);
-      const merged = { ...known };
-      for (const r of rows) merged[r.url] = r;
+      const rows = await checkHostsIndexed(pending, LIST[field]);
+      const merged: Answers = { ...known, [field]: { ...known[field] } };
+      for (const r of rows) merged[field][r.url] = r;
       // Functional update: another field's check may have landed while this one was in flight.
       setIndexed((prev) => {
-        const next = { ...prev };
-        for (const r of rows) next[r.url] = r;
+        const next: Answers = { ...prev, [field]: { ...prev[field] } };
+        for (const r of rows) next[field][r.url] = r;
         return next;
       });
       return merged;
@@ -227,14 +245,14 @@ export default function ProjectForm({
 
   /** Ask the index again for URLs already answered, so a finished crawl can turn one green. */
   async function recheck(field: FieldKey, urls: string[]) {
-    setIndexed((prev) => {
-      const next = { ...prev };
-      for (const u of urls) delete next[u];
-      return next;
+    const without = (answers: Answers): Answers => ({
+      ...answers,
+      [field]: Object.fromEntries(
+        Object.entries(answers[field]).filter(([u]) => !urls.includes(u)),
+      ),
     });
-    await resolveAnswers(field, urls, Object.fromEntries(
-      Object.entries(indexed).filter(([u]) => !urls.includes(u)),
-    ));
+    setIndexed(without);
+    await resolveAnswers(field, urls, without(indexed));
   }
 
   // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
@@ -243,22 +261,31 @@ export default function ProjectForm({
   // index return a run id for it -- which is the same question wearing a different shape, and two
   // shapes of one rule is how they come to disagree.
   // What the project is saved with, and what the floor of five is measured on. Mirrors
-  // GccProjectsController.ResolveDeclaredUrlsAsync, so the form and the server cannot reach
+  // GccDeclaredUrlValidator.ForSaveAsync, so the form and the server cannot reach
   // different verdicts about the same list.
-  const usablePartners = usableUrls(partnerUrls, indexed);
-  const usableCompetitors = usableUrls(competitorUrls, indexed);
+  const usablePartners = usableUrls(partnerUrls, indexed.partner);
+  const usableCompetitors = usableUrls(competitorUrls, indexed.competitor);
 
   // Excluded, not blocking. A URL with no crawl behind it is dropped from the project rather than
   // preventing it, so long as the floor is still met without it -- and dropping it is what keeps
   // the promise the server's docs make, since a declared partner obliges Pillar, Blog and Tool to
   // name it and one with no evidence buys a refusal at generate time instead.
-  const excluded = unindexedUrls([...partnerUrls, ...competitorUrls], indexed);
+  const excluded = [
+    ...unindexedUrls(partnerUrls, indexed.partner),
+    ...unindexedUrls(competitorUrls, indexed.competitor),
+  ];
 
   // Everything currently without an answer the form can act on, the site included. Re-check is the
   // only action these have, and the site has to be in it: it is the field whose Run ID the gate
   // reads, so a project-site crawl that finishes while the form is open could not otherwise be
   // picked up without reloading.
-  const recheckable = unindexedUrls([...siteUrls, ...partnerUrls, ...competitorUrls], indexed);
+  const recheckable: Record<FieldKey, string[]> = {
+    site: unindexedUrls(siteUrls, indexed.site),
+    partner: unindexedUrls(partnerUrls, indexed.partner),
+    competitor: unindexedUrls(competitorUrls, indexed.competitor),
+  };
+  const anyRecheckable =
+    recheckable.site.length + recheckable.partner.length + recheckable.competitor.length > 0;
 
   // Two stages, in the server's order. The declared count costs nothing and can be acted on before
   // the index is asked, and a list already shorter than the floor cannot reach it once the unusable
@@ -341,7 +368,7 @@ export default function ProjectForm({
 
     // The site is not one of several. There is exactly one, the project is grounded on its run, and
     // nothing else can stand in for it — so an unusable site URL is a refusal and never an exclusion.
-    const siteAnswer = siteUrls[0] ? answers[siteUrls[0]] : undefined;
+    const siteAnswer = siteUrls[0] ? answers.site[siteUrls[0]] : undefined;
     const runId = siteAnswer?.usable ? siteAnswer.runId : null;
     if (!runId) {
       setError(
@@ -355,9 +382,12 @@ export default function ProjectForm({
     // Saved with the usable subset, and the floor is measured on it. The ones without evidence are
     // excluded rather than blocking, which is also what stops them obliging a mention at generate
     // time that nothing could satisfy.
-    const partnersToSave = usableUrls(partnerUrls, answers);
-    const competitorsToSave = usableUrls(competitorUrls, answers);
-    const withoutEvidence = unindexedUrls([...partnerUrls, ...competitorUrls], answers);
+    const partnersToSave = usableUrls(partnerUrls, answers.partner);
+    const competitorsToSave = usableUrls(competitorUrls, answers.competitor);
+    const withoutEvidence = [
+      ...unindexedUrls(partnerUrls, answers.partner),
+      ...unindexedUrls(competitorUrls, answers.competitor),
+    ];
 
     if (
       partnersToSave.length < REQUIRED.partner ||
@@ -503,7 +533,7 @@ export default function ProjectForm({
           />
           <IndexReport
             urls={siteUrls}
-            results={indexed}
+            results={indexed.site}
             checking={checking.site}
             error={indexErrors.site}
             kind="site"
@@ -588,7 +618,7 @@ export default function ProjectForm({
             />
             <IndexReport
               urls={partnerUrls}
-              results={indexed}
+              results={indexed.partner}
               checking={checking.partner}
               error={indexErrors.partner}
               kind="list"
@@ -610,7 +640,7 @@ export default function ProjectForm({
             />
             <IndexReport
               urls={competitorUrls}
-              results={indexed}
+              results={indexed.competitor}
               checking={checking.competitor}
               error={indexErrors.competitor}
               kind="list"
@@ -641,7 +671,7 @@ export default function ProjectForm({
         {blockingReason ? (
           <span className="text-xs text-amber-800">
             {blockingReason}
-            {recheckable.length > 0 ? (
+            {anyRecheckable ? (
               <>
                 {" "}
                 {/* All three fields, including the site. Re-check is the only action a URL without
@@ -651,9 +681,9 @@ export default function ProjectForm({
                 <button
                   type="button"
                   onClick={() => {
-                    void recheck("site", siteUrls.filter((u) => recheckable.includes(u)));
-                    void recheck("partner", partnerUrls.filter((u) => recheckable.includes(u)));
-                    void recheck("competitor", competitorUrls.filter((u) => recheckable.includes(u)));
+                    void recheck("site", recheckable.site);
+                    void recheck("partner", recheckable.partner);
+                    void recheck("competitor", recheckable.competitor);
                   }}
                   className="underline decoration-dotted underline-offset-2"
                 >

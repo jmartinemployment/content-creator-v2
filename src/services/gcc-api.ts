@@ -572,8 +572,9 @@ export interface HostIndexed {
    *
    * Indexed is not usable. A crawl can complete having been blocked at its first page, or against a
    * site that renders nothing without JavaScript, and still put a row in the index: that passes
-   * "does an index exist" and gives a writer nothing. The server decides this once, from the run's
-   * own page and chunk counts, so the form and the project gate cannot answer it differently.
+   * "does an index exist" and gives a writer nothing. The server decides this once -- from the run's
+   * page and chunk counts and from a search of the index itself -- so the form and the project gate
+   * cannot answer it differently.
    */
   usable: boolean;
   /** Why not, in the operator's terms. Null when usable. */
@@ -582,16 +583,27 @@ export interface HostIndexed {
   chunks: number | null;
 }
 
+/** The list a URL is entered in, as the index names it. */
+export type DeclaredUrlList = "project-site" | "partner" | "competitors";
+
 /**
- * Whether an index exists for each URL's host.
+ * Whether each URL can be written from, as a member of the list it is entered in.
  *
- * The only question that decides whether a create can use an entered URL. A URL that will not parse
- * has no host and comes back not indexed, so nothing checks syntax separately.
+ * The only question that decides whether a project can use an entered URL, and the same answer the
+ * server gives on save and before Generate. A URL that will not parse has no host and comes back not
+ * indexed, so nothing checks syntax separately.
+ *
+ * The list is required because it is part of the question: Generate searches a URL's crawl as the
+ * kind of list it is declared in, so a competitor is only usable if the index holds its pages as a
+ * competitor crawl. The server refuses a check that does not say.
  */
-export async function checkHostsIndexed(urls: string[]): Promise<HostIndexed[]> {
+export async function checkHostsIndexed(
+  urls: string[],
+  crawlType: DeclaredUrlList,
+): Promise<HostIndexed[]> {
   const res = await gccRequest<{ results: HostIndexed[] }>("/api/rag/hosts-indexed", {
     method: "POST",
-    body: JSON.stringify({ urls }),
+    body: JSON.stringify({ urls, crawlType }),
   });
   return res.results ?? [];
 }
