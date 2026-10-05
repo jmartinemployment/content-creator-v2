@@ -10,6 +10,12 @@ import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
+  draftWrittenLabel,
+  draftsFromRun,
+  runSavedLine,
+  timeOfDay,
+} from "@/lib/content-creator/run-display";
+import {
   AUDIENCE_SEGMENTS,
   BUYING_STAGES,
   CONTENT_ANGLES,
@@ -95,6 +101,16 @@ function writtenBy(metadataJson?: string | null): string | null {
   }
 }
 
+/** A Generate this page started and is following. */
+type GenerateRun = {
+  /** The content types asked for, as the picker had them when Generate was pressed. */
+  types: string[];
+  /** False while the server is still checking the request; true once the run exists. */
+  accepted: boolean;
+  /** When Generate was pressed, then when the run was accepted. This page's own clock. */
+  startedAt: Date;
+};
+
 export default function ProjectContentWorkspace({ project }: { project: GccProject }) {
   const projectId = project.id;
   const [detail, setDetail] = useState<ProjectContent | null>(null);
@@ -111,7 +127,16 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // database, never the screen, so unsaved edits would reach no generate. True while the brief is
   // collapsed: it can only be collapsed when it is saved.
   const [briefSaved, setBriefSaved] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  // The Generate this page started and is following, or null. `accepted` is false while the server
+  // is still checking the request -- nothing is being written yet, and it may be refused -- and true
+  // once the run exists. One value rather than a `generating` flag beside it: what is running, since
+  // when, and whether it has started cannot disagree with whether anything is running at all.
+  const [generateRun, setGenerateRun] = useState<GenerateRun | null>(null);
+  const generating = generateRun !== null;
+  // The running indicator covers the page. The operator can put it away to read the page under it;
+  // it then stays as a bar at the top, so a run is never going with nothing on screen saying so
+  // (Jeff, 2026-10-05: "its just not clear that it is running").
+  const [runIndicatorHidden, setRunIndicatorHidden] = useState(false);
   // The run's progress, one line per event, in the order they arrived. It was one string, overwritten
   // per hub event, so with several artifacts of one type only the last "ready" survived on screen and
   // the run's history was whatever happened to arrive last.
@@ -174,6 +199,18 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // returns 202 and reports over SignalR -- see plans/generate-async-signalr.md.
   const hubRef = useRef<HubConnection | null>(null);
   const generateJobIdRef = useRef<string | null>(null);
+  // The drafts that were on the page when the run now going was started; null when they could not
+  // be read then. What the run saved is whatever is on the project afterwards and not in here.
+  const runDraftsBeforeRef = useRef<ReadonlySet<string> | null>(null);
+  // Set when a run ends and taken by the next read of the drafts, which is the first moment what
+  // the run saved can be told from what was already there.
+  const runEndedRef = useRef<{ draftsBefore: ReadonlySet<string> | null; failed: boolean } | null>(
+    null,
+  );
+  // Counts reads of the project. Only the newest one is shown: a run's last events each start a read
+  // within a second of one another, and an earlier one answering late would otherwise put an older
+  // list of drafts back on the page.
+  const reloadSeqRef = useRef(0);
 
   const loadVersionFor = useCallback(async (a: GccArtifact | null) => {
     setImagePromptsTab(false);
@@ -189,6 +226,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     }
     try {
       const versions = await listGccVersions(a.id);
+      // Another draft was chosen while this one's versions were being read. Showing these now would
+      // put one draft's text under another draft's name.
+      if (selectedArtifactIdRef.current !== a.id) return;
       const latest = [...versions].sort((x, y) => y.versionNumber - x.versionNumber)[0] ?? null;
       setVersion(latest);
     } catch (err) {
@@ -205,6 +245,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   const reload = useCallback(async () => {
     // No synchronous setState before the first await -- every path below still ends by setting
     // loadError to its correct value.
+    const seq = ++reloadSeqRef.current;
     try {
       // The brief does not wait on the drafts. They are two reads, and a drafts read that fails must
       // not take the brief -- the thing being saved -- off the screen with it.
@@ -218,6 +259,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           }),
         ),
       ]);
+      // A later read has started; that one is shown, not this.
+      if (seq !== reloadSeqRef.current) return;
       const artifacts = drafts.rows;
       setDraftsError(drafts.error);
       const d: ProjectContent = {
@@ -241,17 +284,35 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       // they've already selected an artifact (an earlier reload, or clicking a switcher tab), a
       // fresh reload must not silently snap back to the auto-picked "primary" one out from under
       // them. A generate that adds new artifacts is the one case reload() itself should move the
-      // selection — runGenerate passes the freshly created artifact's id explicitly for that.
+      // selection.
+      //
+      // That case was written down here and never built for a run that reports over the hub, which
+      // is every run. So a finished Generate left the page on the draft that was open before it --
+      // the same name, the same tab, eight hours older -- and the new one was a second, identical
+      // button beside it (Jeff, 2026-10-05: "New Run same as before", "And copy is identical").
+      const ended = runEndedRef.current;
+      runEndedRef.current = null;
+      const savedByRun =
+        ended?.draftsBefore && drafts.error === null
+          ? draftsFromRun(d.artifacts, ended.draftsBefore)
+          : null;
+      if (ended && savedByRun) pushGenerateMsg(runSavedLine(savedByRun.length, ended.failed));
+      // The tab follows the draft: a tab picked before the run would otherwise stay open on a type
+      // the newest draft is not in.
+      if (savedByRun?.[0]) setSelectedType(null);
       const stillExists = selectedArtifactIdRef.current
         ? d.artifacts.find((a) => a.id === selectedArtifactIdRef.current)
         : undefined;
       // No type preference -- picking "blog" (or any other type) over whatever else exists is
-      // exactly the silent default this session removed everywhere else. Whatever the operator
-      // most recently generated/selected wins (stillExists, above); absent that, just the first
-      // artifact in the list, not the first one that happens to match a preferred type.
-      const target = stillExists ?? d.artifacts[0] ?? null;
+      // exactly the silent default this session removed everywhere else. The newest draft a run
+      // just saved wins; then whatever the operator most recently selected (stillExists, above);
+      // absent both, just the first artifact in the list, not the first one that happens to match
+      // a preferred type.
+      const target = savedByRun?.[0] ?? stillExists ?? d.artifacts[0] ?? null;
       await loadVersionFor(target);
     } catch (err) {
+      // An older read failing says nothing about the newer one now on its way.
+      if (seq !== reloadSeqRef.current) return;
       setLoadError(
         err instanceof ApiError
           ? err.message
@@ -260,7 +321,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             : "Could not load the project's brief and drafts.",
       );
     }
-  }, [loadVersionFor, projectId]);
+  }, [loadVersionFor, projectId, pushGenerateMsg]);
 
   // reload is called through a ref rather than by name so this effect is not itself classified as
   // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
@@ -393,6 +454,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // so Generate was offered as enabled and then failed with an unexplained 400 every time
   // (Jeff, 2026-09-22: two hours of "same error"). Refuse here, in words, instead.
   const missingProjectSiteRun = !detail.projectSiteRunId;
+  const runIndicatorShown = generateRun !== null && !runIndicatorHidden;
 
   /**
    * Follow a generate job on the hub. Each content type pushes as it finishes, so artifacts appear
@@ -430,12 +492,51 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     }
   }
 
+  /**
+   * The run is over. What it saved is whatever the next read of the drafts holds that was not there
+   * when it started -- reload() works that out, says it, and opens the newest of them.
+   *
+   * Refs and stable setters only: the hub handlers that call this are made once per connection and
+   * outlive the render that made them.
+   */
+  function endRun(failed: boolean) {
+    runEndedRef.current = { draftsBefore: runDraftsBeforeRef.current, failed };
+    runDraftsBeforeRef.current = null;
+    setGenerateRun(null);
+    void reloadRef.current();
+    // Ready and failed are terminal: there is nothing further to hear, so the socket is closed
+    // rather than left to be dropped by a proxy and reported as a 1006 error.
+    closeHub();
+  }
+
+  /**
+   * This page can no longer hear the run, and the run may well still be going. The indicator comes
+   * down and the reason is said: a page that cannot hear a run cannot go on saying it is running,
+   * and must not say it has stopped either.
+   */
+  function stopFollowing(reason: string) {
+    runDraftsBeforeRef.current = null;
+    pushGenerateMsg(
+      `${reason}, so it can no longer say whether the run is still going. Reload the page in a few minutes: whatever the run saved will be there, each draft labelled with the time it was written.`,
+    );
+    setGenerateRun(null);
+    closeHub();
+  }
+
   async function attachToGenerateJob(jobId: string) {
     generateJobIdRef.current = jobId;
     let conn = hubRef.current;
     if (!conn) {
       conn = createWorkflowHubConnection();
       hubRef.current = conn;
+
+      // The connection retries on its own for about twenty seconds and then gives up. closeHub()
+      // clears the job id before it stops a connection, so a close that arrives with one still set
+      // is a connection that was lost, not one this page ended.
+      conn.onclose(() => {
+        if (generateJobIdRef.current === null) return;
+        stopFollowing("This page lost its connection to the run and could not get it back");
+      });
 
       onGccGenerateTypeEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
@@ -502,24 +603,36 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               },
             );
           }
-          pushGenerateMsg("Generate finished.");
-          setGenerating(false);
-          void reloadRef.current();
-          // Ready and failed are terminal: there is nothing further to hear, so the socket is closed
-          // rather than left to be dropped by a proxy and reported as a 1006 error.
-          closeHub();
+          pushGenerateMsg(`Generate finished at ${timeOfDay(new Date())}.`);
+          endRun(false);
         } else if (evt.status === "failed") {
           // The refusal or fault verbatim -- the whole point of the job carrying its error.
           pushGenerateMsg(evt.error ?? "Generate failed.");
-          setGenerating(false);
           // A failed job can still have persisted the pieces that finished before it failed. Without
           // a reload they stayed hidden until the operator refreshed the page.
-          void reloadRef.current();
-          closeHub();
+          endRun(true);
         }
       });
 
-      onGccGenerateReconnected(conn, () => generateJobIdRef.current);
+      // A rejoin the server refuses used to be swallowed, which left the page waiting on a run it
+      // would never hear from again. The hub refuses by name when it does not hold the job, and the
+      // one way it comes not to hold a job this page started is a restart, which stops the run.
+      onGccGenerateReconnected(
+        conn,
+        () => generateJobIdRef.current,
+        (refusedJobId, err) => {
+          if (refusedJobId !== generateJobIdRef.current) return;
+          const reason = err instanceof Error ? err.message : String(err);
+          if (reason.includes("Generate job not found")) {
+            pushGenerateMsg(
+              "The server no longer has this run. That is what a restart of the server leaves behind: a restart stops any run that is going.",
+            );
+            endRun(true);
+            return;
+          }
+          stopFollowing(`This page reconnected but could not rejoin the run (${reason})`);
+        },
+      );
     }
     await joinGccGenerate(conn, jobId);
   }
@@ -531,7 +644,13 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     setGenerateWarnings([]);
     setPreflight(null);
     setStalePrompt(null);
-    setGenerating(true);
+    // What is on the project now, so what this run saves can be told from it afterwards. Unknown
+    // when the drafts could not be read -- and then nothing is claimed about what the run saved.
+    runDraftsBeforeRef.current =
+      draftsError === null && detail ? new Set(detail.artifacts.map((a) => a.id)) : null;
+    runEndedRef.current = null;
+    setRunIndicatorHidden(false);
+    setGenerateRun({ types: outputTypes, accepted: false, startedAt: new Date() });
     try {
       const result = await generateProject(projectId, {
         outputTypes,
@@ -539,16 +658,26 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         acknowledgeStaleGrounding: acknowledgeStale,
       });
 
-      // Job shape: generation runs in the background and reports over the hub. `generating` stays
-      // true until a terminal job event arrives, so the button reflects real state rather than
-      // "the POST returned".
+      // Job shape: generation runs in the background and reports over the hub. The run stays set
+      // until a terminal job event arrives, so the page reflects real state rather than "the POST
+      // returned".
+      //
+      // No "each appears as it finishes" line any more. It was never true of a run: every piece is
+      // written first and all of them are saved together at the end, so for the whole run the page
+      // went on showing earlier drafts under a line that said new ones were arriving.
       if (result.jobId) {
-        pushGenerateMsg(
-          outputTypes.length > 1
-            ? `Generating ${outputTypes.length} content items — each appears as it finishes.`
-            : "Generating — this runs in the background.",
-        );
-        await attachToGenerateJob(result.jobId);
+        setGenerateRun((r) => (r ? { ...r, accepted: true, startedAt: new Date() } : r));
+        try {
+          await attachToGenerateJob(result.jobId);
+        } catch (err) {
+          // The run was accepted and is going; only this page's line to it failed. Reporting that
+          // as a failed Generate would be false, and would invite a second one. A close during the
+          // attempt has already been said by the connection's own handler.
+          if (generateJobIdRef.current !== null) {
+            const reason = err instanceof Error ? err.message : String(err);
+            stopFollowing(`The run was started, but this page could not connect to follow it (${reason})`);
+          }
+        }
         return;
       }
 
@@ -579,8 +708,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           partners: result.preflight,
         });
       }
+      runDraftsBeforeRef.current = null;
       await reload();
-      setGenerating(false);
+      setGenerateRun(null);
     } catch (err) {
       const stale = parseStaleGroundingError(err);
       if (stale) {
@@ -595,12 +725,50 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               : "Generate failed",
         );
       }
-      setGenerating(false);
+      runDraftsBeforeRef.current = null;
+      setGenerateRun(null);
     }
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
+    <>
+      {generateRun && runIndicatorShown ? (
+        <GenerateRunningIndicator run={generateRun} onHide={() => setRunIndicatorHidden(true)}>
+          <GenerateRunReport
+            msgs={generateMsgs}
+            preflight={preflight}
+            notes={generateNotes}
+            warnings={generateWarnings}
+          />
+        </GenerateRunningIndicator>
+      ) : null}
+    {/* Inert under the indicator: what is on the page is from earlier runs, and nothing on it can be
+        pressed through a cover that says a run is going. */}
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8" inert={runIndicatorShown}>
+      {/* The indicator, put away. It stays in view as the page scrolls -- below the site's own bar,
+          which is where the project page already pins its section list. */}
+      {generateRun && runIndicatorHidden ? (
+        <div
+          role="status"
+          className="sticky top-[5.5rem] z-20 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-brand bg-surface px-4 py-3 shadow-md"
+        >
+          <span className="flex items-center gap-2.5 text-sm text-foreground">
+            <RunSpinner className="h-4 w-4" />
+            <span>
+              <span className="font-semibold">{runHeadline(generateRun)}</span>
+              {generateRun.accepted ? ` — started at ${timeOfDay(generateRun.startedAt)}.` : "."} The drafts on this
+              page are from earlier runs.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setRunIndicatorHidden(false)}
+            className="text-sm font-medium text-[#C83803] underline-offset-2 hover:underline"
+          >
+            Show progress
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <Link href="/app/workflow" className="text-sm text-[#C83803] hover:underline">
           &larr; Back to workflow
@@ -754,121 +922,14 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
           ) : null}
-          {generateMsgs.length > 0 ? (
-            <ul className="mt-3 space-y-0.5">
-              {generateMsgs.map((msg) => (
-                <li key={msg} className="whitespace-pre-wrap text-sm text-foreground">
-                  {msg}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {/* The pre-flight, shown while the ready partners are still being written. It reports what
-              the gate measures -- what extraction FOUND -- because page and paragraph volume do not
-              predict it: a partner with hundreds of pages fails if extraction pulled one feature. */}
-          {preflight ? (
-            <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
-              <p className="text-sm font-medium text-foreground">
-                {everyPartnerFailedExtraction(preflight.partners)
-                  ? `Extraction failed for all ${preflight.total} partners — a provider fault, not your data`
-                  : `Partner readiness — ${preflight.ready} of ${preflight.total} can be grounded`}
-              </p>
-              {/* Twice on 2026-10-03 this panel reported a provider outage as five unusable partners:
-                  once for a 400 (temperature deprecated) and once for a 429 (no OpenAI credits). Both
-                  read as "0 of 22 categories ... no capability signal", which is the sentence for a
-                  partner whose site is thin. When nothing was extracted the counts describe nothing,
-                  so they are not shown. */}
-              {everyPartnerFailedExtraction(preflight.partners) ? (
-                <p className="mt-1 text-xs text-muted">
-                  No partner could be assessed. Category counts are omitted because nothing was
-                  extracted to count — the cause is in the error below.
-                </p>
-              ) : null}
-              <ul className="mt-2 space-y-1.5">
-                {preflight.partners.map((partner) => {
-                  const allFailed =
-                    partner.pagesAttempted > 0 && partner.pagesFailed >= partner.pagesAttempted;
-                  return (
-                  <li key={partner.host} className="text-sm">
-                    <span className="text-foreground">
-                      {partner.ready ? "\u2713" : "\u2717"} {partner.productName}
-                    </span>
-                    <span className="text-muted">
-                      {" \u2014 "}
-                      {allFailed ? (
-                        `extraction failed on all ${partner.pagesAttempted} pages`
-                      ) : (
-                        <>
-                          {partner.populatedCategories} of 22 categories
-                          {partner.pagesFailed > 0
-                            ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
-                            : partner.reused
-                              ? `, ${partner.pagesAttempted} pages reused from the bank`
-                              : `, ${partner.pagesAttempted} pages extracted`}
-                          {partner.hasCapabilitySignal ? "" : ", no capability signal"}
-                        </>
-                      )}
-                    </span>
-                    {/* The fault/shortage split, verbatim from the backend. A provider outage and a
-                        thin partner leave identical counts, so only this sentence separates them. */}
-                    {!partner.ready ? (
-                      <span className="mt-0.5 block text-xs text-muted">{partner.coverage}</span>
-                    ) : null}
-                  </li>
-                  );
-                })}
-              </ul>
-              {/* "The rest are" is only true when there IS a rest. Gated on ready < total alone, this
-                  printed directly under the all-failed headline and told the operator drafts were
-                  being written for partners that do not exist -- re-creating the false partial-success
-                  reading three lines below its own fix. */}
-              {preflight.ready > 0 && preflight.ready < preflight.total ? (
-                <p className="mt-2 text-xs text-muted">
-                  The partners above that cannot be grounded are not drafted. The rest are, and each
-                  is saved on its own.
-                </p>
-              ) : preflight.ready === 0 && preflight.total > 0 ? (
-                <p className="mt-2 text-xs text-muted">
-                  No partner could be grounded, so no tool page was drafted.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Named, never a count to be inferred. Each entry is one artifact that was not written
-              and the reason it was not. */}
-          {generateNotes.length > 0 ? (
-            <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
-              <p className="text-sm font-medium text-foreground">
-                Not written ({generateNotes.length})
-              </p>
-              <ul className="mt-1 space-y-1">
-                {generateNotes.map((note) => (
-                  <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
-                    {note}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {/* Saved, with a gap named. Distinct from "Not written": these pieces exist and can be
-              opened below; the line says what to add to them. */}
-          {generateWarnings.length > 0 ? (
-            <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
-              <p className="text-sm font-medium text-foreground">
-                Written with a gap ({generateWarnings.length})
-              </p>
-              <ul className="mt-1 space-y-1">
-                {generateWarnings.map((note) => (
-                  <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
-                    {note}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {runIndicatorShown ? null : (
+            <GenerateRunReport
+              msgs={generateMsgs}
+              preflight={preflight}
+              notes={generateNotes}
+              warnings={generateWarnings}
+            />
+          )}
         </Stage>
 
       <Stage step={3} title="Output">
@@ -979,6 +1040,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                     }
                   >
                     {a.name || a.id.slice(0, 8)}
+                    {/* Every Generate writes its drafts beside the earlier ones under the same
+                        names, so two pillars are two buttons reading the same thing. The time is
+                        what tells them apart. */}
+                    {draftWrittenLabel(a.createdAtUtc) ? (
+                      <span className="font-normal"> · {draftWrittenLabel(a.createdAtUtc)}</span>
+                    ) : null}
                     {a.status?.toLowerCase() === "approved" ? " ✓" : ""}
                   </button>
                 );
@@ -1004,6 +1071,13 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               <span className="text-sm text-muted">
                 {artifact?.type} · v{version.versionNumber}
               </span>
+              {/* When the text on screen was written. A tab holding one draft has no row of buttons
+                  to carry the time, and a revision is later than the draft it revises. */}
+              {draftWrittenLabel(version.createdAtUtc) ? (
+                <span className="text-sm text-muted">
+                  Written {draftWrittenLabel(version.createdAtUtc)}
+                </span>
+              ) : null}
               {approved ? (
                 <span className="text-sm text-[var(--gcc-accent)]">Approved</span>
               ) : null}
@@ -1264,6 +1338,244 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       ) : null}
       {actionMsg ? <p className="mt-4 text-sm text-muted">{actionMsg}</p> : null}
     </div>
+    </>
+  );
+}
+
+/** What the run is doing, in the words both the indicator and its bar use. */
+function runHeadline(run: GenerateRun): string {
+  if (!run.accepted) return "Checking before anything is written";
+  return `Generating ${run.types.map((t) => contentTypeLabel(t)).join(", ")}`;
+}
+
+/** Motion that says "working". Still for a reader who has asked for no motion; the words carry it. */
+function RunSpinner({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`${className} shrink-0 rounded-full border-2 border-brand border-t-transparent motion-safe:animate-spin`}
+    />
+  );
+}
+
+/**
+ * Over the whole page while a Generate runs.
+ *
+ * A run takes minutes and saves nothing until it ends, so for all of that time the page under this
+ * is exactly the page from before the run: earlier drafts, readable, under a small "Generating…" on
+ * a button that had scrolled out of view. On 2026-10-05 that was read as the run's own output --
+ * "still repeating wrong tools", "copy is identical" -- and it was the morning's (Jeff: "its just
+ * not clear that it is running... need a full page loading indicator").
+ *
+ * It says two different things, because Generate does two different things. Before the server
+ * accepts the run it is checking that the site, the partners and the competitors can be found, and
+ * may refuse; nothing is being written yet. After, it is writing.
+ *
+ * It can be put away, and then stays as a bar: the run reports over a connection that can be lost,
+ * and a cover with no way out of it would be a page that cannot be used at all.
+ */
+function GenerateRunningIndicator({
+  run,
+  onHide,
+  children,
+}: {
+  run: GenerateRun;
+  onHide: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gcc-run-indicator-title"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onHide();
+      }}
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-ink/75"
+    >
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="w-full max-w-xl rounded-lg border border-border bg-surface p-6 shadow-xl sm:p-8">
+          <div className="flex items-center gap-3">
+            <RunSpinner className="h-6 w-6" />
+            <h2 id="gcc-run-indicator-title" className="font-display text-xl text-foreground">
+              {runHeadline(run)}
+            </h2>
+          </div>
+
+          {run.accepted ? (
+            <>
+              <p className="mt-4 text-sm text-foreground">
+                Started at {timeOfDay(run.startedAt)}. This takes several minutes.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Every draft is written first and they are all saved together at the end. Until then
+                the page behind this shows drafts from earlier runs, not from this one. When the run
+                finishes this closes and the page opens on what it saved.
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed text-muted">
+              Making sure the site, the partners and the competitors can all be found in the index.
+              Nothing is written until this passes; if it does not, the reason is shown and nothing
+              is started.
+            </p>
+          )}
+
+          <div role="status" aria-live="polite">
+            {children}
+          </div>
+
+          <button
+            type="button"
+            autoFocus
+            onClick={onHide}
+            className="mt-6 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-muted"
+          >
+            Hide this and read the page
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What a run has said so far: its progress lines, the partner pre-flight, what was not written and
+ * what was written with a gap.
+ *
+ * One definition, drawn in two places -- inside the running indicator while a run covers the page,
+ * and in the Generate stage otherwise -- so what the operator reads while waiting is exactly what is
+ * left on the page when the run is over.
+ */
+function GenerateRunReport({
+  msgs,
+  preflight,
+  notes,
+  warnings,
+}: {
+  msgs: string[];
+  preflight: GccGeneratePreflightEvent | null;
+  notes: string[];
+  warnings: string[];
+}) {
+  return (
+    <>
+      {msgs.length > 0 ? (
+        <ul className="mt-3 space-y-0.5">
+          {msgs.map((msg) => (
+            <li key={msg} className="whitespace-pre-wrap text-sm text-foreground">
+              {msg}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* The pre-flight, shown while the ready partners are still being written. It reports what
+          the gate measures -- what extraction FOUND -- because page and paragraph volume do not
+          predict it: a partner with hundreds of pages fails if extraction pulled one feature. */}
+      {preflight ? (
+        <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
+          <p className="text-sm font-medium text-foreground">
+            {everyPartnerFailedExtraction(preflight.partners)
+              ? `Extraction failed for all ${preflight.total} partners — a provider fault, not your data`
+              : `Partner readiness — ${preflight.ready} of ${preflight.total} can be grounded`}
+          </p>
+          {/* Twice on 2026-10-03 this panel reported a provider outage as five unusable partners:
+              once for a 400 (temperature deprecated) and once for a 429 (no OpenAI credits). Both
+              read as "0 of 22 categories ... no capability signal", which is the sentence for a
+              partner whose site is thin. When nothing was extracted the counts describe nothing,
+              so they are not shown. */}
+          {everyPartnerFailedExtraction(preflight.partners) ? (
+            <p className="mt-1 text-xs text-muted">
+              No partner could be assessed. Category counts are omitted because nothing was
+              extracted to count — the cause is in the error below.
+            </p>
+          ) : null}
+          <ul className="mt-2 space-y-1.5">
+            {preflight.partners.map((partner) => {
+              const allFailed =
+                partner.pagesAttempted > 0 && partner.pagesFailed >= partner.pagesAttempted;
+              return (
+              <li key={partner.host} className="text-sm">
+                <span className="text-foreground">
+                  {partner.ready ? "\u2713" : "\u2717"} {partner.productName}
+                </span>
+                <span className="text-muted">
+                  {" \u2014 "}
+                  {allFailed ? (
+                    `extraction failed on all ${partner.pagesAttempted} pages`
+                  ) : (
+                    <>
+                      {partner.populatedCategories} of 22 categories
+                      {partner.pagesFailed > 0
+                        ? `, ${partner.pagesFailed} of ${partner.pagesAttempted} pages failed extraction`
+                        : partner.reused
+                          ? `, ${partner.pagesAttempted} pages reused from the bank`
+                          : `, ${partner.pagesAttempted} pages extracted`}
+                      {partner.hasCapabilitySignal ? "" : ", no capability signal"}
+                    </>
+                  )}
+                </span>
+                {/* The fault/shortage split, verbatim from the backend. A provider outage and a
+                    thin partner leave identical counts, so only this sentence separates them. */}
+                {!partner.ready ? (
+                  <span className="mt-0.5 block text-xs text-muted">{partner.coverage}</span>
+                ) : null}
+              </li>
+              );
+            })}
+          </ul>
+          {/* "The rest are" is only true when there IS a rest. Gated on ready < total alone, this
+              printed directly under the all-failed headline and told the operator drafts were
+              being written for partners that do not exist -- re-creating the false partial-success
+              reading three lines below its own fix. */}
+          {preflight.ready > 0 && preflight.ready < preflight.total ? (
+            <p className="mt-2 text-xs text-muted">
+              The partners above that cannot be grounded are not drafted. The rest are, and each
+              is saved on its own.
+            </p>
+          ) : preflight.ready === 0 && preflight.total > 0 ? (
+            <p className="mt-2 text-xs text-muted">
+              No partner could be grounded, so no tool page was drafted.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Named, never a count to be inferred. Each entry is one artifact that was not written
+          and the reason it was not. */}
+      {notes.length > 0 ? (
+        <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+          <p className="text-sm font-medium text-foreground">
+            Not written ({notes.length})
+          </p>
+          <ul className="mt-1 space-y-1">
+            {notes.map((note) => (
+              <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
+                {note}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Saved, with a gap named. Distinct from "Not written": these pieces exist and can be
+          opened below; the line says what to add to them. */}
+      {warnings.length > 0 ? (
+        <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+          <p className="text-sm font-medium text-foreground">
+            Written with a gap ({warnings.length})
+          </p>
+          <ul className="mt-1 space-y-1">
+            {warnings.map((note) => (
+              <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
+                {note}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
   );
 }
 

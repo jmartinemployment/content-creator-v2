@@ -129,18 +129,25 @@ export function onGccGeneratePreflightEvent(
 /**
  * Rejoin after a dropped connection. The job group is per-connection, so a reconnect that does not
  * rejoin silently stops receiving events while looking perfectly healthy.
+ *
+ * A rejoin that fails is handed to `onRejoinRefused`, never swallowed. It was swallowed, on the
+ * reasoning that the caller surfaces connection problems -- but the caller is told about a closed
+ * connection, and this is an open one the job is no longer on. The hub refuses the join by name when
+ * it does not hold the job (its store is in memory, so a restart loses every job), and a page that
+ * is not told goes on showing a run it will never hear from again.
  */
 export function onGccGenerateReconnected(
   connection: HubConnection,
   getJobId: () => string | null,
+  onRejoinRefused: (jobId: string, error: unknown) => void,
 ): () => void {
   const handler = async () => {
     const jobId = getJobId();
     if (!jobId) return;
     try {
       await connection.invoke("JoinGccGenerate", jobId);
-    } catch {
-      /* the caller surfaces connection problems */
+    } catch (err) {
+      onRejoinRefused(jobId, err);
     }
   };
   connection.onreconnected(handler);
