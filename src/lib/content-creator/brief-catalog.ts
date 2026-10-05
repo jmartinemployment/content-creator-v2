@@ -170,6 +170,8 @@ export function toneAllowed(
 /** Max quoteable wiki/.edu/.gov (or tool page) research docs per project. */
 export const MAX_QUOTEABLE_RESEARCH_DOCS = 3;
 
+export const CONTENT_BRIEF_STORAGE_PREFIX = "gcc-content-brief:";
+
 export type LengthBandKey =
   | "pillar"
   | "blog"
@@ -375,7 +377,7 @@ const TONE_VALUES = TONES_OF_VOICE.map((o) => o.value) as string[];
 
 /**
  * Normalize any persisted brief (legacy or current) into the canonical shape.
- * Runs on every read of a stored brief so stale values
+ * Runs on every read (localStorage load and server-JSON parse) so stale values
  * never reach the prompt.
  */
 export function migrateBrief(raw: unknown): ContentBrief {
@@ -513,26 +515,6 @@ export function contentBriefMissingFields(brief: ContentBrief): string[] {
 
 export function isContentBriefComplete(brief: ContentBrief): boolean {
   return contentBriefMissingFields(brief).length === 0;
-}
-
-/** Parses a stored `brief_json`, or null when there is none or it will not parse. */
-export function parseBriefJson(briefJson: string | null | undefined): ContentBrief | null {
-  if (!briefJson) return null;
-  try {
-    return migrateBrief(JSON.parse(briefJson));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * What a brief says, as one comparable string: the brief as migrated, plus its keyword. Used to tell
- * whether the form differs from what the server holds. `lengthBand` is left out: the brief carries
- * none (it is derived per output type at generate time), and older copies that still hold one say the
- * same thing as copies that do not.
- */
-export function briefFingerprint(brief: ContentBrief, topic: string): string {
-  return JSON.stringify({ ...migrateBrief(brief), lengthBand: "", __topic: topic.trim() });
 }
 
 /* ------------------------------------------------------------------ *

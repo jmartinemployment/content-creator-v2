@@ -66,16 +66,6 @@ export interface GccProject {
   budgetCurrency: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
-  /** The project's brief, keyword, research and site section (fix-project-persistence GR1). The
-   *  contract is plans/project-api-contract.md. */
-  briefJson?: string | null;
-  topic?: string | null;
-  researchJson?: string | null;
-  siteSectionJson?: string | null;
-  /** The concurrency token the brief editor sends back as `expectedVersion`. */
-  version?: number;
-  /** When the current brief revision was saved; null before the first. */
-  briefSavedAtUtc?: string | null;
 }
 
 export interface GccProjectLogEntry {
@@ -547,9 +537,10 @@ export const GCC_DELIVERABLE_STATUS_LABELS: Record<GccDeliverableStatus, string>
 export interface GccDeliverable {
   id: string;
   projectId: string;
+  /** The create this deliverable is. One create, one deliverable. */
+  createId: string;
   name: string;
-  /** What kind of output it is, when GeekAPI records one. */
-  type?: string | null;
+  type: string;
   status: GccDeliverableStatus;
   dueDate: string | null;
   /** Set exactly when delivered; the database enforces the pair. */
@@ -565,18 +556,23 @@ export function listDeliverables(projectId: string): Promise<GccDeliverable[]> {
 }
 
 /**
- * Record a deliverable on a project: a named, dated promise. The project is the unit, so nothing is
- * attached to it (plans/project-api-contract.md §6).
+ * Record a deliverable on a project.
+ *
+ * A 409 means it was refused with a reason worth reading: the create belongs to another client, or
+ * it is already a deliverable on some project. Neither is a fault to retry.
  */
 export function createDeliverable(
   projectId: string,
-  input: { name: string; dueDate?: string | null },
+  // No `type` -- the server derives it from the create being attached (its StartingContentType),
+  // never from a client-supplied copy that could drift from it.
+  input: { createId: string; name: string; dueDate?: string | null },
 ): Promise<GccDeliverable> {
   return projectsRequest<GccDeliverable>(
     `${PROJECTS}/${encodeURIComponent(projectId)}/deliverables`,
     {
       method: "POST",
       body: JSON.stringify({
+        createId: input.createId,
         name: input.name.trim(),
         dueDate: input.dueDate ?? null,
       }),

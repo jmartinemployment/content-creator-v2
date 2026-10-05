@@ -22,20 +22,7 @@ import {
   TONES_OF_VOICE,
 } from "@/lib/content-creator/brief-catalog";
 import ContentBriefPanel from "./ContentBriefPanel";
-import { getProject, type GccProject } from "@/services/gcc-projects-api";
-
-/**
- * What this workspace shows of the project: its saved brief and keyword, what it is grounded on, and
- * its drafts. Read from the project -- the unit of work (plans/fix-project-persistence.md). The brief
- * fields are kept current by the brief panel's saves rather than refetched on every one.
- */
-type ProjectContent = {
-  briefJson: string | null;
-  topic: string;
-  siteSectionJson: string | null;
-  projectSiteRunId: string | null;
-  artifacts: GccArtifact[];
-};
+import { localDraftDiffers } from "@/lib/content-creator/brief-drafts";
 import {
   toGeneratedContentSet,
   type GeneratedContentGroup,
@@ -54,9 +41,9 @@ import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
   briefRevisionSavedAt,
-  downloadProjectHtmlExport,
-  generateProject,
-  listProjectArtifacts,
+  downloadCreateHtmlExport,
+  generateGccCreate,
+  getGccCreateDetail,
   listGccVersions,
   parseSiteSectionJson,
   parseStaleGroundingError,
@@ -67,6 +54,7 @@ import {
   seoGccVersion,
   type GccArtifact,
   type GccArtifactVersion,
+  type GccCreateDetail,
   type GccPolishReport,
   type GccSeoReport,
   type GccStaleGroundingError,
@@ -95,12 +83,40 @@ function writtenBy(metadataJson?: string | null): string | null {
   }
 }
 
-export default function ProjectContentWorkspace({ project }: { project: GccProject }) {
-  const projectId = project.id;
-  const [detail, setDetail] = useState<ProjectContent | null>(null);
-  // Set when the project's drafts could not be read. Said on screen; an empty list would read as
-  // "nothing has been generated", which is a different fact.
-  const [draftsError, setDraftsError] = useState<string | null>(null);
+export default function CreateDraftWorkspace({
+  createId,
+  clientId,
+  projectId,
+  projectSiteRunId,
+  onCreateMinted,
+  onStartNew,
+}: {
+  // Null before a create exists. Mint-through-review is one lifecycle now, in one component, so
+  // clientId/projectId/projectSiteRunId are threaded from the caller exactly once regardless of
+  // which stage the create is at -- two render paths each needing the same context props is how
+  // one of them silently went without it (the missing-projectId refusal bug, 2026-09-22).
+  createId: string | null;
+  // Only needed to mint a fresh create (the `!effectiveCreateId` branch below) -- once a create
+  // exists, the loaded state reads clientId/projectSiteRunId back off the create itself
+  // (`detail.clientId`, `detail.projectSiteRunId`), never off these props. Optional so
+  // A caller that already has a createId does not need to supply them. (The /app/creates routes
+  // that did were deleted 2026-10-03; the workspace is reached from /app/workflow now.)
+  clientId?: string;
+  projectId?: string;
+  projectSiteRunId?: string;
+  onCreateMinted?: (createId: string) => void;
+  /** Leave this create and open an empty brief. The create id lives in the URL now, so a reload no
+   *  longer starts a new piece -- this is the deliberate way to. */
+  onStartNew?: () => void;
+}) {
+  // The id this workspace actually operates on: the prop once a create exists, or one just minted
+  // by the brief panel below, before the parent's own createId state (if it tracks one at all)
+  // catches up on its next render.
+  const [mintedCreateId, setMintedCreateId] = useState<string | null>(null);
+  const effectiveCreateId = createId ?? mintedCreateId;
+  const [briefValid, setBriefValid] = useState(false);
+
+  const [detail, setDetail] = useState<GccCreateDetail | null>(null);
   const [artifact, setArtifact] = useState<GccArtifact | null>(null);
   const [version, setVersion] = useState<GccArtifactVersion | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -108,9 +124,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Whether the brief on screen is the brief the server holds. Generate reads brief_json from the
-  // database, never the screen, so unsaved edits would reach no generate. True while the brief is
-  // collapsed: it can only be collapsed when it is saved.
-  const [briefSaved, setBriefSaved] = useState(true);
+  // row, never the screen, so a brief edited after its last save would generate from the old copy.
+  // True while the brief is collapsed: it can only be collapsed when it is saved.
+  const [briefSynced, setBriefSynced] = useState(true);
+  // The brief opens by itself once, on first load, when it needs the operator: no brief on the server
+  // yet, or this browser holding a draft that differs from it.
+  const briefOpenDecidedRef = useRef(false);
   const [generating, setGenerating] = useState(false);
   // The run's progress, one line per event, in the order they arrived. It was one string, overwritten
   // per hub event, so with several artifacts of one type only the last "ready" survived on screen and
@@ -203,32 +222,20 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   }, []);
 
   const reload = useCallback(async () => {
-    // No synchronous setState before the first await -- every path below still ends by setting
+    if (!effectiveCreateId) return;
+    // No synchronous setState before the first await — see the identical fix and its reasoning
+    // in the repurpose page's `load` (deleted 2026-10-03). Every path below still ends by setting
     // loadError to its correct value.
     try {
-      // The brief does not wait on the drafts. They are two reads, and a drafts read that fails must
-      // not take the brief -- the thing being saved -- off the screen with it.
-      const [p, drafts] = await Promise.all([
-        getProject(projectId),
-        listProjectArtifacts(projectId).then(
-          (rows) => ({ rows, error: null as string | null }),
-          (err: unknown) => ({
-            rows: [] as GccArtifact[],
-            error: err instanceof Error ? err.message : "unknown error",
-          }),
-        ),
-      ]);
-      const artifacts = drafts.rows;
-      setDraftsError(drafts.error);
-      const d: ProjectContent = {
-        briefJson: p.briefJson ?? null,
-        topic: p.topic ?? "",
-        siteSectionJson: p.siteSectionJson ?? null,
-        projectSiteRunId: p.projectSiteRunId,
-        artifacts,
-      };
+      const d = await getGccCreateDetail(effectiveCreateId);
       setDetail(d);
       setLoadError(null);
+      if (!briefOpenDecidedRef.current) {
+        briefOpenDecidedRef.current = true;
+        if (!d.briefJson || localDraftDiffers(projectId, d.id, d.briefJson, d.topic)) {
+          setBriefOpen(true);
+        }
+      }
       // Generate's checkboxes (outputTypes, below) are never seeded from the create's starting
       // type. That type was a decision made at mint time, for Brief; Generate is a separate, later
       // decision about what to produce right now, and pre-checking a box the operator never
@@ -257,14 +264,14 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           ? err.message
           : err instanceof Error
             ? err.message
-            : "Could not load the project's brief and drafts.",
+            : "Could not load create.",
       );
     }
-  }, [loadVersionFor, projectId]);
+  }, [effectiveCreateId, loadVersionFor, projectId]);
 
   // reload is called through a ref rather than by name so this effect is not itself classified as
   // "a function that sets state" — calling it directly here is exactly the standard load-on-mount
-  // pattern, not the "derive state from a prop" pattern the rule
+  // (and reload-if-createId-changes) pattern, not the "derive state from a prop" pattern the rule
   // exists to catch. The two effects run in this order on mount (React runs effects in
   // declaration order), so the ref always holds the current reload before it is called.
   const reloadRef = useRef(reload);
@@ -272,8 +279,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     reloadRef.current = reload;
   }, [reload]);
   useEffect(() => {
+    if (!effectiveCreateId) return;
     void reloadRef.current();
-  }, [projectId]);
+  }, [effectiveCreateId]);
 
   /**
    * Close the hub, from wherever.
@@ -303,7 +311,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // reason to make anyone press a button to find out the score. They run whenever a version is on
   // screen, which covers Generate, Revise, and switching between drafts. Failure is silent: a score
   // that cannot be computed is not a reason to put an error banner over a finished draft.
-  // Keyed on the topic, not the whole project: every Save updates detail's brief, and re-scoring an
+  // Keyed on the topic, not the whole create: every autosave updates detail's brief, and re-scoring an
   // unchanged draft on each one is wasted work.
   const scoredTopic = detail?.topic;
   useEffect(() => {
@@ -346,6 +354,55 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     });
   }
 
+  // No create yet: the same two stages as the create that follows it, on the same surface. This
+  // branch had its own copy of the old card -- heading, blurb, chrome and all -- so restyling the
+  // main path left the state every new piece starts in looking exactly as it did before. Two render
+  // paths for one screen is why; they now share Stage rather than each describing a card.
+  if (!effectiveCreateId) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <Stage
+          step={1}
+          title="Brief"
+          note="What to write and who for. Saving the brief creates the piece."
+        >
+          <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
+
+          <ContentBriefPanel
+            clientId={clientId ?? ""}
+            projectId={projectId}
+            projectSiteRunId={projectSiteRunId}
+            targetKeyword=""
+            startingContentType={outputTypes[0]}
+            onBriefValidityChange={setBriefValid}
+            onBriefSaved={(saved) => {
+              if (!saved.minted) return;
+              setMintedCreateId(saved.createId);
+              onCreateMinted?.(saved.createId);
+            }}
+          />
+        </Stage>
+
+        <Stage step={2} title="Generate">
+          <button
+            type="button"
+            disabled
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Generate content
+          </button>
+          <p className="mt-3 text-sm text-muted">
+            {outputTypes.length === 0
+              ? "Choose at least one thing to write. The piece is created once it has a target keyword and a content type."
+              : briefValid
+                ? "The piece is created and saved once it has a target keyword. Generate runs after that."
+                : "The piece is created once it has a target keyword. Generate needs the brief's required fields filled."}
+          </p>
+        </Stage>
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -360,7 +417,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   if (!detail) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-sm text-muted">Loading the brief…</p>
+        <p className="text-sm text-muted">Loading create…</p>
       </div>
     );
   }
@@ -375,12 +432,13 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   const briefReady = !!detail.briefJson;
   // What Generate will read: the server's brief_json, kept current by the panel's onBriefSaved.
   const savedBriefMissing = contentBriefMissingFields(migrateBrief(safeParse(detail.briefJson)));
+  const researchReady = !!detail.researchJson;
   const approved = artifact?.status?.toLowerCase() === "approved";
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
   // Generate reads the saved brief, so it needs that brief complete and the screen to match it. It
   // was `!!detail.briefJson || briefSavedOnServer`: any brief on the server, however old, enabled
   // Generate, and edits made since the last save reached no generate.
-  const canGenerate = briefReady && savedBriefMissing.length === 0 && briefSaved;
+  const canGenerate = briefReady && savedBriefMissing.length === 0 && briefSynced;
   // A create grounded on a project-site crawl requires relatedPages on its persisted site
   // section; domain-only grounding (a crawl id with no section) does not.
   const saMissingPages =
@@ -525,7 +583,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   }
 
   async function runGenerate(acknowledgeStale = false) {
-    if (!canGenerate || saMissingPages) return;
+    if (!effectiveCreateId || !canGenerate || saMissingPages) return;
     setGenerateMsgs([]);
     setGenerateNotes([]);
     setGenerateWarnings([]);
@@ -533,7 +591,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     setStalePrompt(null);
     setGenerating(true);
     try {
-      const result = await generateProject(projectId, {
+      const result = await generateGccCreate(effectiveCreateId, {
         outputTypes,
         provider,
         acknowledgeStaleGrounding: acknowledgeStale,
@@ -605,13 +663,40 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         <Link href="/app/workflow" className="text-sm text-[#C83803] hover:underline">
           &larr; Back to workflow
         </Link>
+        {onStartNew ? (
+          <button
+            type="button"
+            onClick={onStartNew}
+            className="text-sm text-[#C83803] underline-offset-2 hover:underline"
+          >
+            Start a new piece
+          </button>
+        ) : null}
       </div>
+
+      {/* The title was an ALL-CAPS tracked eyebrow over a bold sans heading, with the state below it
+          as one sentence joined by middle dots: "Create 8f0c… · brief saved · research saved ·
+          grounded on a crawl". A dot-joined string makes the reader parse a sentence to find out
+          whether one thing is true, and buries the id -- which is the only part you ever copy --
+          among three booleans. Three facts, three marks, and the id where it can be selected. */}
+      <header className="mb-7 mt-3">
+        <h1 className="font-display text-[2rem] leading-[1.15] text-foreground">{detail.topic}</h1>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <span className="text-muted">
+            {detail.startingContentType ?? "No type chosen"}
+          </span>
+          <Ready on={briefReady} yes="Brief saved" no="Brief not saved" />
+          <Ready on={researchReady} yes="Research saved" no="No research" />
+          <Ready on={!!detail.projectSiteRunId} yes="Grounded on a crawl" no="No crawl" />
+          <code className="ml-auto select-all font-mono text-xs text-muted">{detail.id}</code>
+        </div>
+      </header>
 
       <div className="mb-6 flex flex-col gap-4">
         {siteSection ? <SiteContextBanner siteSection={siteSection} /> : null}
         {saMissingPages ? (
           <p className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
-            Generate is blocked: this project&rsquo;s crawl has no related pages, and there is no
+            Generate is blocked: this create&rsquo;s crawl has no related pages, and there is no
             keyword-only path.
           </p>
         ) : null}
@@ -624,7 +709,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           title="Brief"
           note={
             briefOpen
-              ? "What to write and who for. Saved to this project, and read back at generate time — every checked type is written independently."
+              ? "What to write and who for. Saved to this create, and read back at generate time — every checked type is written independently."
               : undefined
           }
           aside={
@@ -632,9 +717,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               <button
                 type="button"
                 onClick={() => setBriefOpen((v) => !v)}
-                // Collapsing unmounts the panel, and with it any unsaved edits. Only a saved brief folds.
-                disabled={briefOpen && !briefSaved}
-                title={briefOpen && !briefSaved ? "Save the brief first" : undefined}
+                // Collapsing unmounts the panel, and with it the autosave. Only a saved brief folds.
+                disabled={briefOpen && !briefSynced}
+                title={briefOpen && !briefSynced ? "Waiting for the brief to save" : undefined}
                 className="text-sm text-[#C83803] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {briefOpen ? "Done editing" : "Edit brief"}
@@ -649,18 +734,30 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           ) : (
         <>
           <ContentBriefPanel
+            clientId={detail.clientId}
+            // The project this workspace is mounted under. It was passed only before the create
+            // existed, so once one did, per-tool framing overrides could not be edited and the
+            // partner-quote check said "No project on this create". The create detail carries no
+            // project id; every create opened here is one of this project's deliverables.
             projectId={projectId}
-            // The keyword is the project's, and every brief save writes it. It stops being editable
-            // once something has been generated from it -- after that, a new keyword would describe
-            // pages written for the old one. A second keyword is a second project (J1).
-            // Locked too when the drafts could not be read: whether anything was generated from this
-            // keyword is then unknown, and unknown is not "no".
-            keywordLocked={detail.artifacts.length > 0 || draftsError !== null}
-            onSavedChange={setBriefSaved}
-            // What the server now holds, folded into the content on screen so the summary and
-            // Generate's gate read the saved copy without refetching the project on every save.
+            projectSiteRunId={detail.projectSiteRunId ?? undefined}
+            targetKeyword={detail.topic}
+            // The keyword is the create's topic, and every brief save writes it. It stops being
+            // editable once something has been generated from it -- after that, a new keyword would
+            // describe pages that were written for the old one.
+            keywordLocked={detail.artifacts.length > 0}
+            createId={effectiveCreateId}
+            startingContentType={outputTypes[0] ?? detail.startingContentType ?? undefined}
+            onSyncChange={setBriefSynced}
+            // What the server now holds, folded into the create on screen so the summary, the header
+            // and Generate's gate read the saved copy without refetching the whole create every two
+            // seconds of typing.
             onBriefSaved={(saved) =>
-              setDetail((d) => (d ? { ...d, briefJson: saved.briefJson, topic: saved.topic } : d))
+              setDetail((d) =>
+                d
+                  ? { ...d, briefJson: saved.briefJson, topic: saved.topic, updatedAtUtc: saved.updatedAtUtc }
+                  : d,
+              )
             }
           />
 
@@ -743,8 +840,10 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               project&rsquo;s site, then start the create again.
             </p>
           ) : null}
-          {!briefSaved ? (
-            <p className="mt-3 text-sm text-muted">Unsaved changes. Save the brief first.</p>
+          {!briefSynced ? (
+            <p className="mt-3 text-sm text-muted">
+              The brief has changes the server does not have yet. Generate waits until they are saved.
+            </p>
           ) : !briefReady ? (
             <p className="mt-3 text-sm text-muted">Nothing is saved in the brief yet.</p>
           ) : savedBriefMissing.length > 0 ? (
@@ -872,12 +971,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         </Stage>
 
       <Stage step={3} title="Output">
-      {draftsError ? (
-        <p className="mb-4 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
-          This project&rsquo;s drafts could not be read from the server, so none are shown:{" "}
-          {draftsError}. They are not deleted. The brief above saves regardless.
-        </p>
-      ) : null}
       {/* The generated content set: one tab per content type this create produced, and inside a
           tab a row of that type's artifacts when it produced several. v1 grouped the same way --
           its toolPosts[] was already a list, "one page per unique crawl tool ... no cap of 5" --
@@ -993,7 +1086,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       ) : !version ? (
         <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           {selectedGroup && selectedGroup.artifacts.length === 0
-            ? `No ${selectedGroup.label} yet for this project. Pick it as an output type, then Generate above.`
+            ? `No ${selectedGroup.label} yet for this create. Pick it as an output type, then Generate above.`
             : "No draft artifact yet. Save the Content Brief, then Generate above."}
         </div>
       ) : (
@@ -1243,7 +1336,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                 disabled={pending || detail.artifacts.length === 0}
                 onClick={() =>
                   run("Export downloaded.", async () => {
-                    await downloadProjectHtmlExport(projectId);
+                    if (!effectiveCreateId) return;
+                    await downloadCreateHtmlExport(effectiveCreateId);
                   })
                 }
                 className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
@@ -1387,7 +1481,7 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
       <h2 className="text-lg font-semibold text-foreground">Image prompts</h2>
       <p className="mt-1 text-sm text-muted">
         {total === 0
-          ? "None of this project's drafts carry image prompts."
+          ? "None of this create's drafts carry image prompts."
           : `${total} prompt${total === 1 ? "" : "s"} — one per H2 plus the hero, for each draft.`}{" "}
         Copy these into your image generator. They are production instructions, which is why they
         are not printed in the page.
@@ -1473,7 +1567,7 @@ function BriefSummary({
   detail,
   outputTypes,
 }: {
-  detail: ProjectContent;
+  detail: GccCreateDetail;
   outputTypes: string[];
 }) {
   const brief = migrateBrief(safeParse(detail.briefJson));
@@ -1516,6 +1610,25 @@ function safeParse(json: string | null | undefined): unknown {
 
 function contentTypeLabel(value: string): string {
   return CONTENT_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+/**
+ * One piece of readiness. A filled mark for true and a hollow one for false, so the row reads at a
+ * glance without the reader parsing prose -- and the false state still says what is missing rather
+ * than going silent, which is how "no research" used to be indistinguishable from "not rendered".
+ */
+function Ready({ on, yes, no }: { on: boolean; yes: string; no: string }) {
+  return (
+    <span className={on ? "flex items-center gap-1.5 text-foreground" : "flex items-center gap-1.5 text-muted"}>
+      <span
+        aria-hidden
+        className={
+          "h-1.5 w-1.5 rounded-full " + (on ? "bg-[var(--gcc-accent)]" : "border border-current bg-transparent")
+        }
+      />
+      {on ? yes : no}
+    </span>
+  );
 }
 
 function Stage({

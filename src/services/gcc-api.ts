@@ -17,6 +17,30 @@ export class ApiError extends Error {
   }
 }
 
+export interface GccCreate {
+  id: string;
+  clientId: string;
+  ownerUserId: string;
+  startingContentType: string | null;
+  topic: string;
+  notes: string | null;
+  department?: string;
+  projectSiteRunId: string | null;
+  siteSectionJson: string | null;
+  briefJson: string | null;
+  researchJson: string | null;
+  status: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  /** The project that owns this create. Carried by the list route and the create/save responses;
+   *  the detail route does not send it. */
+  projectId?: string | null;
+  /** The row version this copy was read at, sent back as `expectedVersion` on a save so a write from
+   *  a stale copy is refused (409) instead of overwriting. Carried by the list route and the
+   *  create/save responses; the detail route does not send it. */
+  version?: number;
+}
+
 export interface GccSerpIndex {
   organicTitles: string[];
   organicUrls: string[];
@@ -47,6 +71,53 @@ async function gccRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+export function createGccCreate(input: {
+  clientId: string;
+  projectId?: string | null;
+  startingContentType?: string | null;
+  topic: string;
+  projectSiteRunId?: string | null;
+}): Promise<GccCreate> {
+  return gccRequest<GccCreate>("/api/geek-content-creator/creates", {
+    method: "POST",
+    body: JSON.stringify({
+      clientId: input.clientId,
+      projectId: input.projectId ?? null,
+      startingContentType: input.startingContentType ?? null,
+      topic: input.topic,
+      projectSiteRunId: input.projectSiteRunId ?? null,
+      // No department and no notes. Department was hard-coded to "marketing" here, a value nobody
+      // chose; GeekAPI derives it from the brief's taxonomy path (GccContentPath.DepartmentFor), and
+      // a second derivation here would be a second slug rule to drift. Notes had no field anywhere
+      // in this app, so it was always null (D17: the brief and niche framing are the operator's input).
+    }),
+  });
+}
+
+export function listGccCreates(clientId?: string | null): Promise<GccCreate[]> {
+  const q = clientId
+    ? `?clientId=${encodeURIComponent(clientId)}`
+    : "";
+  return gccRequest<GccCreate[]>(`/api/geek-content-creator/creates${q}`);
+}
+
+export function getGccCreate(id: string): Promise<GccCreate> {
+  return gccRequest<GccCreate>(`/api/geek-content-creator/creates/${id}`);
+}
+
+/**
+ * The create's row version, read from the list route -- the only read that carries it.
+ *
+ * Null when the create is not in this client's list. A save needs this value to be refused when
+ * stale, so a caller that gets null must not save: writing without it is the last-writer-wins
+ * overwrite the version exists to prevent.
+ */
+export async function getGccCreateVersion(clientId: string, createId: string): Promise<number | null> {
+  const rows = await listGccCreates(clientId);
+  const row = rows.find((r) => r.id === createId);
+  return typeof row?.version === "number" ? row.version : null;
+}
+
 export function parseSiteSectionJson(
   json: string | null | undefined,
 ): SiteSectionContext | null {
@@ -73,58 +144,57 @@ export function parseSiteSectionJson(
   }
 }
 
-export interface ProjectBriefSaved {
-  version: number;
-  revisionId: string;
-  savedAtUtc: string;
-  topic: string | null;
-}
+/**
+ * Saves the brief, and optionally a corrected `topic`.
+ *
+ * The keyword previously reached the server only at mint, inside `ensureCreateId`, which returns early
+ * once a create exists — so editing it afterwards changed a local input and persisted nothing. `topic`
+ * is sent to the create's own column rather than copied into the brief, because Topic is what the SEO
+ * score, the descriptor split, the grounding query and artifact naming all read; a second copy would
+ * drift.
+ */
+/** Why a brief was written: a click, the two-second autosave, or a draft recovered from this browser. */
+export type BriefSaveKind = "manual" | "autosave" | "recovered";
 
 /**
- * Save the project's brief and keyword (fix-project-persistence GA1; plans/project-api-contract.md §2).
- *
- * `expectedVersion` is required: a save without it cannot be refused when stale, and would overwrite
- * whatever changed since. Any brief saves, complete or not; completeness gates Generate only.
+ * The status GeekAPI answers when the create changed after the caller read it. Nothing was saved.
  */
-export function patchProjectBrief(
-  projectId: string,
-  body: { briefJson: string; topic: string; expectedVersion: number },
-): Promise<ProjectBriefSaved> {
-  return gccRequest<ProjectBriefSaved>(
-    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/brief`,
+export const BRIEF_STALE_STATUS = 409;
+
+export function patchBriefResearch(
+  createId: string,
+  body: {
+    briefJson: string;
+    topic?: string | null;
+    /** The `version` the caller's copy was read at. Required: a save without it cannot be refused
+     *  when stale, and would overwrite whatever changed since. */
+    expectedVersion: number;
+    kind: BriefSaveKind;
+  },
+): Promise<GccCreate> {
+  return gccRequest<GccCreate>(
+    `/api/geek-content-creator/creates/${createId}/brief-research`,
     {
       method: "PATCH",
       body: JSON.stringify({
         briefJson: body.briefJson,
-        // Blank leaves the topic as it is server-side; Topic is required, so a save can only refine it.
-        topic: body.topic.trim() || null,
+        // Omitted rather than nulled when unchanged: null is "leave it" server-side, and sending a
+        // blank string on every brief save would be a write nobody asked for.
+        topic: body.topic?.trim() || null,
         expectedVersion: body.expectedVersion,
-      }),
-    },
-  );
-}
-
-/** Generate from the project's saved brief (GA2; contract §3). The output types are chosen per run. */
-export function generateProject(
-  projectId: string,
-  opts: { provider: string; outputTypes: string[]; acknowledgeStaleGrounding?: boolean },
-): Promise<GccGenerateResult> {
-  return gccRequest<GccGenerateResult>(
-    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        provider: opts.provider,
-        outputTypes: opts.outputTypes,
-        acknowledgeStaleGrounding: opts.acknowledgeStaleGrounding === true,
+        // Recorded on the revision once GeekAPI writes revisions (fix-persistence SA1).
+        kind: body.kind,
       }),
     },
   );
 }
 
 /**
- * When the brief a version was generated from was saved, from the version's metadata (J7; contract
- * §3). Null for every version written before GeekAPI records it.
+ * When the brief a version was generated from was saved, from the version's metadata.
+ *
+ * The key is this frontend's half of fix-persistence SA3: GeekAPI records the brief revision a
+ * generate read on every version's `metadata_json`. Null until it does, and for every version
+ * written before it.
  */
 export const BRIEF_REVISION_SAVED_AT_KEY = "briefRevisionSavedAtUtc";
 
@@ -137,13 +207,6 @@ export function briefRevisionSavedAt(metadataJson: string | null | undefined): s
   } catch {
     return null;
   }
-}
-
-/** Every draft on the project (contract §4). */
-export function listProjectArtifacts(projectId: string): Promise<GccArtifact[]> {
-  return gccRequest<GccArtifact[]>(
-    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/artifacts`,
-  );
 }
 
 export interface GccArtifact {
@@ -164,6 +227,13 @@ export interface GccArtifactVersion {
   bodyDocumentJson: string;
   metadataJson?: string | null;
   createdAtUtc: string;
+}
+
+export interface GccCreateDetail extends GccCreate {
+  artifacts: GccArtifact[];
+  lastAnalyzedAtUtc?: string | null;
+  analysisAgeDays?: number | null;
+  analysisStale?: boolean;
 }
 
 export interface GccStaleGroundingError {
@@ -234,6 +304,10 @@ export interface GccPolishReport {
   applyFeedback: string;
 }
 
+export function getGccCreateDetail(id: string): Promise<GccCreateDetail> {
+  return gccRequest<GccCreateDetail>(`/api/geek-content-creator/creates/${id}`);
+}
+
 export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[]> {
   return gccRequest<GccArtifactVersion[]>(
     `/api/geek-content-creator/versions?artifactId=${encodeURIComponent(artifactId)}`,
@@ -241,7 +315,7 @@ export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[
 }
 
 /**
- * Download this project's generated content as a zip of HTML documents.
+ * Download this create's generated content as a zip of HTML documents.
  *
  * Restores the export v1 had (ReviewPublishPanel -> downloadHtmlExport), which in this repo exists
  * but is project-scoped and mounted nowhere. The create-scoped export already exists server-side
@@ -256,8 +330,8 @@ export function listGccVersions(artifactId: string): Promise<GccArtifactVersion[
  *
  * Not gccRequest: the response is a zip, not JSON.
  */
-export async function downloadProjectHtmlExport(projectId: string): Promise<void> {
-  const path = `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/export/html`;
+export async function downloadCreateHtmlExport(createId: string): Promise<void> {
+  const path = `/api/geek-content-creator/creates/${encodeURIComponent(createId)}/export/html`;
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`);
@@ -273,9 +347,33 @@ export async function downloadProjectHtmlExport(projectId: string): Promise<void
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${projectId}-html-export.zip`;
+  link.download = `${createId}-html-export.zip`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function generateGccCreate(
+  createId: string,
+  opts: {
+    provider: string;
+    outputTypes?: string[];
+    acknowledgeStaleGrounding?: boolean;
+  },
+): Promise<GccGenerateResult> {
+  return gccRequest<GccGenerateResult>(
+    `/api/geek-content-creator/creates/${createId}/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        provider: opts.provider,
+        outputTypes:
+          opts.outputTypes && opts.outputTypes.length > 0
+            ? opts.outputTypes
+            : null,
+        acknowledgeStaleGrounding: opts.acknowledgeStaleGrounding === true,
+      }),
+    },
+  );
 }
 
 /** Parse a 409 Conflict body from Generate when site grounding is stale. */

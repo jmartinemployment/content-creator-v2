@@ -29,6 +29,23 @@ export type InformationGainNote = {
   summary: string;
 };
 
+export type GccCreate = {
+  id: string;
+  clientId: string;
+  ownerUserId: string;
+  startingContentType: string | null;
+  topic: string;
+  notes: string | null;
+  /** The Geek-Crawler-v2 crawl this create is grounded on. */
+  projectSiteRunId: string | null;
+  siteSectionJson: string | null;
+  briefJson: string | null;
+  researchJson: string | null;
+  status: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+};
+
 export type GccArtifact = {
   id: string;
   createId: string;
@@ -56,6 +73,10 @@ export type GccApprovalEvent = {
   notes: string | null;
   userId: string;
   createdAtUtc: string;
+};
+
+export type GccCreateDetail = GccCreate & {
+  artifacts: GccArtifact[];
 };
 
 export type SeoCheck = {

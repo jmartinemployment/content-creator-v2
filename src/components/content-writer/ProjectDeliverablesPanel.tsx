@@ -12,6 +12,7 @@ import {
   type GccDeliverableStatus,
   type GccProject,
 } from "@/services/gcc-projects-api";
+import { listGccCreates, type GccCreate } from "@/services/gcc-api";
 
 /** "2026-09-21" → "21 Sep". Parsed as parts, never through Date, which would shift the day. */
 function shortDate(value: string | null): string {
@@ -33,21 +34,22 @@ const STATUS_CLASS: Record<GccDeliverableStatus, string> = {
 /**
  * What this project has promised to hand over.
  *
- * A deliverable is a named, dated promise on the project. The project is the unit -- its brief and
- * its drafts are the project's -- so nothing is attached; opening one goes to the project's Brief &
- * Generate, which is where the work is.
+ * A deliverable is the project-side record of a create, so this lists the creates that belong to
+ * the project's client and lets one be attached. Opening a deliverable opens its create in the
+ * draft workspace — the content pipeline is unchanged, this is the schedule around it.
  */
 export default function ProjectDeliverablesPanel({
   project,
-  onOpenWork,
+  onOpenCreate,
 }: {
   project: GccProject;
-  onOpenWork: () => void;
+  onOpenCreate: (createId: string) => void;
 }) {
   const [deliverables, setDeliverables] = useState<GccDeliverable[] | null>(null);
+  const [creates, setCreates] = useState<GccCreate[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  const [selectedCreateId, setSelectedCreateId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [adding, setAdding] = useState(false);
   const [version, setVersion] = useState(0);
@@ -58,9 +60,15 @@ export default function ProjectDeliverablesPanel({
 
     void (async () => {
       try {
-        const rows = await listDeliverables(forProjectId);
+        const [rows, createRows] = await Promise.all([
+          listDeliverables(forProjectId),
+          // Only this client's creates can become this project's deliverables — the server refuses
+          // anything else, so the picker does not offer it.
+          listGccCreates(project.clientId),
+        ]);
         if (cancelled) return;
         setDeliverables(rows);
+        setCreates(createRows);
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -71,20 +79,32 @@ export default function ProjectDeliverablesPanel({
     return () => {
       cancelled = true;
     };
-  }, [project.id, version]);
+  }, [project.id, project.clientId, version]);
+
+  /** Creates not already promised on this project — the ones left to attach. */
+  const attached = new Set((deliverables ?? []).map((d) => d.createId));
+  const available = creates.filter((c) => !attached.has(c.id));
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!selectedCreateId) return;
+    const create = creates.find((c) => c.id === selectedCreateId);
+    if (!create) return;
 
     setError(null);
     setAdding(true);
     try {
-      await createDeliverable(project.id, { name, dueDate: dueDate || null });
-      setName("");
+      await createDeliverable(project.id, {
+        createId: create.id,
+        name: create.topic,
+        dueDate: dueDate || null,
+      });
+      setSelectedCreateId("");
       setDueDate("");
       setVersion((v) => v + 1);
     } catch (err) {
+      // A 409 says why: another client's create, or already a deliverable somewhere. Both are the
+      // operator's to resolve, so the sentence is shown as sent.
       setError(err instanceof ApiError ? err.message : "Could not add the deliverable.");
     } finally {
       setAdding(false);
@@ -121,7 +141,7 @@ export default function ProjectDeliverablesPanel({
 
       {deliverables && deliverables.length === 0 ? (
         <p className="mt-3 text-sm text-muted">
-          Nothing promised yet. Add what this project owes below.
+          Nothing promised yet. Attach a create below to record it as a deliverable of this project.
         </p>
       ) : null}
 
@@ -134,12 +154,12 @@ export default function ProjectDeliverablesPanel({
             >
               <button
                 type="button"
-                onClick={onOpenWork}
+                onClick={() => onOpenCreate(d.createId)}
                 className="flex-1 text-left text-sm font-medium text-[#C83803] hover:underline"
               >
                 {d.name}
               </button>
-              {d.type ? <span className="text-xs text-muted">{d.type}</span> : null}
+              <span className="text-xs text-muted">{d.type}</span>
               {d.dueDate ? (
                 <span className="text-xs text-muted">Due {shortDate(d.dueDate)}</span>
               ) : null}
@@ -163,13 +183,21 @@ export default function ProjectDeliverablesPanel({
 
       <form onSubmit={handleAdd} className="mt-4 flex flex-wrap items-end gap-3">
         <label className="flex flex-1 flex-col gap-1.5 text-sm font-medium text-foreground">
-          Deliverable
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Pillar page and five tool pages"
+          Attach a create
+          <select
+            value={selectedCreateId}
+            onChange={(e) => setSelectedCreateId(e.target.value)}
             className={inputClass}
-          />
+          >
+            <option value="">
+              {available.length === 0 ? "No unattached creates for this client" : "Choose a create"}
+            </option>
+            {available.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.topic}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Due
@@ -182,7 +210,7 @@ export default function ProjectDeliverablesPanel({
         </label>
         <button
           type="submit"
-          disabled={adding || !name.trim()}
+          disabled={adding || !selectedCreateId}
           className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {adding ? "Adding…" : "Add deliverable"}

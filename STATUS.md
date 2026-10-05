@@ -7,13 +7,6 @@ I am implementing Content Creator version one.
 uncommitted seed-validation branch — none of which existed any more. If a claim below cannot be
 re-checked in ten seconds, it does not belong in this file. Authority is [`AGENTS.md`](AGENTS.md).
 
-## The project is the unit — 2026-10-04
-
-The brief, Generate and the drafts belong to the project and are addressed by its id alone; no create
-is visible anywhere. The brief is written by one Save button and nothing about it is kept in the browser. Detail and the
-rule: [`AGENTS.md`](AGENTS.md), "The project is the unit". It depends on GeekAPI's project routes in
-[`plans/project-api-contract.md`](plans/project-api-contract.md).
-
 ## Content is being produced
 
 All three enabled types — Pillar, Blog, Tool — generate and export. Tool fans out one page per
