@@ -157,11 +157,8 @@ Live progress: **SignalR** `JobEvent` on `/hubs/gcc-v2-realtime`. REST is for st
 
 | Path | Role |
 |------|------|
-| `/app/creates` | Create list |
-| `/app/creates/new` | Start a create from a topic + content type (20 types) |
-| `/app/creates/[id]` | Draft workspace |
-| `/app/creates/[id]/repurpose` | Repurpose |
-| `/app/workflow`, `/app/workflow/projects/[id]` | Workflow surfaces |
+| `/app/workflow` | Clients and their projects |
+| `/app/projects/[id]` | One project: Brief & Generate, Profile, Deliverables, Tasks & Time, History. The project is the unit — see `AGENTS.md` |
 | `/api/cw/[...path]` | BFF passthrough → GeekAPI |
 | `/api/auth/*` | PKCE start / token / logout / hub-token |
 

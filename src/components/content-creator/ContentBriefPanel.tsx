@@ -10,9 +10,9 @@ import {
   SECONDARY_INTENTS,
   TONES_OF_VOICE,
   contentBriefMissingFields,
+  briefFingerprint,
   emptyContentBrief,
-  isContentBriefComplete,
-  lengthBandForContentType,
+  parseBriefJson,
   toneAllowed,
   type ContentBrief,
 } from "@/lib/content-creator/brief-catalog";
@@ -29,24 +29,10 @@ import {
   type SerpMergeConflict,
 } from "@/lib/content-creator/serp-lens";
 import {
-  BRIEF_STALE_STATUS,
   briefToJson,
-  createGccCreate,
-  getGccCreate,
-  getGccCreateVersion,
-  patchBriefResearch,
-  type BriefSaveKind,
+  patchProjectBrief,
 } from "@/services/gcc-api";
-import {
-  briefDraftKey,
-  briefFingerprint,
-  clearNewBriefDraft,
-  listBriefDrafts,
-  loadBriefDraft,
-  parseServerBrief,
-  saveBriefDraft,
-  type StoredBriefDraft,
-} from "@/lib/content-creator/brief-drafts";
+import { getProject } from "@/services/gcc-projects-api";
 const SERP_FIELD_LABEL: Record<SerpMergeConflict["field"], string> = {
   paaQuestions: "People Also Ask",
 };
@@ -110,7 +96,7 @@ function PartnerQuoteFit({
       <span className="text-xs font-normal text-muted">
         {projectId
           ? "Pick an angle and a target keyword to check the partners can answer it."
-          : "No project on this create, so its declared partners are not known."}
+          : "No project, so its declared partners are not known."}
       </span>
     );
   }
@@ -164,346 +150,87 @@ function PartnerQuoteFit({
   );
 }
 
-/** What a successful server write reports to the workspace. */
-export type BriefSaved = {
-  createId: string;
-  briefJson: string;
-  topic: string;
-  updatedAtUtc: string;
-  /** Whether the brief as saved has every field Generate requires. */
-  complete: boolean;
-  /** True on the save that minted the create. */
-  minted: boolean;
-};
-
-/** When the browser draft and the server copy differ: both, so the operator chooses. */
-type CopyChoice = {
-  reason: "open" | "stale";
-  local: ContentBrief;
-  localTopic: string;
-  localAt: string | null;
-  server: ContentBrief;
-  serverTopic: string;
-  serverAt: string;
-  serverVersion: number;
-};
-
-function hhmm(iso: string | null): string {
-  if (!iso) return "an unknown time";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? "an unknown time"
-    : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
-
-/** Autosave runs this long after the last change; a failed save is retried on the longer delay. */
-const AUTOSAVE_MS = 2000;
-const RETRY_MS = 10000;
+/** What a Save that reached the server reports to the workspace. */
+export type BriefSaved = { briefJson: string; topic: string };
 
 export default function ContentBriefPanel({
-  clientId,
   projectId,
-  projectSiteRunId,
-  targetKeyword,
   keywordLocked = false,
-  createId: createIdProp,
-  startingContentType,
   onBriefSaved,
-  onBriefValidityChange,
-  onSyncChange,
+  onSavedChange,
 }: {
-  clientId: string;
-  /** The project this create belongs to, when minted from a project context (e.g. /app/workflow).
-   * Without it, GccGroundingResolver refuses any content type that needs partner/competitor
-   * evidence with "this create belongs to no project" -- even when the project genuinely has
-   * partner data, because nothing ever told the new create which project owns it. */
-  projectId?: string;
-  projectSiteRunId?: string;
-  targetKeyword: string;
-  /** True once anything has been generated on this create; the keyword is fixed from then on. */
+  /** The project whose brief this is. The project is the unit: one keyword, one brief (J1). */
+  projectId: string;
+  /** True once anything has been generated on this project; the keyword is fixed from then on. */
   keywordLocked?: boolean;
-  /** When set, brief saves onto this create (does not open a second create). */
-  createId?: string | null;
-  /** The content type this brief is for, chosen in the one picker the parent owns. Used only to
-   * mint the create (its single StartingContentType) and to derive the length band; there is no
-   * picker in here and no default. */
-  startingContentType?: string;
-  /** Called after every write that reached the server, with what the server now holds. */
+  /** Called after a Save that reached the server, with what the server now holds. */
   onBriefSaved: (saved: BriefSaved) => void;
-  /** Whether the brief on screen has every field Generate requires. */
-  onBriefValidityChange?: (complete: boolean) => void;
   /** True when what is on screen is what the server holds -- the condition Generate waits on. */
-  onSyncChange?: (synced: boolean) => void;
+  onSavedChange?: (saved: boolean) => void;
 }) {
-  // The database is where the brief lives (plans/fix-persistence.md). Once a create exists every
-  // change is PATCHed two seconds after the last edit, with the version this copy was read at, so a
-  // save from a stale copy is refused rather than overwriting. This browser keeps a copy only as a
-  // crash buffer, and on open the two are compared and the operator chooses when they differ.
-  //
-  // The server write used to happen only on "Save brief for generate", which refused any incomplete
-  // brief before a network call -- so a brief being worked on could never reach the database, while
-  // every keystroke went to browser storage and the panel looked saved. Jeff's last server-side brief
-  // turned out to be from 9/16.
-  // Before a create exists the only copy is this browser's "new" draft, read once here. The workspace
-  // remounts this panel per create, so a mount never has to re-read for a different one.
-  const [initialDraft] = useState(() =>
-    createIdProp ? null : loadBriefDraft(briefDraftKey(projectId, null)),
-  );
-  const [brief, setBrief] = useState<ContentBrief>(() => initialDraft?.brief ?? emptyContentBrief());
-  // The prop wins when given; internalCreateId holds the id this panel minted until the parent's URL
-  // catches up and remounts it with the prop.
-  const [internalCreateId, setInternalCreateId] = useState<string | null>(null);
-  const createId = createIdProp ?? internalCreateId;
-  const storageKey = briefDraftKey(projectId, createId);
-  // What this create is about -- its topic. Editable until the first generate; every save writes it.
-  const [keywordInput, setKeywordInput] = useState(initialDraft?.topic || targetKeyword || "");
-  // There is no content-type picker in here any more. Brief and Generate are one section with one
-  // picker now (Jeff, 2026-09-22: "The proposed fix that never happened was to combine these two
-  // sections") -- CreateDraftWorkspace owns that selection and passes the type down. The create
-  // row still has exactly one StartingContentType, so the parent hands us its first selection.
-  const effectiveContentType = startingContentType ?? "";
-
-  // "loading" until the server copy and this browser's are read; "choose" while they differ and the
-  // operator has not picked; "unsafe" when the create's version cannot be read, so nothing can be
-  // saved without risking an overwrite.
-  const [phase, setPhase] = useState<"loading" | "ready" | "choose" | "unsafe">(
-    createIdProp ? "loading" : "ready",
-  );
-  const [choice, setChoice] = useState<CopyChoice | null>(null);
-  const [unsafeReason, setUnsafeReason] = useState<string | null>(null);
-  // The row version the next save sends as expectedVersion. A ref, not state: it changes on every
-  // save and nothing renders from it.
+  // The brief is loaded from the database and written to it when Save is clicked, and at no other
+  // time. Nothing is kept in the browser (plans/fix-project-persistence.md, J4 and J9).
+  const [brief, setBrief] = useState<ContentBrief>(() => emptyContentBrief());
+  // The project's keyword. Editable until the first generate; Save writes it with the brief.
+  const [keywordInput, setKeywordInput] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  // Set when the project cannot be read, or carries no version: nothing can be saved safely, so the
+  // form is read-only and says why.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // The version the next Save sends as expectedVersion, so a save from a stale copy is refused
+  // rather than overwriting. A ref: it changes on every save and nothing renders from it.
   const versionRef = useRef<number | null>(null);
-  const mintAnnouncedRef = useRef(false);
-  // The fingerprint of what the server holds, and when it was written. Dirty is the screen differing
-  // from it.
+  // What the server holds, as a fingerprint, and when it was saved.
   const [savedFp, setSavedFp] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [minting, setMinting] = useState(false);
-  const [mintError, setMintError] = useState<string | null>(null);
   const [serpConflicts, setSerpConflicts] = useState<SerpMergeConflict[]>([]);
 
-  // Hydration. Both copies are read, and neither silently replaces the other.
   useEffect(() => {
-    if (!createIdProp) return;
     let cancelled = false;
-    const local = loadBriefDraft(briefDraftKey(projectId, createIdProp));
-    const cid = createIdProp;
-    (async () => {
+    void (async () => {
       try {
-        const [server, version] = await Promise.all([
-          getGccCreate(cid),
-          getGccCreateVersion(clientId, cid),
-        ]);
+        const project = await getProject(projectId);
         if (cancelled) return;
-        const serverBrief = parseServerBrief(server.briefJson);
-        const serverTopic = server.topic;
-        if (version === null) {
-          // Shown, never saved: a write without the version is the overwrite it exists to refuse.
-          setBrief(serverBrief ?? emptyContentBrief());
-          setKeywordInput(serverTopic);
-          setUnsafeReason(
-            "This create's version could not be read from the server, so nothing here is saved. Reload the page.",
+        const serverBrief = parseBriefJson(project.briefJson) ?? emptyContentBrief();
+        const serverTopic = project.topic ?? "";
+        setBrief(serverBrief);
+        setKeywordInput(serverTopic);
+        setSavedFp(briefFingerprint(serverBrief, serverTopic));
+        setSavedAt(project.briefSavedAtUtc ?? null);
+        if (typeof project.version === "number") {
+          versionRef.current = project.version;
+        } else {
+          setLoadError(
+            "This project's version could not be read from the server, so the brief cannot be saved. Reload the page.",
           );
-          setPhase("unsafe");
-          return;
         }
-        versionRef.current = version;
-        setSavedFp(serverBrief ? briefFingerprint(serverBrief, serverTopic) : null);
-        setSavedAt(serverBrief ? server.updatedAtUtc : null);
-
-        if (!local) {
-          setBrief(serverBrief ?? emptyContentBrief());
-          setKeywordInput(serverTopic);
-          setPhase("ready");
-          return;
-        }
-        const localTopic = local.topic || serverTopic;
-        if (!serverBrief) {
-          // Nothing on the server to lose: the draft is shown and autosave writes it.
-          setBrief(local.brief);
-          setKeywordInput(localTopic);
-          setPhase("ready");
-          return;
-        }
-        if (briefFingerprint(local.brief, localTopic) === briefFingerprint(serverBrief, serverTopic)) {
-          setBrief(serverBrief);
-          setKeywordInput(serverTopic);
-          setPhase("ready");
-          return;
-        }
-        setChoice({
-          reason: "open",
-          local: local.brief,
-          localTopic,
-          localAt: local.changedAtUtc,
-          server: serverBrief,
-          serverTopic,
-          serverAt: server.updatedAtUtc,
-          serverVersion: version,
-        });
-        setPhase("choose");
       } catch (err) {
         if (cancelled) return;
-        setUnsafeReason(
-          `The brief could not be read from the server, so nothing here is saved: ${
+        setLoadError(
+          `The brief could not be read from the server: ${
             err instanceof Error ? err.message : "unknown error"
           }. Reload the page.`,
         );
-        setPhase("unsafe");
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [clientId, projectId, createIdProp]);
+  }, [projectId]);
 
   const missing = useMemo(() => contentBriefMissingFields(brief), [brief]);
   const complete = missing.length === 0;
-  const currentFp = briefFingerprint(brief, keywordInput);
-  const dirty = !!createId && currentFp !== savedFp;
-  const keywordBlank = !keywordInput.trim();
-  const synced =
-    !!createId && phase === "ready" && !dirty && !saving && !saveError && !keywordBlank;
+  const unsaved = loaded && !loadError && briefFingerprint(brief, keywordInput) !== savedFp;
 
   useEffect(() => {
-    if (phase === "loading") return;
-    onBriefValidityChange?.(complete);
-  }, [phase, complete, onBriefValidityChange]);
+    onSavedChange?.(loaded && !loadError && !unsaved && !saving);
+  }, [loaded, loadError, unsaved, saving, onSavedChange]);
 
-  useEffect(() => {
-    onSyncChange?.(synced);
-  }, [synced, onSyncChange]);
-
-  // Length was its own choice; now it is not — it is a fact of the starting content type. Derived
-  // at save rather than synced into `brief` state via an effect, so there is no state write racing
-  // the content type prop or the brief's own hydration.
-  const derivedLengthBand = lengthBandForContentType(effectiveContentType);
-
-  // The crash buffer: every change, in this browser, under this create's own key. Never while the
-  // operator is choosing between copies -- writing then would decide for them.
-  useEffect(() => {
-    if (phase !== "ready") return;
-    saveBriefDraft(storageKey, brief, keywordInput);
-  }, [phase, storageKey, brief, keywordInput]);
-
-  async function writeToServer(
-    id: string,
-    version: number,
-    b: ContentBrief,
-    topic: string,
-    kind: BriefSaveKind,
-  ): Promise<void> {
-    const sentFp = briefFingerprint(b, topic);
-    const briefJson = briefToJson({ ...b, lengthBand: derivedLengthBand });
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const updated = await patchBriefResearch(id, {
-        briefJson,
-        topic,
-        expectedVersion: version,
-        kind,
-      });
-      if (typeof updated.version !== "number") {
-        // Without the new version the next save would be refused as stale, every time.
-        setUnsafeReason(
-          "The server saved the brief but did not return its new version, so further saves are off. Reload the page.",
-        );
-        setPhase("unsafe");
-        return;
-      }
-      versionRef.current = updated.version;
-      setSavedFp(sentFp);
-      setSavedAt(updated.updatedAtUtc);
-      // The parent learns of a minted create from the first save that reaches the server, not from
-      // the mint itself: if that first save failed, an announcement tied to it would never come and
-      // the URL would never carry the new id.
-      const minted = !createIdProp && !mintAnnouncedRef.current;
-      if (minted) mintAnnouncedRef.current = true;
-      onBriefSaved({
-        createId: id,
-        briefJson,
-        topic: updated.topic,
-        updatedAtUtc: updated.updatedAtUtc,
-        complete: isContentBriefComplete(b),
-        minted,
-      });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === BRIEF_STALE_STATUS) {
-        await enterStaleChoice(id, b, topic);
-      } else {
-        setSaveError(
-          err instanceof ApiError || err instanceof Error ? err.message : "The save did not reach the server.",
-        );
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /** The server refused a save because the create changed since it was read: show both copies. */
-  async function enterStaleChoice(id: string, b: ContentBrief, topic: string) {
-    try {
-      const [server, version] = await Promise.all([
-        getGccCreate(id),
-        getGccCreateVersion(clientId, id),
-      ]);
-      const serverBrief = parseServerBrief(server.briefJson);
-      if (version === null || !serverBrief) {
-        setUnsafeReason(
-          "The server refused the save because this create changed elsewhere, and its current copy could not be read. Nothing was overwritten. Reload the page.",
-        );
-        setPhase("unsafe");
-        return;
-      }
-      setChoice({
-        reason: "stale",
-        local: b,
-        localTopic: topic,
-        localAt: new Date().toISOString(),
-        server: serverBrief,
-        serverTopic: server.topic,
-        serverAt: server.updatedAtUtc,
-        serverVersion: version,
-      });
-      setPhase("choose");
-    } catch {
-      setUnsafeReason(
-        "The server refused the save because this create changed elsewhere. Nothing was overwritten. Reload the page.",
-      );
-      setPhase("unsafe");
-    }
-  }
-
-  function save(kind: BriefSaveKind, b: ContentBrief = brief, topic: string = keywordInput) {
-    if (!createId || versionRef.current === null || phase !== "ready" || !topic.trim()) return;
-    void writeToServer(createId, versionRef.current, b, topic, kind);
-  }
-
-  // Autosave: two seconds after the last change, or ten after a failed save, so a dropped connection
-  // saves itself when it comes back.
-  useEffect(() => {
-    if (phase !== "ready" || !createId || saving || !dirty || keywordBlank) return;
-    const t = setTimeout(() => save("autosave"), saveError ? RETRY_MS : AUTOSAVE_MS);
-    return () => clearTimeout(t);
-    // save reads the same state listed here; listing it would restart the timer on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, createId, saving, dirty, keywordBlank, saveError, currentFp]);
-
-  useEffect(() => {
-    if (!saveError) return;
-    const retry = () => save("autosave");
-    window.addEventListener("online", retry);
-    return () => window.removeEventListener("online", retry);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveError, currentFp]);
-
-  // Leaving the page while the screen holds something the server does not.
-  const unsaved = (!!createId && !synced) || (!createId && currentFp !== briefFingerprint(emptyContentBrief(), ""));
+  // Leaving the page with unsaved changes: the browser's own warning.
   useEffect(() => {
     if (!unsaved) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -513,85 +240,36 @@ export default function ContentBriefPanel({
     return () => window.removeEventListener("beforeunload", warn);
   }, [unsaved]);
 
-  // The create is minted the moment it has a keyword and a content type, once -- two seconds after
-  // the last change, so it is not named after the first letter typed.
-  async function mint() {
-    const topic = keywordInput.trim();
-    if (createId || minting || !topic || !effectiveContentType) return;
-    setMinting(true);
-    setMintError(null);
+  async function handleSave() {
+    if (versionRef.current === null || saving) return;
+    const b = brief;
+    const typedTopic = keywordInput;
+    // No length band: the brief carries none; it is derived per output type at generate time (J6).
+    const briefJson = briefToJson({ ...b, lengthBand: "" });
+    setSaving(true);
+    setSaveError(null);
     try {
-      const created = await createGccCreate({
-        clientId,
-        projectId: projectId || null,
-        startingContentType: effectiveContentType,
-        topic,
-        projectSiteRunId: projectSiteRunId || null,
+      const saved = await patchProjectBrief(projectId, {
+        briefJson,
+        topic: typedTopic,
+        expectedVersion: versionRef.current,
       });
-      if (typeof created.version !== "number") {
-        throw new ApiError(
-          "The piece was created, but the server did not return its version, so its brief cannot be saved safely. Reload the page.",
-          0,
-        );
-      }
-      // The draft moves to the create's own slot first, so a keystroke from here on lands there.
-      saveBriefDraft(briefDraftKey(projectId, created.id), brief, keywordInput);
-      clearNewBriefDraft(projectId);
-      setInternalCreateId(created.id);
-      versionRef.current = created.version;
-      setSavedFp(null);
-      await writeToServer(created.id, created.version, brief, topic, "manual");
+      // A blank keyword leaves the server's as it was; the field then shows the one that is saved.
+      const topic = saved.topic ?? typedTopic;
+      versionRef.current = saved.version;
+      setKeywordInput((current) => (current === typedTopic ? topic : current));
+      setSavedFp(briefFingerprint(b, topic));
+      setSavedAt(saved.savedAtUtc);
+      onBriefSaved({ briefJson, topic });
     } catch (err) {
-      setMintError(
-        err instanceof ApiError || err instanceof Error ? err.message : "The piece could not be created.",
+      // A stale save (409) arrives here with the server's own sentence: nothing was written.
+      setSaveError(
+        err instanceof ApiError || err instanceof Error ? err.message : "The save did not reach the server.",
       );
     } finally {
-      setMinting(false);
+      setSaving(false);
     }
   }
-
-  useEffect(() => {
-    if (createId || phase !== "ready" || minting || mintError) return;
-    if (!keywordInput.trim() || !effectiveContentType) return;
-    const t = setTimeout(() => void mint(), AUTOSAVE_MS);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createId, phase, minting, mintError, keywordInput, effectiveContentType]);
-
-  function chooseLocal() {
-    if (!choice) return;
-    versionRef.current = choice.serverVersion;
-    setSavedFp(briefFingerprint(choice.server, choice.serverTopic));
-    setSavedAt(choice.serverAt);
-    setBrief(choice.local);
-    setKeywordInput(choice.localTopic);
-    setChoice(null);
-    setPhase("ready");
-    if (createId && choice.localTopic.trim()) {
-      void writeToServer(createId, choice.serverVersion, choice.local, choice.localTopic, "manual");
-    }
-  }
-
-  function chooseServer() {
-    if (!choice) return;
-    versionRef.current = choice.serverVersion;
-    setSavedFp(briefFingerprint(choice.server, choice.serverTopic));
-    setSavedAt(choice.serverAt);
-    setBrief(choice.server);
-    setKeywordInput(choice.serverTopic);
-    setChoice(null);
-    setPhase("ready");
-  }
-
-  function recover(draft: StoredBriefDraft) {
-    const topic = keywordLocked || !draft.topic ? keywordInput : draft.topic;
-    setBrief(draft.brief);
-    setKeywordInput(topic);
-    if (createId && versionRef.current !== null && topic.trim()) {
-      void writeToServer(createId, versionRef.current, draft.brief, topic, "recovered");
-    }
-  }
-
 
   // Stage 7: the only caller of applyCuratedSerpToBrief anywhere in this codebase -- everything
   // upstream of this (the parser, the panel, both merge modes) was already built and simply never
@@ -625,21 +303,11 @@ export default function ContentBriefPanel({
     });
   }
 
-  if (phase === "loading") {
+  if (!loaded) {
     return (
       <div>
         <p className="text-sm text-muted">Loading content brief…</p>
       </div>
-    );
-  }
-
-  if (phase === "choose" && choice) {
-    return (
-      <CopyChooser
-        choice={choice}
-        onKeepLocal={chooseLocal}
-        onUseServer={chooseServer}
-      />
     );
   }
 
@@ -655,29 +323,16 @@ export default function ContentBriefPanel({
   return (
     // Read-only when nothing can be saved safely: an edit there would reach neither the server nor,
     // without a comparison against it, this browser's draft.
-    <fieldset disabled={phase === "unsafe"} className="m-0 min-w-0 border-0 p-0">
+    <fieldset disabled={loadError !== null} className="m-0 min-w-0 border-0 p-0">
       <p className="text-sm text-muted">
-        Controls aligned to Google Search &amp; Ads terminology. Saves itself to the Content
-        Creator create as you type; Generate reads the saved copy only.
+        Controls aligned to Google Search &amp; Ads terminology. Generate reads the saved brief
+        only.
       </p>
 
-      <SaveStateLine
-        createId={createId}
-        phase={phase}
-        unsafeReason={unsafeReason}
-        dirty={dirty}
-        saving={saving}
-        saveError={saveError}
-        savedAt={savedAt}
-        keywordBlank={keywordBlank}
-        hasContentType={!!effectiveContentType}
-        minting={minting}
-        mintError={mintError}
-      />
 
-      {/* What this create is about. mint() names the create from it, and every save after that
-          writes it again as `topic` -- so it stays editable, and saved, until the first generate.
-          After that it is fixed: the pages already written were written for this keyword. */}
+      {/* The project's keyword. Every save writes it as `topic`, so it stays editable, and saved,
+          until the first generate. After that it is fixed: the pages already written were written
+          for this keyword. A second keyword is a second project (J1). */}
       <div className="mt-5">
         <label className={labelClass}>
           Target keyword
@@ -709,7 +364,7 @@ export default function ContentBriefPanel({
           </span>
           <span className="ml-2 text-sm font-normal text-muted">Optional</span>
         </summary>
-        <SerpIngestPanel gapTopic={targetKeyword} onCurated={onSerpCurated} />
+        <SerpIngestPanel gapTopic={keywordInput} onCurated={onSerpCurated} />
       </details>
 
       {/* Outside the disclosure above, deliberately. It was mounted directly after SerpIngestPanel and
@@ -871,7 +526,7 @@ export default function ContentBriefPanel({
           </span>
           <PartnerQuoteFit
             projectId={projectId}
-            targetKeyword={keywordInput || targetKeyword}
+            targetKeyword={keywordInput}
             angle={brief.angle}
           />
         </label>
@@ -971,261 +626,32 @@ export default function ContentBriefPanel({
       {/* The reason Generate is off, not a reason to refuse a save: any draft saves. */}
       {!complete ? (
         <p className="mt-4 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
-          Missing for Generate: {missing.join(", ")}. The brief saves as it is; Generate stays off
-          until these are filled.
+          Missing for Generate: {missing.join(", ")}.
         </p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {createId ? (
-          <button
-            type="button"
-            onClick={() => save("manual")}
-            disabled={phase !== "ready" || saving || keywordBlank}
-            className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? "Saving…" : "Save now"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void mint()}
-            disabled={minting || keywordBlank || !effectiveContentType}
-            className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {minting ? "Creating…" : "Create the piece now"}
-          </button>
-        )}
-        {createId ? (
-          <span className="text-xs text-muted">Create {createId.slice(0, 8)}…</span>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving || loadError !== null}
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <span role="status" className="text-sm text-muted">
+          {unsaved
+            ? "Unsaved changes"
+            : savedAt
+              ? `Saved to the server at ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              : ""}
+        </span>
+        {saveError || loadError ? (
+          <span className="text-sm whitespace-pre-wrap text-[var(--gcc-accent-deep)]">
+            {saveError ?? loadError}
+          </span>
         ) : null}
       </div>
-
-      {createId && phase === "ready" ? <RecoverFromBrowser onRecover={recover} /> : null}
     </fieldset>
-  );
-}
-
-/**
- * The one line that says which copy the screen is showing. Always on screen.
- */
-function SaveStateLine({
-  createId,
-  phase,
-  unsafeReason,
-  dirty,
-  saving,
-  saveError,
-  savedAt,
-  keywordBlank,
-  hasContentType,
-  minting,
-  mintError,
-}: {
-  createId: string | null;
-  phase: "loading" | "ready" | "choose" | "unsafe";
-  unsafeReason: string | null;
-  dirty: boolean;
-  saving: boolean;
-  saveError: string | null;
-  savedAt: string | null;
-  keywordBlank: boolean;
-  hasContentType: boolean;
-  minting: boolean;
-  mintError: string | null;
-}) {
-  let text: string;
-  let warn = true;
-  if (phase === "unsafe") {
-    text = unsafeReason ?? "Not saved.";
-  } else if (!createId) {
-    text = minting
-      ? "Local draft, not yet saved — creating the piece…"
-      : mintError
-        ? `Local draft, not yet saved — ${mintError}`
-        : keywordBlank || !hasContentType
-          ? "Local draft, not yet saved — it saves to the server once it has a target keyword and a content type."
-          : "Local draft, not yet saved — creating the piece in a moment.";
-  } else if (keywordBlank) {
-    text = "Local draft, not yet saved — the target keyword cannot be empty.";
-  } else if (saveError) {
-    text = `Local draft, not yet saved — ${saveError}. Retrying.`;
-  } else if (saving) {
-    text = "Local draft, not yet saved — saving…";
-  } else if (dirty) {
-    text = "Local draft, not yet saved";
-  } else {
-    text = `Saved to the server at ${savedAt ? new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}`;
-    warn = false;
-  }
-  return (
-    <p
-      role="status"
-      className={
-        "mt-3 px-3 py-1.5 text-sm " +
-        (warn
-          ? "border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 text-foreground"
-          : "border-l-2 border-border text-muted")
-      }
-    >
-      {text}
-    </p>
-  );
-}
-
-/** Which brief fields differ between two copies, by the labels the form uses. */
-function differingFields(a: ContentBrief, b: ContentBrief, aTopic: string, bTopic: string): string[] {
-  const out: string[] = [];
-  if (aTopic.trim() !== bTopic.trim()) out.push("Target keyword");
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ContentBrief>;
-  for (const k of keys) {
-    if (k === "lengthBand") continue;
-    if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) out.push(BRIEF_FIELD_LABEL[k] ?? String(k));
-  }
-  return out;
-}
-
-const BRIEF_FIELD_LABEL: Partial<Record<keyof ContentBrief, string>> = {
-  primaryIntent: "Primary intent",
-  secondaryIntent: "Secondary intent",
-  buyingStage: "Buying stage",
-  audienceSegment: "Audience segment",
-  audienceNotes: "Audience notes",
-  angle: "Angle for SEO",
-  ctaType: "Discovery CTA type",
-  ctaLabel: "CTA label",
-  toneOfVoice: "Tone of voice",
-  paaQuestions: "People Also Ask",
-  writingNotes: "Writing notes",
-  nicheFraming: "Niche framing",
-};
-
-/**
- * This browser's draft and the server copy differ: both are shown, with when each was written, and
- * the operator picks. Replaces "server brief wins", which discarded a newer local draft on open.
- */
-function CopyChooser({
-  choice,
-  onKeepLocal,
-  onUseServer,
-}: {
-  choice: CopyChoice;
-  onKeepLocal: () => void;
-  onUseServer: () => void;
-}) {
-  const serverNewer = !choice.localAt || choice.serverAt > choice.localAt;
-  const fields = differingFields(choice.local, choice.server, choice.localTopic, choice.serverTopic);
-  return (
-    <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-4 py-3 text-sm text-foreground">
-      <p role="status" className="font-medium">
-        {choice.reason === "stale"
-          ? "This create was changed somewhere else after you loaded it. Nothing was overwritten."
-          : serverNewer
-            ? "The server copy is newer than this draft"
-            : "This browser holds a draft the server does not have"}
-      </p>
-      <ul className="mt-2 space-y-1 text-muted">
-        <li>Server copy: saved {hhmm(choice.serverAt)}.</li>
-        <li>This browser&rsquo;s draft: changed {hhmm(choice.localAt)}.</li>
-        <li>They differ in: {fields.length ? fields.join(", ") : "formatting only"}.</li>
-      </ul>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onKeepLocal}
-          className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-dark"
-        >
-          Keep this browser&rsquo;s draft and save it
-        </button>
-        <button
-          type="button"
-          onClick={onUseServer}
-          className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
-        >
-          Use the server copy
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        Either way the other copy is not deleted: the server keeps its revisions, and this
-        browser&rsquo;s draft stays listed under &ldquo;Recover from this browser&rdquo; until it is
-        replaced.
-      </p>
-    </div>
-  );
-}
-
-/**
- * Every brief draft this browser holds, offered as a revision on this create.
- *
- * Reads keys and never deletes one. Drafts from before the brief saved itself -- `kw:<keyword>`
- * keys among them -- are only here, and stay until Jeff says he has what he needs.
- */
-function RecoverFromBrowser({ onRecover }: { onRecover: (draft: StoredBriefDraft) => void }) {
-  const [drafts, setDrafts] = useState<StoredBriefDraft[] | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-
-  return (
-    <details
-      className="group mt-6 border-t border-border pt-5"
-      onToggle={(e) => {
-        if ((e.currentTarget as HTMLDetailsElement).open) setDrafts(listBriefDrafts());
-      }}
-    >
-      <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:content-['']">
-        <span className="text-[#C83803] underline-offset-2 group-open:no-underline hover:underline">
-          Recover from this browser
-        </span>
-        <span className="ml-2 text-sm font-normal text-muted">
-          Brief drafts this browser kept, including ones from before the brief saved itself
-        </span>
-      </summary>
-      {drafts === null ? null : drafts.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">This browser holds no brief drafts.</p>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {drafts.map((d) => (
-            <li key={d.key} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-              <span className="text-foreground">
-                {d.label}
-                <span className="ml-2 text-xs text-muted">
-                  {(d.bytes / 1024).toFixed(1)} KB · changed {hhmm(d.changedAtUtc)}
-                  {d.brief.nicheFraming.taxonomyPath ? ` · ${d.brief.nicheFraming.taxonomyPath}` : ""}
-                </span>
-              </span>
-              {confirming === d.key ? (
-                <span className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-muted">Replaces the brief on screen and saves it.</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirming(null);
-                      onRecover(d);
-                    }}
-                    className="rounded-md bg-brand px-2.5 py-1 font-semibold text-white transition-colors hover:bg-brand-dark"
-                  >
-                    Save as a revision on this create
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirming(null)}
-                    className="text-muted underline"
-                  >
-                    Cancel
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirming(d.key)}
-                  className="text-xs text-[#C83803] underline"
-                >
-                  Use this draft
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </details>
   );
 }
