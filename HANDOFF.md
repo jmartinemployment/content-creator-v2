@@ -98,13 +98,20 @@ Payable generate has been run and read, and each also needs something GeekAPI do
 | Stage | Needs from GeekAPI |
 |---|---|
 | F7 — send the chosen writing provider to the partner-quote check | `brief/partner-quote-readiness` takes only project, topic, angle |
-| F9 — `grounding:` warnings shown under the readiness block | no such warning prefix found in the generate code |
+| F9 — `grounding:` warnings shown under the readiness block | **Met.** `GccGenerationCoordinator.GroundingWarningLabel = "grounding"` (`:131` at `5671288`) reaches `warnings` as `grounding: …` and the hub as a type event with that `contentType`; the live page shows one under "Written with a gap". This row said "no such warning prefix" until 2026-10-06; it was wrong |
 | F10 — "drafted, saving" per-type progress | no such progress event |
 | F11 — Revise through a revise-job route | no such route; `versions/{id}/revise` is the only one |
 
-**Across all repositories (`plans/fix-overview.md`):** no wave's end-to-end proof has been run yet.
-The proof is one Generate on the Accounts Payable project, all seven live types, read by Jeff, with
-every quote found on the page it cites. It was held until persistence was fixed; that gate is now met.
+**Across all repositories (`plans/fix-overview.md`):** the end-to-end proof is one Generate on the
+Accounts Payable project — the project named **"test"** (`ed18d0e5-…`), keyword "Accounts Payable:
+Automated Approval Workflows", five partners — all seven live types, read by Jeff, with every quote
+found on the page it cites. The run of 2026-10-05 18:24 UTC requested only `tool`, `blog`, `pillar`
+and finished before GeekAPI `5671288` deployed, so it was not the proof. **Two proof runs were started on 2026-10-06 against `5671288`**, all seven types each. The first,
+on OpenAI (10:05 UTC), failed closed in 35 seconds with nothing saved: OpenAI returned
+`429 insufficient_quota` / `credit_balance_exhausted` — "You have no credits remaining" — on every
+piece. That is a billing limit on the OpenAI account, for Jeff at platform.openai.com. The second,
+on Anthropic (10:06 UTC), passed the pre-flight 5 of 5 and ran; its outcome is on the project page
+when it opens (the latest-run read). Whether it is the proof is Jeff's reading, not this file's.
 
 **Stale documents — rewritten 2026-10-06.** `README.md` now describes the project-keyed product
 and cites only files that exist. `STATUS.md` is headed as the 2026-10-03 record, superseded here for
