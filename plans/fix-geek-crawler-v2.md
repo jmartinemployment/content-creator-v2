@@ -1,6 +1,15 @@
 # Fix Content Creator — Geek-Crawler-v2
 
-**Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
+**Written 2026-10-04. Status, 2026-10-06: finishing. C1 to C5 are built; C6 is withdrawn.**
+
+**Re-post is removed, by Jeff's instruction (2026-10-06).** Re-post was a fallback to a method that
+had no logging. It is replaced by logging sufficient to determine the actual cause of each failure:
+the transport cause in the post-mortem and in GeekAPI's error summary (`2943e3b`), and each run's
+own log on disk (`9f57044`). Whether re-post is the actual fix, which is unlikely, is determined
+from that data. The removal of the re-post code itself is not yet done.
+
+Remaining: remove the re-post code; the third declared-partner re-crawl (Jeff's to start); the
+measurement checks in Verification; the plan-creator decisions recorded under Status.
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
