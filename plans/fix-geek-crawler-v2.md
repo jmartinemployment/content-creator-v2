@@ -200,18 +200,13 @@ log existed only in the terminal that ran `serve`.
 report, CLI help, server help and the `archiveFailure` and archive doc comments said a kept run
 "can be re-posted" with its "crawl data still on disk". They now say no command exists and nothing
 ingests from the extract cache. `FailureSummary.recoverable` / `pagesRecoverable` are renamed
-`kept` / `pagesKept`. `archiveFailure` stays, uncalled, pending Jeff's decision on re-post.
+`kept` / `pagesKept`. `archiveFailure` stays, uncalled.
 README:276 still says "re-post", correctly: it means re-triggering a RAG index job.
 
-Two facts for the re-post decision:
-- **The page payload does exist locally.** `EXTRACT_CACHE` is on by default and writes each page's
-  `contentHtml`, `blocks` and meta to `DATA_DIR/extract-cache/<runId>/`, outside the purge.
-  ramp.com alone has 6,456 files there. A re-post is buildable from it; nothing does it today, and
-  the cache's own header calls it diagnostics, never authority.
-- **33 post-mortems are KEPT (12,848 pages); 31 belong to runs still `running` locally**, ramp.com
-  and the 30 `external`. The startup orphan pass purges those 30 without updating their
-  post-mortems, so after a restart the report will still list them as KEPT. Open: the orphan pass
-  should mark the post-mortem purged.
+**Re-post is not a pending decision (Jeff, 2026-10-06).** Re-post is a fallback. Logging comes
+first; whether re-post is the fix cannot be known until the logged failure data shows it. Until
+then nothing is built or decided. Earlier entries here, the handoff doc and memory recorded it as a
+decision waiting on Jeff, which was wrong.
 
 ## Audit — Geek-Crawler-v2
 
