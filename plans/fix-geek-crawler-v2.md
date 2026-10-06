@@ -150,7 +150,7 @@ report and discovery ledger, published 2,150 pages at 14:27:00 UTC and retired r
 | section admitted | blog 250, customers 124, community 10, case-studies 5, tools 3, free-tools 2, learn 2, faq 1, press 1, news 1, resources 1, insights 1 |
 | sitemap | 3,857 URLs, not truncated |
 
-Across all three re-crawls the trap rules refused 14 URLs and the cap of 50 refused 22 (16 on bill,
+Across all three re-crawls the trap rules refused 11 URLs (pagination 3, facet 6, calendar 2; corrected 2026-10-06 from 14) and the cap of 50 refused 22 (16 on bill,
 6 on ramp). Neither is binding. Both stand as they are unless the plan creator decides otherwise.
 
 **`fabb42f` (Geek-Crawler-v2): an interrupted run is deleted, whatever interrupted it (Jeff,
