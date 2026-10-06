@@ -196,6 +196,23 @@ log existed only in the terminal that ran `serve`.
 - Nothing removes these files. Retention is open.
 - Unit 360 of 360, integration 11 of 11, typecheck clean, fail-closed check ok.
 
+**`4ff602b` (Geek-Crawler-v2): the texts stop promising a re-post (2026-10-06).** The failures
+report, CLI help, server help and the `archiveFailure` and archive doc comments said a kept run
+"can be re-posted" with its "crawl data still on disk". They now say no command exists and nothing
+ingests from the extract cache. `FailureSummary.recoverable` / `pagesRecoverable` are renamed
+`kept` / `pagesKept`. `archiveFailure` stays, uncalled, pending Jeff's decision on re-post.
+README:276 still says "re-post", correctly: it means re-triggering a RAG index job.
+
+Two facts for the re-post decision:
+- **The page payload does exist locally.** `EXTRACT_CACHE` is on by default and writes each page's
+  `contentHtml`, `blocks` and meta to `DATA_DIR/extract-cache/<runId>/`, outside the purge.
+  ramp.com alone has 6,456 files there. A re-post is buildable from it; nothing does it today, and
+  the cache's own header calls it diagnostics, never authority.
+- **33 post-mortems are KEPT (12,848 pages); 31 belong to runs still `running` locally**, ramp.com
+  and the 30 `external`. The startup orphan pass purges those 30 without updating their
+  post-mortems, so after a restart the report will still list them as KEPT. Open: the orphan pass
+  should mark the post-mortem purged.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
