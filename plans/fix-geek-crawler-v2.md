@@ -175,6 +175,15 @@ have purged the published corpus.
   ramp.com left alone. A `serve` restart is now safe and will delete those 30.
 - Unit 347 of 347, integration 11 of 11, typecheck clean, fail-closed check ok.
 
+**`2943e3b` (Geek-Crawler-v2): a transport failure names its cause (2026-10-06).** Every
+post-mortem and GeekAPI `errorSummary` of the 30 runs that failed on 2026-10-05 read "fetch failed",
+because the client kept `err.message` and dropped `err.cause`.
+- `describeTransportError` (`errors.ts`) walks the cause chain, with each level's code and each
+  address of an `AggregateError`. The ingest client's `PersistenceError` message uses it, and that
+  message is what `markFailed` sends to GeekAPI and what the failure archive records.
+- A dropped socket now reads `transport: fetch failed; caused by: other side closed (UND_ERR_SOCKET)`.
+- Unit 354 of 354, integration 11 of 11, typecheck clean, fail-closed check ok.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
