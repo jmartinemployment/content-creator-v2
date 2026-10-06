@@ -184,6 +184,18 @@ because the client kept `err.message` and dropped `err.cause`.
 - A dropped socket now reads `transport: fetch failed; caused by: other side closed (UND_ERR_SOCKET)`.
 - Unit 354 of 354, integration 11 of 11, typecheck clean, fail-closed check ok.
 
+**`9f57044` (Geek-Crawler-v2): each run's log lines are written to disk (2026-10-06).** A run's
+log existed only in the terminal that ran `serve`.
+- `run-log.ts` tees `console` into `DATA_DIR/logs/<runId>.log` for the run that owns the current
+  async context (AsyncLocalStorage), so concurrent runs keep only their own lines. Crawlee's logger
+  prints through `console`, so its internal lines are captured too. The terminal is unchanged.
+- The file sits outside `runs/` and `.crawlee/`, so a purge leaves it. The integration test of an
+  abandoned site checks that the run directory is gone and the log, with the abort reason, is not.
+- Covered: everything from the crawl's start to its terminal block, purge included. Not covered:
+  `persist.begin` and `markRunning`, which run before the run log opens, and the server's own lines.
+- Nothing removes these files. Retention is open.
+- Unit 360 of 360, integration 11 of 11, typecheck clean, fail-closed check ok.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
