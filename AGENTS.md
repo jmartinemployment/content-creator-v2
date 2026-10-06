@@ -245,6 +245,32 @@ browser** (Jeff, 2026-10-04). `src/no-browser-storage.test.ts` fails on any `loc
 plan's P0 the server still keeps a create row under each project to hold its drafts. The client never
 mints one, never sees its id and never sends it, and this repo has no create client code.
 
+**A project holds one draft per page. It does not hold a history of drafts.** Jeff, 2026-10-06:
+*"re-running an existing project requires no history"* and *"I don't see a need for a project to
+contain multiple drafts."* Re-running is replacing: a Generate writes the project's pages and
+whatever was there is gone; nothing on the page, in the URL or in the wording may imply an older
+draft exists to be found. He was *"extremely confused ... trying to determine which was the latest"*
+— on 2026-10-05, when every Generate still added a new artifact beside the last run's under the same
+name (ended by GeekBackend `62efbad`, which rewrites the page instead), and again on 2026-10-06.
+
+What this means on this side, as of today:
+
+- The page already shows one draft per page and nothing older: it reads a page's versions and keeps
+  only the newest (`ProjectContentWorkspace.tsx:228-233`); no older version is reachable on screen.
+  Keep it that way — no version list, no "previous draft", no compare, no restore.
+- The one thing on screen that still claims a history is the `pillar · v2` label beside a draft
+  (`:1100`). A number implies a v1 somewhere; there is nowhere to see one. It should go.
+- "Written at HH:MM" and "Generated from the brief saved at …" stay: they say *when* and *from
+  what*, not *which of several*.
+- Five tool pages on a project are five pages, one per usable partner — not five drafts of one.
+- Brief **revisions** are a different thing and stay (J5 in `plans/fix-project-persistence.md`):
+  they exist so a stale Save can be refused and so a draft can name the brief it came from. They are
+  never shown as a list either.
+
+The server-side version rows (`listGccVersions`, approve/revise/SEO by version id) are GeekBackend's
+and are what the number comes from. Whether they go is GeekBackend's call; this repo's obligation is
+to show one draft and never to surface more.
+
 ## Topic is a descriptor and a keyword
 
 The topic — the project's keyword field, `create.Topic` in GeekAPI's generation code — is **two fields
