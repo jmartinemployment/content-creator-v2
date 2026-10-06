@@ -110,8 +110,14 @@ and finished before GeekAPI `5671288` deployed, so it was not the proof. **Two p
 on OpenAI (10:05 UTC), failed closed in 35 seconds with nothing saved: OpenAI returned
 `429 insufficient_quota` / `credit_balance_exhausted` — "You have no credits remaining" — on every
 piece. That is a billing limit on the OpenAI account, for Jeff at platform.openai.com. The second,
-on Anthropic (10:06 UTC), passed the pre-flight 5 of 5 and ran; its outcome is on the project page
-when it opens (the latest-run read). Whether it is the proof is Jeff's reading, not this file's.
+on Anthropic (10:06 UTC), passed the pre-flight 5 of 5 and then failed closed in 2.5 minutes with
+nothing saved: every writing call — pillar, blog, all five tool pages — returned HTTP 200 after
+18–66 s with "Anthropic response contained no text content block". The mechanism the evidence
+supports, recorded as `plans/fix-geekapi.md` F-A19: `claude-sonnet-5` runs adaptive thinking when
+`thinking` is omitted, GeekAPI's provider omits it and sends 512–4,096 `max_tokens`, so the budget
+is spent thinking and the body holds only empty `thinking` blocks. Not confirmed — the provider logs
+nothing about a 200 body. **So the proof has not been run.** It needs either OpenAI credits or the
+F-A19 fix in GeekAPI, and then one seven-type Generate on "test".
 
 **Stale documents — rewritten 2026-10-06.** `README.md` now describes the project-keyed product
 and cites only files that exist. `STATUS.md` is headed as the 2026-10-03 record, superseded here for
