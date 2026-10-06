@@ -1,11 +1,19 @@
-# Where things stand — 2026-10-03
+# Where things stood — 2026-10-03
 
 I am implementing Content Creator version one.
+
+**Superseded for state by [`HANDOFF.md`](HANDOFF.md) (2026-10-06).** What is deployed, what is open
+and how to check the live app are there; this file is the record of 2026-10-03 and 2026-10-04, kept
+for its "Known open" list and for the cleanup and code-review record below it. Of the open items,
+three were re-checked on 2026-10-06 and are still open: no `ValidateOnBuild` in `Program.cs` and
+`GeneratedByModel = llmType.ToString()` (`ContentGenerationOrchestrator.cs:416`) at GeekBackend
+`5671288`, and `--foreground: var(--gcc-ink)` at `globals.css:266`. The `crawl_pages.Html` question
+and the `GEEK_SEO_API_URL` variable were not re-checked. Authority for rules is [`AGENTS.md`](AGENTS.md).
 
 **This file goes stale faster than anything else here.** The version it replaced was dated
 2026-09-17 and still described Site Analyzer, an `/app/site-analyzer` → `/app/create` rename and an
 uncommitted seed-validation branch — none of which existed any more. If a claim below cannot be
-re-checked in ten seconds, it does not belong in this file. Authority is [`AGENTS.md`](AGENTS.md).
+re-checked in ten seconds, it does not belong in this file.
 
 ## The project is the unit — 2026-10-04
 

@@ -106,8 +106,9 @@ Payable generate has been run and read, and each also needs something GeekAPI do
 The proof is one Generate on the Accounts Payable project, all seven live types, read by Jeff, with
 every quote found on the page it cites. It was held until persistence was fixed; that gate is now met.
 
-**Stale documents, known:** `README.md` still describes the old create-based product
-(`/creates/new`, PLAN → WRITE → VALIDATE). `STATUS.md` is dated and partly superseded by this file.
+**Stale documents — rewritten 2026-10-06.** `README.md` now describes the project-keyed product
+and cites only files that exist. `STATUS.md` is headed as the 2026-10-03 record, superseded here for
+state and kept for its "Known open" list.
 
 ## 6. How to check the live app does what it says
 

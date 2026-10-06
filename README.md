@@ -13,80 +13,105 @@ I am implementing Content Creator version one.
 
 **Correctness over expediency.**
 
-Content Creator v2 is an authenticated, AI-assisted writing workspace for marketing operators and agencies. It turns a project website, content brief, and partner/competitor research into grounded, citeable content for editing, publishing, or export.
+The Content Creator frontend. An operator opens a client's project, saves its brief, presses
+Generate, and reads the pages GeekAPI wrote — grounded on the crawl Geek-Crawler-v2 already ran for
+that site and its declared partners. This app passes a project id to GeekAPI and displays results. It
+has no crawler, no browser automation and no database of its own.
 
 | | |
 |--|--|
-| **Production UI** | `https://content-creator-v2-phi.vercel.app` |
-| **GeekAPI** | `https://api.geekatyourspot.com` |
-| **Direction** | **Version one is what is being implemented.** v2 lost features and was rolled back. The repo name and the `ContentCreatorV2/*` namespace are historical, not a statement of direction. New work extends `api/geek-content-creator` (v1) |
-| **Release status** | **Not release-ready.** v1's frontend is restored and in production; drafting is off by default (`ContentCreatorV2:DraftingEnabled=false`). See [`AGENTS.md`](AGENTS.md) § Current state |
-| **Authority** | [`AGENTS.md`](AGENTS.md) (service boundaries + current state) · [`architecture.md`](architecture.md) (platform contracts) · [`.cursor/rules/`](.cursor/rules/) (agent-enforced non-negotiables) |
+| **Production UI** | `https://content-creator-v2-phi.vercel.app` — deployed from `main` on every push; there are no branches |
+| **GeekAPI** | `https://api.geekatyourspot.com`, routes under `api/geek-content-creator` |
+| **Direction** | **Version one is what is being implemented.** v2 lost features and was rolled back. The repo name and the `ContentCreatorV2/*` namespace are historical, not a statement of direction |
+| **Where things stand** | [`HANDOFF.md`](HANDOFF.md) — what is deployed, what is open, how to check the live app |
+| **Authority** | [`AGENTS.md`](AGENTS.md) (service boundaries, rules, current state) · [`architecture.md`](architecture.md) · [`.cursor/rules/`](.cursor/rules/) (non-negotiables, always applied) |
 
-## Product overview
+## The product, as deployed
 
-Operators move from research and planning through outline approval, writing, validation, and Canvas export. Project-site brand context combines with external evidence from Geek-Crawler and Geek-Crawler-Rag.
+**The project is the unit.** A project is one client, one site, one keyword and one brief. Its brief,
+every Generate and every draft are addressed by the project id alone; nothing else is visible.
 
-### Capabilities
+- `/app/workflow` — clients and their projects. Everything starts here; `/app` redirects to it.
+- `/app/projects/[id]?section=…` — one project: **Brief & Generate**, Profile, Deliverables,
+  Tasks & Time, History.
+- **The brief** is read from the project and written by one **Save** button
+  (`PATCH projects/{id}/brief`, with the version it was read at; a stale save is refused and nothing
+  is overwritten). An incomplete brief saves; completeness gates Generate. Nothing about the brief is
+  kept in the browser — `src/no-browser-storage.test.ts` fails on any `localStorage` or
+  `sessionStorage` use under `src`.
+- **Generate** is `POST projects/{id}/generate` for the chosen content types and writing provider.
+  Progress arrives over SignalR (`/hubs/gcc-v2-realtime`); a reopened page reads the project's newest
+  run (`GET projects/{id}/generate/latest`) and shows a run in progress or the last run's outcome —
+  what it saved, what it refused by name, the gaps it saved with, and which partners could be
+  grounded.
+- **Drafts** are the project's pages, one per content type and name; a Generate rewrites them as new
+  versions. Each shows "Generated from the brief saved at …". Revise, SEO and polish scores, approve,
+  and HTML export (`GET projects/{id}/export/html`) work on them.
+- **Content types live today:** Pillar, Blog, Tool (one page per usable declared partner, with a
+  pre-flight that refuses a partner by name rather than silently producing fewer pages), cold-outreach
+  email, Social, Image prompts, Ads. Every other type is disabled.
 
-- Project-site crawling, hierarchy, BrandKit, and related-page context
-- Persisted briefs (topic, keyword, intent, stage, voice, PAA, **partner tool URLs**, **competitor page URLs**)
-- Partner/competitor crawl runs **always required** — **fail closed** if either is missing (tools = partners; competitors never as partner)
-- Competitor extraction plan (complete): [`plans/competitor-extraction-complete.md`](plans/competitor-extraction-complete.md) (extract + competitor SoftwareApplication JSON-LD)
-- Partner extraction plan (complete): [`plans/partner-extraction-complete.md`](plans/partner-extraction-complete.md) (citable, ads, comparison, alternatives, partner SoftwareApplication JSON-LD)
-- Approval-driven `PLAN → WRITE → VALIDATE → REPAIR` Create jobs
-- Citeable blog/pillar path with verified quotations, partner-mention gate, and `sourceRights`
-- Articles, guides, comparisons, tool/service/local pages, ads, social, and related formats
-- Editable outlines, section regen, SEO/GEO reporting, CMS publish, export
-- SignalR job progress (`/hubs/gcc-v2-realtime`) — no timer polling for live status
+The wire contract between this repo and GeekAPI is
+[`plans/project-api-contract.md`](plans/project-api-contract.md). Change it before changing either
+side.
 
-### Technology
-
-Next.js App Router, React, TypeScript, Tailwind CSS, Microsoft SignalR, OAuth 2.0 Authorization Code + PKCE, BFF route handlers, GeekAPI, Vercel.
-
-## Place in the Geek content platform
+## Place in the platform
 
 ```text
-Geek-Crawler → GeekAPI/Repository → MongoDB
-                                      ↓
-                            Geek-Crawler-Rag / Qdrant
-                                      ↓
-                          GeekAPI ContentCreatorV2
-                                      ↓
-                         content-creator-v2 (phi) → Canvas / export
+Geek-Crawler-v2 ──crawls──▶ GeekAPI / GeekRepository ──▶ MongoDB (crawl_runs, crawl_pages)
+                                                          │
+                                                          ▼
+                                           Geek-Crawler-Rag / Qdrant  (retrieval + quote verification; never generates)
+                                                          │
+                                                          ▼
+                              GeekAPI  api/geek-content-creator  (generation, grounded on verified block text)
+                                   │                      │
+                                   ▼                      ▼
+     Supabase content_creator (projects, briefs,    content-creator-v2 (this repo)
+     versions) via GeekRepository
 ```
 
-This repo owns brief UX, editorial controls, Canvas, publishing, and export. It does not crawl partner research from the browser and does not talk to MongoDB or Qdrant directly.
+This repo owns the brief UX, the Generate controls and the reading of what was written. It starts no
+crawl, talks to no database, and never reaches MongoDB, Qdrant or Supabase directly. Markdown is not
+a corpus, interchange or verification format anywhere on this path; the model never emits markup and
+one renderer in GeekAPI produces the HTML.
+
+## Technology
+
+Next.js App Router, React, TypeScript, Tailwind CSS, Microsoft SignalR, OAuth 2.0 Authorization Code
++ PKCE against GeekOAuth, Vercel.
+
+The browser never holds a GeekAPI token. Tokens stay in HTTP-only cookies; `src/proxy.ts` refreshes
+the access token before a request reaches a Server Component, and `src/app/api/cw/[...path]` forwards
+the signed-in user's Bearer to GeekAPI. There is no API-key fallback when the user's token is
+rejected — that masked auth failures once.
 
 ## Local development
 
 ```bash
 npm install
-npm run dev
-# http://localhost:3004
-```
-
-```bash
+npm run dev        # http://localhost:3003
 npm run build
 ```
 
-Configure GeekOAuth and GeekAPI per [`.env.example`](.env.example). Tokens stay in HTTP-only cookies; infrastructure and LLM secrets never ship to the browser.
+Configure GeekOAuth and GeekAPI per [`.env.example`](.env.example). Read environment variables so
+`""` counts as absent — `??` passes an empty string through and has caused two production auth
+outages.
 
-### Unified Create + evidence
-
-`/creates/new → persisted job → Canvas` is the only authoring path. Product `/rag` is **404**. The BFF still proxies `/api/rag/*` to GeekAPI for research status and Create helpers.
-
-The draft workspace stays backward-compatible with older jobs. Newer results may include `citations`, `sectionCitations`, `provenance`, `evidenceManifest`, `modelPolicy`, and `approvedStageModels`. `jobStatus: Ready` is not `shipReady`.
+**Checks:** `npx tsc --noEmit`, `npx eslint src`, `npm test` (node's test runner over
+`src/**/*.test.ts`). There is no component-rendering test and no browser test. Do not start a local
+dev server to verify UI — verify against the deployed app (Jeff's standing rule).
 
 ## Documentation
 
 | Doc | Role |
 |-----|------|
+| [`HANDOFF.md`](HANDOFF.md) | Where the frontend stands, what is open, how to check the live app |
 | [`AGENTS.md`](AGENTS.md) | Service boundaries, crawl types, fail-closed rules, current state |
-| [`plans/README.md`](plans/README.md) | Plans index + rules sync note |
-| [`architecture.md`](architecture.md) | Platform map, copy/call/do-not-reuse, Create contracts |
-| [`.cursor/rules/`](.cursor/rules/) | Agent rules mirrored from master-plan non-negotiables |
-| [`AGENTS.md`](AGENTS.md) | Agent entry (Next.js notice + project pointers) |
-| [`tests/e2e/README.md`](tests/e2e/README.md) | Playwright against real GeekOAuth + GeekAPI |
+| [`architecture.md`](architecture.md) | Platform map and contracts |
+| [`plans/project-api-contract.md`](plans/project-api-contract.md) | The GeekAPI routes this app calls, and their shapes |
+| [`plans/fix-overview.md`](plans/fix-overview.md) | The cross-repository fix plan and its end-to-end proof |
+| [`.cursor/rules/`](.cursor/rules/) | Agent rules: no fallbacks, no stubs, no unwired code, RAG never generates |
 
-`plans/master-plan.md` was deleted; [`AGENTS.md`](AGENTS.md) is the standing authority. Do not resurrect parallel living plans.
+`STATUS.md` is a dated snapshot; `HANDOFF.md` supersedes it. Do not resurrect parallel living plans:
+[`AGENTS.md`](AGENTS.md) is the standing authority.
