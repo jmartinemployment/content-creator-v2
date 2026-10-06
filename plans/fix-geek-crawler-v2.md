@@ -164,6 +164,17 @@ there is no command and no retained payload.
 - The wider durable-delivery redesign (outbox and SignalR ingest) was planned and then dropped by
   Jeff in favour of this smallest change.
 
+**`15ab6d6` (Geek-Crawler-v2): the orphan pass asks GeekAPI before deleting a run (2026-10-06).**
+`fabb42f` deleted every stale local run marked `running`. ramp.com `4563f7ec` was completed by hand
+and GeekAPI holds it `complete`, but its `run.json` still says `running`, so a `serve` restart would
+have purged the published corpus.
+- `runPresence` now carries the status GeekAPI reports. A run GeekAPI shows `complete` is left
+  alone. A run GeekAPI gave no usable answer about (transport failure, 5xx, proxy 404, no status in
+  the body) is left alone too. Any other status, or a GeekAPI 404, is purged as before.
+- Dry run on the data volume against live GeekAPI: 30 runs held as `external` would be purged,
+  ramp.com left alone. A `serve` restart is now safe and will delete those 30.
+- Unit 347 of 347, integration 11 of 11, typecheck clean, fail-closed check ok.
+
 ## Audit — Geek-Crawler-v2
 
 | Id | Finding | Where |
