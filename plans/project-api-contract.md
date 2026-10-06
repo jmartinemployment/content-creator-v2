@@ -86,6 +86,16 @@ the last run's and under the same name. Now:
   what it recorded. Nothing is polled.
 - The plan's A11 route was `GET creates/{id}/jobs/{jobId}`; the page knows its project and not a job
   id, so it asks by project.
+- **`resultJson` is not camelCase inside, as of `5671288` — found 2026-10-06.** The route's own fields
+  are camelCase, and so are the hub's live events, but the stored result is written with
+  `JsonSerializer.Serialize(result)` and no options (`GccJobsAndSeo.cs:48`), so the result's declared
+  fields (`created`, `refusals`, `preflight`, `warnings`) come through as declared and everything
+  inside them as C# declares it: `preflight[].ProductName`, `Ready`, `PopulatedCategories`,
+  `created[].artifact.Id`. Read through the hub's type, the Accounts Payable run of 2026-10-05 showed
+  "0 of 5 can be grounded" and "undefined categories" five times over, on a run that wrote four tool
+  pages. The workspace now reads the record with every key's first letter lowered
+  (`run-display.ts` `runRecord`), which is the identity on camelCase, so GeekAPI serializing the record
+  with `JsonSerializerDefaults.Web` is the fix on its side and changes nothing here.
 
 ## 4. The project's drafts — not in the plan's P0, needed by it
 

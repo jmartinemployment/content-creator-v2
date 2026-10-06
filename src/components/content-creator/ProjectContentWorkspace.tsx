@@ -12,6 +12,7 @@ import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-re
 import {
   draftWrittenLabel,
   lastRunLines,
+  runRecord,
   runSavedLine,
   savedByRun,
   timeOfDay,
@@ -468,37 +469,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
    * progressively rather than all at once when the slowest one lands; the job event is what ends
    * the run. Handlers read reload through its ref so they never close over a stale copy.
    */
-  /** The job's recorded aggregate -- `{ created, refusals, preflight }` -- or null when the event
-   *  carries none or it will not parse. Never the raw string: a body that does not parse is not a
-   *  list of refusals. */
-  function parseGenerateResultJson(
-    raw: string | null | undefined,
-  ): {
-    refusals?: string[];
-    warnings?: string[];
-    preflight?: GccGeneratePreflightEvent["partners"];
-  } | null {
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!parsed || typeof parsed !== "object") return null;
-      const obj = parsed as { refusals?: unknown; warnings?: unknown; preflight?: unknown };
-      return {
-        refusals: Array.isArray(obj.refusals)
-          ? obj.refusals.filter((r): r is string => typeof r === "string")
-          : undefined,
-        warnings: Array.isArray(obj.warnings)
-          ? obj.warnings.filter((w): w is string => typeof w === "string")
-          : undefined,
-        preflight: Array.isArray(obj.preflight)
-          ? (obj.preflight as GccGeneratePreflightEvent["partners"])
-          : undefined,
-      };
-    } catch {
-      return null;
-    }
-  }
-
   /**
    * The run is over. `savedIds` is what it recorded saving, or null when that is not known -- a run
    * that failed, or whose result did not arrive. reload() says how many and opens the first.
@@ -521,7 +491,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
    * run this page watched and the record of that run say the same things, and each is listed once.
    */
   function showRecorded(resultJson: string | null | undefined, jobId: string) {
-    const recorded = parseGenerateResultJson(resultJson);
+    // The record as the server spells it -- see runRecord: the stored result is not camelCase, and
+    // reading it as the hub's live event printed "undefined categories" for every partner.
+    const recorded = runRecord(resultJson);
     const recordedRefusals = recorded?.refusals ?? [];
     const recordedWarnings = recorded?.warnings ?? [];
     const recordedPreflight = recorded?.preflight ?? [];
@@ -1344,7 +1316,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">Approve &amp; export</h3>
             <p className="mt-1 text-sm text-muted">
-              Approval is on the create artifact (GeekAPI) — required before Repurpose.
+              Approve marks this page&rsquo;s newest version approved on the server. Export downloads
+              the project&rsquo;s pages as HTML.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {approved ? (

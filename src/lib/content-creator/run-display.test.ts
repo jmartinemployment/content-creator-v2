@@ -1,4 +1,4 @@
-import { draftWrittenLabel, lastRunLines, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
+import { draftWrittenLabel, lastRunLines, runRecord, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -72,6 +72,137 @@ assertEqual(
   null,
   "a list with a piece that names no page is not vouched for",
 );
+
+// The record as GeekAPI stores it at 5671288: the result's own fields as declared, everything
+// inside them as C# declares it. This is the 2:32 PM run on "test" on 2026-10-05, which the page
+// showed as "0 of 5 can be grounded" and "undefined categories" five times over.
+const storedRecord = JSON.stringify({
+  created: [
+    { artifact: { Id: "pillar", Type: "pillar" }, version: { Id: "v-pillar", VersionNumber: 2 } },
+    { artifact: { Id: "tool-ramp", Type: "tool" }, version: { Id: "v-ramp", VersionNumber: 1 } },
+  ],
+  refusals: ["Approvalmax: Refused: the tool page 'Approvalmax'"],
+  preflight: [
+    {
+      ProductName: "Ramp",
+      Host: "ramp.com",
+      Ready: true,
+      Coverage: "12 of 20 categories",
+      PagesAttempted: 9,
+      PagesFailed: 0,
+      PopulatedCategories: 12,
+      HasCapabilitySignal: true,
+      Reused: true,
+      BankedAtUtc: "2026-10-05T10:46:00Z",
+      TotalCategories: 20,
+    },
+    {
+      ProductName: "Approvalmax",
+      Host: "approvalmax.com",
+      Ready: false,
+      Coverage: "no capability signal",
+      PagesAttempted: 4,
+      PagesFailed: 0,
+      PopulatedCategories: 1,
+      HasCapabilitySignal: false,
+      Reused: false,
+      BankedAtUtc: null,
+      TotalCategories: 20,
+    },
+  ],
+  warnings: ["blog: Blog body sections 1-2 is 761 words against a 900-word floor"],
+});
+assertEqual(
+  runRecord(storedRecord),
+  {
+    savedIds: ["pillar", "tool-ramp"],
+    refusals: ["Approvalmax: Refused: the tool page 'Approvalmax'"],
+    warnings: ["blog: Blog body sections 1-2 is 761 words against a 900-word floor"],
+    preflight: [
+      {
+        productName: "Ramp",
+        host: "ramp.com",
+        ready: true,
+        coverage: "12 of 20 categories",
+        pagesAttempted: 9,
+        pagesFailed: 0,
+        populatedCategories: 12,
+        hasCapabilitySignal: true,
+        totalCategories: 20,
+        reused: true,
+        bankedAtUtc: "2026-10-05T10:46:00Z",
+      },
+      {
+        productName: "Approvalmax",
+        host: "approvalmax.com",
+        ready: false,
+        coverage: "no capability signal",
+        pagesAttempted: 4,
+        pagesFailed: 0,
+        populatedCategories: 1,
+        hasCapabilitySignal: false,
+        totalCategories: 20,
+        reused: false,
+        bankedAtUtc: null,
+      },
+    ],
+  },
+  "the stored record is read under the contract's names whatever the server's spelling",
+);
+assertEqual(savedByRun(storedRecord), ["pillar", "tool-ramp"], "and the saved pages come from the same read");
+// The hub's live spelling reads the same way: lowering the first letter of a camelCase key is the identity.
+assertEqual(
+  runRecord(
+    JSON.stringify({
+      created: [{ artifact: { id: "blog" }, version: { id: "v" } }],
+      refusals: [],
+      preflight: [
+        {
+          productName: "Bill",
+          host: "bill.com",
+          ready: true,
+          coverage: "ok",
+          pagesAttempted: 3,
+          pagesFailed: 0,
+          populatedCategories: 8,
+          hasCapabilitySignal: true,
+        },
+      ],
+      warnings: [],
+    }),
+  ),
+  {
+    savedIds: ["blog"],
+    refusals: [],
+    warnings: [],
+    preflight: [
+      {
+        productName: "Bill",
+        host: "bill.com",
+        ready: true,
+        coverage: "ok",
+        pagesAttempted: 3,
+        pagesFailed: 0,
+        populatedCategories: 8,
+        hasCapabilitySignal: true,
+      },
+    ],
+  },
+  "a camelCase record reads unchanged, optional fields left absent",
+);
+// A pre-flight row the page could not print makes the pre-flight not known -- not a shorter list.
+assertEqual(
+  runRecord(JSON.stringify({ created: [], preflight: [{ ProductName: "Ramp" }] }))?.preflight,
+  null,
+  "a partner row missing its counts is not a row, and the pre-flight is then not known",
+);
+assertEqual(
+  runRecord(JSON.stringify({ artifact: { Id: "pillar" }, version: { Id: "v" } })),
+  { savedIds: ["pillar"], refusals: null, warnings: null, preflight: null },
+  "a bare single piece carries no lists, and absent is not empty",
+);
+assertEqual(runRecord(null), null, "no record is not a record");
+assertEqual(runRecord("{"), null, "a record that will not parse is not a record");
 
 assertEqual(runSavedLine(6), "It saved 6 drafts. The first is open below.", "a run that saved several");
 assertEqual(runSavedLine(1), "It saved 1 draft. It is open below.", "a run that saved one");
