@@ -714,7 +714,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       // on purpose, so there is never a moment where the two disagree.
       if (result.artifact && result.version) {
         pushGenerateMsg(
-          `Created ${result.artifact.type} \u201c${result.artifact.name}\u201d v${result.version.versionNumber}.`,
+          `Wrote ${result.artifact.type} \u201c${result.artifact.name}\u201d.`,
         );
         selectedArtifactIdRef.current = result.artifact.id;
       } else if (result.created?.length) {
@@ -1096,9 +1096,10 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           <section>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h3 className="font-display text-lg text-foreground">{artifact?.name || "Draft"}</h3>
-              <span className="text-sm text-muted">
-                {artifact?.type} · v{version.versionNumber}
-              </span>
+              {/* The type alone. This read "pillar · v2" until 2026-10-06, and a number implies a
+                  v1 somewhere when there is nowhere on the page to see one: a project holds one
+                  draft per page and no history of drafts (AGENTS.md, Jeff, 2026-10-06). */}
+              <span className="text-sm text-muted">{artifact?.type}</span>
               {/* When the text on screen was written. A tab holding one draft has no row of buttons
                   to carry the time, and a revision is later than the draft it revises. */}
               {draftWrittenLabel(version.createdAtUtc) ? (
