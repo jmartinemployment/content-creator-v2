@@ -53,3 +53,18 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# editor / assistant instruction files - local only, never committed
+CLAUDE.md
+CLAUDE.local.md
+CLAUDE.*.md
+**/CLAUDE.md
+.claudeignore
+AGENTS.md
+AGENTS.local.md
+**/AGENTS.md
+.cursor/
+.cursorrules
+.cursorignore
+.cursorindexingignore
+.agents/
