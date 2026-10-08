@@ -152,6 +152,11 @@ export interface GccProjectRun {
   /** What an ended run recorded: what it saved, what it refused by name, the pre-flight, the gaps. */
   resultJson?: string | null;
   error?: string | null;
+  /**
+   * Where to read the run's full record — every model call, verdict and outcome — so a refusal can
+   * be diagnosed. Same path `getGenerateJobEvents` hits.
+   */
+  eventsPath?: string;
 }
 
 /**
@@ -165,6 +170,35 @@ export async function getLatestProjectRun(projectId: string): Promise<GccProject
     `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/latest`,
   );
   return body.run ?? null;
+}
+
+/** One row of a Generate run's record (grounding, call, verdict, batch, outcome, …). */
+export interface GccGenerateJobEvent {
+  id: number;
+  jobId: string;
+  seq: number;
+  atUtc: string;
+  kind: string;
+  piece: string | null;
+  payloadJson: string;
+}
+
+/**
+ * A run's full record: what it was grounded on, every model call, every verdict, every outcome.
+ * What to open when a type is refused and the one-line note is not enough to fix it.
+ */
+export async function getGenerateJobEvents(
+  projectId: string,
+  jobId: string,
+): Promise<{ jobId: string; status: string; error: string | null; events: GccGenerateJobEvent[] }> {
+  return gccRequest(
+    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/${encodeURIComponent(jobId)}/events`,
+  );
+}
+
+/** The path the page shows for a run's full record. Same shape GeekAPI puts on `eventsPath`. */
+export function generateJobEventsPath(projectId: string, jobId: string): string {
+  return `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/${encodeURIComponent(jobId)}/events`;
 }
 
 /** Every draft on the project (contract §4). */
@@ -217,6 +251,8 @@ export interface GccGenerateResult {
   jobId?: string;
   createId?: string;
   status?: string;
+  /** Where to read the run's full record once it has started. */
+  eventsPath?: string;
   /* The shapes a synchronous generate returned. Kept so the UI works against a GeekAPI that has
      not yet been deployed with the job runner -- this frontend ships first, deliberately, so
      there is no window where the two disagree. */
@@ -224,12 +260,8 @@ export interface GccGenerateResult {
   version?: GccArtifactVersion;
   created?: Array<{ artifact: GccArtifact; version: GccArtifactVersion }>;
   /**
-   * Per-partner refusals, named. One requested type can be several artifacts — tool is one page per
-   * declared partner — and a partner that could not be grounded refuses its own page while the
-   * others persist.
-   *
-   * This field is why the two missing tool pages had no explanation on 2026-10-02: the backend
-   * computed the reason and sent it, and there was nowhere here to put it, so it was dropped.
+   * What was not written, each named with its type — a whole content type that failed, or a
+   * partner tool page that could not be grounded while the others still saved.
    */
   refusals?: string[];
   /** Pieces that were saved with a gap the operator should see, prefixed by type. */

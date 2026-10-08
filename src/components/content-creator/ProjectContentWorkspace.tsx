@@ -63,7 +63,9 @@ import {
   approveGccVersion,
   briefRevisionSavedAt,
   downloadProjectHtmlExport,
+  generateJobEventsPath,
   generateProject,
+  getGenerateJobEvents,
   getLatestProjectRun,
   listProjectArtifacts,
   listGccVersions,
@@ -76,6 +78,7 @@ import {
   seoGccVersion,
   type GccArtifact,
   type GccArtifactVersion,
+  type GccGenerateJobEvent,
   type GccPolishReport,
   type GccSeoReport,
   type GccStaleGroundingError,
@@ -152,10 +155,13 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // pages appeared out of five on 2026-10-02 with nothing on screen saying why, while the backend
   // had named both reasons and pushed them over the hub.
   const [generateNotes, setGenerateNotes] = useState<string[]>([]);
-  // Pieces that were saved with a gap: a pillar that never named a partner after a retry, a closing
-  // without the scheduler link. These used to refuse the whole draft; the draft is now saved and the
-  // gap is said here, so the operator has the known-good page and knows what to add to it.
+  // Pieces that were saved with a gap: a pillar that never named a partner, a closing without the
+  // scheduler link. The draft is saved and the gap is said here, so the operator has the page and
+  // knows what to add to it.
   const [generateWarnings, setGenerateWarnings] = useState<string[]>([]);
+  // The ended (or current) run whose full record the page can open — stays set after the hub closes,
+  // so a refusal still has a link to every model call and verdict (Jeff, 2026-10-06).
+  const [runLogJobId, setRunLogJobId] = useState<string | null>(null);
   // The tool pre-flight: which declared partners can be grounded, known before anything is drafted.
   const [preflight, setPreflight] = useState<GccGeneratePreflightEvent | null>(null);
   const [outputTypes, setOutputTypes] = useState<string[]>([]);
@@ -491,6 +497,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
    * run this page watched and the record of that run say the same things, and each is listed once.
    */
   function showRecorded(resultJson: string | null | undefined, jobId: string) {
+    setRunLogJobId(jobId);
     // The record as the server spells it -- see runRecord: the stored result is not camelCase, and
     // reading it as the hub's live event printed "undefined categories" for every partner.
     const recorded = runRecord(resultJson);
@@ -506,13 +513,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       });
     }
     if (recordedRefusals.length > 0) {
+      // Already typed on the backend ("blog: …", "tool: Bill: …"). Do not invent a type here — that
+      // used to force every refusal under "tool:" and mislabelled a content-type failure.
       setGenerateNotes((prev) => {
         const next = [...prev];
         for (const refusal of recordedRefusals) {
-          // The live event names the type ("tool: Bill: ..."); the recorded refusal is the
-          // per-partner text alone, and only tool pages refuse per partner.
-          const note = `tool: ${refusal}`;
-          if (!next.includes(note)) next.push(note);
+          if (!next.includes(refusal)) next.push(refusal);
         }
         return next;
       });
@@ -592,6 +598,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
 
   async function attachToGenerateJob(jobId: string) {
     generateJobIdRef.current = jobId;
+    setRunLogJobId(jobId);
     let conn = hubRef.current;
     if (!conn) {
       conn = createWorkflowHubConnection();
@@ -675,6 +682,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     setGenerateMsgs([]);
     setGenerateNotes([]);
     setGenerateWarnings([]);
+    setRunLogJobId(null);
     setPreflight(null);
     setStalePrompt(null);
     runEndedRef.current = null;
@@ -766,6 +774,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             preflight={preflight}
             notes={generateNotes}
             warnings={generateWarnings}
+            projectId={projectId}
+            jobId={runLogJobId}
           />
         </GenerateRunningIndicator>
       ) : null}
@@ -955,6 +965,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               preflight={preflight}
               notes={generateNotes}
               warnings={generateWarnings}
+              projectId={projectId}
+              jobId={runLogJobId}
             />
           )}
         </Stage>
@@ -1471,7 +1483,8 @@ function GenerateRunningIndicator({
 
 /**
  * What a run has said so far: its progress lines, the partner pre-flight, what was not written and
- * what was written with a gap.
+ * what was written with a gap — and, when something failed or shipped with a gap, the link to the
+ * run's full record so the refusal can be fixed rather than guessed.
  *
  * One definition, drawn in two places -- inside the running indicator while a run covers the page,
  * and in the Generate stage otherwise -- so what the operator reads while waiting is exactly what is
@@ -1482,12 +1495,20 @@ function GenerateRunReport({
   preflight,
   notes,
   warnings,
+  projectId,
+  jobId,
 }: {
   msgs: string[];
   preflight: GccGeneratePreflightEvent | null;
   notes: string[];
   warnings: string[];
+  projectId: string;
+  jobId: string | null;
 }) {
+  const needsLog = notes.length > 0 || warnings.length > 0
+    || msgs.some((m) => /failed|refus/i.test(m));
+  const eventsPath = jobId ? generateJobEventsPath(projectId, jobId) : null;
+
   return (
     <>
       {msgs.length > 0 ? (
@@ -1510,11 +1531,6 @@ function GenerateRunReport({
               ? `Extraction failed for all ${preflight.total} partners — a provider fault, not your data`
               : `Partner readiness — ${preflight.ready} of ${preflight.total} can be grounded`}
           </p>
-          {/* Twice on 2026-10-03 this panel reported a provider outage as five unusable partners:
-              once for a 400 (temperature deprecated) and once for a 429 (no OpenAI credits). Both
-              read as "0 of 22 categories ... no capability signal", which is the sentence for a
-              partner whose site is thin. When nothing was extracted the counts describe nothing,
-              so they are not shown. */}
           {everyPartnerFailedExtraction(preflight.partners) ? (
             <p className="mt-1 text-xs text-muted">
               No partner could be assessed. Category counts are omitted because nothing was
@@ -1536,8 +1552,6 @@ function GenerateRunReport({
                     `extraction failed on all ${partner.pagesAttempted} pages`
                   ) : (
                     <>
-                      {/* The total comes with the count. Where a recorded run carries none, the
-                          count is given alone rather than against a number this page assumes. */}
                       {typeof partner.totalCategories === "number"
                         ? `${partner.populatedCategories} of ${partner.totalCategories} categories`
                         : `${partner.populatedCategories} categories`}
@@ -1550,8 +1564,6 @@ function GenerateRunReport({
                     </>
                   )}
                 </span>
-                {/* The fault/shortage split, verbatim from the backend. A provider outage and a
-                    thin partner leave identical counts, so only this sentence separates them. */}
                 {!partner.ready ? (
                   <span className="mt-0.5 block text-xs text-muted">{partner.coverage}</span>
                 ) : null}
@@ -1559,10 +1571,6 @@ function GenerateRunReport({
               );
             })}
           </ul>
-          {/* "The rest are" is only true when there IS a rest. Gated on ready < total alone, this
-              printed directly under the all-failed headline and told the operator drafts were
-              being written for partners that do not exist -- re-creating the false partial-success
-              reading three lines below its own fix. */}
           {preflight.ready > 0 && preflight.ready < preflight.total ? (
             <p className="mt-2 text-xs text-muted">
               The partners above that cannot be grounded are not drafted. The rest are, and each
@@ -1576,8 +1584,6 @@ function GenerateRunReport({
         </div>
       ) : null}
 
-      {/* Named, never a count to be inferred. Each entry is one artifact that was not written
-          and the reason it was not. */}
       {notes.length > 0 ? (
         <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
           <p className="text-sm font-medium text-foreground">
@@ -1593,8 +1599,6 @@ function GenerateRunReport({
         </div>
       ) : null}
 
-      {/* Saved, with a gap named. Distinct from "Not written": these pieces exist and can be
-          opened below; the line says what to add to them. */}
       {warnings.length > 0 ? (
         <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
           <p className="text-sm font-medium text-foreground">
@@ -1609,8 +1613,117 @@ function GenerateRunReport({
           </ul>
         </div>
       ) : null}
+
+      {needsLog && eventsPath && jobId ? (
+        <GenerateRunLog key={jobId} projectId={projectId} jobId={jobId} eventsPath={eventsPath} />
+      ) : null}
     </>
   );
+}
+
+/**
+ * The run's full record — every grounding note, model call, verdict and outcome — opened from the
+ * page when something was not written or shipped with a gap. The one-line refusal is not enough to
+ * fix a draft; this is what is (Jeff, 2026-10-06).
+ */
+function GenerateRunLog({
+  projectId,
+  jobId,
+  eventsPath,
+}: {
+  projectId: string;
+  jobId: string;
+  eventsPath: string;
+}) {
+  // Open and load as soon as this panel appears — Jeff, 2026-10-06: the JSON URL is not
+  // openable from the browser (auth), so the record has to be on the page.
+  const [open, setOpen] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<GccGenerateJobEvent[] | null>(null);
+  // Loading is the absence of an answer, not a third flag kept in step with the other two. The parent
+  // keys this panel on the run id, so a new run mounts a fresh panel and nothing here resets state
+  // inside the effect.
+  const loading = events === null && error === null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void getGenerateJobEvents(projectId, jobId)
+      .then((body) => {
+        if (!cancelled) setEvents(body.events);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, jobId]);
+
+  return (
+    <div className="mt-3 border border-[var(--gcc-border)] px-3 py-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-sm font-medium text-foreground">Run log</p>
+        <button
+          type="button"
+          className="text-sm font-medium text-[#C83803] underline-offset-2 hover:underline"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "Hide record" : "Show full record"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Every model call, guard verdict and outcome for this run — shown here because the events
+        URL is authenticated and cannot be opened as a bare link.
+      </p>
+      <p className="mt-1 font-mono text-xs text-muted">{eventsPath}</p>
+      {open ? (
+        <div className="mt-2">
+          {loading ? <p className="text-sm text-muted">Loading…</p> : null}
+          {error ? (
+            <p className="whitespace-pre-wrap text-sm text-foreground">{error}</p>
+          ) : null}
+          {events && events.length === 0 ? (
+            <p className="text-sm text-muted">This run has no recorded events yet.</p>
+          ) : null}
+          {events && events.length > 0 ? (
+            <ol className="mt-1 max-h-[32rem] space-y-2 overflow-y-auto text-sm">
+              {events.map((evt) => (
+                <li key={evt.id} className="border-t border-[var(--gcc-border)] pt-2 first:border-t-0 first:pt-0">
+                  <p className="font-medium text-foreground">
+                    {evt.seq}. {evt.kind}
+                    {evt.piece ? ` · ${evt.piece}` : ""}
+                  </p>
+                  <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-muted">
+                    {summarizeEventPayload(evt.payloadJson)}
+                  </pre>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Enough of an event's payload to diagnose without dumping megabytes of prompts by default. */
+function summarizeEventPayload(payloadJson: string): string {
+  try {
+    const parsed = JSON.parse(payloadJson) as unknown;
+    if (!parsed || typeof parsed !== "object") return payloadJson;
+    const obj = parsed as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === "string" && value.length > 400) {
+        out[key] = `${value.slice(0, 400)}… (${value.length} chars)`;
+      } else {
+        out[key] = value;
+      }
+    }
+    return JSON.stringify(out, null, 2);
+  } catch {
+    return payloadJson.length > 800 ? `${payloadJson.slice(0, 800)}…` : payloadJson;
+  }
 }
 
 /**
