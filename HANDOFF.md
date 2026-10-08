@@ -1,7 +1,8 @@
-# Handoff — content-creator-v2, 2026-10-06
+# Handoff — content-creator-v2, 2026-10-06, updated 2026-10-08
 
 For whoever picks this repository up next. Everything here was checked on 2026-10-06 against the
-repository, Vercel and Railway; where something was not checked, it says so. Authority for rules is
+repository, Vercel and Railway, and §3 and the 2026-10-08 entries in §5 were checked again on
+2026-10-08; where something was not checked, it says so. Authority for rules is
 [`AGENTS.md`](AGENTS.md); this file says where things stand and what to do next.
 
 ## 1. What this repository is
@@ -36,8 +37,8 @@ GeekBackend's `main` on Railway, separately.
 
 | Repository | `main` | Deployed | Checked |
 |---|---|---|---|
-| content-creator-v2 | `8b621ab` | Vercel production, READY | 2026-10-06 |
-| GeekBackend (GeekAPI + GeekRepository) | `5671288` | Railway, SUCCESS 2026-10-05 19:57 UTC | 2026-10-06 |
+| content-creator-v2 | `e91357b` | Vercel production, READY (`dpl_ERsRmeQoNnHVnToEGwSv38Yxcu7r`) | 2026-10-08 |
+| GeekBackend (GeekAPI + GeekRepository) | `e45bd0e` | Railway, SUCCESS 2026-10-07 19:57 UTC, both services | 2026-10-08 |
 | Geek-Crawler-v2 | `fabb42f` | not checked from here | — |
 | Geek-Crawler-Rag | `5e622b6` | not checked from here | — |
 
@@ -80,6 +81,27 @@ six files). There is no component-rendering test setup and no browser test; do n
 dev server to verify UI (Jeff's standing rule) — verify against the deployed app.
 
 ## 5. What is open
+
+**Shipped 2026-10-08 (`8ebd3d4`): the run log.** When a run reports anything under "Not written" or
+"Written with a gap", or a progress line says failed or refused, the Generate panel reads
+`GET projects/{id}/generate/{jobId}/events` and shows the run's whole record on the page — grounding,
+every model call, every verdict, every outcome — because the events URL is authenticated and does not
+open as a bare link (Jeff, 2026-10-06). The route is GeekAPI `a28c7fd`, in the Railway deployment of
+`e45bd0e`. Recorded refusals are shown as the backend typed them; the page no longer prefixes "tool:".
+
+**Held 2026-10-08: a "Clean Voice" tone of voice.** A fourth tone (`clean_voice`, "senior technical
+writer / implementation consultant — clear everyday words, active voice, authoritative and direct")
+was drafted in `brief-catalog.ts` and `ContentBriefPanel.tsx` and left uncommitted in the working tree.
+It is blocked on GeekAPI: `GccGenerateService.cs:2160` at `e45bd0e` accepts exactly
+`consultant_professional`, `informational_instructional` and `commercial_balanced` and sets any other
+tone to null, so the option would be offered on the page and silently dropped from the prompt. Ship it
+only after GeekAPI accepts the value and says what the voice means. GeekBackend has no occurrence of
+"clean voice" today.
+
+**Plans directory pruned 2026-10-08 (`e91357b`).** Nineteen files deleted — the eighteen
+`fix-overview.md` Appendix A retired, plus the stale generated `fix-content-creator-complete.md`.
+What remains is what drives work: the fix-overview set, `fix-project-persistence.md`,
+`project-api-contract.md`. The plans directory is not a documentation directory (Jeff).
 
 **From `plans/fix-project-persistence.md` (the project-is-the-unit plan):** P0 is shipped on both
 sides. Still open there:
