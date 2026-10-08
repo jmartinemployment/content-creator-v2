@@ -89,15 +89,6 @@ every model call, every verdict, every outcome — because the events URL is aut
 open as a bare link (Jeff, 2026-10-06). The route is GeekAPI `a28c7fd`, in the Railway deployment of
 `e45bd0e`. Recorded refusals are shown as the backend typed them; the page no longer prefixes "tool:".
 
-**Held 2026-10-08: a "Clean Voice" tone of voice.** A fourth tone (`clean_voice`, "senior technical
-writer / implementation consultant — clear everyday words, active voice, authoritative and direct")
-was drafted in `brief-catalog.ts` and `ContentBriefPanel.tsx` and left uncommitted in the working tree.
-It is blocked on GeekAPI: `GccGenerateService.cs:2160` at `e45bd0e` accepts exactly
-`consultant_professional`, `informational_instructional` and `commercial_balanced` and sets any other
-tone to null, so the option would be offered on the page and silently dropped from the prompt. Ship it
-only after GeekAPI accepts the value and says what the voice means. GeekBackend has no occurrence of
-"clean voice" today.
-
 **Plans directory pruned 2026-10-08 (`e91357b`).** Nineteen files deleted — the eighteen
 `fix-overview.md` Appendix A retired, plus the stale generated `fix-content-creator-complete.md`.
 What remains is what drives work: the fix-overview set, `fix-project-persistence.md`,
