@@ -41,9 +41,8 @@ producing fewer pages.
 
 ## The cleanup, 2026-10-03
 
-About **19,000 lines** removed across both repos — see
-[`plans/remove-unwired-code.md`](plans/remove-unwired-code.md) for the method and the per-phase
-verification.
+About **19,000 lines** removed across both repos. The method and the per-phase verification are in
+the retired plan `remove-unwired-code.md`, deleted from `plans/` on 2026-10-08 and kept in git history.
 
 - 9 components with no importer (1,888 lines), `content-writer-api.ts` (655), `/app/creates/*` (584),
   12 dead `gcc-api` functions, 6 brief fields nothing read

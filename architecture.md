@@ -224,13 +224,14 @@ and it creates a second solution that outputs HTML.
 from `ContentDocumentText.AllHeadings` / `TopLevelHeadings` — read off the document, never parsed
 out of a string.
 
-**Gap against the corpus, measured.** The crawler types seven block kinds
+**Coverage of the corpus, checked 2026-10-08.** The crawler types seven block kinds
 (`Geek-Crawler-v2/src/crawl/extract-content.ts:418-425`): `heading(level)`, `paragraph`,
-`listItem(ordered)`, `quote`, `code`, `term`, `definition`. `ContentDocument` represents four —
-headings, paragraphs, lists, and anchors via `Run.Href`. `quote`, `code` and `term`/`definition`
-have no node type, because v1 was built for article output with no exposure to RAG or to ingesting
-those pipelines. Extending it is additive (`Paragraph` is an abstract record); tracked as Stage 4 in
-`plans/grounded-generation-and-serp.md`.
+`listItem(ordered)`, `quote`, `code`, `term`, `definition`. `ContentDocument` has a node for each:
+headings, paragraphs and lists as above, anchors via `Run.Href`, and `QuoteParagraph`,
+`CodeParagraph` and `DefinitionParagraph` (term and definition paired as one `DefinitionItem`) in
+`GeekAPI/Services/Workflow/Domain/Entities/ContentDocument.cs:77-88` at GeekBackend `e45bd0e`. The
+earlier gap — v1 was built for article output and had no node for the last three — was closed by
+extending `Paragraph`, the abstract record.
 
 **Why Markdown can never be the intermediate.** It has no paragraph token — a paragraph is a blank
 line, so the boundary is whitespace every consumer must re-infer, and nesting flattens outright.

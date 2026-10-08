@@ -17,7 +17,7 @@ import {
  * and related searches were written to the brief and read by nothing -- zero references across every
  * `.cs` file in GeekAPI, v1 and v2 -- along with three provenance fields recording when a SERP
  * nobody read was captured. `.cursor/rules/no-unwired-code.mdc` had listed it since 2026-09-27
- * ("SERP ingest changed nothing"). Removed 2026-10-03, `plans/remove-unwired-code.md` Phase 1.
+ * ("SERP ingest changed nothing"). Removed 2026-10-03 as Phase 1 of the dead-code removal.
  *
  * The questions are the half that does something: they become the pillar's FAQ section
  * (`GccGenerateService:2407`) and license headings against PAA (`:3120`). So the panel is named for

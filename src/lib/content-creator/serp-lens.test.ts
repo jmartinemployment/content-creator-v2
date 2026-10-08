@@ -20,7 +20,7 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
 /**
  * The seed carries questions and nothing else since 2026-10-03. Organic titles, organic URLs,
  * related searches and three provenance fields were written to the brief and read by nothing;
- * `plans/remove-unwired-code.md` Phase 1 removed them. The parse result still carries organics and
+ * Phase 1 of the 2026-10-03 dead-code removal took them out. The parse result still carries organics and
  * related searches because it mirrors the API response — the fixture keeps them to prove they are
  * now ignored rather than absent.
  */

@@ -175,6 +175,11 @@ None of these was reviewed or approved. They are not evidence of what is live, w
 what is done. Where one contains a measurement (the Ramp passage counts, the sitemap drop counts),
 the measurement was re-run or re-read against code for this plan and is cited above from code.
 
+Deleted from `plans/` on 2026-10-08 — Jeff: the plans directory is not a documentation directory.
+Each is in git history before that date. `query.py` is untracked and was left alone, as was
+`fix-content-creator-complete.md`'s deletion noted here: it was a generated concatenation of the six
+project plans, last regenerated 2026-10-04 and stale against them since 2026-10-06.
+
 content-creator-v2/plans: `agent-specialists.md`, `angle-aware-blockquote-validation.md`,
 `bank-extraction-and-legible-quote-guard.md` (its banking half shipped 2026-10-04 as described in
 F-A3's "confirmed sound" line; its quote-guard half was superseded by selection by number),

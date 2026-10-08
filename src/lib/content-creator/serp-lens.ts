@@ -49,8 +49,8 @@ export type SavedSerpParseResult = {
  * **Questions only.** This carried `serpTitles`, `serpUrls`, `relatedSearches` and three provenance
  * fields until 2026-10-03; every one of them was written to the brief and read by nothing — zero
  * references across every `.cs` file in GeekAPI, v1 and v2. `.cursor/rules/no-unwired-code.mdc` had
- * listed the defect since 2026-09-27 ("SERP ingest changed nothing"). See
- * `plans/remove-unwired-code.md` Phase 1.
+ * listed the defect since 2026-09-27 ("SERP ingest changed nothing"). Removed 2026-10-03 as Phase 1
+ * of the dead-code removal.
  *
  * What survives is the half that does something: the questions become the pillar's FAQ section
  * (`GccGenerateService:2407`) and license headings against PAA (`:3120`).
