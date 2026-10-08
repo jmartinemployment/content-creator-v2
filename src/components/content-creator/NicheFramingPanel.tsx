@@ -111,8 +111,9 @@ export default function NicheFramingPanel({
 
       <FramingFields
         legend="For the whole category"
-        hint="The one problem the whole niche has — not a collection of each tool's. Every page uses this; a tool below overrides only the boxes you fill in."
+        hint="The one problem the whole niche has — not a collection of each tool's. The tool pages and the blog argue from it (the pillar does not yet), and it is the first search asked of every partner's crawl. A tool below overrides only the boxes you fill in."
         value={value}
+        askedOf={partners.map((p) => p.host)}
         onChange={(next) => patch(next)}
       />
 
@@ -131,12 +132,12 @@ export default function NicheFramingPanel({
 
         <label className="mt-3 block">
           <span className="text-sm text-foreground">One question per line</span>
-          {/* One per line, the opposite of "Where they fail" above, and said plainly because the two
-              boxes sit a few inches apart and look identical. A failure is a paragraph; a question is
-              a line. */}
+          {/* One per line, unlike the rows above, where a failure is one row with three columns. Said
+              plainly because the two sit a few inches apart. */}
           <span className="mt-0.5 block text-xs text-muted">
-            One per line. Blank lines are ignored. The writer uses these as written, or a subset if
-            the length will not carry them all, and may not invent another.
+            One per line. Blank lines are ignored. The page ends with these, word for word, under
+            &ldquo;Answer these questions when booking your free consultation&rdquo;. The writer never
+            sees them, so it cannot rephrase them or turn them into a quiz.
           </span>
           <textarea
             value={value.diagnosisQuestions}
@@ -171,10 +172,11 @@ export default function NicheFramingPanel({
             ) : null}
           </div>
           <p className="mt-1 text-xs text-muted">
-            Leave a tool alone and it uses the category framing above. Override it when that tool owns a
-            distinct slice of the problem &mdash; a segment, a stage, a scale. Core Problem and Automation
-            replace the category&rsquo;s; pain points are <em>added</em> to them, since the category&rsquo;s
-            are true of every tool in the niche. Leave a box empty and nothing changes for that tool.
+            Leave a tool alone and its crawl is searched with the category&rsquo;s core problem and every
+            category row. Open a tool to add rows only it should be asked &mdash; the slice of the problem
+            it alone owns: a segment, a stage, a scale. A row here whose Problem matches a category row
+            replaces that row for this tool; the rest are added. Core Problem and Automation here replace
+            the category&rsquo;s. Leave a box empty and nothing changes for that tool.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => {
@@ -200,8 +202,9 @@ export default function NicheFramingPanel({
                     <div className="border-t border-[var(--gcc-border)] px-3 pb-3">
                       <FramingFields
                         legend={`${partner.label}'s niche`}
-                        hint="What slice of the category problem does this tool own? Leave a box empty to keep the category's."
+                        hint={`What slice of the category problem does this tool own? Rows here are searched on ${partner.host} only, after the category's. Leave a box empty to keep the category's.`}
                         value={set}
+                        askedOf={[partner.host]}
                         inheritedRows={value.evidence}
                         onChange={(next) => patchPerTool(partner.host, next)}
                       />
@@ -234,12 +237,15 @@ function FramingFields({
   legend,
   hint,
   value,
+  askedOf,
   inheritedRows,
   onChange,
 }: {
   legend: string;
   hint: string;
   value: NicheFramingSet;
+  /** The partner hosts each row here is searched on: every partner for the category, one for a tool. */
+  askedOf: string[];
   /** The category's rows, shown read-only above a tool's own so the page's whole question set is visible. */
   inheritedRows?: EvidenceRow[];
   onChange: (next: Partial<NicheFramingSet>) => void;
@@ -266,7 +272,12 @@ function FramingFields({
         />
       </label>
 
-      <EvidenceRows rows={value.evidence} inherited={inheritedRows} onChange={changeRows} />
+      <EvidenceRows
+        rows={value.evidence}
+        askedOf={askedOf}
+        inherited={inheritedRows}
+        onChange={changeRows}
+      />
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">The automation to pitch</span>
@@ -297,10 +308,12 @@ function FramingFields({
  */
 function EvidenceRows({
   rows,
+  askedOf,
   inherited,
   onChange,
 }: {
   rows: EvidenceRow[];
+  askedOf: string[];
   inherited?: EvidenceRow[];
   onChange: (next: EvidenceRow[]) => void;
 }) {
@@ -322,23 +335,32 @@ function EvidenceRows({
   const inputClass =
     "mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground";
   const inheritedShown = (inherited ?? []).filter((row) => row.problem.trim() || row.solution.trim());
+  const searchedOn =
+    askedOf.length === 0
+      ? "each partner's crawl (this project declares no partners yet)"
+      : askedOf.length === 1
+        ? `${askedOf[0]}'s crawl`
+        : `each partner's crawl — ${askedOf.join(", ")}`;
 
   return (
     <div className="mt-4">
       <span className="text-sm text-foreground">Where they fail, and what the vendor does about it</span>
       <span className="mt-0.5 block text-xs text-muted">
-        One row per failure, entered once. <strong>Problem</strong> in the reader&rsquo;s words
-        &mdash; the writer argues from it. <strong>Vendor&rsquo;s solution</strong> in the
-        vendor&rsquo;s own words (what their site says it does; a research answer is fine) and two to
-        five <strong>search terms</strong> the vendor uses &mdash; each row searches the
-        partner&rsquo;s crawl on its own. Nothing here is quoted; quotes come only from what the
-        search returns.
+        One row per failure, entered once. Each row is one search of {searchedOn}, and the pages
+        it returns are what the tool page, the pillar and the blog are written from.{" "}
+        <strong>Problem</strong>: the failure in the reader&rsquo;s words; the writer argues from it,
+        and it is the only column the writer ever sees. <strong>Vendor&rsquo;s solution</strong>: what
+        the vendor says it does, in the vendor&rsquo;s own words (a research answer is fine); the search
+        matches pages by meaning on this. <strong>Search terms</strong>: two to five words the
+        vendor&rsquo;s site uses; the search matches pages by those exact words. Nothing you type here is
+        quoted &mdash; quotes come only from the pages the search returns.
       </span>
 
       {inheritedShown.length > 0 ? (
         <div className="mt-2 border border-dashed border-[var(--gcc-border)] p-2">
           <span className="text-xs text-muted">
-            From the category, asked for this tool too ({inheritedShown.length}):
+            From the category &mdash; searched on {askedOf[0] ?? "this tool"} too; edit them in the
+            category above ({inheritedShown.length}):
           </span>
           <ul className="mt-1 space-y-1">
             {inheritedShown.map((row, i) => (
@@ -353,7 +375,9 @@ function EvidenceRows({
 
       {rows.length === 0 ? (
         <p className="mt-2 text-xs text-muted">
-          No rows yet. Without rows, retrieval asks only the core problem and the writer has no failures to argue from.
+          No rows yet. Without rows each partner&rsquo;s crawl is searched once, with the core problem
+          alone; with rows it is searched once more per row. And the writer has no failures to argue
+          from.
         </p>
       ) : null}
       <ol className="mt-2 space-y-3">
@@ -420,10 +444,12 @@ function EvidenceRows({
       <label className="mt-3 block">
         <span className="text-xs text-foreground">Paste research to make rows</span>
         <span className="mt-0.5 block text-xs text-muted">
-          A table, one failure per line, columns separated by a tab, a &ldquo;|&rdquo; or three or more
-          spaces: problem, then the solution, then (optionally) a comma list of terms. Or blocks
-          separated by a blank line: problem on the first line, solution on the next, terms last. Rows
-          are added below for you to correct; nothing is saved until the brief is.
+          Have the research as a table? Paste it here and press <em>Make rows</em>: one failure per
+          line &mdash; the problem, then the vendor&rsquo;s solution, then (optional) a comma list of
+          search terms &mdash; with the columns separated by a tab, a &ldquo;|&rdquo; or three or more
+          spaces. Or one failure per paragraph: problem on the first line, solution on the next, terms
+          on the last. The rows appear above for you to correct. Nothing is saved until you save the
+          brief.
         </span>
         <textarea
           value={pasted}
