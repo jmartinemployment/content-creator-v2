@@ -3,7 +3,8 @@
 For whoever picks this repository up next. Everything here was checked on 2026-10-06 against the
 repository, Vercel and Railway, and §3 and the 2026-10-08 entries in §5 were checked again on
 2026-10-08; where something was not checked, it says so. Authority for rules is
-[`AGENTS.md`](AGENTS.md); this file says where things stand and what to do next.
+`AGENTS.md`, kept locally and untracked since `d4cf339` (a fresh clone has none; `.gitignore` lists
+it); this file says where things stand and what to do next.
 
 ## 1. What this repository is
 
@@ -37,7 +38,7 @@ GeekBackend's `main` on Railway, separately.
 
 | Repository | `main` | Deployed | Checked |
 |---|---|---|---|
-| content-creator-v2 | `e91357b` | Vercel production, READY (`dpl_ERsRmeQoNnHVnToEGwSv38Yxcu7r`) | 2026-10-08 |
+| content-creator-v2 | `18a58d8` | Vercel production, READY (`dpl_6TF9NQoJeGdVat6v8uiAR7A1mXGD`) | 2026-10-08 |
 | GeekBackend (GeekAPI + GeekRepository) | `e45bd0e` | Railway, SUCCESS 2026-10-07 19:57 UTC, both services | 2026-10-08 |
 | Geek-Crawler-v2 | `fabb42f` | not checked from here | — |
 | Geek-Crawler-Rag | `5e622b6` | not checked from here | — |
@@ -76,9 +77,10 @@ agreement between this repo and GeekAPI; change it before changing either side.
 | Project form, with the declared-URL index check | `src/components/content-writer/ProjectForm.tsx` |
 | Deliverables | `src/components/content-writer/ProjectDeliverablesPanel.tsx` |
 
-Checks: `npx tsc --noEmit`, `npx eslint src`, `npm test` (node's test runner over `src/**/*.test.ts`;
-six files). There is no component-rendering test setup and no browser test; do not start a local
-dev server to verify UI (Jeff's standing rule) — verify against the deployed app.
+Checks: `npx tsc --noEmit`, `npx eslint src`, `npm test` (node's test runner under tsx, with a jsdom
+browser registered by `src/test/dom.ts`; seven files, two of which render components). There is no
+browser test; do not start a local dev server to verify UI (Jeff's standing rule) — verify against
+the deployed app.
 
 ## 5. What is open
 
@@ -97,23 +99,22 @@ What remains is what drives work: the fix-overview set, `fix-project-persistence
 **From `plans/fix-project-persistence.md` (the project-is-the-unit plan):** P0 is shipped on both
 sides. Still open there:
 
-- **GF6, second test:** no rendered page may contain a GUID other than the project id and the labelled
-  Run ID. Needs a rendering test setup first (new dev dependencies). Jeff: after GeekBackend finishes.
+- **GF6, second test — done 2026-10-08 (`18a58d8`):** `src/no-foreign-guid-on-screen.test.tsx`
+  renders Brief & Generate and Profile against fixtures carrying every identifier GeekAPI has and
+  fails on any GUID but the project's and the labelled Run ID. Writing it found and fixed three
+  leaks: the events path on the run log, an id fragment on a nameless draft, the run-log payload's ids.
 - **P1 and P2** are GeekBackend's (re-keying drafts, deliverables, inputs and evidence to the project;
   removing the create table and routes last). The frontend follows the contract as those land.
 - **The backfill (GR3)** ran for one project only ("test"), by Jeff's choice. Any other pre-existing
   project opens with an empty brief; its old brief is still on its create row in the database.
 
-**From `plans/fix-frontend.md` (the Wave plan):** F1–F6 are done. F7–F11 are held until the Accounts
-Payable generate has been run and read, and each also needs something GeekAPI does not have as of
-`5671288`:
+**From `plans/fix-frontend.md` (the Wave plan):** F1–F9 are done; F7 and F9 landed 2026-10-08
+(`18a58d8`). F10 and F11 wait on GeekAPI, checked at `e45bd0e`:
 
 | Stage | Needs from GeekAPI |
 |---|---|
-| F7 — send the chosen writing provider to the partner-quote check | `brief/partner-quote-readiness` takes only project, topic, angle |
-| F9 — `grounding:` warnings shown under the readiness block | **Met.** `GccGenerationCoordinator.GroundingWarningLabel = "grounding"` (`:131` at `5671288`) reaches `warnings` as `grounding: …` and the hub as a type event with that `contentType`; the live page shows one under "Written with a gap". This row said "no such warning prefix" until 2026-10-06; it was wrong |
-| F10 — "drafted, saving" per-type progress | no such progress event |
-| F11 — Revise through a revise-job route | no such route; `versions/{id}/revise` is the only one |
+| F10 — "drafted, saving" per-type progress | No event fires when a type finishes drafting. The per-type outcome fires from `PersistAllAsync` as each piece is saved (`GccGenerationCoordinator.cs:915`), refusals at `:317` and `:419`, so the type event the page already has means "saved" |
+| F11 — Revise through a revise-job route | No such route; `POST versions/{id}/revise` (`GccController.cs:633`) is the only one |
 
 **Across all repositories (`plans/fix-overview.md`):** the end-to-end proof is one Generate on the
 Accounts Payable project — the project named **"test"** (`ed18d0e5-…`), keyword "Accounts Payable:

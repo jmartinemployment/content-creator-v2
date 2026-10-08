@@ -3,7 +3,7 @@
 > **2026-10-04: F1, F12, F13 and the create-keyed work are re-keyed to the project by `fix-project-persistence.md` (GF1 to GF6). Read that file first; where it and this one disagree, it wins.**
 
 
-**Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
+**Written 2026-10-04. Status, 2026-10-08: F1 to F9 are built; F10 and F11 wait on GeekAPI; F12 and F13 are superseded by `fix-project-persistence.md`.**
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
@@ -58,6 +58,17 @@ seven backend reads of `create.Notes` remain (D17 said remove them); the fronten
 tried to commit GeekBackend's uncommitted work, which Jeff stopped. **Rule, stated once: one
 session per repository. A session reads other repositories to learn an API's shape and changes
 nothing there, builds nothing there, commits nothing there.**
+
+## Status, 2026-10-08 — F7 to F11, checked against GeekAPI `e45bd0e` (the Railway deployment)
+
+| Stage | State | Evidence |
+|---|---|---|
+| F7 | **Built** (`18a58d8`). The brief panel sends the workspace's provider to `brief/partner-quote-readiness`, and the answer is keyed on it, so switching writers does not show the other writer's answer. | `PartnerQuoteReadinessRequest` takes `Provider`, absent meaning the configured default (`GccController.cs:1063-1068`) |
+| F8 | **Built** by GF2 (`fix-project-persistence.md`): Save sends `expectedVersion`; a stale save is refused with the server's 409 sentence and nothing is overwritten. | `patchProjectBrief` in `gcc-api.ts` |
+| F9 | **Built** (`18a58d8`). `grounding:` warnings, live and recorded, sit in a "Grounding" block directly under the readiness block; "Written with a gap" names pieces only. | `splitGroundingWarnings` in `run-display.ts`, tested; the GF6 test renders a run with one of each |
+| F10 | **Waits on GeekAPI.** Nothing fires when a type finishes drafting: the per-type outcome fires from `PersistAllAsync` as each piece is saved (`GccGenerationCoordinator.cs:915`) and refusals fire at `:317` and `:419`. The type event the page already shows means "saved", so "drafted, saving" has no event to hang on. | `GccGenerateNotifier.PushTypeAsync` is the only per-type push |
+| F11 | **Waits on GeekAPI.** The only revise route is `POST versions/{id}/revise` (`GccController.cs:633`); there is no revise-job route to switch to. | — |
+| F12, F13 | **Superseded** by `fix-project-persistence.md` GF1 to GF6, as the note at the top says. | — |
 
 ## Audit — content-creator-v2
 

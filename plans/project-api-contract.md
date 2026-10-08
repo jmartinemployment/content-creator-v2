@@ -97,6 +97,17 @@ the last run's and under the same name. Now:
   (`run-display.ts` `runRecord`), which is the identity on camelCase, so GeekAPI serializing the record
   with `JsonSerializerDefaults.Web` is the fix on its side and changes nothing here.
 
+### 3c. A run's record — GeekBackend `a28c7fd`, read by the page since `8ebd3d4`
+
+`GET projects/{id}/generate/{jobId}/events`
+
+- `200` → `{ "jobId", "status", "error", "events": [{ "id", "jobId", "seq", "atUtc", "kind", "piece",
+  "payloadJson" }] }`, in `seq` order: what the run was grounded on, every model call, every verdict,
+  every batch, every outcome, and how it ended. `404` when the job is not this project's.
+- The workspace reads it when a run reports a refusal or a gap and shows it on the page, with
+  GUID-valued payload fields left out and a GUID inside prose replaced: the page shows no identifier
+  but the project's and the labelled Run ID (`fix-project-persistence.md` GF6).
+
 ## 4. The project's drafts — not in the plan's P0, needed by it
 
 GF1 removes the create from the page, and today the only read of a create's drafts is

@@ -1,6 +1,6 @@
 # Save a project to the database
 
-**Written 2026-10-04. Status: for review. Nothing here is built. This replaces `fix-persistence.md`.**
+**Written 2026-10-04. Status, 2026-10-08: P0 is shipped on both sides (`HANDOFF.md` §3); GF1, GF2, GF3, GF5 and both GF6 tests are built; P1 and P2 are GeekBackend's. This replaced `fix-persistence.md`.**
 
 **Jeff, 2026-10-04: the unique key is the Project ID. The project contains the Brief, Generate and
 Profile. No "Create" is visible anywhere. No Generate is run until this is deployed.**
@@ -156,6 +156,17 @@ and provider are chosen on the page each run.
 keep the save-state line and re-key it to the project.
 
 **GF6 — A test** that scans `src` for `localStorage` and `sessionStorage` calls and fails on any in the brief code, and a test that no rendered page contains a GUID other than the project id and the labelled Run ID.
+
+**GF6 status, 2026-10-08.** Both tests exist. `src/no-browser-storage.test.ts` scans `src` for browser
+storage. `src/no-foreign-guid-on-screen.test.tsx` (`18a58d8`) renders Brief & Generate and Profile
+against fixtures carrying every identifier GeekAPI has -- client, create, job, brief revision,
+artifacts, versions -- and fails on any GUID in the page's text or attributes other than the
+project's and the Run ID, which must sit in text beginning "Run". The rendering setup is tsx, jsdom
+and testing-library, registered by `npm test` through `src/test/dom.ts`. Writing it found three
+leaks, fixed in the same commit: the run log printed the events path (the job id), a nameless draft
+printed eight characters of its id, and a run-log payload printed the record's create, revision and
+artifact ids -- GUID-valued fields are now left out of the payload shown and a GUID inside prose is
+replaced.
 
 ## 4. Order, and the gate
 
