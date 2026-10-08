@@ -231,6 +231,30 @@ export type NicheFramingSet = {
   painPoints: string;
   /** What removes the problem, and the shape of the offer. */
   automationToPitch: string;
+  /**
+   * One retrieval question per failure (Geek-Crawler-Rag `plans/retrieval-from-the-brief.md`,
+   * 2026-10-08). Each row is asked of the partner's crawl on its own: `solution` goes to the
+   * index's meaning half, `terms` to its keyword half. Measured on Tipalti the same day: the
+   * brief's pain points found the vendor *describing* three of six failures and the fix for none of
+   * those three; solution descriptions in the vendor's own vocabulary found the product page for all
+   * six. Per tool, rows are *added* to the category's, like pain points.
+   *
+   * Never quoted. Like every other field here it is prompt and retrieval input; quotes still come
+   * only from crawled partner pages.
+   */
+  evidence: EvidenceRow[];
+};
+
+export type EvidenceRow = {
+  /** The reader's failure, in the reader's words — the same voice as `painPoints`. */
+  problem: string;
+  /**
+   * What the vendor does about it, in the VENDOR'S vocabulary ("self-service supplier onboarding
+   * collects W-9 and W-8 forms"). Perplexity-sourced is fine; the operator reviews it.
+   */
+  solution: string;
+  /** Two to five distinctive terms from the vendor's vocabulary, for the keyword half. */
+  terms: string[];
 };
 
 export type NicheFraming = NicheFramingSet & {
@@ -270,7 +294,16 @@ export type NicheFraming = NicheFramingSet & {
 };
 
 export function emptyNicheFramingSet(): NicheFramingSet {
-  return { coreProblem: "", painPoints: "", automationToPitch: "" };
+  return { coreProblem: "", painPoints: "", automationToPitch: "", evidence: [] };
+}
+
+export function emptyEvidenceRow(): EvidenceRow {
+  return { problem: "", solution: "", terms: [] };
+}
+
+/** True when a row carries anything at all. A blank row is a row the operator has not written yet. */
+export function evidenceRowHasAny(row: EvidenceRow): boolean {
+  return Boolean(row.problem.trim() || row.solution.trim() || row.terms.some((t) => t.trim()));
 }
 
 export function emptyNicheFraming(): NicheFraming {
@@ -280,7 +313,10 @@ export function emptyNicheFraming(): NicheFraming {
 /** True when a set carries anything at all. An all-blank set is not framing. */
 export function nicheFramingSetHasAny(set: NicheFramingSet): boolean {
   return Boolean(
-    set.coreProblem.trim() || set.painPoints.trim() || set.automationToPitch.trim(),
+    set.coreProblem.trim() ||
+      set.painPoints.trim() ||
+      set.automationToPitch.trim() ||
+      set.evidence.some(evidenceRowHasAny),
   );
 }
 
@@ -464,6 +500,27 @@ function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
   set.painPoints = Array.isArray(p.painPoints)
     ? p.painPoints.filter((x): x is string => typeof x === "string").join("\n\n")
     : str(p.painPoints);
+  // Rows read back explicitly, like every other field: a shape not read here is saved once and
+  // wiped on the next load. `terms` accepts an array or a comma-separated string, matching the
+  // backend reader. Blank rows are dropped; the form adds its own blank row to edit.
+  set.evidence = Array.isArray(p.evidence)
+    ? p.evidence
+        .map((row): EvidenceRow | null => {
+          if (!row || typeof row !== "object") return null;
+          const r = row as Record<string, unknown>;
+          const terms = Array.isArray(r.terms)
+            ? r.terms.filter((x): x is string => typeof x === "string")
+            : typeof r.terms === "string"
+              ? r.terms.split(",")
+              : [];
+          return {
+            problem: str(r.problem),
+            solution: str(r.solution),
+            terms: terms.map((t) => t.trim()).filter((t) => t.length > 0),
+          };
+        })
+        .filter((row): row is EvidenceRow => row !== null && evidenceRowHasAny(row))
+    : [];
   return set;
 }
 

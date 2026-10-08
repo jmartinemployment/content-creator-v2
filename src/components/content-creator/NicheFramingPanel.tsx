@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
+  emptyEvidenceRow,
   emptyNicheFramingSet,
   nicheFramingSetHasAny,
+  type EvidenceRow,
   type NicheFraming,
   type NicheFramingSet,
 } from "@/lib/content-creator/brief-catalog";
@@ -283,7 +285,109 @@ function FramingFields({
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
       </label>
+
+      <EvidenceRows rows={value.evidence} onChange={(evidence) => onChange({ evidence })} />
     </fieldset>
+  );
+}
+
+/**
+ * One retrieval question per failure. Each row is asked of the partner's crawl on its own: the
+ * vendor's solution to the index's meaning half, the search terms to its keyword half. Measured on
+ * Tipalti, 2026-10-08: the pain points above found the vendor describing three failures of six and
+ * fixing none of those three; solutions written in the vendor's own words found the product page
+ * for all six. Nothing here is ever quoted.
+ */
+function EvidenceRows({
+  rows,
+  onChange,
+}: {
+  rows: EvidenceRow[];
+  onChange: (next: EvidenceRow[]) => void;
+}) {
+  function patchRow(index: number, next: Partial<EvidenceRow>) {
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...next } : row)));
+  }
+  function removeRow(index: number) {
+    onChange(rows.filter((_, i) => i !== index));
+  }
+
+  const inputClass =
+    "mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground";
+
+  return (
+    <div className="mt-4">
+      <span className="text-sm text-foreground">Evidence questions</span>
+      <span className="mt-0.5 block text-xs text-muted">
+        One row per failure. The problem in the reader&rsquo;s words; the solution in the
+        vendor&rsquo;s own words (what their site says it does &mdash; a research answer is fine);
+        two to five search terms the vendor uses. Each row searches the partner&rsquo;s crawl on
+        its own. Nothing here is quoted; quotes come only from what the search returns.
+      </span>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-xs text-muted">No rows yet. Without rows, retrieval asks only the core problem.</p>
+      ) : null}
+      <ol className="mt-2 space-y-3">
+        {rows.map((row, index) => (
+          <li key={index} className="border border-[var(--gcc-border)] p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted">Row {index + 1}</span>
+              <button
+                type="button"
+                onClick={() => removeRow(index)}
+                className="text-xs text-muted hover:text-foreground"
+              >
+                Remove
+              </button>
+            </div>
+            <label className="mt-1 block">
+              <span className="text-xs text-foreground">Problem</span>
+              <textarea
+                value={row.problem}
+                onChange={(e) => patchRow(index, { problem: e.target.value })}
+                rows={2}
+                placeholder="Tax forms, vendor details and compliance records are stored inconsistently."
+                className={inputClass}
+              />
+            </label>
+            <label className="mt-2 block">
+              <span className="text-xs text-foreground">Vendor&rsquo;s solution</span>
+              <textarea
+                value={row.solution}
+                onChange={(e) => patchRow(index, { solution: e.target.value })}
+                rows={3}
+                placeholder="Self-service supplier onboarding collects payment details, preferences and W-9 or W-8 tax forms, with validation and reporting."
+                className={inputClass}
+              />
+            </label>
+            <label className="mt-2 block">
+              <span className="text-xs text-foreground">Search terms, comma-separated</span>
+              <input
+                type="text"
+                value={row.terms.join(", ")}
+                onChange={(e) =>
+                  patchRow(index, {
+                    terms: e.target.value
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter((t) => t.length > 0),
+                  })
+                }
+                placeholder="supplier onboarding, W-9 W-8, tax compliance"
+                className={inputClass}
+              />
+            </label>
+          </li>
+        ))}
+      </ol>
+      <button
+        type="button"
+        onClick={() => onChange([...rows, emptyEvidenceRow()])}
+        className="mt-2 text-xs font-medium text-brand hover:underline"
+      >
+        + Add a row
+      </button>
+    </div>
   );
 }
 
