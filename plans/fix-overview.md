@@ -71,7 +71,7 @@ is the order. Section 5 is how each piece is proven.
 | Email — newsletter | disabled | offers, facts with numbers |
 | Email — story nurture | disabled | the angle's problem, sequence |
 | Email — transactional | disabled | none; template |
-| PDF / LinkedIn document | disabled | as Pillar, sectioned for slides |
+| PDF / LinkedIn document | disabled; its plan is written, `enable-linkedin-document.md` (2026-10-08) | the framing's failures and approach; each declared partner's passages, one slide per partner; no quotation; no link inside the PDF — the caption carries them |
 
 The "grounding it needs" column is the first draft of each type's gate (Section 3.3, A3). It is for
 discussion, not in code.
@@ -148,7 +148,9 @@ makes verification real and feeds the writer per-claim evidence. Wave 3 replaces
 the system diagnosable. Wave 4 is the deletion, last, so nothing is removed that a lift still needs.
 
 Disabled content types are not enabled in any wave of this plan. Each one is a later plan of its own:
-its spine, its gate from A3's table, and one real proof.
+its spine, its gate from A3's table, and one real proof. The first is written:
+[`enable-linkedin-document.md`](enable-linkedin-document.md) (2026-10-08) — not repurposing, one slide
+per declared partner, nothing built yet.
 
 ---
 

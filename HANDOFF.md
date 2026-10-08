@@ -96,6 +96,18 @@ open as a bare link (Jeff, 2026-10-06). The route is GeekAPI `a28c7fd`, in the R
 What remains is what drives work: the fix-overview set, `fix-project-persistence.md`,
 `project-api-contract.md`. The plans directory is not a documentation directory (Jeff).
 
+**A plan for the first disabled type, 2026-10-08: `plans/enable-linkedin-document.md`.** Jeff asked the
+Geek-Crawler-Rag session for it at 21:01 UTC; that session went on to the Blog and Tool FAQ fields and
+no plan was written there, so it is written here, where the cross-repository plans live. Jeff's two
+rules for the type: **it is not repurposing** — the deck is written from the brief, the framing and the
+partners' passages, never from an existing page — and **it incorporates the partners' tools**, one
+slide per declared partner. The deck is a `ContentDocument` (slides as sections) rendered to PDF on
+request by one QuestPDF renderer rebuilt from the dormant carousel's (GeekBackend
+`ContentCreatorV2/Carousel/`, whose repurposing prompt, converter and spawn the plan deletes). Nothing
+is built. Four decisions in its §9 are Jeff's (no links inside the PDF, no hashtags, the slide fonts,
+the QuestPDF licence). The type stays disabled in both gates until the plan's G4 (GeekBackend) and G5
+(here) ship, backend first.
+
 **From `plans/fix-project-persistence.md` (the project-is-the-unit plan):** P0 is shipped on both
 sides. Still open there:
 

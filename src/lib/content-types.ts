@@ -39,9 +39,11 @@ export function contentTypeLabel(value: string | null | undefined): string {
 }
 
 /**
- * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan. None exists:
- * the scoping note of that day was retired by plans/fix-overview.md (Appendix A) and is in git
- * history only. Mirrors GccGenerateService.DisabledContentTypes
+ * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan. One exists so
+ * far, for the PDF / LinkedIn document -- plans/enable-linkedin-document.md (2026-10-08), written and
+ * not yet approved, so the type stays here until that plan's G5. None for the other twelve: the
+ * scoping note of 2026-09-22 was retired by plans/fix-overview.md (Appendix A) and is in git history
+ * only. Mirrors GccGenerateService.DisabledContentTypes
  * (GeekBackend), the real, enforced gate; this list is what makes that same state visible before
  * Generate is even clicked. Revised same day: Pillar and Blog re-enabled -- they have real,
  * independent dedicated generators and only break in one specific combination (multi-select
