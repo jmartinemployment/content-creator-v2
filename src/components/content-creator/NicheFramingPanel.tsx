@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
+  derivePainPoints,
   emptyEvidenceRow,
   emptyNicheFramingSet,
   nicheFramingSetHasAny,
+  parseEvidenceRows,
   type EvidenceRow,
   type NicheFraming,
   type NicheFramingSet,
@@ -133,8 +135,7 @@ export default function NicheFramingPanel({
               boxes sit a few inches apart and look identical. A failure is a paragraph; a question is
               a line. */}
           <span className="mt-0.5 block text-xs text-muted">
-            One per line here &mdash; unlike &ldquo;Where they fail&rdquo; above, where a blank line
-            separates entries. Blank lines are ignored. The writer uses these as written, or a subset if
+            One per line. Blank lines are ignored. The writer uses these as written, or a subset if
             the length will not carry them all, and may not invent another.
           </span>
           <textarea
@@ -201,6 +202,7 @@ export default function NicheFramingPanel({
                         legend={`${partner.label}'s niche`}
                         hint="What slice of the category problem does this tool own? Leave a box empty to keep the category's."
                         value={set}
+                        inheritedRows={value.evidence}
                         onChange={(next) => patchPerTool(partner.host, next)}
                       />
                     </div>
@@ -232,13 +234,22 @@ function FramingFields({
   legend,
   hint,
   value,
+  inheritedRows,
   onChange,
 }: {
   legend: string;
   hint: string;
   value: NicheFramingSet;
+  /** The category's rows, shown read-only above a tool's own so the page's whole question set is visible. */
+  inheritedRows?: EvidenceRow[];
   onChange: (next: Partial<NicheFramingSet>) => void;
 }) {
+  // The rows are the one place a failure is entered. The writer still reads "where they fail" as
+  // paragraphs, so that field is derived from the rows on every change and never edited directly.
+  function changeRows(evidence: EvidenceRow[]) {
+    onChange({ evidence, painPoints: derivePainPoints(evidence) });
+  }
+
   return (
     <fieldset className="mt-4">
       <legend className="text-sm font-medium text-foreground">{legend}</legend>
@@ -255,25 +266,7 @@ function FramingFields({
         />
       </label>
 
-      <label className="mt-3 block">
-        <span className="text-sm text-foreground">Where they fail</span>
-        {/* Shape-agnostic on purpose. The research arrives three different ways -- several bolded
-            failures each with a paragraph, terse one-liners, or a single unbroken paragraph (Jeff's
-            Bill.com example, 2026-10-03: "They all do not come formatted in that way") -- so demanding
-            any one structure is wrong most of the time. A blank line separates entries when there are
-            several; text without one is a single entry, which is the right reading of a paragraph. */}
-        <span className="mt-0.5 block text-xs text-muted">
-          Paste it however it came. If it is several distinct failures, put a blank line between them;
-          one paragraph stays one point.
-        </span>
-        <textarea
-          value={value.painPoints}
-          onChange={(e) => onChange({ painPoints: e.target.value })}
-          rows={8}
-          placeholder={"They treat approval as an email reply, a verbal instruction, or access to the company bank account. That creates slow approvals, late fees, duplicate payments and no defensible approval history."}
-          className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
-        />
-      </label>
+      <EvidenceRows rows={value.evidence} inherited={inheritedRows} onChange={changeRows} />
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">The automation to pitch</span>
@@ -285,47 +278,83 @@ function FramingFields({
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
       </label>
-
-      <EvidenceRows rows={value.evidence} onChange={(evidence) => onChange({ evidence })} />
     </fieldset>
   );
 }
 
 /**
- * One retrieval question per failure. Each row is asked of the partner's crawl on its own: the
- * vendor's solution to the index's meaning half, the search terms to its keyword half. Measured on
- * Tipalti, 2026-10-08: the pain points above found the vendor describing three failures of six and
- * fixing none of those three; solutions written in the vendor's own words found the product page
- * for all six. Nothing here is ever quoted.
+ * Where they fail, and what the vendor does about each failure: one row per failure, entered once.
+ *
+ * The Problem column is what the writer argues from (it reaches the backend as the pain-point
+ * paragraphs, derived from these rows). The Solution and Search terms columns are what retrieval
+ * asks the partner's crawl with: the solution to the index's meaning half, the terms to its keyword
+ * half, one query per row. Measured on Tipalti, 2026-10-08: problem statements alone found the
+ * vendor describing three failures of six and fixing none of those three; solutions written in the
+ * vendor's own words found the product page for all six. Nothing here is ever quoted.
+ *
+ * Rows can be pasted in from a research answer and reviewed before the brief is saved; the
+ * conversion is a deterministic split on the table's columns, never a model.
  */
 function EvidenceRows({
   rows,
+  inherited,
   onChange,
 }: {
   rows: EvidenceRow[];
+  inherited?: EvidenceRow[];
   onChange: (next: EvidenceRow[]) => void;
 }) {
+  const [pasted, setPasted] = useState("");
+
   function patchRow(index: number, next: Partial<EvidenceRow>) {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...next } : row)));
   }
   function removeRow(index: number) {
     onChange(rows.filter((_, i) => i !== index));
   }
+  function importPasted() {
+    const parsed = parseEvidenceRows(pasted);
+    if (parsed.length === 0) return;
+    onChange([...rows, ...parsed]);
+    setPasted("");
+  }
 
   const inputClass =
     "mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground";
+  const inheritedShown = (inherited ?? []).filter((row) => row.problem.trim() || row.solution.trim());
 
   return (
     <div className="mt-4">
-      <span className="text-sm text-foreground">Evidence questions</span>
+      <span className="text-sm text-foreground">Where they fail, and what the vendor does about it</span>
       <span className="mt-0.5 block text-xs text-muted">
-        One row per failure. The problem in the reader&rsquo;s words; the solution in the
-        vendor&rsquo;s own words (what their site says it does &mdash; a research answer is fine);
-        two to five search terms the vendor uses. Each row searches the partner&rsquo;s crawl on
-        its own. Nothing here is quoted; quotes come only from what the search returns.
+        One row per failure, entered once. <strong>Problem</strong> in the reader&rsquo;s words
+        &mdash; the writer argues from it. <strong>Vendor&rsquo;s solution</strong> in the
+        vendor&rsquo;s own words (what their site says it does; a research answer is fine) and two to
+        five <strong>search terms</strong> the vendor uses &mdash; each row searches the
+        partner&rsquo;s crawl on its own. Nothing here is quoted; quotes come only from what the
+        search returns.
       </span>
+
+      {inheritedShown.length > 0 ? (
+        <div className="mt-2 border border-dashed border-[var(--gcc-border)] p-2">
+          <span className="text-xs text-muted">
+            From the category, asked for this tool too ({inheritedShown.length}):
+          </span>
+          <ul className="mt-1 space-y-1">
+            {inheritedShown.map((row, i) => (
+              <li key={i} className="text-xs text-muted">
+                {row.problem || "(no problem)"} &mdash; {row.solution || "(no solution)"}
+                {row.terms.length > 0 ? ` · ${row.terms.join(", ")}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {rows.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">No rows yet. Without rows, retrieval asks only the core problem.</p>
+        <p className="mt-2 text-xs text-muted">
+          No rows yet. Without rows, retrieval asks only the core problem and the writer has no failures to argue from.
+        </p>
       ) : null}
       <ol className="mt-2 space-y-3">
         {rows.map((row, index) => (
@@ -387,6 +416,31 @@ function EvidenceRows({
       >
         + Add a row
       </button>
+
+      <label className="mt-3 block">
+        <span className="text-xs text-foreground">Paste research to make rows</span>
+        <span className="mt-0.5 block text-xs text-muted">
+          A table, one failure per line, columns separated by a tab, a &ldquo;|&rdquo; or three or more
+          spaces: problem, then the solution, then (optionally) a comma list of terms. Or blocks
+          separated by a blank line: problem on the first line, solution on the next, terms last. Rows
+          are added below for you to correct; nothing is saved until the brief is.
+        </span>
+        <textarea
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+          rows={4}
+          placeholder={"International vendors are paid manually through bank wires.\tGlobal payments through Mass Payments: 200+ countries, 120 currencies, 50+ payment methods.\tglobal payments, mass payments, wire"}
+          className={inputClass}
+        />
+        <button
+          type="button"
+          onClick={importPasted}
+          disabled={pasted.trim().length === 0}
+          className="mt-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+        >
+          Make rows
+        </button>
+      </label>
     </div>
   );
 }

@@ -320,6 +320,83 @@ export function nicheFramingSetHasAny(set: NicheFramingSet): boolean {
   );
 }
 
+/**
+ * The writer's "where they fail", derived from the rows: one paragraph per row, the Problem column.
+ *
+ * Since 2026-10-08 the rows are the one place a failure is entered (Jeff: enter it once). The writer
+ * still reads `painPoints` as paragraphs separated by a blank line, so that field is kept and filled
+ * from the rows whenever they change; nothing the writer reads changed shape.
+ */
+export function derivePainPoints(rows: readonly EvidenceRow[]): string {
+  return rows
+    .map((row) => row.problem.trim())
+    .filter((problem) => problem.length > 0)
+    .join("\n\n");
+}
+
+/** A cell boundary in pasted research: a tab, a pipe with spaces, or three or more spaces. */
+const CELL_SPLIT = /\t+| \| |\s{3,}/;
+
+function looksLikeTerms(cell: string): boolean {
+  // A terms cell is short phrases separated by commas with no sentence in it.
+  return cell.includes(",") && !/[.!?]\s|[.!?]$/.test(cell.trim()) && cell.trim().length <= 120;
+}
+
+function isHeaderRow(cells: readonly string[]): boolean {
+  const first = cells[0]?.trim().toLowerCase() ?? "";
+  return /^(your )?(problem|failure|pain( point)?)s?$/.test(first);
+}
+
+/**
+ * Rows out of pasted research, for review before the brief is saved. Deterministic: no model.
+ *
+ * Two shapes are read. A table, one row per line, cells separated by a tab, a " | " or three or
+ * more spaces (a research answer's "Your problem · Tipalti solution · What it does · Automation
+ * to pitch" pastes this way): the first cell is the problem, a last cell that reads as a comma list
+ * is the terms, and everything between is the solution. Or blocks separated by a blank line, two or
+ * three lines each: problem, solution, and optionally a comma list of terms. A header row ("Your
+ * problem …") is dropped. Lines that fit neither shape are ignored rather than guessed at.
+ */
+export function parseEvidenceRows(text: string): EvidenceRow[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const tableRows: EvidenceRow[] = [];
+  let sawTable = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const cells = line.split(CELL_SPLIT).map((c) => c.trim()).filter((c) => c.length > 0);
+    if (cells.length < 2) continue;
+    sawTable = true;
+    if (isHeaderRow(cells)) continue;
+    const problem = cells[0];
+    let terms: string[] = [];
+    let solutionCells = cells.slice(1);
+    if (solutionCells.length >= 2 && looksLikeTerms(solutionCells[solutionCells.length - 1])) {
+      terms = solutionCells[solutionCells.length - 1].split(",").map((t) => t.trim()).filter(Boolean);
+      solutionCells = solutionCells.slice(0, -1);
+    }
+    const row = { problem, solution: solutionCells.join(" "), terms };
+    if (evidenceRowHasAny(row)) tableRows.push(row);
+  }
+  if (sawTable) return tableRows;
+
+  const blocks = text
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .map((block) => block.split("\n").map((l) => l.trim()).filter((l) => l.length > 0))
+    .filter((block) => block.length >= 2);
+  return blocks.map((block) => {
+    const [problem, ...rest] = block;
+    let terms: string[] = [];
+    let solutionLines = rest;
+    if (rest.length >= 2 && looksLikeTerms(rest[rest.length - 1])) {
+      terms = rest[rest.length - 1].split(",").map((t) => t.trim()).filter(Boolean);
+      solutionLines = rest.slice(0, -1);
+    }
+    return { problem, solution: solutionLines.join(" "), terms };
+  });
+}
+
 export function emptyContentBrief(): ContentBrief {
   return {
     briefVersion: BRIEF_VERSION,
@@ -521,6 +598,15 @@ function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
         })
         .filter((row): row is EvidenceRow => row !== null && evidenceRowHasAny(row))
     : [];
+  // A brief saved before rows existed: its "where they fail" paragraphs become rows with the
+  // problem filled and the solution and terms left for the operator. Entered once, from then on.
+  if (set.evidence.length === 0 && set.painPoints.trim()) {
+    set.evidence = set.painPoints
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+      .map((problem) => ({ problem, solution: "", terms: [] }));
+  }
   return set;
 }
 
