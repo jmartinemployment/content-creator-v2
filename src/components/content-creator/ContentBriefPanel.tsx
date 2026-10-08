@@ -615,6 +615,21 @@ export default function ContentBriefPanel({
       </label>
 
       <label className={`${labelClass} mt-5`}>
+        Blog FAQ (optional)
+        <span className="block text-xs font-normal text-muted">
+          One question per line. Answered at the end of the blog, in calls of eight; the pillar
+          answers the People Also Ask list above instead.
+        </span>
+        <textarea
+          value={brief.blogFaqQuestions}
+          onChange={(e) => patch({ blogFaqQuestions: e.target.value })}
+          rows={3}
+          placeholder={"One question per line, e.g.\nHow long does an AP automation rollout take?\nWhat does it cost to run?"}
+          className={`${fieldClass} font-mono text-xs`}
+        />
+      </label>
+
+      <label className={`${labelClass} mt-5`}>
         Writing notes (optional)
         {/* Named "Writing Note for Image Prompt" on the strength of a 2026-09-21 audit that found
             only WriteImagePromptAsync read it. That is no longer true and the label was telling

@@ -198,6 +198,12 @@ export interface ContentBrief {
   writingNotes: string;
   paaQuestions: string;
   /**
+   * The blog's FAQ questions, one per line (2026-10-08). The pillar answers `paaQuestions` in its
+   * People Also Ask section; the blog had no FAQ of its own. Read by GeekAPI as `blogFaqQuestions`
+   * and answered at the end of the blog, in calls of eight, like the pillar's.
+   */
+  blogFaqQuestions: string;
+  /**
    * The operator's own framing of this niche's problem — researched by hand, per taxonomy leaf.
    *
    * Saved inside the brief deliberately: the brief is already the place operator framing lives
@@ -243,6 +249,14 @@ export type NicheFramingSet = {
    * only from crawled partner pages.
    */
   evidence: EvidenceRow[];
+  /**
+   * The operator's FAQ questions for one tool, one per line (2026-10-08). Read only from a tool's
+   * own `perTool` entry (`GccNicheFramingReader.ToolFaqQuestions`); the category has no FAQ for a
+   * tool page, so the form shows the box per tool only. Answered on that tool's page from the
+   * partner's retrieved pages alone; a question no page answers is left out and reported as a gap,
+   * never answered from general knowledge.
+   */
+  faqQuestions: string;
 };
 
 export type EvidenceRow = {
@@ -294,7 +308,7 @@ export type NicheFraming = NicheFramingSet & {
 };
 
 export function emptyNicheFramingSet(): NicheFramingSet {
-  return { coreProblem: "", painPoints: "", automationToPitch: "", evidence: [] };
+  return { coreProblem: "", painPoints: "", automationToPitch: "", evidence: [], faqQuestions: "" };
 }
 
 export function emptyEvidenceRow(): EvidenceRow {
@@ -316,7 +330,8 @@ export function nicheFramingSetHasAny(set: NicheFramingSet): boolean {
     set.coreProblem.trim() ||
       set.painPoints.trim() ||
       set.automationToPitch.trim() ||
-      set.evidence.some(evidenceRowHasAny),
+      set.evidence.some(evidenceRowHasAny) ||
+      set.faqQuestions.trim(),
   );
 }
 
@@ -464,6 +479,7 @@ export function emptyContentBrief(): ContentBrief {
     lengthBand: "",
     writingNotes: "",
     paaQuestions: "",
+    blogFaqQuestions: "",
     nicheFraming: emptyNicheFraming(),
   };
 }
@@ -602,6 +618,10 @@ export function migrateBrief(raw: unknown): ContentBrief {
     }, [])
     .join("\n");
   base.paaQuestions = str(p.paaQuestions);
+  // One per line, or an array from a programmatic writer -- the backend reader accepts both.
+  base.blogFaqQuestions = Array.isArray(p.blogFaqQuestions)
+    ? p.blogFaqQuestions.filter((x): x is string => typeof x === "string").join("\n")
+    : str(p.blogFaqQuestions);
   // Read back explicitly, like every other field. migrateBrief rebuilds from emptyContentBrief, so a
   // field missing here is saved to the server and then silently wiped on the next load.
   base.nicheFraming = migrateNicheFraming(p.nicheFraming);
@@ -617,6 +637,10 @@ function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
 
   set.coreProblem = str(p.coreProblem);
   set.automationToPitch = str(p.automationToPitch);
+  // The tool's FAQ questions: one per line, or an array -- the backend reader accepts both.
+  set.faqQuestions = Array.isArray(p.faqQuestions)
+    ? p.faqQuestions.filter((x): x is string => typeof x === "string").join("\n")
+    : str(p.faqQuestions);
   // Accepts an array as well as lines, matching what the backend reader accepts — a programmatic
   // writer (a later paste-and-extract acquisition) may store either.
   // Joined on a BLANK line, because a blank line is the separator: each entry is one failure and may

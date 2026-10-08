@@ -174,18 +174,44 @@ describe("brief evidence rows", () => {
 
   it("rows alone make a set framing, and a blank row does not", () => {
     assert.equal(evidenceRowHasAny(emptyEvidenceRow()), false);
-    assert.equal(
-      nicheFramingSetHasAny({ coreProblem: "", painPoints: "", automationToPitch: "", evidence: [] }),
-      false,
-    );
+    assert.equal(nicheFramingSetHasAny(emptyNicheFramingSet()), false);
     assert.equal(
       nicheFramingSetHasAny({
-        coreProblem: "",
-        painPoints: "",
-        automationToPitch: "",
+        ...emptyNicheFramingSet(),
         evidence: [{ problem: "", solution: "", terms: ["W-9"] }],
       }),
       true,
     );
+  });
+});
+
+describe("FAQ fields (2026-10-08): the blog's questions on the brief, a tool's questions in its own entry", () => {
+  it("reads blogFaqQuestions as lines or an array, and a tool's faqQuestions the same way", () => {
+    const brief = migrateBrief({
+      blogFaqQuestions: ["How long does a rollout take?", "What does it cost to run?"],
+      nicheFraming: {
+        perTool: {
+          "tipalti.com": { faqQuestions: "Does it sync with QuickBooks Online?\n\nCan a bookkeeper schedule a payment?" },
+        },
+      },
+    });
+    assert.equal(brief.blogFaqQuestions, "How long does a rollout take?\nWhat does it cost to run?");
+    assert.equal(
+      brief.nicheFraming.perTool["tipalti.com"]?.faqQuestions,
+      "Does it sync with QuickBooks Online?\n\nCan a bookkeeper schedule a payment?",
+    );
+    assert.equal(brief.nicheFraming.faqQuestions, "", "the category carries no tool FAQ");
+  });
+
+  it("a tool's FAQ questions alone make its entry an override, and the searches are unchanged by them", () => {
+    const tool = { ...emptyNicheFramingSet(), faqQuestions: "Does it fly?" };
+    assert.equal(nicheFramingSetHasAny(tool), true);
+    assert.deepEqual(partnerQuestions(emptyNicheFramingSet(), tool), []);
+  });
+
+  it("a brief saved before the fields existed loads with them empty", () => {
+    const brief = migrateBrief({ paaQuestions: "What is AI implementation?" });
+    assert.equal(brief.blogFaqQuestions, "");
+    assert.equal(brief.nicheFraming.faqQuestions, "");
   });
 });

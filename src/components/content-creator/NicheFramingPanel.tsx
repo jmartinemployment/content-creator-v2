@@ -210,6 +210,7 @@ export default function NicheFramingPanel({
                         legend={`${partner.label}'s own`}
                         hint="Only what this tool owns. Empty boxes keep the category's."
                         value={set}
+                        toolHost={partner.host}
                         onChange={(next) => patchPerTool(partner.host, next)}
                       />
                     </div>
@@ -273,11 +274,14 @@ function FramingFields({
   legend,
   hint,
   value,
+  toolHost,
   onChange,
 }: {
   legend: string;
   hint: string;
   value: NicheFramingSet;
+  /** Set for a tool's own fields: shows the tool page FAQ box, which the category has no use for. */
+  toolHost?: string;
   onChange: (next: Partial<NicheFramingSet>) => void;
 }) {
   // The rows are the one place a failure is entered. The writer still reads "where they fail" as
@@ -314,6 +318,23 @@ function FramingFields({
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
       </label>
+
+      {toolHost ? (
+        <label className="mt-3 block">
+          <span className="text-sm text-foreground">Tool page FAQ</span>
+          <span className="mt-0.5 block text-xs text-muted">
+            One question per line. Answered on this tool&rsquo;s page from {toolHost}&rsquo;s pages only; a
+            question no page answers is left out and reported.
+          </span>
+          <textarea
+            value={value.faqQuestions}
+            onChange={(e) => onChange({ faqQuestions: e.target.value })}
+            rows={3}
+            placeholder={"Does it sync with QuickBooks Online?\nCan a bookkeeper schedule a payment the owner releases?"}
+            className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 font-mono text-xs text-foreground"
+          />
+        </label>
+      ) : null}
     </fieldset>
   );
 }
