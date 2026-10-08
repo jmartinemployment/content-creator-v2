@@ -3,7 +3,12 @@
 The six files: this overview, then one per project: `fix-geekapi.md`, `fix-geekrepository.md`,
 `fix-geek-crawler-v2.md`, `fix-geek-crawler-rag.md`, `fix-frontend.md` (this repository's UI).
 
-**Written 2026-10-04. Status: for review. Nothing in Sections 3–5 is built.**
+**Written 2026-10-04. Status, 2026-10-08: most of Waves 1–3 is built.** Each project file carries
+its own status line; the item-by-item reconciliation against git is
+`Geek-Crawler-Rag/plans/audit-content-creator.md` §3 — of 63 items, 22 done, 11 partial, 30 open.
+The line that stood here, "Nothing in Sections 3–5 is built", was stale within hours of being
+written: R1, R4's route, R5, C1–C3, A1 interim, A2, A5, A6, A7, A16 and D1 all landed on
+2026-10-04, and nine more GeekAPI stages were committed that day to a branch that was never pushed.
 
 This plan rests on two things and nothing else:
 
@@ -155,7 +160,9 @@ stage's own "done when".
 - **Geek-Crawler-Rag:** `uv run pytest` green; `/health` ok after deploy; the Ramp re-index numbers in
   R1; the two claim questions answered from Melio product pages after R2/R3.
 - **Geek-Crawler-v2:** `tsx --test` green including the new `sitemap.test.ts`; the three re-crawls in
-  C1 with their reports; no counter in the report that nothing increments.
+  C1 with their reports; no counter in the report that nothing increments — **not met on
+  2026-10-08**: `enqueueSuppressedQueue`, `browserRenders` and `run.json`'s `pagesWithoutContent`
+  (`Geek-Crawler-v2/tests/KNOWN_GAPS.md`).
 - **GeekAPI:** `dotnet build` zero errors; `dotnet test` green (1,540 today, rising); for every guard
   a mutation test that disables it and shows a test go red; for every prompt sentence that asserts a
   safety property, a line of code named beside it in the test that enforces it.

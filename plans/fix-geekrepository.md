@@ -1,6 +1,9 @@
 # Fix Content Creator — GeekRepository
 
-**Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
+**Written 2026-10-04. Status, 2026-10-08:** D1 (`db918bb`) and D2 (`a117eec`, `88fae57`) are on
+GeekBackend `main`. D3 (`9742608`) and D4 (`62ecfe4`) were built the same day and sit only on the
+unpushed branch `fix-content-creator-stages`; on `main`, `metadata_json` carries provider and brief
+revision only, and `gcc_version_evidence` has a table and a client and no caller (audit F8, F16).
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is

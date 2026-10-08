@@ -1,6 +1,12 @@
 # Fix Content Creator — GeekAPI
 
-**Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
+**Written 2026-10-04. Status, 2026-10-08 (GeekBackend `main` at `288dde3`):** built — A1 interim,
+A2, A5, A6, A7, A11, A12, A13's provider half, A14, A16, D1, D2, GA1, GA2; A9 on the projects
+controller only. **Built on 2026-10-04 and never pushed** — A8, A9's controller half, A10's
+writer, D3, D4, on the local branch `fix-content-creator-stages` (nine commits, `953ed1e`…`849f9c9`).
+Open — A1 full (nothing calls `/v1/verify`), A3, A4's claim link, A15, A17's typing, A18, A19.
+Item by item: `Geek-Crawler-Rag/plans/audit-content-creator.md` §3; the fix plan is
+`Geek-Crawler-Rag/plans/fix-from-the-audit.md`.
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
@@ -36,6 +42,13 @@ The GeekBackend session built A1 interim, A2, A5, A6, A7, A16, D1, A1 full's sha
 pieces, A8, A9, A10, A11, A12, A13, A14, D2 and D3 in one uncommitted working tree, on Jeff's
 "continue". There is no diff to read, so this is a review of its own report. Verdicts: **keep**,
 **change** (before commit), **run first** (a precondition), **follow-up** (another project's stage).
+
+**2026-10-08:** that working tree was committed as the local branch `fix-content-creator-stages`
+(A13 `953ed1e`, D2 `c535382`, D3 `9742608`, D4 `62ecfe4`, A9 `c024cc1`, A10 `0b422bc`, A11
+`e71706c`, A12 `139f30d`, A8 `849f9c9`) and never pushed. `main` later redid A13 (`687242a`), D2
+(`a117eec`, `88fae57`), A12 (`62efbad`) and A11 (`aefc443`, `5248c22`) on its own, so **A8, A10's
+writer, D3 and D4 exist only on that branch** — whether to merge, cherry-pick or discard it is
+Jeff's decision (audit F8).
 
 **Process.**
 - Commit by stage, in wave order, as separate commits, and push the Wave 1 commits first. The
@@ -110,8 +123,10 @@ end. Push a per-type progress event when a piece is drafted (no artifact yet), t
 events after the batch write. **Follow-up F10:** the workspace shows "drafted, saving" for the
 first and keeps "each appears as it finishes" honest.
 
-**A8.** The interim and the full rebuild both built; the full one is `POST versions/{id}/revise-job`
-beside the old route. **Keep as a transition, with an end:** **follow-up F11** switches the
+**A8.** Built on the unpushed branch only (`849f9c9`). On `main` neither the interim nor
+`revise-job` exists: `POST versions/{id}/revise` (`GccController.cs:633`) runs no draft guard, uses
+no evidence and takes tool pages (audit F7). As built on the branch, the full one is
+`POST versions/{id}/revise-job` beside the old route. **Keep as a transition, with an end:** **follow-up F11** switches the
 workspace to the new route, and the old route is deleted in the same change. Section scope keeps
 stored metadata and JSON-LD: **keep**; "regenerated" in the stage was for full scope. Section
 matching by H2 heading text and splicing: **change.** Match by section path or index, which the
@@ -137,7 +152,7 @@ warnings placement), F10 (drafted-then-saved events), F11 (switch Revise route, 
 | F-A3 | **The gate is "three of twenty-two buckets, one item each"**, over an unverified extraction. One fact, one award and one call-to-action pass it. Only `FaqBank` is read by name downstream; the other 21 reach the writer as one JSON dump. | `GccGenerateService.cs:1700-1726`, `:1334-1336` |
 | F-A4 | **Pillar and Blog are never refused for zero partner evidence.** The resolver refuses only when *every* URL of a crawl type is unindexed; one dropped partner crawl is skipped silently, against its own comment. Retrieval warnings are collected and never read. `GccHeadingProvenanceGuard` says "an empty set cannot reach generation"; true for Tool only. | `GccGroundingResolver.cs:333-340`, `:376-382`, `:417-420`; `GccHeadingProvenanceGuard.cs:33-34` |
 | F-A5 | **The pillar FAQ is generated after the provenance check and dropped by the mentions and CTA retries**, which rebuild the document from retry sections. Retries re-run provenance but not the tools-section guard. | `GccGenerateService.cs:2547-2554`, `:2588`, `:2627` |
-| F-A6 | **Prompt-only promises, unenforced:** "Do not quote. No blockquotes" on Pillar/Blog (parser accepts a quote paragraph, no quote guard runs there); "exactly one block quotation" on Tool (code requires one or more); "never a specific price not in the research" (body unchecked); "a number may appear only if it is in the evidence" (five sites, none enforced); "never cite or link a competitor" (hrefs never validated; competitor URLs printed to the model); "name the product in every section" (one substring anywhere); "never attribute a claim to a URL you did not read it under". | `ContentPromptBuilder.cs:361-366`, `:869-893`, `:1638-1639`, `:2676-2681`; `ToolPrompts.cs:72`; `GccGenerateService.cs:354-355`, `:3113-3118`, `:3164`, `:1619` |
+| F-A6 | **Prompt-only promises, unenforced:** "Do not quote. No blockquotes" on Pillar/Blog (parser accepts a quote paragraph, no quote guard runs there); "exactly one block quotation" on Tool (since `6ea68fb`, 2026-10-08: zero is a reported gap, more than one refuses, and the refusal text still says "exactly one" — audit F11); "never a specific price not in the research" (body unchecked); "a number may appear only if it is in the evidence" (five sites, none enforced); "never cite or link a competitor" (hrefs never validated; competitor URLs printed to the model); "name the product in every section" (one substring anywhere); "never attribute a claim to a URL you did not read it under". | `ContentPromptBuilder.cs:361-366`, `:869-893`, `:1638-1639`, `:2676-2681`; `ToolPrompts.cs:72`; `GccGenerateService.cs:354-355`, `:3113-3118`, `:3164`, `:1619` |
 | F-A7 | **Affiliate wording:** 19 hits in 6 files; the extraction prompt defines a partner as promoted "for affiliate revenue"; `affiliateDisclosures` is one of the 22 gate buckets. | `GccV2PartnerExtractionService.cs:11`, `:52`; `GccGenerateService.cs:1586`; `GccV2PartnerUrlResearchService.cs:200` |
 | F-A8 | **Revise regenerates from flattened prose with no evidence, no brief, no guards**, one call for the whole body, and `scope=section` regenerates everything. On a tool page it demands a numbered quote with no spans listed and never runs the quote guard, so an invented quote with any cite ships. | `GccGenerateService.cs:925-1043`, `:994-1008` |
 | F-A9 | **Authorization:** no `[Authorize]` on the controller; only `ListCreates` checks ownership. `PATCH brief-research` accepts arbitrary `researchJson` with no shape check, and injected quoteables outrank retrieved evidence at the same URL. `ValidateAudience=false`. Under the API key, `X-Geek-User-Id` impersonates any GUID. The hub join checks job ownership, not create ownership; `JoinToolsJob` checks nothing. | `GccController.cs:28-30`, `:91-98`, `:140`, `:454`, `:680`, `:759`; `GccGenerationCoordinator.cs:71-88`; `Program.cs:204-210`; `ApiKeyMiddleware.cs:102-109`; `WorkflowRealtimeHub.cs:26-34`, `:52-79` |
@@ -281,10 +296,11 @@ cutter, same selection rule; or the claim is removed and the probe is described 
 **A17 — The crawl discovery ledger is readable.** (from Geek-Crawler-v2 C3, 2026-10-04) The crawler
 now writes a discovery ledger into `HostProgressJson` on every terminal transition (discovered,
 enqueued by source, fetched, budget, refusals by rule, off-sitemap counts, per-section counts,
-sitemap size and truncation). GeekAPI stores the string and nothing reads it. Either type it onto
-`GeekCrawlerRunReport` (which today drops unknown fields) or return it on the run read, so the
-operator and the C2 measurement can see it. Until then the counters C3 built are invisible from
-the product.
+sitemap size and truncation). GeekAPI stores the string, and since `8b291cc` (2026-09-30)
+`GET crawls/{runId}` returns it parsed as `hosts` — untyped, and a malformed value is silently
+replaced with an empty list (`GeekCrawlerService.cs:517-526`). Still to do: type it onto
+`GeekCrawlerRunReport` (which today drops unknown fields) and show it, so the operator and the C2
+measurement can see it. Until then the counters C3 built are invisible from the product.
 
 **A18 — `gcc_creates.Department` agrees with the taxonomy.** (from the frontend review) The frontend
 no longer sends `department`; the controller defaults it to `"marketing"` (`GccController.cs:313`)

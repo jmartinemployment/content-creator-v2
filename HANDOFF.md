@@ -38,10 +38,10 @@ GeekBackend's `main` on Railway, separately.
 
 | Repository | `main` | Deployed | Checked |
 |---|---|---|---|
-| content-creator-v2 | `18a58d8` | Vercel production, READY (`dpl_6TF9NQoJeGdVat6v8uiAR7A1mXGD`) | 2026-10-08 |
-| GeekBackend (GeekAPI + GeekRepository) | `e45bd0e` | Railway, SUCCESS 2026-10-07 19:57 UTC, both services | 2026-10-08 |
-| Geek-Crawler-v2 | `fabb42f` | not checked from here | — |
-| Geek-Crawler-Rag | `5e622b6` | not checked from here | — |
+| content-creator-v2 | `4677b69` (code; the docs commits after it change no build output) | Vercel production, READY | 2026-10-08 |
+| GeekBackend (GeekAPI + GeekRepository) | `288dde3`. A local branch `fix-content-creator-stages` (nine commits of 2026-10-04: A8, A9, A10, A11, A12, A13, D2, D3, D4) was never pushed — A8, D3, D4 and A10's writer exist only there | Railway, SUCCESS 2026-10-08 15:32 UTC, both services | 2026-10-08 |
+| Geek-Crawler-v2 | `05b2649` | runs locally; the next crawl uses it | 2026-10-08 |
+| Geek-Crawler-Rag | `e65dd5e` | VPS, deploys on push | 2026-10-08 |
 
 The deployed frontend is the project-keyed page:
 
@@ -109,12 +109,12 @@ sides. Still open there:
   project opens with an empty brief; its old brief is still on its create row in the database.
 
 **From `plans/fix-frontend.md` (the Wave plan):** F1–F9 are done; F7 and F9 landed 2026-10-08
-(`18a58d8`). F10 and F11 wait on GeekAPI, checked at `e45bd0e`:
+(`18a58d8`). F10 and F11 wait on GeekAPI, checked at `288dde3` (2026-10-08):
 
 | Stage | Needs from GeekAPI |
 |---|---|
 | F10 — "drafted, saving" per-type progress | No event fires when a type finishes drafting. The per-type outcome fires from `PersistAllAsync` as each piece is saved (`GccGenerationCoordinator.cs:915`), refusals at `:317` and `:419`, so the type event the page already has means "saved" |
-| F11 — Revise through a revise-job route | No such route; `POST versions/{id}/revise` (`GccController.cs:633`) is the only one |
+| F11 — Revise through a revise-job route | No such route on `main`; `POST versions/{id}/revise` (`GccController.cs:633`) is the only one. The route was built on 2026-10-04 (`849f9c9`, A8) on GeekBackend's unpushed branch `fix-content-creator-stages` — F11 waits on that branch landing or A8 being rebuilt, not on new design (`Geek-Crawler-Rag/plans/fix-from-the-audit.md` X5) |
 
 **Across all repositories (`plans/fix-overview.md`):** the end-to-end proof is one Generate on the
 Accounts Payable project — the project named **"test"** (`ed18d0e5-…`), keyword "Accounts Payable:

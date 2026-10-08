@@ -6,10 +6,13 @@
 had no logging. It is replaced by logging sufficient to determine the actual cause of each failure:
 the transport cause in the post-mortem and in GeekAPI's error summary (`2943e3b`), and each run's
 own log on disk (`9f57044`). Whether re-post is the actual fix, which is unlikely, is determined
-from that data. The removal of the re-post code itself is not yet done.
+from that data. The re-post code was removed in `4466494`.
 
-Remaining: remove the re-post code; the third declared-partner re-crawl (Jeff's to start); the
-measurement checks in Verification; the plan-creator decisions recorded under Status.
+Remaining (2026-10-08): the third declared-partner re-crawl (Jeff's to start; lightyear is no
+longer offered); the measurement checks in Verification — including C1's own done-when on the Ramp
+re-crawl `4563f7ec` (`/products`, `/bill-pay`, `/accounting-automation`, `offSitemapAdmitted`),
+never read off the run; the three counters nothing increments (`tests/KNOWN_GAPS.md`); the
+plan-creator decisions recorded under Status.
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
@@ -275,7 +278,9 @@ cleared on cancel and supersede (`persist.ts:321-336`; `IngestController.cs:342-
 ## Verification
 
 - **Geek-Crawler-v2:** `tsx --test` green including the new `sitemap.test.ts`; the three re-crawls in
-  C1 with their reports; no counter in the report that nothing increments.
+  C1 with their reports; no counter in the report that nothing increments — **not met on
+  2026-10-08**: `enqueueSuppressedQueue`, `browserRenders` and `run.json`'s `pagesWithoutContent`
+  (`tests/KNOWN_GAPS.md`, found 2026-10-06, deferred by Jeff).
 
 - **End to end, every wave:** one Generate on the Accounts Payable create with five partners produces
   five tool pages, a pillar, a blog, one cold-outreach email, one social piece, one image-prompt set

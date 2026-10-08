@@ -1,6 +1,10 @@
 # Fix Content Creator — Geek-Crawler-Rag
 
-**Written 2026-10-04. Status: for review. Nothing in "The work" is built.**
+**Written 2026-10-04. Status, 2026-10-08:** R1, R2, R4's route, R5, R6 and R7 are built; R3's
+selection rule is built (`3092ccd`, page-diverse), its collapse-before-the-cut and the near-copy
+measurement are open; R4's done-when waits on GeekAPI calling `/v1/verify` (A1 full — nothing calls
+it). The live record is `Geek-Crawler-Rag/HANDOFF.md` §4; the fix plan is
+`Geek-Crawler-Rag/plans/fix-from-the-audit.md`.
 
 One of five project plans. The overview, the settled rules, all seventeen decisions, the wave order
 and the retired-plans list are in [`fix-overview.md`](fix-overview.md). This file is
@@ -19,7 +23,7 @@ Made 2026-10-04: Jeff deferred every decision to the recommendation, so each row
 |---|---|---|---|
 | D1 | Repeated chunk text: collapse at **index time** (one point per distinct text per run) or at query time. | Index time. One rule for every consumer; query-time would need it in two retrieval paths that work differently. | R1 |
 | D4 | Quote verification: a **Library route** GeekAPI calls, or the existing C# substring comparison. | Library route. Two implementations of "is this quote on the page" will disagree on whitespace and punctuation; the quote guard already paid for that. | R4, A1 |
-| D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | Rank it over a run-scoped candidate set, with the collapse before the pool cut. Measure after R1 before building. | R2 |
+| D15 | Lexical retrieval: today it is a Qdrant scroll in id order with synthetic scores, not a ranked search. Rank it, or drop it from fusion. | **Decided 2026-10-04: delete it** (R2, `5e622b6`). The in-process BM25 re-rank that stood beside it was deleted too, on 2026-10-08 (`e2937f0`, `d8a628e`); the keyword signal is the sparse half of the one hybrid query — which first actually ran on 2026-10-08 (`7c47fa1`). | R2 |
 
 ## Status, 2026-10-04 evening — what is built, and where it departs from the stages above
 
@@ -41,7 +45,10 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
   copy and the DTO. A contract change is committed on both sides together; that is not a scope
   violation, it is what a contract is.
 
-**Departures that are defects, to fix before R4 is called done.**
+**Departures that were defects — all three fixed in `9a0c901` the same day** (one digest;
+`verify_citations` deleted; F-R10's two projection differences normalised in `verify_quote` and
+pinned by a fixture shared with GeekBackend `a8e284d`; curly quotes deliberately not folded, so
+item 2's curly-apostrophe done-when is unmet by instruction). The list as it stood:
 1. **Two digest definitions remain.** The route returns `sourceDigest` as `sha256(contentHtml)`
    falling back to `html`; `verify_citations` still hashes the page text. R4 said one definition.
    Until it is one, GeekAPI's A1 must treat the route's `found` as the verdict and never compare
@@ -63,8 +70,9 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
 - Part of R6 (tests for R1, R4, R5) was written early. The flooded-pool and ranked-keyword tests
   are not written and are still R6.
 - One README line from R7 was changed early. Fine.
-- The scheduler defaults off in the repo; **production still has it on**. That is an operations
-  change on the VPS compose, Jeff's to make.
+- The scheduler defaults **on** in the repo (`config.py:123`, `deploy/hostinger-compose.yml:50`,
+  since `2cd443f`) and on the box, and the README says so. The line that stood here — "defaults
+  off in the repo" — was wrong.
 
 **Violations, recorded so they are not repeated.**
 - A re-index of all 62 runs was queued. Jeff killed it; 6 ran, 56 never started. The rule is in R1:
@@ -85,8 +93,11 @@ without `ContentReadyAt`, and the scheduler's entrance is gated the same way.
   by R1's rule.
 - Wave 2 measurements (R2's keyword list, R3's near-copies) were run before Wave 1's proof. They
   are read-only, so nothing broke, but every measurement before the last sent the bare keyword
-  rather than the question GeekAPI sends (`GccGroundingResolver.BuildNeed`). Only the last run's
-  numbers count. The question text is the plan's, not the session's: copy it from `BuildNeed`.
+  rather than the 25-word question GeekAPI sent at the time (`GccGroundingResolver.BuildNeed`).
+  Since GeekBackend `bfd99c9` (2026-10-08) `BuildNeed` is the bare keyword again, and since
+  `6ea68fb` a partner run is asked the brief's core problem and one question per evidence row at
+  8 each — `BuildNeed` is the no-brief fallback only. Every one of these measurements was also
+  dense-only (`7c47fa1`); none of them counts now. Re-measure on current code.
 
 **Recommendation received, decision made.** The session recommends deleting the keyword scroll
 list from fusion rather than ranking it. The dense list is already LlamaIndex's dense-plus-sparse
@@ -160,9 +171,10 @@ hit, in `architecture.md`, saying it is forbidden.
 - Depends on: nothing.
 
 **R5 — Readiness is fail-closed.** (F-R5, F-R6)
-- Change: `POST /v1/index` refuses a run without `ContentReadyAt`; the scheduler default matches the
-  README (off); restart behaviour is documented once, correctly, and the README's recovery claim is
-  removed or made true.
+- Change: `POST /v1/index` refuses a run without `ContentReadyAt`; the scheduler default is **on**
+  in `config.py`, the compose and the README alike (`2cd443f` — this line used to say "off");
+  restart behaviour is documented once, correctly, and the README's recovery claim is removed or
+  made true.
 - Depends on: nothing.
 
 **R6 — Tests.** Same text across page ids; a flooded pool; the verify route; the ranked lexical list.
