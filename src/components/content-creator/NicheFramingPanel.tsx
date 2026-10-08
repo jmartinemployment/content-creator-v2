@@ -7,9 +7,11 @@ import {
   emptyNicheFramingSet,
   nicheFramingSetHasAny,
   parseEvidenceRows,
+  partnerQuestions,
   type EvidenceRow,
   type NicheFraming,
   type NicheFramingSet,
+  type PartnerQuestion,
 } from "@/lib/content-creator/brief-catalog";
 import Link from "next/link";
 import { getProject } from "@/services/gcc-projects-api";
@@ -111,9 +113,8 @@ export default function NicheFramingPanel({
 
       <FramingFields
         legend="For the whole category"
-        hint="The one problem the whole niche has — not a collection of each tool's. The tool pages and the blog argue from it (the pillar does not yet), and it is the first search asked of every partner's crawl. A tool below overrides only the boxes you fill in."
+        hint="The one problem the whole niche has — not a collection of each tool's. A tool below overrides only the boxes you fill in."
         value={value}
-        askedOf={partners.map((p) => p.host)}
         onChange={(next) => patch(next)}
       />
 
@@ -135,9 +136,7 @@ export default function NicheFramingPanel({
           {/* One per line, unlike the rows above, where a failure is one row with three columns. Said
               plainly because the two sit a few inches apart. */}
           <span className="mt-0.5 block text-xs text-muted">
-            One per line. Blank lines are ignored. The page ends with these, word for word, under
-            &ldquo;Answer these questions when booking your free consultation&rdquo;. The writer never
-            sees them, so it cannot rephrase them or turn them into a quiz.
+            One per line. The page adds these to its closing word for word; the writer never sees them.
           </span>
           <textarea
             value={value.diagnosisQuestions}
@@ -172,40 +171,45 @@ export default function NicheFramingPanel({
             ) : null}
           </div>
           <p className="mt-1 text-xs text-muted">
-            Leave a tool alone and its crawl is searched with the category&rsquo;s core problem and every
-            category row. Open a tool to add rows only it should be asked &mdash; the slice of the problem
-            it alone owns: a segment, a stage, a scale. A row here whose Problem matches a category row
-            replaces that row for this tool; the rest are added. Core Problem and Automation here replace
-            the category&rsquo;s. Leave a box empty and nothing changes for that tool.
+            Each tool lists the searches its crawl gets, in order. Leave it alone and they are the
+            category&rsquo;s; fill a box here and it replaces the category&rsquo;s, a row here is added
+            &mdash; or replaces the category row that states the same problem.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => {
               const set = value.perTool[partner.host] ?? emptyNicheFramingSet();
               const overridden = nicheFramingSetHasAny(set);
+              const questions = partnerQuestions(value, value.perTool[partner.host]);
+              const own = questions.filter((q) => q.source === "tool").length;
               const open = openHost === partner.host;
               return (
                 <li key={partner.host} className="border border-[var(--gcc-border)]">
                   <button
                     type="button"
+                    aria-expanded={open}
                     onClick={() => setOpenHost(open ? null : partner.host)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm"
                   >
                     <span className="text-foreground">
                       {partner.label}
                       <span className="text-muted"> &mdash; {partner.host}</span>
                     </span>
-                    <span className="text-xs text-muted">
-                      {overridden ? "overridden" : "uses category"}
+                    <span className="shrink-0 text-xs text-muted">
+                      {questions.length === 0
+                        ? "bare keyword only"
+                        : `${questions.length} ${questions.length === 1 ? "search" : "searches"}${
+                            own > 0 ? ` · ${own} own` : ""
+                          }`}
+                      {overridden ? "" : " · uses category"}
                     </span>
                   </button>
                   {open ? (
                     <div className="border-t border-[var(--gcc-border)] px-3 pb-3">
+                      <SearchList host={partner.host} questions={questions} />
                       <FramingFields
-                        legend={`${partner.label}'s niche`}
-                        hint={`What slice of the category problem does this tool own? Rows here are searched on ${partner.host} only, after the category's. Leave a box empty to keep the category's.`}
+                        legend={`${partner.label}'s own`}
+                        hint="Only what this tool owns. Empty boxes keep the category's."
                         value={set}
-                        askedOf={[partner.host]}
-                        inheritedRows={value.evidence}
                         onChange={(next) => patchPerTool(partner.host, next)}
                       />
                     </div>
@@ -233,21 +237,47 @@ export default function NicheFramingPanel({
   );
 }
 
+/**
+ * What one partner's crawl is searched with, in order — read-only, computed by `partnerQuestions`
+ * from the category set and the tool's own, so the answer to "what is asked of whom" is on the
+ * page under the partner's name rather than explained in a paragraph.
+ */
+function SearchList({ host, questions }: { host: string; questions: PartnerQuestion[] }) {
+  return (
+    <div className="mt-3">
+      <span className="text-xs font-medium text-foreground">
+        Searched on {host}, in this order
+      </span>
+      {questions.length === 0 ? (
+        <p className="mt-1 text-xs text-muted">
+          Nothing from the framing yet &mdash; the crawl is searched with the target keyword alone.
+        </p>
+      ) : (
+        <ol className="mt-1 list-decimal space-y-1 pl-5 text-xs">
+          {questions.map((q, i) => (
+            <li key={i} className="text-foreground">
+              <span className="text-muted">
+                {q.kind === "core" ? "Core problem" : "Row"} ({q.source === "tool" ? "own" : "category"}):{" "}
+              </span>
+              {q.need}
+              {q.keyword ? <span className="text-muted"> &middot; terms: {q.keyword}</span> : null}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function FramingFields({
   legend,
   hint,
   value,
-  askedOf,
-  inheritedRows,
   onChange,
 }: {
   legend: string;
   hint: string;
   value: NicheFramingSet;
-  /** The partner hosts each row here is searched on: every partner for the category, one for a tool. */
-  askedOf: string[];
-  /** The category's rows, shown read-only above a tool's own so the page's whole question set is visible. */
-  inheritedRows?: EvidenceRow[];
   onChange: (next: Partial<NicheFramingSet>) => void;
 }) {
   // The rows are the one place a failure is entered. The writer still reads "where they fail" as
@@ -272,12 +302,7 @@ function FramingFields({
         />
       </label>
 
-      <EvidenceRows
-        rows={value.evidence}
-        askedOf={askedOf}
-        inherited={inheritedRows}
-        onChange={changeRows}
-      />
+      <EvidenceRows rows={value.evidence} onChange={changeRows} />
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">The automation to pitch</span>
@@ -308,13 +333,9 @@ function FramingFields({
  */
 function EvidenceRows({
   rows,
-  askedOf,
-  inherited,
   onChange,
 }: {
   rows: EvidenceRow[];
-  askedOf: string[];
-  inherited?: EvidenceRow[];
   onChange: (next: EvidenceRow[]) => void;
 }) {
   const [pasted, setPasted] = useState("");
@@ -334,50 +355,16 @@ function EvidenceRows({
 
   const inputClass =
     "mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground";
-  const inheritedShown = (inherited ?? []).filter((row) => row.problem.trim() || row.solution.trim());
-  const searchedOn =
-    askedOf.length === 0
-      ? "each partner's crawl (this project declares no partners yet)"
-      : askedOf.length === 1
-        ? `${askedOf[0]}'s crawl`
-        : `each partner's crawl — ${askedOf.join(", ")}`;
-
   return (
     <div className="mt-4">
       <span className="text-sm text-foreground">Where they fail, and what the vendor does about it</span>
       <span className="mt-0.5 block text-xs text-muted">
-        One row per failure, entered once. Each row is one search of {searchedOn}, and the pages
-        it returns are what the tool page, the pillar and the blog are written from.{" "}
-        <strong>Problem</strong>: the failure in the reader&rsquo;s words; the writer argues from it,
-        and it is the only column the writer ever sees. <strong>Vendor&rsquo;s solution</strong>: what
-        the vendor says it does, in the vendor&rsquo;s own words (a research answer is fine); the search
-        matches pages by meaning on this. <strong>Search terms</strong>: two to five words the
-        vendor&rsquo;s site uses; the search matches pages by those exact words. Nothing you type here is
-        quoted &mdash; quotes come only from the pages the search returns.
+        One row per failure. Each row is one search of the partner&rsquo;s crawl. Nothing here is quoted.
       </span>
-
-      {inheritedShown.length > 0 ? (
-        <div className="mt-2 border border-dashed border-[var(--gcc-border)] p-2">
-          <span className="text-xs text-muted">
-            From the category &mdash; searched on {askedOf[0] ?? "this tool"} too; edit them in the
-            category above ({inheritedShown.length}):
-          </span>
-          <ul className="mt-1 space-y-1">
-            {inheritedShown.map((row, i) => (
-              <li key={i} className="text-xs text-muted">
-                {row.problem || "(no problem)"} &mdash; {row.solution || "(no solution)"}
-                {row.terms.length > 0 ? ` · ${row.terms.join(", ")}` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       {rows.length === 0 ? (
         <p className="mt-2 text-xs text-muted">
-          No rows yet. Without rows each partner&rsquo;s crawl is searched once, with the core problem
-          alone; with rows it is searched once more per row. And the writer has no failures to argue
-          from.
+          No rows yet: each partner is searched with the core problem alone.
         </p>
       ) : null}
       <ol className="mt-2 space-y-3">
@@ -394,7 +381,9 @@ function EvidenceRows({
               </button>
             </div>
             <label className="mt-1 block">
-              <span className="text-xs text-foreground">Problem</span>
+              <span className="text-xs text-foreground">
+                Problem <span className="text-muted">&mdash; the writer argues from it</span>
+              </span>
               <textarea
                 value={row.problem}
                 onChange={(e) => patchRow(index, { problem: e.target.value })}
@@ -404,7 +393,10 @@ function EvidenceRows({
               />
             </label>
             <label className="mt-2 block">
-              <span className="text-xs text-foreground">Vendor&rsquo;s solution</span>
+              <span className="text-xs text-foreground">
+                Vendor&rsquo;s solution{" "}
+                <span className="text-muted">&mdash; in the vendor&rsquo;s words; the meaning search</span>
+              </span>
               <textarea
                 value={row.solution}
                 onChange={(e) => patchRow(index, { solution: e.target.value })}
@@ -414,7 +406,10 @@ function EvidenceRows({
               />
             </label>
             <label className="mt-2 block">
-              <span className="text-xs text-foreground">Search terms, comma-separated</span>
+              <span className="text-xs text-foreground">
+                Search terms{" "}
+                <span className="text-muted">&mdash; the exact-word search; comma-separated</span>
+              </span>
               <input
                 type="text"
                 value={row.terms.join(", ")}
@@ -444,12 +439,8 @@ function EvidenceRows({
       <label className="mt-3 block">
         <span className="text-xs text-foreground">Paste research to make rows</span>
         <span className="mt-0.5 block text-xs text-muted">
-          Have the research as a table? Paste it here and press <em>Make rows</em>: one failure per
-          line &mdash; the problem, then the vendor&rsquo;s solution, then (optional) a comma list of
-          search terms &mdash; with the columns separated by a tab, a &ldquo;|&rdquo; or three or more
-          spaces. Or one failure per paragraph: problem on the first line, solution on the next, terms
-          on the last. The rows appear above for you to correct. Nothing is saved until you save the
-          brief.
+          A research table (problem, solution, terms per line) or blank-line blocks. Rows appear above
+          to correct; nothing is saved until the brief is.
         </span>
         <textarea
           value={pasted}

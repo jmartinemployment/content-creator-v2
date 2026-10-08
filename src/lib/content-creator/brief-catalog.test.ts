@@ -4,11 +4,62 @@ import { describe, it } from "node:test";
 import {
   derivePainPoints,
   emptyEvidenceRow,
+  emptyNicheFramingSet,
   evidenceRowHasAny,
   migrateBrief,
   nicheFramingSetHasAny,
   parseEvidenceRows,
+  partnerQuestions,
 } from "./brief-catalog";
+
+describe("partnerQuestions — what each partner's crawl is searched with, in GeekAPI's order", () => {
+  const category = {
+    ...emptyNicheFramingSet(),
+    coreProblem: "The uncontrolled handoff between an approved invoice and the moment cash leaves.",
+    evidence: [
+      { problem: "Approval is informal.", solution: "Approval workflows route each bill.", terms: ["approval workflow"] },
+      { problem: "Payments are executed ad hoc.", solution: "", terms: [] },
+    ],
+  };
+
+  it("a tool with nothing of its own gets the category's core problem, then one search per row", () => {
+    const q = partnerQuestions(category, undefined);
+    assert.deepEqual(
+      q.map((x) => [x.kind, x.source, x.need, x.keyword]),
+      [
+        ["core", "category", category.coreProblem, ""],
+        ["row", "category", "Approval workflows route each bill.", "approval workflow"],
+        ["row", "category", "Payments are executed ad hoc.", ""],
+      ],
+      "a row with no solution searches on its problem; no terms means the need text is searched",
+    );
+  });
+
+  it("a tool's core problem replaces the category's; a row restating a problem replaces that row in place; other rows are added", () => {
+    const tool = {
+      ...emptyNicheFramingSet(),
+      coreProblem: "Global payments across entities.",
+      evidence: [
+        { problem: "approval is informal.", solution: "Entity-specific approval routing.", terms: ["multi-entity"] },
+        { problem: "Cannot reconcile global payments.", solution: "Automated payment reconciliation.", terms: ["payment reconciliation", "sub-ledger"] },
+      ],
+    };
+    const q = partnerQuestions(category, tool);
+    assert.deepEqual(
+      q.map((x) => [x.kind, x.source, x.need, x.keyword]),
+      [
+        ["core", "tool", "Global payments across entities.", ""],
+        ["row", "tool", "Entity-specific approval routing.", "multi-entity"],
+        ["row", "category", "Payments are executed ad hoc.", ""],
+        ["row", "tool", "Automated payment reconciliation.", "payment reconciliation sub-ledger"],
+      ],
+    );
+  });
+
+  it("nothing in either set means no searches from the framing", () => {
+    assert.deepEqual(partnerQuestions(emptyNicheFramingSet(), undefined), []);
+  });
+});
 
 describe("rows are the one place a failure is entered", () => {
   it("a brief saved with pain-point paragraphs and no rows loads them as rows", () => {

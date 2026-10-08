@@ -334,6 +334,54 @@ export function derivePainPoints(rows: readonly EvidenceRow[]): string {
     .join("\n\n");
 }
 
+/** One search of a partner's crawl, as GeekAPI will make it. */
+export type PartnerQuestion = {
+  kind: "core" | "row";
+  /** Whose text it is: the tool's own box or row, or the category's. */
+  source: "tool" | "category";
+  /** What the meaning half searches for. */
+  need: string;
+  /** What the keyword half searches for; empty means the need text is used. */
+  keyword: string;
+};
+
+/**
+ * The searches a partner's crawl gets, in order, from the category framing and that tool's own —
+ * the same rule as GeekAPI's `GccNicheFramingReader.ForHost` + `GccGroundingResolver.PartnerQuestions`:
+ * the core problem first (the tool's when it has one, else the category's), then one search per
+ * row — the category's rows, with a tool row that restates the same problem replacing that row in
+ * place, and the tool's other rows added after. A row searches on its solution; a row with no
+ * solution searches on its problem. Nothing when both sets are empty (GeekAPI then uses the bare
+ * keyword). Shown per tool so what is asked of whom is read off the page, not inferred.
+ */
+export function partnerQuestions(
+  category: NicheFramingSet,
+  tool: NicheFramingSet | undefined,
+): PartnerQuestion[] {
+  const out: PartnerQuestion[] = [];
+  const toolCore = (tool?.coreProblem ?? "").trim();
+  const categoryCore = category.coreProblem.trim();
+  if (toolCore) out.push({ kind: "core", source: "tool", need: toolCore, keyword: "" });
+  else if (categoryCore) out.push({ kind: "core", source: "category", need: categoryCore, keyword: "" });
+
+  const key = (row: EvidenceRow) => row.problem.trim().toLowerCase();
+  const toolRows = (tool?.evidence ?? []).filter(evidenceRowHasAny);
+  const merged: { row: EvidenceRow; source: "tool" | "category" }[] = [];
+  for (const row of category.evidence.filter(evidenceRowHasAny)) {
+    const own = toolRows.find((t) => key(t) && key(t) === key(row));
+    merged.push(own ? { row: own, source: "tool" } : { row, source: "category" });
+  }
+  for (const row of toolRows) {
+    if (!merged.some((m) => m.row === row)) merged.push({ row, source: "tool" });
+  }
+  for (const { row, source } of merged) {
+    const need = row.solution.trim() || row.problem.trim();
+    if (!need) continue;
+    out.push({ kind: "row", source, need, keyword: row.terms.map((t) => t.trim()).filter(Boolean).join(" ") });
+  }
+  return out;
+}
+
 /** A cell boundary in pasted research: a tab, a pipe with spaces, or three or more spaces. */
 const CELL_SPLIT = /\t+| \| |\s{3,}/;
 
