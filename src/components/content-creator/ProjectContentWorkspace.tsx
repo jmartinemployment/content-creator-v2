@@ -16,6 +16,9 @@ import {
   runSavedLine,
   savedByRun,
   timeOfDay,
+  appendUnique,
+  splitGroundingWarnings,
+  summarizeEventPayload,
 } from "@/lib/content-creator/run-display";
 import {
   AUDIENCE_SEGMENTS,
@@ -63,7 +66,6 @@ import {
   approveGccVersion,
   briefRevisionSavedAt,
   downloadProjectHtmlExport,
-  generateJobEventsPath,
   generateProject,
   getGenerateJobEvents,
   getLatestProjectRun,
@@ -159,6 +161,17 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   // scheduler link. The draft is saved and the gap is said here, so the operator has the page and
   // knows what to add to it.
   const [generateWarnings, setGenerateWarnings] = useState<string[]>([]);
+  // Warnings about the evidence the run was grounded on, as against a piece: `grounding: …`. Shown
+  // under the partner readiness block, which is about the evidence, not under "Written with a gap",
+  // which names pieces (fix-frontend F9).
+  const [groundingWarnings, setGroundingWarnings] = useState<string[]>([]);
+
+  /** Each warning where it belongs: about the grounding, or about a piece. Each is listed once. */
+  function addWarnings(warnings: string[]) {
+    const { grounding, pieces } = splitGroundingWarnings(warnings);
+    if (grounding.length > 0) setGroundingWarnings((prev) => appendUnique(prev, grounding));
+    if (pieces.length > 0) setGenerateWarnings((prev) => appendUnique(prev, pieces));
+  }
   // The ended (or current) run whose full record the page can open — stays set after the hub closes,
   // so a refusal still has a link to every model call and verdict (Jeff, 2026-10-06).
   const [runLogJobId, setRunLogJobId] = useState<string | null>(null);
@@ -504,24 +517,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     const recordedRefusals = recorded?.refusals ?? [];
     const recordedWarnings = recorded?.warnings ?? [];
     const recordedPreflight = recorded?.preflight ?? [];
-    if (recordedWarnings.length > 0) {
-      // Already prefixed by type on the backend ("pillar: ...").
-      setGenerateWarnings((prev) => {
-        const next = [...prev];
-        for (const warning of recordedWarnings) if (!next.includes(warning)) next.push(warning);
-        return next;
-      });
-    }
+    // Already prefixed by type on the backend ("pillar: ...", "grounding: ...").
+    if (recordedWarnings.length > 0) addWarnings(recordedWarnings);
     if (recordedRefusals.length > 0) {
       // Already typed on the backend ("blog: …", "tool: Bill: …"). Do not invent a type here — that
       // used to force every refusal under "tool:" and mislabelled a content-type failure.
-      setGenerateNotes((prev) => {
-        const next = [...prev];
-        for (const refusal of recordedRefusals) {
-          if (!next.includes(refusal)) next.push(refusal);
-        }
-        return next;
-      });
+      setGenerateNotes((prev) => appendUnique(prev, recordedRefusals));
     }
     if (recordedPreflight.length > 0) {
       setPreflight((prev) =>
@@ -618,10 +619,9 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           // Appended, not assigned: one type can emit several of these (one per partner for tool),
           // and each one names a partner the operator would otherwise have to infer from a count.
           const note = `${evt.contentType}: ${evt.error ?? "failed"}`;
-          setGenerateNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+          setGenerateNotes((prev) => appendUnique(prev, [note]));
         } else if (evt.status === "warning") {
-          const note = `${evt.contentType}: ${evt.error ?? "written with a gap"}`;
-          setGenerateWarnings((prev) => (prev.includes(note) ? prev : [...prev, note]));
+          addWarnings([`${evt.contentType}: ${evt.error ?? "written with a gap"}`]);
         } else {
           pushGenerateMsg(`${evt.contentType} ready.`);
         }
@@ -682,6 +682,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
     setGenerateMsgs([]);
     setGenerateNotes([]);
     setGenerateWarnings([]);
+    setGroundingWarnings([]);
     setRunLogJobId(null);
     setPreflight(null);
     setStalePrompt(null);
@@ -735,7 +736,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       // Same two fields the hub pushes, read off the synchronous response for a GeekAPI not running
       // the job runner -- so the explanation is present on both shapes, not just the live one.
       if (result.refusals?.length) setGenerateNotes(result.refusals);
-      if (result.warnings?.length) setGenerateWarnings(result.warnings);
+      if (result.warnings?.length) addWarnings(result.warnings);
       if (result.preflight?.length) {
         setPreflight({
           jobId: "",
@@ -774,6 +775,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             preflight={preflight}
             notes={generateNotes}
             warnings={generateWarnings}
+            groundingWarnings={groundingWarnings}
             projectId={projectId}
             jobId={runLogJobId}
           />
@@ -855,6 +857,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         <>
           <ContentBriefPanel
             projectId={projectId}
+            provider={provider}
             // The keyword is the project's, and every brief save writes it. It stops being editable
             // once something has been generated from it -- after that, a new keyword would describe
             // pages written for the old one. A second keyword is a second project (J1).
@@ -965,6 +968,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               preflight={preflight}
               notes={generateNotes}
               warnings={generateWarnings}
+              groundingWarnings={groundingWarnings}
               projectId={projectId}
               jobId={runLogJobId}
             />
@@ -1482,9 +1486,9 @@ function GenerateRunningIndicator({
 }
 
 /**
- * What a run has said so far: its progress lines, the partner pre-flight, what was not written and
- * what was written with a gap — and, when something failed or shipped with a gap, the link to the
- * run's full record so the refusal can be fixed rather than guessed.
+ * What a run has said so far: its progress lines, the partner pre-flight, what it said about the
+ * grounding, what was not written and what was written with a gap — and, when something failed or
+ * shipped with a gap, the run's full record so the refusal can be fixed rather than guessed.
  *
  * One definition, drawn in two places -- inside the running indicator while a run covers the page,
  * and in the Generate stage otherwise -- so what the operator reads while waiting is exactly what is
@@ -1495,6 +1499,7 @@ function GenerateRunReport({
   preflight,
   notes,
   warnings,
+  groundingWarnings,
   projectId,
   jobId,
 }: {
@@ -1502,12 +1507,15 @@ function GenerateRunReport({
   preflight: GccGeneratePreflightEvent | null;
   notes: string[];
   warnings: string[];
+  groundingWarnings: string[];
   projectId: string;
   jobId: string | null;
 }) {
-  const needsLog = notes.length > 0 || warnings.length > 0
-    || msgs.some((m) => /failed|refus/i.test(m));
-  const eventsPath = jobId ? generateJobEventsPath(projectId, jobId) : null;
+  const needsLog =
+    notes.length > 0 ||
+    warnings.length > 0 ||
+    groundingWarnings.length > 0 ||
+    msgs.some((m) => /failed|refus/i.test(m));
 
   return (
     <>
@@ -1584,40 +1592,42 @@ function GenerateRunReport({
         </div>
       ) : null}
 
-      {notes.length > 0 ? (
-        <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
-          <p className="text-sm font-medium text-foreground">
-            Not written ({notes.length})
-          </p>
-          <ul className="mt-1 space-y-1">
-            {notes.map((note) => (
-              <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      {/* Under the readiness block, because it is about the same thing: the evidence, not a piece. */}
+      <RunReportList
+        title="Grounding"
+        hint="About the evidence the run was grounded on, not about a piece. Each piece's own gaps are under “Written with a gap”."
+        items={groundingWarnings}
+      />
 
-      {warnings.length > 0 ? (
-        <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
-          <p className="text-sm font-medium text-foreground">
-            Written with a gap ({warnings.length})
-          </p>
-          <ul className="mt-1 space-y-1">
-            {warnings.map((note) => (
-              <li key={note} className="whitespace-pre-wrap text-sm text-foreground">
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <RunReportList title="Not written" items={notes} />
 
-      {needsLog && eventsPath && jobId ? (
-        <GenerateRunLog key={jobId} projectId={projectId} jobId={jobId} eventsPath={eventsPath} />
-      ) : null}
+      <RunReportList title="Written with a gap" items={warnings} />
+
+      {needsLog && jobId ? <GenerateRunLog key={jobId} projectId={projectId} jobId={jobId} /> : null}
     </>
+  );
+}
+
+/**
+ * One named list of what a run said -- "Grounding", "Not written", "Written with a gap". Nothing when
+ * the list is empty: a heading over nothing would read as a count of zero the run never gave.
+ */
+function RunReportList({ title, hint, items }: { title: string; hint?: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-3 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2">
+      <p className="text-sm font-medium text-foreground">
+        {title} ({items.length})
+      </p>
+      {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
+      <ul className="mt-1 space-y-1">
+        {items.map((item) => (
+          <li key={item} className="whitespace-pre-wrap text-sm text-foreground">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -1626,15 +1636,7 @@ function GenerateRunReport({
  * page when something was not written or shipped with a gap. The one-line refusal is not enough to
  * fix a draft; this is what is (Jeff, 2026-10-06).
  */
-function GenerateRunLog({
-  projectId,
-  jobId,
-  eventsPath,
-}: {
-  projectId: string;
-  jobId: string;
-  eventsPath: string;
-}) {
+function GenerateRunLog({ projectId, jobId }: { projectId: string; jobId: string }) {
   // Open and load as soon as this panel appears — Jeff, 2026-10-06: the JSON URL is not
   // openable from the browser (auth), so the record has to be on the page.
   const [open, setOpen] = useState(true);
@@ -1672,10 +1674,10 @@ function GenerateRunLog({
         </button>
       </div>
       <p className="mt-1 text-xs text-muted">
-        Every model call, guard verdict and outcome for this run — shown here because the events
-        URL is authenticated and cannot be opened as a bare link.
+        Every model call, guard verdict and outcome for this run — shown here because the record is
+        read with the operator&apos;s sign-in and does not open as a bare link. Identifiers are left
+        out: this page shows none but the project&apos;s and the labelled Run ID.
       </p>
-      <p className="mt-1 font-mono text-xs text-muted">{eventsPath}</p>
       {open ? (
         <div className="mt-2">
           {loading ? <p className="text-sm text-muted">Loading…</p> : null}
@@ -1704,26 +1706,6 @@ function GenerateRunLog({
       ) : null}
     </div>
   );
-}
-
-/** Enough of an event's payload to diagnose without dumping megabytes of prompts by default. */
-function summarizeEventPayload(payloadJson: string): string {
-  try {
-    const parsed = JSON.parse(payloadJson) as unknown;
-    if (!parsed || typeof parsed !== "object") return payloadJson;
-    const obj = parsed as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === "string" && value.length > 400) {
-        out[key] = `${value.slice(0, 400)}… (${value.length} chars)`;
-      } else {
-        out[key] = value;
-      }
-    }
-    return JSON.stringify(out, null, 2);
-  } catch {
-    return payloadJson.length > 800 ? `${payloadJson.slice(0, 800)}…` : payloadJson;
-  }
 }
 
 /**
@@ -1857,7 +1839,7 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
           <div key={group.artifact.id} className="flex flex-col gap-2">
             <div className="flex items-baseline gap-2">
               <h3 className="text-sm font-semibold text-foreground">
-                {group.artifact.name || group.artifact.id.slice(0, 8)}
+                {group.artifact.name || contentTypeLabel(group.artifact.type)}
               </h3>
               <span className="text-xs text-muted">{group.artifact.type}</span>
             </div>

@@ -12,6 +12,7 @@
  */
 
 import type { GccPartnerToolReadiness } from "@/services/workflow-tools-hub";
+import { isGuid, replaceGuids } from "../guid";
 
 /**
  * A time of day as the page says it: `2:32 PM`.
@@ -245,3 +246,74 @@ export function lastRunLines(
   return [`The last Generate finished${at}. It saved ${count}.`];
 }
 
+
+/**
+ * The label the coordinator puts on a warning about the evidence a run was grounded on, as against a
+ * warning about a piece it wrote: `GccGenerationCoordinator.GroundingWarningLabel` is "grounding"
+ * (GeekBackend), and it reaches the page both ways the record does -- as `grounding: …` in the run's
+ * `warnings`, and as a type event whose `contentType` is `grounding`, which the page spells the same
+ * way. A grounding warning is about the evidence, so it belongs under the partner readiness block; a
+ * piece's warning belongs under "Written with a gap", which names pieces (plans/fix-frontend.md F9).
+ */
+export function isGroundingWarning(warning: string): boolean {
+  return warning.trimStart().toLowerCase().startsWith("grounding:");
+}
+
+/** The run's warnings, each in its place: about the grounding, or about a piece. Order kept. */
+export function splitGroundingWarnings(warnings: readonly string[]): {
+  grounding: string[];
+  pieces: string[];
+} {
+  const grounding: string[] = [];
+  const pieces: string[] = [];
+  for (const warning of warnings) (isGroundingWarning(warning) ? grounding : pieces).push(warning);
+  return { grounding, pieces };
+}
+
+/** `prev` with each new item of `items` added once, in order; `prev` itself when nothing is new. */
+export function appendUnique(prev: string[], items: readonly string[]): string[] {
+  const added = items.filter((item, i) => !prev.includes(item) && items.indexOf(item) === i);
+  return added.length === 0 ? prev : [...prev, ...added];
+}
+
+const PAYLOAD_STRING_LIMIT = 400;
+
+function withoutIdentifiers(value: unknown): unknown {
+  if (typeof value === "string") {
+    const text = replaceGuids(value, "(id)");
+    return text.length > PAYLOAD_STRING_LIMIT
+      ? `${text.slice(0, PAYLOAD_STRING_LIMIT)}… (${text.length} chars)`
+      : text;
+  }
+  if (Array.isArray(value)) {
+    return value.filter((v) => !(typeof v === "string" && isGuid(v))).map(withoutIdentifiers);
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof inner === "string" && isGuid(inner)) continue;
+      out[key] = withoutIdentifiers(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Enough of a run-log event's payload to diagnose a refusal: every field, with a string over 400
+ * characters cut and the identifiers left out. The record names its create, its brief revision and
+ * its artifacts by GUID, and the page shows no identifier but the project's and the labelled Run ID
+ * (plans/fix-project-persistence.md GF6); what fixes a draft is the prompt, the reply and the
+ * verdict, and those stay whole up to the cut. A payload that is not JSON is shown as text, cut at
+ * 800 characters, with the same identifiers taken out.
+ */
+export function summarizeEventPayload(payloadJson: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payloadJson);
+  } catch {
+    const text = replaceGuids(payloadJson, "(id)");
+    return text.length > 800 ? `${text.slice(0, 800)}…` : text;
+  }
+  return JSON.stringify(withoutIdentifiers(parsed), null, 2);
+}

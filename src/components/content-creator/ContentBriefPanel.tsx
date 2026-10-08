@@ -53,10 +53,13 @@ function PartnerQuoteFit({
   projectId,
   targetKeyword,
   angle,
+  provider,
 }: {
   projectId?: string;
   targetKeyword: string;
   angle: string;
+  /** The provider the workspace will write with. The answer is that provider's, so it is part of the question. */
+  provider: string;
 }) {
   const [checking, setChecking] = useState(false);
   const [answered, setAnswered] = useState<{
@@ -71,14 +74,14 @@ function PartnerQuoteFit({
   // An answer describes one project, angle and keyword. Tagging it with the question it answers and
   // comparing on render keeps a stale result off screen without clearing state from an effect —
   // which would re-render every time any of the three changed, to say nothing.
-  const key = `${projectId ?? ""}\u0000${angle}\u0000${keyword}`;
+  const key = `${projectId ?? ""}\u0000${angle}\u0000${keyword}\u0000${provider}`;
   const current = answered?.key === key ? answered : null;
 
   async function run() {
     if (!projectId || checking) return;
     setChecking(true);
     try {
-      const data = await checkPartnerQuoteReadiness(projectId, keyword, angle);
+      const data = await checkPartnerQuoteReadiness(projectId, keyword, angle, provider);
       setAnswered({ key, data, error: null });
     } catch (err) {
       setAnswered({
@@ -155,12 +158,15 @@ export type BriefSaved = { briefJson: string; topic: string };
 
 export default function ContentBriefPanel({
   projectId,
+  provider,
   keywordLocked = false,
   onBriefSaved,
   onSavedChange,
 }: {
   /** The project whose brief this is. The project is the unit: one keyword, one brief (J1). */
   projectId: string;
+  /** The provider the workspace has chosen to write with; the partner-quote check asks as that writer (fix-frontend F7). */
+  provider: string;
   /** True once anything has been generated on this project; the keyword is fixed from then on. */
   keywordLocked?: boolean;
   /** Called after a Save that reached the server, with what the server now holds. */
@@ -528,6 +534,7 @@ export default function ContentBriefPanel({
             projectId={projectId}
             targetKeyword={keywordInput}
             angle={brief.angle}
+            provider={provider}
           />
         </label>
 

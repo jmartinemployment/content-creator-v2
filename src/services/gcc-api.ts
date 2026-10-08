@@ -152,11 +152,6 @@ export interface GccProjectRun {
   /** What an ended run recorded: what it saved, what it refused by name, the pre-flight, the gaps. */
   resultJson?: string | null;
   error?: string | null;
-  /**
-   * Where to read the run's full record — every model call, verdict and outcome — so a refusal can
-   * be diagnosed. Same path `getGenerateJobEvents` hits.
-   */
-  eventsPath?: string;
 }
 
 /**
@@ -194,11 +189,6 @@ export async function getGenerateJobEvents(
   return gccRequest(
     `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/${encodeURIComponent(jobId)}/events`,
   );
-}
-
-/** The path the page shows for a run's full record. Same shape GeekAPI puts on `eventsPath`. */
-export function generateJobEventsPath(projectId: string, jobId: string): string {
-  return `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/${encodeURIComponent(jobId)}/events`;
 }
 
 /** Every draft on the project (contract §4). */
@@ -251,8 +241,6 @@ export interface GccGenerateResult {
   jobId?: string;
   createId?: string;
   status?: string;
-  /** Where to read the run's full record once it has started. */
-  eventsPath?: string;
   /* The shapes a synchronous generate returned. Kept so the UI works against a GeekAPI that has
      not yet been deployed with the job runner -- this frontend ships first, deliberately, so
      there is no window where the two disagree. */
@@ -741,9 +729,11 @@ export function checkPartnerQuoteReadiness(
   projectId: string,
   topic: string,
   angle: string,
+  /** The provider the brief will be written with, so the check asks the question that writer will. */
+  provider: string,
 ): Promise<PartnerQuoteReadiness> {
   return gccRequest<PartnerQuoteReadiness>(
     "/api/geek-content-creator/brief/partner-quote-readiness",
-    { method: "POST", body: JSON.stringify({ projectId, topic, angle }) },
+    { method: "POST", body: JSON.stringify({ projectId, topic, angle, provider }) },
   );
 }

@@ -1,4 +1,14 @@
-import { draftWrittenLabel, lastRunLines, runRecord, runSavedLine, savedByRun, timeOfDay } from "./run-display.ts";
+import {
+  appendUnique,
+  draftWrittenLabel,
+  lastRunLines,
+  runRecord,
+  runSavedLine,
+  savedByRun,
+  splitGroundingWarnings,
+  summarizeEventPayload,
+  timeOfDay,
+} from "./run-display.ts";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -245,3 +255,49 @@ assertEqual(
   "a failure with no reason says there is none",
 );
 
+
+// F9: a grounding warning is about the evidence, not a piece; the two go to different blocks.
+assertEqual(
+  splitGroundingWarnings([
+    "pillar: never named a partner",
+    "grounding: Ramp's crawl is 40 days old",
+    "Grounding: a second one",
+  ]),
+  {
+    grounding: ["grounding: Ramp's crawl is 40 days old", "Grounding: a second one"],
+    pieces: ["pillar: never named a partner"],
+  },
+  "warnings split by the grounding label, order kept",
+);
+assertEqual(appendUnique(["a"], ["a", "b", "b"]), ["a", "b"], "appendUnique adds each new item once");
+{
+  const prev = ["a"];
+  if (appendUnique(prev, ["a"]) !== prev) {
+    throw new Error("appendUnique returns the same list when nothing is new");
+  }
+}
+
+// GF6: the run log prints no identifier. A GUID-valued field goes, a GUID inside prose is replaced,
+// a long string is cut and its length said, and everything else stays.
+const summary = summarizeEventPayload(
+  JSON.stringify({
+    createId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+    provider: "Anthropic",
+    note: "job 7c9e6679-7425-40de-944b-e07fc1f90ae7 not found",
+    prompt: "x".repeat(1000),
+    ids: ["0f8fad5b-d9cb-469f-a165-70867728950e", "keep"],
+  }),
+);
+if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(summary)) {
+  throw new Error(`the summary still carries a GUID:\n${summary}`);
+}
+if (summary.includes("createId")) throw new Error("a GUID-valued field is left out, not shown blank");
+if (!summary.includes('"provider": "Anthropic"')) throw new Error("other fields stay");
+if (!summary.includes("job (id) not found")) throw new Error("a GUID inside prose is replaced");
+if (!summary.includes("… (1000 chars)")) throw new Error("a long string is cut and its length said");
+if (!summary.includes('"keep"')) throw new Error("array entries that are not GUIDs stay");
+assertEqual(
+  summarizeEventPayload("not json 0f8fad5b-d9cb-469f-a165-70867728950e"),
+  "not json (id)",
+  "a payload that is not JSON is shown as text without its identifiers",
+);
