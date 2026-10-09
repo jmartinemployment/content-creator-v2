@@ -14,13 +14,6 @@ import { declaredUrls, unindexedUrls } from "@/lib/declared-url-gate";
 type FieldKey = "site" | "partner" | "competitor";
 
 /**
- * How many URLs each list must carry (Jeff, 2026-09-29). Five is what a pillar names and what a
- * comparison needs to be a comparison; the site is one because it is the page this content must not
- * duplicate. All three pass the same test — only the count differs.
- */
-const REQUIRED: Record<FieldKey, number> = { site: 1, partner: 5, competitor: 5 };
-
-/**
  * The list each field is, as the index names it. Sent with every check: a URL is usable as a member
  * of the list it is entered in, because that is how Generate searches its crawl.
  */
@@ -262,20 +255,13 @@ export default function ProjectForm({
   const withoutEvidence = [...recheckable.site, ...recheckable.partner, ...recheckable.competitor];
   const anyRecheckable = withoutEvidence.length > 0;
 
-  // The one rule the save keeps (Jeff, 2026-09-29): one site, five partners, five competitors --
-  // counted on distinct URLs, as the server counts them. It costs nothing and the operator can act
-  // on it before the index has answered.
+  // How many URLs the note beside the button counts. Nothing here gates the save. The only
+  // requirements are the name, the start date and the site URL, and those inputs are `required`, so
+  // the browser names the empty one. The five-of-each floor went on 2026-10-09 (Jeff: "Create
+  // Project being disabled wastes my time, disable this blocking"); Generate names every declared
+  // partner, however many there are.
   const declaredCount =
     declaredUrls(siteUrls).length + declaredUrls(partnerUrls).length + declaredUrls(competitorUrls).length;
-  const declaredShortfalls = (
-    [
-      ["Project site URL", declaredUrls(siteUrls).length, REQUIRED.site],
-      ["Partner URLs", declaredUrls(partnerUrls).length, REQUIRED.partner],
-      ["Competitor URLs", declaredUrls(competitorUrls).length, REQUIRED.competitor],
-    ] as const
-  )
-    .filter(([, have, need]) => have < need)
-    .map(([label, have, need]) => `${label}: ${have} of ${need}`);
 
   // Edit mode arrives with URLs already declared and nothing blurred, so `indexed` is empty on mount
   // and every line would be blank. This asks the index the same question a blur asks, at the one
@@ -299,15 +285,6 @@ export default function ProjectForm({
     // edits re-check on blur, so re-running this on every keystroke would be a request per character.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
-
-  const canSubmit =
-    name.trim().length > 0 && startDate.length > 0 && declaredShortfalls.length === 0;
-
-  // The one thing that disables the button, and it is a count, not the index.
-  const blockingReason =
-    declaredShortfalls.length > 0
-      ? `${declaredShortfalls.join(" · ")} — one site, five partners, five competitors.`
-      : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -506,7 +483,7 @@ export default function ProjectForm({
           Partners &amp; competitors
         </legend>
         <p className="mb-3 text-xs text-muted">
-          Saved with the project as declared — five of each. Every URL here is checked against the
+          Saved with the project as declared, however many. Every URL here is checked against the
           index as you leave the field; an amber line is one that cannot be written from yet, and
           the project still saves. Generate is what refuses until every declared URL has a usable
           crawl, because declaring a partner is what obliges the writer to name it. Being indexed is
@@ -521,7 +498,7 @@ export default function ProjectForm({
           <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
             Partner URLs
             <span className="text-xs font-normal text-muted">
-              Products you sell or recommend. Five required, one per line.
+              Products you sell or recommend. One per line.
             </span>
             <textarea
               value={partnerSeeds}
@@ -542,7 +519,7 @@ export default function ProjectForm({
           <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
             Competitor URLs
             <span className="text-xs font-normal text-muted">
-              Rivals writing on the same topics. Five required, one per line.
+              Rivals writing on the same topics. One per line.
             </span>
             <textarea
               value={competitorSeeds}
@@ -565,9 +542,11 @@ export default function ProjectForm({
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
       <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* Disabled only while a submit is in flight. The required inputs are the browser's to
+            name; the index is information beside each URL and never a reason this cannot be pressed. */}
         <button
           type="submit"
-          disabled={isSubmitting || !canSubmit}
+          disabled={isSubmitting}
           className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white"
         >
           {isSubmitting
@@ -578,8 +557,6 @@ export default function ProjectForm({
               ? "Save changes"
               : "Create Project"}
         </button>
-        {/* The count shortfall, at the point of action. It is the only thing that disables the button. */}
-        {blockingReason ? <span className="text-xs text-amber-800">{blockingReason}</span> : null}
         {/* Where the declared URLs stand with the index, as a count. Not a refusal: the project saves
             as declared, and Generate is what refuses until each has a usable crawl. Re-check covers
             all three fields, the site included, so a crawl that finishes while the form is open is
