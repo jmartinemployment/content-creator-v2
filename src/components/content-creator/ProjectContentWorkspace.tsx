@@ -65,6 +65,7 @@ import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
   briefRevisionSavedAt,
+  downloadArtifactHtmlExport,
   downloadProjectHtmlExport,
   generateProject,
   getGenerateJobEvents,
@@ -1333,8 +1334,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">Approve &amp; export</h3>
             <p className="mt-1 text-sm text-muted">
-              Approve marks this page&rsquo;s newest version approved on the server. Export downloads
-              the project&rsquo;s pages as HTML.
+              Approve marks this page&rsquo;s newest version approved on the server. Export this page
+              downloads the page on screen as one HTML file; Export HTML downloads every page as a zip.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {approved ? (
@@ -1355,6 +1356,21 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                   Approve content
                 </button>
               )}
+              {/* The page on screen as one HTML file -- the pillar alone, one tool page, the blog.
+                  Jeff, 2026-10-09: "Why can't I export just Pillar from this run?" */}
+              <button
+                type="button"
+                disabled={pending || !artifact || !version}
+                onClick={() =>
+                  run("Page downloaded.", async () => {
+                    if (!artifact) return;
+                    await downloadArtifactHtmlExport(artifact.id, artifact.name || artifact.type);
+                  })
+                }
+                className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Export this page (.html)
+              </button>
               {/* Export every artifact on this create as a zip of HTML documents -- the export v1
                   had, which existed here with no caller. Not gated on approval: an operator
                   reviewing output outside the browser is exactly when it is wanted. */}

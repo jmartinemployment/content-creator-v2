@@ -334,6 +334,36 @@ export async function downloadProjectHtmlExport(projectId: string): Promise<void
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Download one page -- the pillar alone, one tool page, the blog -- as a standalone HTML file, from
+ * its newest version. The project export is every page as a zip; this is the page on screen
+ * (Jeff, 2026-10-09: "Why can't I export just Pillar from this run?"). The file name is the server's,
+ * read from Content-Disposition, so it matches the file the zip would hold.
+ */
+export async function downloadArtifactHtmlExport(artifactId: string, fallbackName: string): Promise<void> {
+  const path = `/api/geek-content-creator/artifacts/${encodeURIComponent(artifactId)}/export/html`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText);
+    throw new ApiError(detail || response.statusText, response.status);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = named ? decodeURIComponent(named) : `${fallbackName}.html`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Parse a 409 Conflict body from Generate when site grounding is stale. */
 export function parseStaleGroundingError(err: unknown): GccStaleGroundingError | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
