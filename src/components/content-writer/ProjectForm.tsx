@@ -8,7 +8,7 @@ import {
   type GccProject,
 } from "@/services/gcc-projects-api";
 import { checkHostsIndexed, type DeclaredUrlList, type HostIndexed } from "@/services/gcc-api";
-import { unindexedUrls, usableUrls } from "@/lib/declared-url-gate";
+import { declaredUrls, unindexedUrls } from "@/lib/declared-url-gate";
 
 /** The three URL fields, each with its own check state so one field's error is not shown on all. */
 type FieldKey = "site" | "partner" | "competitor";
@@ -52,34 +52,27 @@ function today(): string {
 }
 
 /**
- * Whether an index exists for each entered URL. Green yes, red no.
+ * What the index says about each entered URL. Green it can be written from; amber it cannot yet, with
+ * the server's reason — which also covers a crawl whose index is still running.
  *
  * One check, because it subsumes the rest: a URL that will not parse was never crawled, so no index
- * can exist for it, and it lands red beside a well-formed URL that was never crawled. The operator
+ * can exist for it, and it lands amber beside a well-formed URL that was never crawled. The operator
  * does the same thing about both.
  *
- * It reports and offers no action, which is the point: this app starts no crawl. Where the crawl does
- * happen is on the field's own helper line, once, because the crawl type is per field and not per URL.
+ * It reports and offers no action, which is the point: this app starts no crawl, and the line does
+ * not decide whether the project saves. The project is saved with every URL declared; Generate is
+ * what refuses one that cannot be written from, so the line says that rather than "excluded".
  */
 function IndexReport({
   urls,
   results,
   checking,
   error,
-  kind,
 }: {
   urls: string[];
   results: Record<string, HostIndexed>;
   checking: boolean;
   error: string | null;
-  /**
-   * What a failure means for this field, which is not the same for all three.
-   *
-   * `site` is one URL and the project is grounded on its run, so no evidence is a refusal. `list`
-   * is partners and competitors, where the floor is five and a sixth without evidence is simply
-   * left out — so the line has to say "excluded" rather than imply it has blocked the project.
-   */
-  kind: "site" | "list";
 }) {
   if (urls.length === 0) return null;
   if (checking) return <p className="text-xs text-muted">Checking the index…</p>;
@@ -103,9 +96,9 @@ function IndexReport({
 
         const reason = r.reason ?? "cannot be written from";
         return (
-          <p key={u} className={kind === "site" ? "text-red-600" : "text-amber-700"}>
-            <span className="font-mono">{u}</span> — {reason}
-            {kind === "list" ? " · excluded from this project" : null}
+          <p key={u} className="text-amber-700">
+            <span className="font-mono">{u}</span> — {reason} · not usable yet; Generate refuses
+            until it is
           </p>
         );
       })}
@@ -135,10 +128,9 @@ export default function ProjectForm({
   /**
    * An existing project to edit. Omit to create a new one.
    *
-   * Edit runs through this form rather than a second URL editor on purpose: the index gate below is
-   * the whole value of declaring a URL — every partner and competitor must have an indexed crawl, and
-   * the site URL resolves the run the project is grounded on. A separate editor would either
-   * duplicate that or, far more likely, skip it and let a partner be saved with no evidence behind it.
+   * Edit runs through this form rather than a second URL editor on purpose: the index feedback
+   * beside each URL, and the Run ID the site's answer carries, are the same here as on create. A
+   * separate editor would either duplicate that or, far more likely, skip it.
    */
   project?: GccProject;
 }) {
@@ -152,12 +144,11 @@ export default function ProjectForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Declared partners and competitors, saved with the project — and every one of them must have a
-  // crawl behind it. `plans/validate-partner-competitor-urls.md` has said so since 2026-09-17; the
-  // check shipped and the block did not, so a partner could be declared with nothing indexed and
-  // the gap only surfaced at generate time, as a refusal reading "a partner with no evidence gives
-  // the writer nothing to say about it". Declaring one is what obliges the writer to name it.
-  // One per line, which is the shape the textareas take and the shape the lists are stored in.
+  // Declared partners and competitors, saved with the project as declared. Whether each has a crawl
+  // behind it is the index's answer, shown on its line as it is entered and asked again when
+  // Generate is pressed -- Generate refuses until every declared URL can be written from. Declaring
+  // one is what obliges the writer to name it. One per line, which is the shape the textareas take
+  // and the shape the lists are stored in.
   const [partnerSeeds, setPartnerSeeds] = useState((project?.partnerUrls ?? []).join("\n"));
   const [competitorSeeds, setCompetitorSeeds] = useState((project?.competitorUrls ?? []).join("\n"));
   const [indexed, setIndexed] = useState<Answers>(NO_ANSWERS);
@@ -255,68 +246,41 @@ export default function ProjectForm({
     await resolveAnswers(field, urls, without(indexed));
   }
 
-  // The affordance. The real gate is in handleSubmit, which asks the index first -- this can only
-  // reflect answers already obtained, and pasting a URL then clicking Create never blurs the field.
-  // One rule for all three lists. The site used to be gated by a different question -- does the
-  // index return a run id for it -- which is the same question wearing a different shape, and two
-  // shapes of one rule is how they come to disagree.
-  // What the project is saved with, and what the floor of five is measured on. Mirrors
-  // GccDeclaredUrlValidator.ForSaveAsync, so the form and the server cannot reach
-  // different verdicts about the same list.
-  const usablePartners = usableUrls(partnerUrls, indexed.partner);
-  const usableCompetitors = usableUrls(competitorUrls, indexed.competitor);
-
-  // Excluded, not blocking. A URL with no crawl behind it is dropped from the project rather than
-  // preventing it, so long as the floor is still met without it -- and dropping it is what keeps
-  // the promise the server's docs make, since a declared partner obliges Pillar, Blog and Tool to
-  // name it and one with no evidence buys a refusal at generate time instead.
-  const excluded = [
-    ...unindexedUrls(partnerUrls, indexed.partner),
-    ...unindexedUrls(competitorUrls, indexed.competitor),
-  ];
-
-  // Everything currently without an answer the form can act on, the site included. Re-check is the
-  // only action these have, and the site has to be in it: it is the field whose Run ID the gate
-  // reads, so a project-site crawl that finishes while the form is open could not otherwise be
-  // picked up without reloading.
+  // What the index has said so far, for the lines and the note beside the button. Nothing here
+  // decides whether the project saves: it is saved with every URL declared, and Generate is what
+  // refuses a URL that cannot be written from. Until 2026-10-09 these decided the save -- the floor
+  // of five was measured on the usable URLs and the rest were dropped from the project -- so a
+  // partner whose crawl was still being indexed was enough to disable Create.
+  //
+  // Re-check is the only action a URL without evidence has, the site included: a crawl that
+  // finishes while the form is open could not otherwise be picked up without reloading.
   const recheckable: Record<FieldKey, string[]> = {
     site: unindexedUrls(siteUrls, indexed.site),
     partner: unindexedUrls(partnerUrls, indexed.partner),
     competitor: unindexedUrls(competitorUrls, indexed.competitor),
   };
-  const anyRecheckable =
-    recheckable.site.length + recheckable.partner.length + recheckable.competitor.length > 0;
+  const withoutEvidence = [...recheckable.site, ...recheckable.partner, ...recheckable.competitor];
+  const anyRecheckable = withoutEvidence.length > 0;
 
-  // Two stages, in the server's order. The declared count costs nothing and can be acted on before
-  // the index is asked, and a list already shorter than the floor cannot reach it once the unusable
-  // are removed. Only after that does the usable count mean anything: before the index answers it
-  // is zero for every field, which is an unanswered question and not a shortfall.
+  // The one rule the save keeps (Jeff, 2026-09-29): one site, five partners, five competitors --
+  // counted on distinct URLs, as the server counts them. It costs nothing and the operator can act
+  // on it before the index has answered.
+  const declaredCount =
+    declaredUrls(siteUrls).length + declaredUrls(partnerUrls).length + declaredUrls(competitorUrls).length;
   const declaredShortfalls = (
     [
-      ["Project site URL", siteUrls.length, REQUIRED.site],
-      ["Partner URLs", partnerUrls.length, REQUIRED.partner],
-      ["Competitor URLs", competitorUrls.length, REQUIRED.competitor],
+      ["Project site URL", declaredUrls(siteUrls).length, REQUIRED.site],
+      ["Partner URLs", declaredUrls(partnerUrls).length, REQUIRED.partner],
+      ["Competitor URLs", declaredUrls(competitorUrls).length, REQUIRED.competitor],
     ] as const
   )
     .filter(([, have, need]) => have < need)
     .map(([label, have, need]) => `${label}: ${have} of ${need}`);
 
-  const evidenceShortfalls = (
-    [
-      ["Partner URLs", usablePartners.length, REQUIRED.partner],
-      ["Competitor URLs", usableCompetitors.length, REQUIRED.competitor],
-    ] as const
-  )
-    .filter(([, have, need]) => have < need)
-    .map(([label, have, need]) => `${label}: ${have} of ${need} with usable crawl evidence`);
-
-  // Edit mode arrives with URLs already declared and nothing blurred, so `indexed` is empty on mount:
-  // projectSiteRunId resolves to null, both evidence shortfalls are non-empty, and canSubmit is false.
-  // The Save button was therefore disabled with no explanation, on a form whose URLs were all fine.
-  //
-  // This asks the index the same question a blur asks -- it does not bypass the gate, it just asks at
-  // the one moment the operator has no reason to trigger it. Creating still asks on blur and again on
-  // submit, unchanged.
+  // Edit mode arrives with URLs already declared and nothing blurred, so `indexed` is empty on mount
+  // and every line would be blank. This asks the index the same question a blur asks, at the one
+  // moment the operator has no reason to trigger it, so each URL shows where it stands before they
+  // decide what to change. Nothing here gates the save.
   useEffect(() => {
     if (!editing) return;
     let cancelled = false;
@@ -337,20 +301,13 @@ export default function ProjectForm({
   }, [editing]);
 
   const canSubmit =
-    name.trim().length > 0 &&
-    startDate.length > 0 &&
-    Boolean(projectSiteRunId) &&
-    declaredShortfalls.length === 0 &&
-    evidenceShortfalls.length === 0;
+    name.trim().length > 0 && startDate.length > 0 && declaredShortfalls.length === 0;
 
+  // The one thing that disables the button, and it is a count, not the index.
   const blockingReason =
     declaredShortfalls.length > 0
-      ? `${declaredShortfalls.join(" · ")} — every one needs its own indexed crawl.`
-      : !projectSiteRunId
-        ? "Enter a site URL with crawl evidence — the Run ID is what the content is grounded on."
-        : evidenceShortfalls.length > 0
-          ? `${evidenceShortfalls.join(" · ")}. Without evidence: ${excluded.join(", ")}. Crawl and index them, or declare others.`
-          : null;
+      ? `${declaredShortfalls.join(" · ")} — one site, five partners, five competitors.`
+      : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -358,54 +315,14 @@ export default function ProjectForm({
     if (name.trim().length === 0 || startDate.length === 0) return;
     setError(null);
 
-    // The gate, and the reason it is here rather than in `canSubmit`: the index is asked on blur,
-    // so pasting URLs and clicking Create submits a form nobody ever checked. Ask first, decide on
-    // the answers, and only then create.
-    let answers = indexed;
-    answers = await resolveAnswers("site", siteUrls, answers);
-    answers = await resolveAnswers("partner", partnerUrls, answers);
-    answers = await resolveAnswers("competitor", competitorUrls, answers);
-
-    // The site is not one of several. There is exactly one, the project is grounded on its run, and
-    // nothing else can stand in for it — so an unusable site URL is a refusal and never an exclusion.
-    const siteAnswer = siteUrls[0] ? answers.site[siteUrls[0]] : undefined;
-    const runId = siteAnswer?.usable ? siteAnswer.runId : null;
-    if (!runId) {
-      setError(
-        siteAnswer?.reason
-          ? `The project site URL cannot be written from: ${siteAnswer.reason}. It is the crawl this project is grounded on, so nothing else can stand in for it.`
-          : "This project has no crawl to ground on. Enter a site URL whose crawl is indexed, then try again.",
-      );
-      return;
-    }
-
-    // Saved with the usable subset, and the floor is measured on it. The ones without evidence are
-    // excluded rather than blocking, which is also what stops them obliging a mention at generate
-    // time that nothing could satisfy.
-    const partnersToSave = usableUrls(partnerUrls, answers.partner);
-    const competitorsToSave = usableUrls(competitorUrls, answers.competitor);
-    const withoutEvidence = [
-      ...unindexedUrls(partnerUrls, answers.partner),
-      ...unindexedUrls(competitorUrls, answers.competitor),
-    ];
-
-    if (
-      partnersToSave.length < REQUIRED.partner ||
-      competitorsToSave.length < REQUIRED.competitor
-    ) {
-      setError(
-        `Partner URLs: ${partnersToSave.length} of ${REQUIRED.partner} · Competitor URLs: ` +
-          `${competitorsToSave.length} of ${REQUIRED.competitor} with usable crawl evidence. ` +
-          `Without evidence: ${withoutEvidence.join(", ")}. Crawl and index them, or declare others.`,
-      );
-      return;
-    }
-
+    // Nothing is asked of the index here. The project is saved with every URL declared; whether
+    // each can be written from is Generate's question, asked when Generate is pressed. Until
+    // 2026-10-09 this asked three times and refused on the answers, so a site whose crawl was still
+    // being indexed, or an index that was briefly unreachable, made the Profile unsaveable.
     setIsSubmitting(true);
     try {
-      // Everything above this point -- the index resolution, the site-run refusal, the partner and
-      // competitor floors -- applies identically either way. Editing a project cannot be a way to get
-      // URLs in that creating one would have rejected.
+      // The same payload either way: the declared lists, cleaned, and the site Run ID when the index
+      // has already answered for it -- null otherwise, and Generate resolves and stores it.
       const saved = editing
         ? await updateProject(project.id, {
             name,
@@ -413,10 +330,10 @@ export default function ProjectForm({
             code: project.code,
             description: description.trim() || null,
             siteUrl: siteUrls[0] ?? null,
-            projectSiteRunId: runId,
+            projectSiteRunId,
             department: project.department,
-            partnerUrls: partnersToSave,
-            competitorUrls: competitorsToSave,
+            partnerUrls: declaredUrls(partnerUrls),
+            competitorUrls: declaredUrls(competitorUrls),
             dueDate: dueDate || null,
             estimatedHours: project.estimatedHours,
             budget: project.budget,
@@ -435,9 +352,9 @@ export default function ProjectForm({
             dueDate: dueDate || null,
             description: description.trim() || null,
             siteUrl: siteUrls[0] ?? null,
-            projectSiteRunId: runId,
-            partnerUrls: partnersToSave,
-            competitorUrls: competitorsToSave,
+            projectSiteRunId,
+            partnerUrls: declaredUrls(partnerUrls),
+            competitorUrls: declaredUrls(competitorUrls),
           });
 
       // A fresh key, so the next project started here is a new one rather than a repeat of this.
@@ -536,7 +453,6 @@ export default function ProjectForm({
             results={indexed.site}
             checking={checking.site}
             error={indexErrors.site}
-            kind="site"
           />
           {projectSiteRunId ? (
             <span className="break-all text-xs font-normal text-muted">
@@ -590,16 +506,15 @@ export default function ProjectForm({
           Partners &amp; competitors
         </legend>
         <p className="mb-3 text-xs text-muted">
-          Saved with the project, and each one must already be crawled. Every URL here is checked
-          against the index as you leave the field; a red line means no crawl exists for it yet, and
-          the project cannot be created until it does. Declaring a partner is what obliges the
-          writer to name it, so a partner with no evidence is a page it has nothing to say about.
-          Five of each, and being indexed is not enough: a crawl that was blocked at its first page
-          still puts a row in the index and gives the writer nothing, so each line shows the pages
-          and chunks behind it. Crawl a red one in Geek-Crawler-v2 as{" "}
-          <span className="font-mono">partner</span> or <span className="font-mono">competitors</span>
-          , one URL per crawl — so those counts describe that host and not a batch it was bundled
-          into.
+          Saved with the project as declared — five of each. Every URL here is checked against the
+          index as you leave the field; an amber line is one that cannot be written from yet, and
+          the project still saves. Generate is what refuses until every declared URL has a usable
+          crawl, because declaring a partner is what obliges the writer to name it. Being indexed is
+          not enough: a crawl that was blocked at its first page still puts a row in the index and
+          gives the writer nothing, so each line shows the pages and chunks behind it. Crawl an amber
+          one in Geek-Crawler-v2 as <span className="font-mono">partner</span> or{" "}
+          <span className="font-mono">competitors</span>, one URL per crawl — so those counts
+          describe that host and not a batch it was bundled into.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -621,7 +536,6 @@ export default function ProjectForm({
               results={indexed.partner}
               checking={checking.partner}
               error={indexErrors.partner}
-              kind="list"
             />
           </label>
 
@@ -643,7 +557,6 @@ export default function ProjectForm({
               results={indexed.competitor}
               checking={checking.competitor}
               error={indexErrors.competitor}
-              kind="list"
             />
           </label>
         </div>
@@ -665,32 +578,27 @@ export default function ProjectForm({
               ? "Save changes"
               : "Create Project"}
         </button>
-        {/* The refusal, at the point of action and with its reason. Creating a project whose
-            declared URLs have no crawl behind them only defers the failure to generate time, where
-            it surfaces as a draft that cannot be written rather than a field the operator can fix. */}
-        {blockingReason ? (
-          <span className="text-xs text-amber-800">
-            {blockingReason}
-            {anyRecheckable ? (
-              <>
-                {" "}
-                {/* All three fields, including the site. Re-check is the only action a URL without
-                    evidence has now that the crawl is started in Geek-Crawler-v2, and the site was the
-                    one field it skipped — which is the field whose run id the gate actually reads,
-                    so a finished project-site crawl could not be picked up without reloading. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    void recheck("site", recheckable.site);
-                    void recheck("partner", recheckable.partner);
-                    void recheck("competitor", recheckable.competitor);
-                  }}
-                  className="underline decoration-dotted underline-offset-2"
-                >
-                  Re-check the index
-                </button>
-              </>
-            ) : null}
+        {/* The count shortfall, at the point of action. It is the only thing that disables the button. */}
+        {blockingReason ? <span className="text-xs text-amber-800">{blockingReason}</span> : null}
+        {/* Where the declared URLs stand with the index, as a count. Not a refusal: the project saves
+            as declared, and Generate is what refuses until each has a usable crawl. Re-check covers
+            all three fields, the site included, so a crawl that finishes while the form is open is
+            picked up without reloading. */}
+        {anyRecheckable ? (
+          <span className="text-xs text-muted">
+            {withoutEvidence.length} of {declaredCount} URLs not usable yet — saves as declared;
+            Generate refuses until each has a usable crawl.{" "}
+            <button
+              type="button"
+              onClick={() => {
+                void recheck("site", recheckable.site);
+                void recheck("partner", recheckable.partner);
+                void recheck("competitor", recheckable.competitor);
+              }}
+              className="underline decoration-dotted underline-offset-2"
+            >
+              Re-check the index
+            </button>
           </span>
         ) : null}
       </div>
