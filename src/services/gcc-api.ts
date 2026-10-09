@@ -107,7 +107,17 @@ export function patchProjectBrief(
 /** Generate from the project's saved brief (GA2; contract §3). The output types are chosen per run. */
 export function generateProject(
   projectId: string,
-  opts: { provider: string; outputTypes: string[]; acknowledgeStaleGrounding?: boolean },
+  opts: {
+    provider: string;
+    outputTypes: string[];
+    acknowledgeStaleGrounding?: boolean;
+    /**
+     * When tool pages are among the output types: only these partners, each one of the project's
+     * declared partner URLs. Omitted is every partner. Jeff, 2026-10-09: "Seeing as a single tool
+     * can fail, need a way to select just one tool."
+     */
+    tools?: string[];
+  },
 ): Promise<GccGenerateResult> {
   return gccRequest<GccGenerateResult>(
     `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate`,
@@ -117,6 +127,7 @@ export function generateProject(
         provider: opts.provider,
         outputTypes: opts.outputTypes,
         acknowledgeStaleGrounding: opts.acknowledgeStaleGrounding === true,
+        ...(opts.tools && opts.tools.length > 0 ? { tools: opts.tools } : {}),
       }),
     },
   );

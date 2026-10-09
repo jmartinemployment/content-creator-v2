@@ -194,6 +194,15 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
     );
   }
+  // Which partners get a tool page this run. Every declared partner until the operator unticks one;
+  // a single failed page is then re-run on its own rather than with the four that passed (Jeff,
+  // 2026-10-09: "Seeing as a single tool can fail, need a way to select just one tool").
+  const [toolPartners, setToolPartners] = useState<string[]>(project.partnerUrls);
+  function toggleToolPartner(url: string) {
+    setToolPartners((prev) => (prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]));
+  }
+  const toolPagesRequested = outputTypes.includes("tool");
+  const noToolPicked = toolPagesRequested && project.partnerUrls.length > 0 && toolPartners.length === 0;
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
 
   const [feedback, setFeedback] = useState("");
@@ -695,6 +704,11 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         outputTypes,
         provider,
         acknowledgeStaleGrounding: acknowledgeStale,
+        // Sent only when it narrows the run; every partner is the server's default.
+        tools:
+          toolPagesRequested && toolPartners.length < project.partnerUrls.length
+            ? toolPartners
+            : undefined,
       });
 
       // Job shape: generation runs in the background and reports over the hub. The run stays set
@@ -882,6 +896,40 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               the brief it disappeared the moment the brief was collapsed. */}
           <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
 
+          {toolPagesRequested && project.partnerUrls.length > 0 ? (
+            <fieldset className="mt-3 rounded-md border border-border p-3">
+              <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+                Tool pages for
+              </legend>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+                {project.partnerUrls.map((url) => {
+                  const host = (() => {
+                    try {
+                      return new URL(url).hostname.replace(/^www\./, "");
+                    } catch {
+                      return url;
+                    }
+                  })();
+                  return (
+                    <label key={url} className="flex items-center gap-1.5 text-xs font-normal text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={toolPartners.includes(url)}
+                        onChange={() => toggleToolPartner(url)}
+                        className="h-3.5 w-3.5 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20"
+                      />
+                      <span className="font-mono">{host}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                {toolPartners.length} of {project.partnerUrls.length} partners
+                {toolPartners.length < project.partnerUrls.length ? " — only these are written this run." : "."}
+              </p>
+            </fieldset>
+          ) : null}
+
           <div className="mt-4 border-t border-border pt-4">
             <label className="block">
               <span className="text-sm font-medium text-foreground">Writing model</span>
@@ -911,7 +959,8 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
               saMissingPages ||
               missingProjectSiteRun ||
               generating ||
-              outputTypes.length === 0
+              outputTypes.length === 0 ||
+              noToolPicked
             }
             onClick={() => void runGenerate(false)}
             className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
