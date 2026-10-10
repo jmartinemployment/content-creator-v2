@@ -658,6 +658,50 @@ function migrateNicheFraming(raw: unknown): NicheFraming {
   return framing;
 }
 
+/**
+ * The departments a page can be filed under, as the operator types them. GeekAPI's `Departments` is
+ * the list Generate checks the taxonomy path against; this is the form's copy of it, as
+ * `contentBriefMissingFields` is the form's copy of the fields Generate requires.
+ */
+export const DEPARTMENTS = ["Accounting", "Customer Service", "Human Resource", "Marketing", "Sales"] as const;
+
+/** Lowercase letters and digits with single hyphens between: GeekAPI's `GccContentPath.Slugify`. */
+function departmentSlug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The first level of a taxonomy path, or "" when the path is empty. Split as GeekAPI splits it
+ * (`GccNicheFramingReader.TaxonomyPath`): on "->", ">", "›" or "→".
+ */
+export function taxonomyFirstLevel(path: string): string {
+  const levels = path
+    .replaceAll("->", ">")
+    .replaceAll("›", ">")
+    .replaceAll("→", ">")
+    .split(">")
+    .map((level) => level.trim())
+    .filter((level) => level.length > 0);
+  return levels[0] ?? "";
+}
+
+/**
+ * True when a taxonomy path cannot file a page: it has a first level and that level is not a
+ * department. An empty path is not refused. GeekAPI refuses the same paths before a run starts
+ * (`GccContentPath.DepartmentRefusal`); until 2026-10-10 it filed such a page under "marketing"
+ * without a word.
+ */
+export function taxonomyPathNamesNoDepartment(path: string): boolean {
+  const first = taxonomyFirstLevel(path);
+  if (!first) return false;
+  const slug = departmentSlug(first);
+  return !DEPARTMENTS.some((department) => departmentSlug(department) === slug);
+}
+
 /** Required fields for fail-closed Generate (inline validation). */
 export function contentBriefMissingFields(brief: ContentBrief): string[] {
   const missing: string[] = [];
@@ -667,6 +711,9 @@ export function contentBriefMissingFields(brief: ContentBrief): string[] {
   if (!brief.audienceNotes.trim()) missing.push("Audience notes");
   if (!brief.angle) missing.push("Angle");
   if (!brief.toneOfVoice) missing.push("Tone of voice");
+  if (taxonomyPathNamesNoDepartment(brief.nicheFraming.taxonomyPath)) {
+    missing.push(`a department as the taxonomy path's first level (${DEPARTMENTS.join(", ")})`);
+  }
   // Neither E-E-A-T signals nor Length is asked for here — E-E-A-T is always the full set (no
   // longer a choice the operator makes), and Length is derived from starting content type
   // (lengthBandForContentType). Neither can be blank once a content type is known.

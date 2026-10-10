@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import {
+  DEPARTMENTS,
   derivePainPoints,
   emptyEvidenceRow,
   emptyNicheFramingSet,
   nicheFramingSetHasAny,
   parseEvidenceRows,
   partnerQuestions,
+  taxonomyFirstLevel,
+  taxonomyPathNamesNoDepartment,
   type EvidenceRow,
   type NicheFraming,
   type NicheFramingSet,
@@ -107,8 +110,15 @@ export default function NicheFramingPanel({
           className="mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground"
         />
         <span className="mt-1 block text-xs text-muted">
-          First level is the department, so this is what files the page under the right directory.
+          First level is the department, so this is what files the page under the right directory:{" "}
+          {DEPARTMENTS.join(", ")}.
         </span>
+        {taxonomyPathNamesNoDepartment(value.taxonomyPath) ? (
+          <span className="mt-1 block text-xs text-foreground">
+            &ldquo;{taxonomyFirstLevel(value.taxonomyPath)}&rdquo; is not a department. Generate will not start
+            until the first level is one of those five.
+          </span>
+        ) : null}
       </label>
 
       <FramingFields

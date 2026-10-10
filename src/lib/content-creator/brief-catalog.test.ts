@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  contentBriefMissingFields,
   derivePainPoints,
   emptyEvidenceRow,
   emptyNicheFramingSet,
@@ -10,7 +11,61 @@ import {
   nicheFramingSetHasAny,
   parseEvidenceRows,
   partnerQuestions,
+  taxonomyFirstLevel,
+  taxonomyPathNamesNoDepartment,
 } from "./brief-catalog";
+
+describe("the taxonomy path's first level is the department, checked as GeekAPI checks it", () => {
+  it("a department is accepted whatever its case, spacing or the separator after it", () => {
+    for (const path of [
+      "Accounting->Cash Flow Forecasting->Automated Accounts Receivable",
+      "Accounting-> Accounts Payable-> Automated Payment Execution",
+      "accounting",
+      "Customer Service > Returns",
+      "Human Resource \u203a Onboarding",
+      "Accounting \u2192 Cash Flow Forecasting \u2192 Accounts Receivable",
+      "  SALES  ->  Pipeline",
+    ]) {
+      assert.equal(taxonomyPathNamesNoDepartment(path), false, path);
+    }
+  });
+
+  it("a first level that is not one of the five is named", () => {
+    assert.equal(taxonomyPathNamesNoDepartment("Finance Ops -> Receivables"), true);
+    assert.equal(taxonomyFirstLevel("Finance Ops -> Receivables"), "Finance Ops");
+    assert.equal(taxonomyPathNamesNoDepartment("Human Resources -> Onboarding"), true);
+    // A separator nothing splits on leaves one level, and that level is not a department.
+    assert.equal(taxonomyPathNamesNoDepartment("Accounting / Accounts Payable"), true);
+  });
+
+  it("an empty path is not refused: the page is filed as it was", () => {
+    assert.equal(taxonomyPathNamesNoDepartment(""), false);
+    assert.equal(taxonomyPathNamesNoDepartment("   "), false);
+    assert.equal(taxonomyPathNamesNoDepartment(" -> "), false);
+  });
+
+  it("Generate is off for a brief whose path names no department, and says which five it may be", () => {
+    const complete = {
+      primaryIntent: "commercial_investigation",
+      buyingStage: "consideration",
+      audienceSegment: "in_market",
+      audienceNotes: "Finance leads at 20 to 200 person firms.",
+      angle: "problem_solution",
+      toneOfVoice: "consultant_professional",
+    };
+
+    const filed = migrateBrief({ ...complete, nicheFraming: { taxonomyPath: "Accounting -> Accounts Payable" } });
+    assert.deepEqual(contentBriefMissingFields(filed), []);
+
+    const unfiled = migrateBrief({ ...complete, nicheFraming: { taxonomyPath: "Finance -> Accounts Payable" } });
+    assert.deepEqual(contentBriefMissingFields(unfiled), [
+      "a department as the taxonomy path's first level (Accounting, Customer Service, Human Resource, Marketing, Sales)",
+    ]);
+
+    const none = migrateBrief({ ...complete });
+    assert.deepEqual(contentBriefMissingFields(none), []);
+  });
+});
 
 describe("partnerQuestions — what each partner's crawl is searched with, in GeekAPI's order", () => {
   const category = {
