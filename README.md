@@ -45,7 +45,7 @@ every Generate and every draft are addressed by the project id alone; nothing el
   what it saved, what it refused by name, the gaps it saved with, and which partners could be
   grounded.
 - **Drafts** are the project's pages, one per content type and name; a Generate rewrites them as new
-  versions. Each shows "Generated from the brief saved at …". Revise, SEO and polish scores, approve,
+  versions. Each shows "Generated from the brief saved at …". SEO and polish scores, approve,
   and HTML export (`GET projects/{id}/export/html`) work on them.
 - **Content types live today:** Pillar, Blog, Tool (one page per usable declared partner, with a
   pre-flight that refuses a partner by name rather than silently producing fewer pages), cold-outreach

@@ -26,7 +26,6 @@ import {
   CONTENT_ANGLES,
   contentBriefMissingFields,
   CONTENT_LENGTH_TARGETS,
-  CTA_TYPES,
   lengthBandForContentType,
   migrateBrief,
   PRIMARY_INTENTS,
@@ -77,7 +76,6 @@ import {
   polishGccVersion,
   previewBodyDocument,
   renderArtifactBody,
-  reviseGccVersion,
   seoGccVersion,
   type GccArtifact,
   type GccArtifactVersion,
@@ -205,9 +203,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
   const noToolPicked = toolPagesRequested && project.partnerUrls.length > 0 && toolPartners.length === 0;
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
 
-  const [feedback, setFeedback] = useState("");
-  const [scope, setScope] = useState<"full" | "section">("full");
-  const [sectionPath, setSectionPath] = useState("");
   const [seo, setSeo] = useState<GccSeoReport | null>(null);
   const [polish, setPolish] = useState<GccPolishReport | null>(null);
   // Image prompts are a view of every artifact at once, not one artifact's draft, so the tab is
@@ -399,7 +394,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
 
   // Both analysers are deterministic and free -- no model call, no token spend -- so there is no
   // reason to make anyone press a button to find out the score. They run whenever a version is on
-  // screen, which covers Generate, Revise, and switching between drafts. Failure is silent: a score
+  // screen, which covers Generate and switching between drafts. Failure is silent: a score
   // that cannot be computed is not a reason to put an error banner over a finished draft.
   // Keyed on the topic, not the whole project: every Save updates detail's brief, and re-scoring an
   // unchanged draft on each one is wasted work.
@@ -1167,7 +1162,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                   draft per page and no history of drafts (AGENTS.md, Jeff, 2026-10-06). */}
               <span className="text-sm text-muted">{artifact?.type}</span>
               {/* When the text on screen was written. A tab holding one draft has no row of buttons
-                  to carry the time, and a revision is later than the draft it revises. */}
+                  to carry the time. */}
               {draftWrittenLabel(version.createdAtUtc) ? (
                 <span className="text-sm text-muted">
                   Written {draftWrittenLabel(version.createdAtUtc)}
@@ -1203,75 +1198,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           </section>
 
           <section className="border-t border-border pt-6">
-            <h3 className="font-display text-lg text-foreground">Revise</h3>
-            <p className="mt-1 text-sm text-muted">
-              Full or Section — each submit creates a new version (not a chat thread).
-            </p>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              rows={4}
-              className="mt-4 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-              placeholder="What should change in this draft?"
-            />
-            <div className="mt-3 flex flex-wrap gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={scope === "full"}
-                  onChange={() => setScope("full")}
-                />
-                Full
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={scope === "section"}
-                  onChange={() => setScope("section")}
-                />
-                Section
-              </label>
-            </div>
-            {scope === "section" ? (
-              <input
-                value={sectionPath}
-                onChange={(e) => setSectionPath(e.target.value)}
-                placeholder='e.g. "Key Capabilities"'
-                className="mt-3 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
-            ) : null}
-            <button
-              type="button"
-              disabled={pending || !feedback.trim() || (scope === "section" && !sectionPath.trim())}
-              onClick={() =>
-                run("Revised — new version saved.", async () => {
-                  if (!version) return;
-                  if (scope === "section" && !sectionPath.trim()) {
-                    throw new Error("Section path required for section revise.");
-                  }
-                  const next = await reviseGccVersion(version.id, {
-                    feedback: feedback.trim(),
-                    scope,
-                    // Revise is the only call on this screen that WRITES prose -- polish and seo are
-                    // read-only -- and it was the one the Writing model picker did not reach, so a
-                    // draft generated on Anthropic was rewritten entirely by OpenAI with nothing on
-                    // screen saying so. That silently contaminates the comparison the picker exists for.
-                    provider,
-                    sectionPath: scope === "section" ? sectionPath.trim() : null,
-                  });
-                  setVersion(next);
-                  setSeo(null);
-                  setPolish(null);
-                  await reload();
-                })
-              }
-              className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {pending ? "Working…" : "Revise"}
-            </button>
-          </section>
-
-          <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">On-page SEO &amp; polish</h3>
             {/* No Run buttons. Both analysers are deterministic -- same draft in, same numbers out
                 -- and they already run whenever a version loads, so pressing Run refetched an
@@ -1302,35 +1228,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                     </li>
                   ))}
                 </ul>
-                {/* Was two steps: copy the fixes into the box, then find Revise and press it. The
-                    report already knows what it wants changed, so applying it is one action. The
-                    feedback is still put in the box, so it is visible and editable if the revise
-                    then needs steering. */}
-                {seo.applyFeedback ? (
-                  <button
-                    type="button"
-                    disabled={pending || !version}
-                    className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
-                    onClick={() => {
-                      const fixes = seo.applyFeedback;
-                      setFeedback(fixes);
-                      setScope("full");
-                      run("Revised against the SEO report — new version saved.", async () => {
-                        if (!version) return;
-                        const next = await reviseGccVersion(version.id, {
-                          feedback: fixes,
-                          scope: "full",
-                          sectionPath: null,
-                          provider,
-                        });
-                        setVersion(next);
-                        await reload();
-                      });
-                    }}
-                  >
-                    {pending ? "Working…" : "Fix these and revise"}
-                  </button>
-                ) : null}
               </div>
             ) : null}
             {polish ? (
@@ -1349,33 +1246,6 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
                     </li>
                   ))}
                 </ul>
-                {/* Same one-press treatment as the SEO report: the analyser already knows what it
-                    wants changed, so applying it is one action rather than copy-then-find-Revise. */}
-                {polish.applyFeedback ? (
-                  <button
-                    type="button"
-                    disabled={pending || !version}
-                    className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
-                    onClick={() => {
-                      const fixes = polish.applyFeedback;
-                      setFeedback(fixes);
-                      setScope("full");
-                      run("Revised against the polish report — new version saved.", async () => {
-                        if (!version) return;
-                        const next = await reviseGccVersion(version.id, {
-                          feedback: fixes,
-                          scope: "full",
-                          sectionPath: null,
-                          provider,
-                        });
-                        setVersion(next);
-                        await reload();
-                      });
-                    }}
-                  >
-                    {pending ? "Working…" : "Fix these and revise"}
-                  </button>
-                ) : null}
               </div>
             ) : null}
           </section>
@@ -1963,7 +1833,7 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
  * the chrome said what followed what. Bands on a shared surface, divided by a rule, say it.
  *
  * The number is here because these genuinely are ordered -- brief, then generate, then the draft,
- * then revise, then approve. Numbering anything that is not a sequence is decoration.
+ * then approve. Numbering anything that is not a sequence is decoration.
  */
 /**
  * What the saved brief says, in the words the pickers use.
@@ -1993,7 +1863,6 @@ function BriefSummary({
     { term: "Buying stage", value: brief.buyingStage ? label(BUYING_STAGES, brief.buyingStage) : "" },
     { term: "Audience", value: brief.audienceSegment ? label(AUDIENCE_SEGMENTS, brief.audienceSegment) : "" },
     { term: "Angle", value: brief.angle ? label(CONTENT_ANGLES, brief.angle) : "" },
-    { term: "Call to action", value: brief.ctaType ? label(CTA_TYPES, brief.ctaType) : "" },
     { term: "Tone", value: brief.toneOfVoice ? label(TONES_OF_VOICE, brief.toneOfVoice) : "" },
   ];
 

@@ -112,10 +112,10 @@ export function applyCuratedSerpToBrief(
   // No capture provenance is stamped. serpCapturedKeyword/At/Locale were written here and read by
   // nothing; a provenance claim nobody can act on is a field that has to be kept true for no reason.
   //
-  // Writing notes stay the operator's. Confirming a SERP used to put `SERP shape: ...` and
-  // `Information Gain: ...` there when the field happened to be empty, so a field labelled as your
-  // input silently filled with machine output (Jeff, 2026-09-27: "None of it belongs as a writing
-  // note").
+  // Nothing but the questions is written. Confirming a SERP used to put `SERP shape: ...` and
+  // `Information Gain: ...` into a field of the operator's own when it happened to be empty, so a
+  // field labelled as your input silently filled with machine output (Jeff, 2026-09-27: "None of it
+  // belongs as a writing note").
   return { brief: { ...brief, paaQuestions }, conflicts };
 }
 

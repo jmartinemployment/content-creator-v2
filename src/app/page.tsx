@@ -42,7 +42,7 @@ export default function HomePage() {
         </h1>
         <p className="mt-4 max-w-lg text-base leading-relaxed text-white/60">
           A project&rsquo;s crawl grounding starts a create with real site section context. Content
-          Brief, deep research, generate, revise, on-page SEO, approve, and Mix —
+          Brief, deep research, generate, on-page SEO, approve, and Mix —
           pillar optional.
         </p>
         <div className="mt-10 flex flex-wrap gap-3">

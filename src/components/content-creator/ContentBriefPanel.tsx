@@ -5,7 +5,6 @@ import {
   AUDIENCE_SEGMENTS,
   BUYING_STAGES,
   CONTENT_ANGLES,
-  CTA_TYPES,
   PRIMARY_INTENTS,
   SECONDARY_INTENTS,
   TONES_OF_VOICE,
@@ -539,39 +538,6 @@ export default function ContentBriefPanel({
         </label>
 
         <label className={labelClass}>
-          Discovery CTA type
-          <select
-            value={brief.ctaType}
-            onChange={(e) =>
-              patch({ ctaType: e.target.value as ContentBrief["ctaType"] })
-            }
-            className={fieldClass}
-          >
-            <option value="">Select CTA type</option>
-            {CTA_TYPES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          {/* Matches Angle for SEO's caption line so the two selects, row-mates in this grid,
-              land at the same height instead of Discovery CTA type's sitting lower. */}
-          <span className="text-xs font-normal text-muted">Google Ads call-to-action type.</span>
-        </label>
-
-        <label className={labelClass}>
-          CTA label (optional)
-          <input
-            value={brief.ctaLabel}
-            onChange={(e) => patch({ ctaLabel: e.target.value })}
-            className={fieldClass}
-          />
-          <span className="text-xs font-normal text-muted">
-            Overrides the CTA type&apos;s default wording, if set.
-          </span>
-        </label>
-
-        <label className={labelClass}>
           Tone of voice
           <select
             value={brief.toneOfVoice}
@@ -626,22 +592,6 @@ export default function ContentBriefPanel({
           rows={3}
           placeholder={"One question per line, e.g.\nHow long does an AP automation rollout take?\nWhat does it cost to run?"}
           className={`${fieldClass} font-mono text-xs`}
-        />
-      </label>
-
-      <label className={`${labelClass} mt-5`}>
-        Writing notes (optional)
-        {/* Named "Writing Note for Image Prompt" on the strength of a 2026-09-21 audit that found
-            only WriteImagePromptAsync read it. That is no longer true and the label was telling
-            operators the opposite of what happens: GccGenerateService passes WritingNotes into
-            GenerateStartingContentAsync, GenerateToolPageAsync and GeneratePillarBodyAsync, and it
-            lands in every long-form body prompt as "Writing notes: ..." inside BRIEF CONTROLS
-            (ContentPromptBuilder:839, :878). So it reaches pillar, blog and tool bodies. */}
-        <textarea
-          value={brief.writingNotes}
-          onChange={(e) => patch({ writingNotes: e.target.value })}
-          rows={2}
-          className={fieldClass}
         />
       </label>
 

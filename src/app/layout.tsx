@@ -17,7 +17,7 @@ const body = Source_Sans_3({
 export const metadata: Metadata = {
   title: "Geek Content Creator",
   description:
-    "Find site content gaps, generate with site section context, revise, approve, and repurpose.",
+    "Find site content gaps, generate with site section context, approve, and repurpose.",
 };
 
 export default function RootLayout({

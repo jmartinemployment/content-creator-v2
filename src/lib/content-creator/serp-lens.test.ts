@@ -94,11 +94,15 @@ for (const mode of ["fill-empty", "replace"] as const) {
   assertEqual(noop.conflicts.length, 0, `an empty seed reports no conflict in ${mode}`);
 }
 
-// Writing notes are the operator's and nothing writes into them. Confirming a SERP used to put
-// "SERP shape: ..." and "Information Gain: ..." there when the field happened to be empty, so a
+// Confirming a SERP writes the questions and nothing else. It used to put "SERP shape: ..." and
+// "Information Gain: ..." into a field of the operator's own when it happened to be empty, so a
 // field labelled as your input filled with machine output (Jeff, 2026-09-27: "None of it belongs as
 // a writing note").
-const notes = applyCuratedSerpToBrief(emptyContentBrief(), withQuestions, "fill-empty");
-assertEqual(notes.brief.writingNotes, "", "confirming a SERP never writes writing notes");
+const onlyQuestions = applyCuratedSerpToBrief(emptyContentBrief(), withQuestions, "fill-empty");
+assertEqual(
+  JSON.stringify({ ...onlyQuestions.brief, paaQuestions: "" }),
+  JSON.stringify(emptyContentBrief()),
+  "confirming a SERP changes nothing in the brief but the questions",
+);
 
 console.log("serp-lens.test.ts: all assertions passed");

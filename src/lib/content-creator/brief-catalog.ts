@@ -75,23 +75,6 @@ export const CONTENT_ANGLES = [
 export type ContentAngle = (typeof CONTENT_ANGLES)[number]["value"];
 
 /* ------------------------------------------------------------------ *
- * 1.E  Discovery CTA Types (Google Ads CallToActionTypeEnum)         *
- *      developers.google.com/google-ads/api/reference/rpc/v21/CallToActionTypeEnum
- * ------------------------------------------------------------------ */
-
-export const CTA_TYPES = [
-  { value: "sign_up", label: "Sign Up" },
-  { value: "contact_us", label: "Contact Us" },
-  { value: "book_now", label: "Book Now" },
-  { value: "download", label: "Download" },
-  { value: "learn_more", label: "Learn More" },
-  { value: "apply_now", label: "Apply Now" },
-  { value: "get_quote", label: "Get Quote" },
-] as const;
-
-export type CtaType = (typeof CTA_TYPES)[number]["value"];
-
-/* ------------------------------------------------------------------ *
  * 1.F  Tone of Voice + E-E-A-T                                       *
  * ------------------------------------------------------------------ */
 
@@ -190,12 +173,9 @@ export interface ContentBrief {
   audienceSegment: AudienceSegment | "";
   audienceNotes: string;
   angle: ContentAngle | "";
-  ctaType: CtaType | "";
-  ctaLabel: string;
   toneOfVoice: ToneOfVoice | "";
   eeatSignals: EeatSignal[];
   lengthBand: LengthBandKey | "";
-  writingNotes: string;
   paaQuestions: string;
   /**
    * The blog's FAQ questions, one per line (2026-10-08). The pillar answers `paaQuestions` in its
@@ -207,7 +187,7 @@ export interface ContentBrief {
    * The operator's own framing of this niche's problem — researched by hand, per taxonomy leaf.
    *
    * Saved inside the brief deliberately: the brief is already the place operator framing lives
-   * (`writingNotes`, `audienceNotes`, `paaQuestions`), and it persists through the existing
+   * (`audienceNotes`, `paaQuestions`), and it persists through the existing
    * `PATCH creates/{id}/brief-research` with no new route or store.
    *
    * Read on the backend by `GccNicheFramingReader`, which lands it in the tool page's opening
@@ -469,15 +449,12 @@ export function emptyContentBrief(): ContentBrief {
     audienceSegment: "",
     audienceNotes: "",
     angle: "",
-    ctaType: "",
-    ctaLabel: "",
     toneOfVoice: "",
     // Always the full set — not a per-piece choice. E-E-A-T applies to virtually every piece, and
     // the picker that used to let an operator narrow it was removed entirely (2026-09-21), not
     // just defaulted, so there is nothing left to persist here beyond the constant set itself.
     eeatSignals: EEAT_SIGNALS.map((s) => s.value),
     lengthBand: "",
-    writingNotes: "",
     paaQuestions: "",
     blogFaqQuestions: "",
     nicheFraming: emptyNicheFraming(),
@@ -532,22 +509,6 @@ const LEGACY_ANGLE: Record<string, ContentAngle> = {
   objection_faq: "ultimate_guide",
 };
 
-const LEGACY_CTA: Record<string, CtaType> = {
-  sign_up: "sign_up",
-  start_trial: "sign_up",
-  subscribe: "sign_up",
-  contact_us: "contact_us",
-  book_now: "book_now",
-  book_demo: "book_now",
-  download: "download",
-  learn_more: "learn_more",
-  read_related: "learn_more",
-  apply_now: "apply_now",
-  get_quote: "get_quote",
-  contact_quote: "get_quote",
-  buy: "get_quote",
-};
-
 const TONE_VALUES = TONES_OF_VOICE.map((o) => o.value) as string[];
 
 /**
@@ -590,8 +551,6 @@ export function migrateBrief(raw: unknown): ContentBrief {
     : notes;
 
   base.angle = LEGACY_ANGLE[str(p.angle)] ?? "";
-  base.ctaType = LEGACY_CTA[str(p.ctaType)] ?? "";
-  base.ctaLabel = str(p.ctaLabel);
 
   // Tone: legacy was a numeric Record; unknown/object → commercial_balanced.
   const toneRaw = p.toneOfVoice;
@@ -606,17 +565,6 @@ export function migrateBrief(raw: unknown): ContentBrief {
   base.eeatSignals = EEAT_SIGNALS.map((s) => s.value);
 
   base.lengthBand = (str(p.lengthBand) as LengthBandKey) || "";
-  // Normalize writing notes: collapse consecutive duplicate lines (one-time migration for stale storage)
-  const rawNotes = str(p.writingNotes);
-  base.writingNotes = rawNotes
-    .split("\n")
-    .reduce((acc: string[], line) => {
-      if (acc.length === 0 || acc[acc.length - 1] !== line) {
-        acc.push(line);
-      }
-      return acc;
-    }, [])
-    .join("\n");
   base.paaQuestions = str(p.paaQuestions);
   // One per line, or an array from a programmatic writer -- the backend reader accepts both.
   base.blogFaqQuestions = Array.isArray(p.blogFaqQuestions)
@@ -718,7 +666,6 @@ export function contentBriefMissingFields(brief: ContentBrief): string[] {
   if (!brief.audienceSegment) missing.push("Audience segment");
   if (!brief.audienceNotes.trim()) missing.push("Audience notes");
   if (!brief.angle) missing.push("Angle");
-  if (!brief.ctaType) missing.push("Call to action");
   if (!brief.toneOfVoice) missing.push("Tone of voice");
   // Neither E-E-A-T signals nor Length is asked for here — E-E-A-T is always the full set (no
   // longer a choice the operator makes), and Length is derived from starting content type

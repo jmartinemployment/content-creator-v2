@@ -410,38 +410,6 @@ export type GccParsedSerpPage = {
   parseWarning: string | null;
 };
 
-/**
- * `provider` is REQUIRED on every call that writes prose.
- *
- * It was optional with a `?? "OpenAi"` default, which is a default substituted over a user-selected
- * value — `.cursor/rules/no-fallbacks.mdc`. Revise is what made that concrete: the Writing model
- * picker did not reach it, so a draft generated on Anthropic was rewritten entirely by OpenAI and the
- * stamp recorded "OpenAi" as though it had been chosen. Required means the type refuses a caller that
- * forgets, instead of the default answering for them.
- */
-export function reviseGccVersion(
-  versionId: string,
-  input: {
-    feedback: string;
-    scope?: "full" | "section";
-    sectionPath?: string | null;
-    provider: string;
-  },
-): Promise<GccArtifactVersion> {
-  return gccRequest<GccArtifactVersion>(
-    `/api/geek-content-creator/versions/${versionId}/revise`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        feedback: input.feedback,
-        scope: input.scope ?? "full",
-        sectionPath: input.sectionPath ?? null,
-        provider: input.provider,
-      }),
-    },
-  );
-}
-
 export function seoGccVersion(
   versionId: string,
   keyword: string,
