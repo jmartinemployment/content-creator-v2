@@ -497,9 +497,11 @@ function EvidenceRows({
       <span className="text-sm text-foreground">Where they fail, and what the vendor does about it</span>
       <span className="mt-0.5 block text-xs text-muted">
         One row per failure, for one partner or for all of them. A partner&rsquo;s row is searched on
-        that partner&rsquo;s site only and argued on that partner&rsquo;s tool page only. A row for all
-        partners is searched on every partner&rsquo;s site and argued on every page. Nothing here is
-        quoted.
+        that partner&rsquo;s site only. Its failure is argued on that partner&rsquo;s tool page, and the
+        pillar and the blog are told the failure and the remedy under that partner&rsquo;s name. A row
+        for all partners is searched on every partner&rsquo;s site and its failure is argued on every
+        page. With no row for all partners, the pillar and the blog argue the partners&rsquo; failures.
+        Nothing here is quoted.
       </span>
 
       {rows.length === 0 ? (
