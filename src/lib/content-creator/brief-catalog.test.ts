@@ -2,15 +2,21 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ALL_PARTNERS,
   contentBriefMissingFields,
   derivePainPoints,
   emptyEvidenceRow,
+  emptyNicheFraming,
   emptyNicheFramingSet,
+  evidenceOwners,
   evidenceRowHasAny,
   migrateBrief,
+  moveEvidenceRow,
   nicheFramingSetHasAny,
   parseEvidenceRows,
   partnerQuestions,
+  placedEvidenceRows,
+  withEvidenceRows,
   taxonomyFirstLevel,
   taxonomyPathNamesNoDepartment,
 } from "./brief-catalog";
@@ -137,6 +143,116 @@ describe("rows are the one place a failure is entered", () => {
       ]),
       "Approval is informal.\n\nPayments are executed ad hoc.",
     );
+  });
+});
+
+describe("a row belongs to one partner or to all of them (2026-10-11)", () => {
+  const row = (problem: string, solution = "") => ({ problem, solution, terms: [] as string[] });
+  const framing = () => ({
+    ...emptyNicheFraming(),
+    coreProblem: "Cash arrives whenever the customer gets round to paying.",
+    evidence: [row("Invoices go out late.", "Scheduled invoicing.")],
+    painPoints: "Invoices go out late.",
+    perTool: {
+      "upflow.io": {
+        ...emptyNicheFramingSet(),
+        coreProblem: "Collections run on memory.",
+        automationToPitch: "A collections workflow.",
+        faqQuestions: "Does it sync with QuickBooks?",
+        evidence: [row("Reminders are sent by hand.", "Automated reminder sequences.")],
+        painPoints: "Reminders are sent by hand.",
+      },
+      "gone.example": { ...emptyNicheFramingSet(), evidence: [row("A row under a removed partner.")] },
+    },
+  });
+  const partners = ["chaserhq.com", "upflow.io"];
+
+  it("the table lists every row: all partners' first, each partner's in the project's order, then a removed partner's", () => {
+    assert.deepEqual(evidenceOwners(framing(), partners), [ALL_PARTNERS, "chaserhq.com", "upflow.io", "gone.example"]);
+    assert.deepEqual(
+      placedEvidenceRows(framing(), partners).map((p) => [p.owner, p.index, p.row.problem]),
+      [
+        [ALL_PARTNERS, 0, "Invoices go out late."],
+        ["upflow.io", 0, "Reminders are sent by hand."],
+        ["gone.example", 0, "A row under a removed partner."],
+      ],
+    );
+  });
+
+  it("a host with no rows that is not a partner is not listed", () => {
+    const f = { ...framing(), perTool: { "old.example": { ...emptyNicheFramingSet(), coreProblem: "x" } } };
+    assert.deepEqual(evidenceOwners(f, partners), [ALL_PARTNERS, "chaserhq.com", "upflow.io"]);
+  });
+
+  it("giving a row to a partner moves it into that partner's own rows, after its last, and nowhere else", () => {
+    const before = framing();
+    const moved = before.evidence[0];
+    const after = moveEvidenceRow(before, { owner: ALL_PARTNERS, index: 0 }, "upflow.io");
+
+    assert.deepEqual(after.evidence, []);
+    assert.equal(after.painPoints, "");
+    assert.deepEqual(
+      after.perTool["upflow.io"].evidence.map((r) => r.problem),
+      ["Reminders are sent by hand.", "Invoices go out late."],
+    );
+    assert.equal(after.perTool["upflow.io"].painPoints, "Reminders are sent by hand.\n\nInvoices go out late.");
+    // The same row, not a copy: the form keeps a row's place in the table by the object.
+    assert.equal(after.perTool["upflow.io"].evidence[1], moved);
+    // What the partner's section holds besides rows is untouched.
+    assert.equal(after.perTool["upflow.io"].coreProblem, "Collections run on memory.");
+    assert.equal(after.perTool["upflow.io"].automationToPitch, "A collections workflow.");
+    assert.equal(after.perTool["upflow.io"].faqQuestions, "Does it sync with QuickBooks?");
+    assert.equal(after.coreProblem, before.coreProblem);
+    assert.deepEqual(after.perTool["gone.example"], before.perTool["gone.example"]);
+  });
+
+  it("giving a row to a partner with no entry yet makes one, and back to all partners empties it", () => {
+    const toChaser = moveEvidenceRow(framing(), { owner: ALL_PARTNERS, index: 0 }, "chaserhq.com");
+    assert.deepEqual(toChaser.perTool["chaserhq.com"].evidence.map((r) => r.problem), ["Invoices go out late."]);
+    assert.equal(toChaser.perTool["chaserhq.com"].painPoints, "Invoices go out late.");
+
+    const back = moveEvidenceRow(toChaser, { owner: "chaserhq.com", index: 0 }, ALL_PARTNERS);
+    assert.deepEqual(back.evidence.map((r) => r.problem), ["Invoices go out late."]);
+    assert.equal(back.painPoints, "Invoices go out late.");
+    assert.deepEqual(back.perTool["chaserhq.com"].evidence, []);
+    assert.equal(nicheFramingSetHasAny(back.perTool["chaserhq.com"]), false);
+  });
+
+  it("a row left with its owner, or a place that holds no row, changes nothing", () => {
+    const f = framing();
+    assert.equal(moveEvidenceRow(f, { owner: ALL_PARTNERS, index: 0 }, ALL_PARTNERS), f);
+    assert.equal(moveEvidenceRow(f, { owner: "upflow.io", index: 7 }, ALL_PARTNERS), f);
+  });
+
+  it("replacing one owner's rows derives that owner's pain points and no other's", () => {
+    const f = withEvidenceRows(framing(), "upflow.io", [row("Disputes stall payment."), row("  ")]);
+    assert.equal(f.perTool["upflow.io"].painPoints, "Disputes stall payment.");
+    assert.equal(f.painPoints, "Invoices go out late.");
+
+    const g = withEvidenceRows(framing(), ALL_PARTNERS, [row("Nobody owns the ledger.")]);
+    assert.equal(g.painPoints, "Nobody owns the ledger.");
+    assert.equal(g.perTool["upflow.io"].painPoints, "Reminders are sent by hand.");
+  });
+
+  it("a partner's row is searched on that partner's site and on no other's", () => {
+    const f = moveEvidenceRow(framing(), { owner: ALL_PARTNERS, index: 0 }, "upflow.io");
+    const needs = (host: string) => partnerQuestions(f, f.perTool[host]).map((q) => q.need);
+
+    assert.deepEqual(needs("upflow.io"), [
+      "Collections run on memory.",
+      "Automated reminder sequences.",
+      "Scheduled invoicing.",
+    ]);
+    // Chaserhq is searched with the core problem alone: the row is no longer every partner's.
+    assert.deepEqual(needs("chaserhq.com"), ["Cash arrives whenever the customer gets round to paying."]);
+  });
+
+  it("nothing new is saved: a brief with a moved row reads back as the same rows", () => {
+    const f = moveEvidenceRow(framing(), { owner: ALL_PARTNERS, index: 0 }, "upflow.io");
+    const read = migrateBrief(JSON.parse(JSON.stringify({ nicheFraming: f }))).nicheFraming;
+    assert.deepEqual(read.evidence, []);
+    assert.deepEqual(read.perTool["upflow.io"].evidence, f.perTool["upflow.io"].evidence);
+    assert.deepEqual(Object.keys(read.perTool["upflow.io"]).sort(), Object.keys(emptyNicheFramingSet()).sort());
   });
 });
 

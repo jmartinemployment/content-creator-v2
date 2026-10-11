@@ -329,6 +329,82 @@ export function derivePainPoints(rows: readonly EvidenceRow[]): string {
     .join("\n\n");
 }
 
+/**
+ * Who a row belongs to: one partner's host, or every partner. The form shows one table of rows with
+ * the partner chosen on each (Jeff, 2026-10-11: the research is five failures and five remedies per
+ * partner, and a row named no partner). Nothing new is stored: a row for every partner is the
+ * category's `evidence`, a row for one partner is that host's `perTool` entry's, which is where
+ * GeekAPI already reads each from.
+ */
+export const ALL_PARTNERS = "";
+
+/** A row with where it is stored: its owner, and its place in that owner's rows. */
+export type PlacedEvidenceRow = { owner: string; index: number; row: EvidenceRow };
+
+/** The rows one owner holds: the category's for `ALL_PARTNERS`, else that host's own. */
+export function evidenceRowsOf(framing: NicheFraming, owner: string): EvidenceRow[] {
+  return owner === ALL_PARTNERS ? framing.evidence : (framing.perTool[owner]?.evidence ?? []);
+}
+
+/**
+ * The owners that hold rows, in the order the table lists them: every partner first, then the
+ * project's partners in the project's order, then any other host a saved brief still holds rows
+ * under (a partner removed from the project since). The last are listed so no saved row is hidden.
+ */
+export function evidenceOwners(framing: NicheFraming, partnerHosts: readonly string[]): string[] {
+  const owners = [ALL_PARTNERS];
+  for (const host of partnerHosts) {
+    if (host && !owners.includes(host)) owners.push(host);
+  }
+  for (const host of Object.keys(framing.perTool)) {
+    if (!owners.includes(host) && evidenceRowsOf(framing, host).length > 0) owners.push(host);
+  }
+  return owners;
+}
+
+/** Every row in the brief, each with its owner, in the table's order. */
+export function placedEvidenceRows(
+  framing: NicheFraming,
+  partnerHosts: readonly string[],
+): PlacedEvidenceRow[] {
+  return evidenceOwners(framing, partnerHosts).flatMap((owner) =>
+    evidenceRowsOf(framing, owner).map((row, index) => ({ owner, index, row })),
+  );
+}
+
+/** One owner's rows replaced, with that owner's "where they fail" derived from them as ever. */
+export function withEvidenceRows(
+  framing: NicheFraming,
+  owner: string,
+  rows: EvidenceRow[],
+): NicheFraming {
+  const painPoints = derivePainPoints(rows);
+  if (owner === ALL_PARTNERS) return { ...framing, evidence: rows, painPoints };
+  const current = framing.perTool[owner] ?? emptyNicheFramingSet();
+  return {
+    ...framing,
+    perTool: { ...framing.perTool, [owner]: { ...current, evidence: rows, painPoints } },
+  };
+}
+
+/** A row given to another owner: taken out of where it was, added after that owner's last row. */
+export function moveEvidenceRow(
+  framing: NicheFraming,
+  from: { owner: string; index: number },
+  to: string,
+): NicheFraming {
+  if (from.owner === to) return framing;
+  const source = evidenceRowsOf(framing, from.owner);
+  const row = source[from.index];
+  if (!row) return framing;
+  const taken = withEvidenceRows(
+    framing,
+    from.owner,
+    source.filter((_, i) => i !== from.index),
+  );
+  return withEvidenceRows(taken, to, [...evidenceRowsOf(taken, to), row]);
+}
+
 /** One search of a partner's crawl, as GeekAPI will make it. */
 export type PartnerQuestion = {
   kind: "core" | "row";

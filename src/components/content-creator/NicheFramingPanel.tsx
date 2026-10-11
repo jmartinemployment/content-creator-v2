@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
+  ALL_PARTNERS,
   DEPARTMENTS,
-  derivePainPoints,
   emptyEvidenceRow,
   emptyNicheFramingSet,
+  evidenceOwners,
+  evidenceRowsOf,
+  moveEvidenceRow,
   nicheFramingSetHasAny,
   parseEvidenceRows,
   partnerQuestions,
+  placedEvidenceRows,
   taxonomyFirstLevel,
   taxonomyPathNamesNoDepartment,
+  withEvidenceRows,
   type EvidenceRow,
   type NicheFraming,
   type NicheFramingSet,
   type PartnerQuestion,
+  type PlacedEvidenceRow,
 } from "@/lib/content-creator/brief-catalog";
 import Link from "next/link";
 import { getProject } from "@/services/gcc-projects-api";
@@ -126,7 +132,17 @@ export default function NicheFramingPanel({
         hint="The one problem the whole niche has — not a collection of each tool's. A tool below overrides only the boxes you fill in."
         value={value}
         onChange={(next) => patch(next)}
-      />
+      >
+        {/* Every row in the brief, the partners' own included, with the partner chosen on the row. It
+            sits here because this is where a failure is entered; a partner's section below no longer
+            has a second table of the same rows. */}
+        <EvidenceRows
+          framing={value}
+          partners={partners}
+          partnersKnown={fetched !== null && fetched.projectId === projectId}
+          onChange={onChange}
+        />
+      </FramingFields>
 
       <fieldset className="mt-5">
         <legend className="text-sm font-medium text-foreground">
@@ -182,8 +198,9 @@ export default function NicheFramingPanel({
           </div>
           <p className="mt-1 text-xs text-muted">
             Each tool lists the searches its crawl gets, in order. Leave it alone and they are the
-            category&rsquo;s; fill a box here and it replaces the category&rsquo;s, a row here is added
-            &mdash; or replaces the category row that states the same problem.
+            category&rsquo;s; fill a box here and it replaces the category&rsquo;s. A tool&rsquo;s own
+            rows are entered in the table above, with the tool chosen as the row&rsquo;s partner: each
+            is added to its searches, or replaces the all-partners row that states the same problem.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => {
@@ -286,6 +303,7 @@ function FramingFields({
   value,
   toolHost,
   onChange,
+  children,
 }: {
   legend: string;
   hint: string;
@@ -293,13 +311,9 @@ function FramingFields({
   /** Set for a tool's own fields: shows the tool page FAQ box, which the category has no use for. */
   toolHost?: string;
   onChange: (next: Partial<NicheFramingSet>) => void;
+  /** The table of rows, between the problem and the pitch. The category passes it; a tool does not. */
+  children?: ReactNode;
 }) {
-  // The rows are the one place a failure is entered. The writer still reads "where they fail" as
-  // paragraphs, so that field is derived from the rows on every change and never edited directly.
-  function changeRows(evidence: EvidenceRow[]) {
-    onChange({ evidence, painPoints: derivePainPoints(evidence) });
-  }
-
   return (
     <fieldset className="mt-4">
       <legend className="text-sm font-medium text-foreground">{legend}</legend>
@@ -316,7 +330,7 @@ function FramingFields({
         />
       </label>
 
-      <EvidenceRows rows={value.evidence} onChange={changeRows} />
+      {children}
 
       <label className="mt-3 block">
         <span className="text-sm text-foreground">The automation to pitch</span>
@@ -350,7 +364,50 @@ function FramingFields({
 }
 
 /**
- * Where they fail, and what the vendor does about each failure: one row per failure, entered once.
+ * A row's place in the table while the form is open.
+ *
+ * A row is stored under its owner (every partner, or one partner's host), so the stored order is by
+ * owner. A table in that order would move a row out of sight the moment its partner was chosen. So
+ * each row object is numbered when it is first seen, in stored order, and the table lists rows by
+ * that number: a row stays where it is while its partner is changed or its text is typed, a new row
+ * is last, and a brief read again from the server is numbered afresh, by owner.
+ */
+const rowNumbers = new WeakMap<EvidenceRow, number>();
+let nextRowNumber = 0;
+
+function rowNumber(row: EvidenceRow): number {
+  const known = rowNumbers.get(row);
+  if (known !== undefined) return known;
+  const assigned = nextRowNumber;
+  nextRowNumber += 1;
+  rowNumbers.set(row, assigned);
+  return assigned;
+}
+
+/** An edited row is a new object; it keeps the place of the one it replaces. */
+function editedRow(row: EvidenceRow, next: Partial<EvidenceRow>): EvidenceRow {
+  const edited = { ...row, ...next };
+  rowNumbers.set(edited, rowNumber(row));
+  return edited;
+}
+
+/** The rows in the order the table shows them. */
+function inTableOrder(placed: PlacedEvidenceRow[]): PlacedEvidenceRow[] {
+  // Numbered in stored order first, so rows not seen before fall in by owner among themselves.
+  for (const p of placed) rowNumber(p.row);
+  return [...placed].sort((a, b) => rowNumber(a.row) - rowNumber(b.row));
+}
+
+/**
+ * Where they fail, and what the vendor does about each failure: one row per failure, entered once,
+ * each for one partner or for all of them.
+ *
+ * The Partner is which crawl the row searches and which page argues it (Jeff, 2026-10-11: "Row 1 is
+ * not associated with vendor/partner X" -- the research is five failures and five remedies per
+ * partner, and this table named none, so a remedy written in one vendor's words was searched for on
+ * every other vendor's site). A partner's row is that host's own row in the saved brief, exactly
+ * what the table inside each partner's section used to write; that second table is gone, so a row
+ * has one place.
  *
  * The Problem column is what the writer argues from (it reaches the backend as the pain-point
  * paragraphs, derived from these rows). The Solution and Search terms columns are what retrieval
@@ -363,34 +420,86 @@ function FramingFields({
  * conversion is a deterministic split on the table's columns, never a model.
  */
 function EvidenceRows({
-  rows,
+  framing,
+  partners,
+  partnersKnown,
   onChange,
 }: {
-  rows: EvidenceRow[];
-  onChange: (next: EvidenceRow[]) => void;
+  framing: NicheFraming;
+  partners: { host: string; label: string }[];
+  /** False until the project's partners have loaded: a host is not called "not a partner" on a guess. */
+  partnersKnown: boolean;
+  onChange: (next: NicheFraming) => void;
 }) {
   const [pasted, setPasted] = useState("");
+  // Whose rows a paste makes. Null until chosen; until then it is the last row's partner.
+  const [pastedFor, setPastedFor] = useState<string | null>(null);
 
-  function patchRow(index: number, next: Partial<EvidenceRow>) {
-    onChange(rows.map((row, i) => (i === index ? { ...row, ...next } : row)));
+  const partnerHosts = partners.map((p) => p.host);
+  const rows = inTableOrder(placedEvidenceRows(framing, partnerHosts));
+  // Who a row can be given to: the project's partners, and any other host a saved row is still under.
+  const hosts = evidenceOwners(framing, partnerHosts).filter((owner) => owner !== ALL_PARTNERS);
+  // A new row belongs with the one above it, so five rows for one partner are one choice, not five.
+  const lastOwner = rows.length > 0 ? rows[rows.length - 1].owner : ALL_PARTNERS;
+  const pasteOwner =
+    pastedFor !== null && (pastedFor === ALL_PARTNERS || hosts.includes(pastedFor))
+      ? pastedFor
+      : lastOwner;
+
+  function ownerText(host: string): string {
+    const partner = partners.find((p) => p.host === host);
+    if (partner) return `${partner.label} — ${partner.host}`;
+    return partnersKnown ? `${host} — not a partner of this project` : host;
   }
-  function removeRow(index: number) {
-    onChange(rows.filter((_, i) => i !== index));
+  function patchRow(placed: PlacedEvidenceRow, next: Partial<EvidenceRow>) {
+    const edited = editedRow(placed.row, next);
+    onChange(
+      withEvidenceRows(
+        framing,
+        placed.owner,
+        evidenceRowsOf(framing, placed.owner).map((row, i) => (i === placed.index ? edited : row)),
+      ),
+    );
+  }
+  function removeRow(placed: PlacedEvidenceRow) {
+    onChange(
+      withEvidenceRows(
+        framing,
+        placed.owner,
+        evidenceRowsOf(framing, placed.owner).filter((_, i) => i !== placed.index),
+      ),
+    );
+  }
+  function addRows(owner: string, added: EvidenceRow[]) {
+    onChange(withEvidenceRows(framing, owner, [...evidenceRowsOf(framing, owner), ...added]));
   }
   function importPasted() {
     const parsed = parseEvidenceRows(pasted);
     if (parsed.length === 0) return;
-    onChange([...rows, ...parsed]);
+    addRows(pasteOwner, parsed);
     setPasted("");
   }
 
   const inputClass =
     "mt-1 w-full border border-[var(--gcc-border)] bg-transparent px-2 py-1.5 text-sm text-foreground";
+  const partnerOptions = (
+    <>
+      <option value={ALL_PARTNERS}>All partners</option>
+      {hosts.map((host) => (
+        <option key={host} value={host}>
+          {ownerText(host)}
+        </option>
+      ))}
+    </>
+  );
   return (
     <div className="mt-4">
       <span className="text-sm text-foreground">Where they fail, and what the vendor does about it</span>
       <span className="mt-0.5 block text-xs text-muted">
-        One row per failure. Each row is one search of the partner&rsquo;s crawl. Nothing here is quoted.
+        One row per failure, for one partner or for all of them. A partner&rsquo;s row is searched on
+        that partner&rsquo;s site only and argued on that partner&rsquo;s tool page only. A row for all
+        partners is searched on every partner&rsquo;s site and argued on every page. Nothing here is
+        quoted.
       </span>
 
       {rows.length === 0 ? (
@@ -399,13 +508,13 @@ function EvidenceRows({
         </p>
       ) : null}
       <ol className="mt-2 space-y-3">
-        {rows.map((row, index) => (
-          <li key={index} className="border border-[var(--gcc-border)] p-2">
+        {rows.map((placed, position) => (
+          <li key={rowNumber(placed.row)} className="border border-[var(--gcc-border)] p-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">Row {index + 1}</span>
+              <span className="text-xs text-muted">Row {position + 1}</span>
               <button
                 type="button"
-                onClick={() => removeRow(index)}
+                onClick={() => removeRow(placed)}
                 className="text-xs text-muted hover:text-foreground"
               >
                 Remove
@@ -413,11 +522,23 @@ function EvidenceRows({
             </div>
             <label className="mt-1 block">
               <span className="text-xs text-foreground">
+                Partner <span className="text-muted">&mdash; whose remedy this is</span>
+              </span>
+              <select
+                value={placed.owner}
+                onChange={(e) => onChange(moveEvidenceRow(framing, placed, e.target.value))}
+                className={inputClass}
+              >
+                {partnerOptions}
+              </select>
+            </label>
+            <label className="mt-2 block">
+              <span className="text-xs text-foreground">
                 Problem <span className="text-muted">&mdash; the writer argues from it</span>
               </span>
               <textarea
-                value={row.problem}
-                onChange={(e) => patchRow(index, { problem: e.target.value })}
+                value={placed.row.problem}
+                onChange={(e) => patchRow(placed, { problem: e.target.value })}
                 rows={2}
                 placeholder="Tax forms, vendor details and compliance records are stored inconsistently."
                 className={inputClass}
@@ -429,8 +550,8 @@ function EvidenceRows({
                 <span className="text-muted">&mdash; in the vendor&rsquo;s words; the meaning search</span>
               </span>
               <textarea
-                value={row.solution}
-                onChange={(e) => patchRow(index, { solution: e.target.value })}
+                value={placed.row.solution}
+                onChange={(e) => patchRow(placed, { solution: e.target.value })}
                 rows={3}
                 placeholder="Self-service supplier onboarding collects payment details, preferences and W-9 or W-8 tax forms, with validation and reporting."
                 className={inputClass}
@@ -441,18 +562,9 @@ function EvidenceRows({
                 Search terms{" "}
                 <span className="text-muted">&mdash; the exact-word search; comma-separated</span>
               </span>
-              <input
-                type="text"
-                value={row.terms.join(", ")}
-                onChange={(e) =>
-                  patchRow(index, {
-                    terms: e.target.value
-                      .split(",")
-                      .map((t) => t.trim())
-                      .filter((t) => t.length > 0),
-                  })
-                }
-                placeholder="supplier onboarding, W-9 W-8, tax compliance"
+              <TermsInput
+                terms={placed.row.terms}
+                onChange={(terms) => patchRow(placed, { terms })}
                 className={inputClass}
               />
             </label>
@@ -461,7 +573,7 @@ function EvidenceRows({
       </ol>
       <button
         type="button"
-        onClick={() => onChange([...rows, emptyEvidenceRow()])}
+        onClick={() => addRows(lastOwner, [emptyEvidenceRow()])}
         className="mt-2 text-xs font-medium text-brand hover:underline"
       >
         + Add a row
@@ -480,16 +592,64 @@ function EvidenceRows({
           placeholder={"International vendors are paid manually through bank wires.\tGlobal payments through Mass Payments: 200+ countries, 120 currencies, 50+ payment methods.\tglobal payments, mass payments, wire"}
           className={inputClass}
         />
-        <button
-          type="button"
-          onClick={importPasted}
-          disabled={pasted.trim().length === 0}
-          className="mt-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
-        >
-          Make rows
-        </button>
       </label>
+      <label className="mt-2 block">
+        <span className="text-xs text-foreground">
+          Partner <span className="text-muted">&mdash; whose remedies the pasted rows are</span>
+        </span>
+        <select
+          value={pasteOwner}
+          onChange={(e) => setPastedFor(e.target.value)}
+          className={inputClass}
+        >
+          {partnerOptions}
+        </select>
+      </label>
+      <button
+        type="button"
+        onClick={importPasted}
+        disabled={pasted.trim().length === 0}
+        className="mt-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+      >
+        Make rows
+      </button>
     </div>
+  );
+}
+
+/**
+ * A row's search terms, typed as a comma list.
+ *
+ * It holds the text as typed and hands the row the terms in it. Showing the terms joined back
+ * together instead dropped a comma the moment it was typed, since a comma with nothing after it is
+ * not yet a term: a second term could be pasted in but never typed.
+ */
+function TermsInput({
+  terms,
+  onChange,
+  className,
+}: {
+  terms: string[];
+  onChange: (terms: string[]) => void;
+  className: string;
+}) {
+  const [text, setText] = useState(terms.join(", "));
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(
+          e.target.value
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0),
+        );
+      }}
+      placeholder="supplier onboarding, W-9 W-8, tax compliance"
+      className={className}
+    />
   );
 }
 
