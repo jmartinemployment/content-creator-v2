@@ -95,7 +95,7 @@ describe("partnerQuestions — what each partner's crawl is searched with, in Ge
     );
   });
 
-  it("a tool's core problem replaces the category's; a row restating a problem replaces that row in place; other rows are added", () => {
+  it("a tool's pain point is searched beside the category's problem, both; a row restating a problem replaces that row in place; other rows are added", () => {
     const tool = {
       ...emptyNicheFramingSet(),
       coreProblem: "Global payments across entities.",
@@ -109,10 +109,26 @@ describe("partnerQuestions — what each partner's crawl is searched with, in Ge
       q.map((x) => [x.kind, x.source, x.need, x.keyword]),
       [
         ["core", "tool", "Global payments across entities.", ""],
+        // Not an OR: the category's problem is searched for on this tool's site too (2026-10-12).
+        ["core", "category", category.coreProblem, ""],
         ["row", "tool", "Entity-specific approval routing.", "multi-entity"],
         ["row", "category", "Payments are executed ad hoc.", ""],
         ["row", "tool", "Automated payment reconciliation.", "payment reconciliation sub-ledger"],
       ],
+    );
+  });
+
+  it("one statement typed in both boxes is one search", () => {
+    const tool = { ...emptyNicheFramingSet(), coreProblem: `  ${category.coreProblem.toUpperCase()} ` };
+    const cores = partnerQuestions(category, tool).filter((q) => q.kind === "core");
+    assert.deepEqual(cores.map((q) => q.source), ["tool"]);
+  });
+
+  it("a tool with a pain point and no category problem is searched with its own", () => {
+    const tool = { ...emptyNicheFramingSet(), coreProblem: "Global payments across entities." };
+    assert.deepEqual(
+      partnerQuestions(emptyNicheFramingSet(), tool).map((q) => [q.kind, q.source, q.need]),
+      [["core", "tool", "Global payments across entities."]],
     );
   });
 
@@ -237,6 +253,7 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
 
     assert.deepEqual(needs("upflow.io"), [
       "Collections run on memory.",
+      "Cash arrives whenever the customer gets round to paying.",
       "Automated reminder sequences.",
       "Scheduled invoicing.",
     ]);

@@ -40,8 +40,9 @@ import { getProject } from "@/services/gcc-projects-api";
  * sat in its section below: one partner's research was entered in two places.
  *
  * Saved inside the brief when the operator clicks Save. No new field: a tool's hook is its
- * `automationToPitch`, which the form called "The automation to pitch" and GeekAPI gives that tool's
- * page as what answers the problem.
+ * `automationToPitch`, which the form called "The automation to pitch". GeekAPI tells that tool's page
+ * the category's and the tool's own, both, and the same for the problem and a tool's pain point
+ * (2026-10-12; until then a tool's own was used in the category's place).
  *
  * There is deliberately no partner-program field — Jeff, 2026-10-02: "Partner program text has no place
  * in my output." The brief is prompt input, so not having the field is the only guarantee that cannot
@@ -143,8 +144,8 @@ export default function NicheFramingPanel({
           placeholder="Revenue is booked when the invoice goes out, but cash arrives whenever the customer gets round to paying."
         />
         {/* Only a brief saved with rows for every partner has these. They still search every
-            partner's site and are argued on every page, so they are shown, not hidden; a new row
-            is entered in a tool's section. */}
+            partner's site, and every page is told their failure and their remedy, so they are shown,
+            not hidden; a new row is entered in a tool's section. */}
         {value.evidence.length > 0 ? (
           <EvidenceRows framing={value} owner={ALL_PARTNERS} partners={partners} onChange={onChange} />
         ) : null}
@@ -208,8 +209,8 @@ export default function NicheFramingPanel({
           <p className="mt-1 text-xs text-muted">
             One section a tool, holding everything you researched for it, in this order: its core
             pain point, where small businesses fail and what the tool does about each, the automation
-            to pitch (its marketing/sales hook), and its tool page FAQ. A pain point or a pitch left
-            empty uses the category&rsquo;s.
+            to pitch (its marketing/sales hook), and its tool page FAQ. A tool&rsquo;s pain point and
+            its pitch are used beside the category&rsquo;s, never in place of them.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => (
@@ -372,7 +373,7 @@ function ToolSection({
           )}
           <TextBox
             label="Core pain point"
-            hint={`${name}'s own. Its page opens on it; left empty, the category's core problem is used there. The pillar and the blog are told it under ${name}'s name.`}
+            hint={`${name}'s own. ${host} is searched with it and with the category's core problem, both. Its page is told both and opens on this one. The pillar and the blog are told it under ${name}'s name.`}
             value={set.coreProblem}
             onChange={(coreProblem) => patchSet({ coreProblem })}
             placeholder="Fractional CFOs lose twenty hours a month rebuilding the same forecast in a spreadsheet."
@@ -380,7 +381,7 @@ function ToolSection({
           <EvidenceRows framing={framing} owner={host} partners={partners} onChange={onChange} />
           <TextBox
             label="The automation to pitch — the marketing/sales hook"
-            hint={`What you would say to sell ${name}. Its page argues it as what answers the problem; left empty, the category's automation to pitch is used there. The pillar and the blog are told it under ${name}'s name, to argue in their own words.`}
+            hint={`What you would say to sell ${name}. Its page is told it beside the category's automation to pitch, both, in every section. The pillar and the blog are told it under ${name}'s name, to argue in their own words.`}
             value={set.automationToPitch}
             onChange={(automationToPitch) => patchSet({ automationToPitch })}
             placeholder="Stop rebuilding the forecast every Monday. A rolling 52-week view of cash in five minutes, with no formulas."
@@ -471,7 +472,7 @@ function SearchList({ host, questions }: { host: string; questions: PartnerQuest
           {questions.map((q, i) => (
             <li key={i} className="text-foreground">
               <span className="text-muted">
-                {q.kind === "core" ? "Core problem" : "Row"} ({q.source === "tool" ? "own" : "category"}):{" "}
+                {searchLabel(q)}:{" "}
               </span>
               {q.need}
               {q.keyword ? <span className="text-muted"> &middot; terms: {q.keyword}</span> : null}
@@ -481,6 +482,15 @@ function SearchList({ host, questions }: { host: string; questions: PartnerQuest
       )}
     </div>
   );
+}
+
+/**
+ * Whose box a search comes from, by the box's own name on this form: a tool's "Core pain point", the
+ * category's "The core problem", or a row of either.
+ */
+function searchLabel(q: PartnerQuestion): string {
+  if (q.kind === "core") return q.source === "tool" ? "Core pain point (own)" : "The core problem (category)";
+  return q.source === "tool" ? "Row (own)" : "Row (all partners)";
 }
 
 /**
@@ -514,7 +524,8 @@ function editedRow(row: EvidenceRow, next: Partial<EvidenceRow>): EvidenceRow {
  * The failure is what the writer argues from (it reaches GeekAPI as that tool's pain-point
  * paragraphs, derived from these rows). The remedy and the search terms are what retrieval asks that
  * tool's crawl with: the remedy to the index's meaning half, the terms to its keyword half, one
- * search per row. Measured on Tipalti, 2026-10-08: problem statements alone found the vendor
+ * search per row. The remedy is also told to the writers beside its failure, as the operator's note
+ * of what answers it (2026-10-12): to that tool's page, the pillar and the blog. Measured on Tipalti, 2026-10-08: problem statements alone found the vendor
  * describing three failures of six and fixing none of those three; remedies written in the vendor's
  * own words found the product page for all six. Nothing here is ever quoted.
  *
@@ -554,12 +565,12 @@ function EvidenceRows({
       </span>
       <span className="mt-0.5 block text-xs text-muted">
         {forAll
-          ? "Each is searched on every partner’s site and its failure is argued on every page. Give a row to the tool whose remedy it is, or remove it. A new row is entered in a tool’s section below."
-          : `One row per failure. Each is searched on ${owner} only. Its failure is argued on this tool’s page, and the pillar and the blog are told the failure and the remedy under this tool’s name. Nothing here is quoted.`}
+          ? "Each is searched on every partner’s site, and every page is told its failure and its remedy, under no tool’s name. Give a row to the tool whose remedy it is, or remove it. A new row is entered in a tool’s section below."
+          : `One row per failure. Each is searched on ${owner} only. This tool’s page is told the failure and the remedy in every section, and the pillar and the blog are told them under this tool’s name. Nothing here is quoted.`}
       </span>
 
       {rows.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">No rows yet: this tool is searched with the core problem alone.</p>
+        <p className="mt-2 text-xs text-muted">No rows yet: this tool is searched for the problem alone, and for no failure.</p>
       ) : null}
       <ol className="mt-2 space-y-3">
         {rows.map((row, index) => (

@@ -144,7 +144,29 @@ test("a closed section says what the tool has: its rows, whether it has a pitch 
   await partnersLoaded();
 
   assert.match(section(/Chaserhq/).textContent ?? "", /no rows · no pitch · no FAQ · 1 search$/);
-  assert.match(section(/Upflow/).textContent ?? "", /2 rows · pitch · FAQ · 3 searches$/);
+  assert.match(section(/Upflow/).textContent ?? "", /2 rows · pitch · FAQ · 4 searches$/);
+});
+
+test("a tool's site is searched with its own pain point and the category's problem, both, each named by its box", async (t) => {
+  t.after(cleanup);
+  installProject(["https://www.chaserhq.com", "https://upflow.io"]);
+  open(framing());
+  await partnersLoaded();
+
+  fireEvent.click(section(/Upflow/));
+
+  // Until 2026-10-12 a tool with a pain point of its own was searched with that in the category's place.
+  const searches = screen.getAllByRole("listitem").map((item) => item.textContent ?? "");
+  const own = searches.findIndex((text) => text.startsWith("Core pain point (own): Collections run on memory."));
+  const categorys = searches.findIndex((text) =>
+    text.startsWith("The core problem (category): Cash arrives whenever the customer gets round to paying."),
+  );
+  assert.ok(own >= 0, "the tool's own pain point is a search");
+  assert.ok(categorys > own, "the category's problem is searched for after it");
+  assert.ok(searches.some((text) => text.startsWith("Row (own): Automated reminder sequences.")));
+  // And the hints no longer say the category's is used only where the tool's box is empty.
+  assert.equal(screen.queryByText(/left empty/), null);
+  assert.ok(screen.getByText(/upflow\.io is searched with it and with the category's core problem, both\./));
 });
 
 test("a row added in a tool's section is that tool's, and is last", async (t) => {
@@ -258,7 +280,7 @@ test("what is saved under a host that is no longer a partner is shown, says so, 
   assert.equal(saved.current.perTool["upflow.io"], undefined);
   assert.deepEqual(saved.current.perTool["getupflow.com"], framing().perTool["upflow.io"]);
   assert.equal(screen.queryByRole("button", { name: /not a partner of this project/ }), null);
-  assert.match(section(/Getupflow/).textContent ?? "", /2 rows · pitch · FAQ · 3 searches$/);
+  assert.match(section(/Getupflow/).textContent ?? "", /2 rows · pitch · FAQ · 4 searches$/);
 });
 
 test("no host is called not a partner before the project's partners are known", async (t) => {

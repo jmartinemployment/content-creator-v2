@@ -457,12 +457,17 @@ export type PartnerQuestion = {
 
 /**
  * The searches a partner's crawl gets, in order, from the category framing and that tool's own —
- * the same rule as GeekAPI's `GccNicheFramingReader.ForHost` + `GccGroundingResolver.PartnerQuestions`:
- * the core problem first (the tool's when it has one, else the category's), then one search per
- * row — the category's rows, with a tool row that restates the same problem replacing that row in
- * place, and the tool's other rows added after. A row searches on its solution; a row with no
- * solution searches on its problem. Nothing when both sets are empty (GeekAPI then uses the bare
- * keyword). Shown per tool so what is asked of whom is read off the page, not inferred.
+ * the same rule as GeekAPI's `GccToolFraming.Problems` and `RowsToSearch`, read by
+ * `GccGroundingResolver.PartnerQuestions`: each statement of the problem first, the tool's own pain
+ * point and then the category's core problem, then one search per row — the category's rows, with a
+ * tool row that restates the same problem replacing that row in place, and the tool's other rows
+ * added after. A row searches on its solution; a row with no solution searches on its problem.
+ * Nothing when both sets are empty (GeekAPI then uses the bare keyword). Shown per tool so what is
+ * asked of whom is read off the page, not inferred.
+ *
+ * Both problems since 2026-10-12 (Jeff: "it is not an OR it is both PAIN POINTS"). Until then a tool
+ * with a pain point of its own was searched with that in the category's place. One statement typed
+ * in both boxes is one search.
  */
 export function partnerQuestions(
   category: NicheFramingSet,
@@ -472,7 +477,9 @@ export function partnerQuestions(
   const toolCore = (tool?.coreProblem ?? "").trim();
   const categoryCore = category.coreProblem.trim();
   if (toolCore) out.push({ kind: "core", source: "tool", need: toolCore, keyword: "" });
-  else if (categoryCore) out.push({ kind: "core", source: "category", need: categoryCore, keyword: "" });
+  if (categoryCore && categoryCore.toLowerCase() !== toolCore.toLowerCase()) {
+    out.push({ kind: "core", source: "category", need: categoryCore, keyword: "" });
+  }
 
   const key = (row: EvidenceRow) => row.problem.trim().toLowerCase();
   const toolRows = (tool?.evidence ?? []).filter(evidenceRowHasAny);
