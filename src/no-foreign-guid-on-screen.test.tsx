@@ -287,11 +287,34 @@ function unlabelledRunIds(): string[] {
   return offenders;
 }
 
-test("Brief & Generate shows no GUID but the project's: drafts, the last run, its refusals and its record", async (t) => {
+test("the brief and Generate are shown one at a time, and the one not shown stays mounted", async (t) => {
+  t.after(cleanup);
+  installGeekApi();
+  const stage = (name: string) => screen.getByRole("heading", { level: 2, name, hidden: true });
+
+  const { rerender } = render(<ProjectContentWorkspace project={project} view="brief" />);
+  await waitFor(() => assert.ok(stage("Brief")));
+
+  assert.equal(stage("Brief").closest("[hidden]"), null);
+  assert.ok(stage("Generate").closest("[hidden]"));
+  assert.ok(stage("Output").closest("[hidden]"));
+  const generate = stage("Generate");
+
+  // The project page hands the same workspace the other section: nothing is built again.
+  rerender(<ProjectContentWorkspace project={project} view="generate" />);
+
+  assert.ok(stage("Brief").closest("[hidden]"));
+  assert.equal(stage("Generate").closest("[hidden]"), null);
+  assert.equal(stage("Output").closest("[hidden]"), null);
+  assert.equal(stage("Generate"), generate);
+});
+
+test("Brief and Generate show no GUID but the project's: drafts, the last run, its refusals and its record", async (t) => {
   t.after(cleanup);
   const api = installGeekApi();
 
-  render(<ProjectContentWorkspace project={project} />);
+  // Generate is on screen; the brief is mounted beside it, hidden, and is read by the same checks.
+  render(<ProjectContentWorkspace project={project} view="generate" />);
 
   // The drafts, the run's report and the run's record have all loaded before the page is judged.
   await waitFor(() => assert.ok(screen.getByText(/Not written/)));

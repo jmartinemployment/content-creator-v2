@@ -29,7 +29,8 @@ import { ApiError, getProject, type GccProject } from "@/services/gcc-projects-a
  * that knew about it and one that did not. Only what is stateless is duplicated now.
  */
 const SECTIONS = [
-  { key: "content", label: "Brief & Generate", blurb: "The brief, generation, and the drafts it produced." },
+  { key: "brief", label: "Brief", blurb: "What to write, and who for." },
+  { key: "generate", label: "Generate", blurb: "What to produce from the brief, and the drafts it produced." },
   { key: "profile", label: "Profile", blurb: "The engagement: site, schedule, partners, budget." },
   { key: "deliverables", label: "Deliverables", blurb: "What this project owes, and what has shipped." },
   { key: "tasks", label: "Tasks & Time", blurb: "Work outstanding, and the hours against it." },
@@ -48,13 +49,15 @@ export default function ProjectWorkspacePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // Lands on the work, not on reference. Profile is the engagement's fields -- nothing to act on --
   // so opening a freshly created project there left no visible next step. The brief is what a new
-  // project needs first, and generate follows it in the same section.
+  // project needs first, and Generate is the section after it.
   // Section and edit mode live in the URL, not in state. Two reasons: a section becomes linkable, so
   // somewhere else in the app can send you straight to the one that matters -- which is how the brief's
   // "no partner URLs" message can point at the form that fixes it -- and the back button works.
   const sectionParam = search.get("section");
+  // An address that names no section, or the one section the brief and Generate used to share
+  // ("content", until 2026-10-12), lands on the brief.
   const section: SectionKey =
-    SECTIONS.find((s) => s.key === sectionParam)?.key ?? "content";
+    SECTIONS.find((s) => s.key === sectionParam)?.key ?? "brief";
   const editing = search.get("edit") === "1";
 
   // The project is the unit: its brief, every Generate and every draft are addressed by the project
@@ -147,10 +150,21 @@ export default function ProjectWorkspacePage() {
             <ProjectProfilePanel project={project} onChanged={setProject} />
           </>
         );
-      case "content":
-        return <ProjectContentWorkspace key={project.id} project={project} />;
+      case "brief":
+      case "generate":
+        // One workspace, shown a part at a time. Both sections return the same element at the same
+        // place, so moving between them keeps what the workspace holds: an unsaved brief, the types
+        // ticked for Generate, a run in progress and its report.
+        return (
+          <ProjectContentWorkspace
+            key={project.id}
+            project={project}
+            view={section}
+            onOpen={(view) => go(view)}
+          />
+        );
       case "deliverables":
-        return <ProjectDeliverablesPanel project={project} onOpenWork={() => go("content")} />;
+        return <ProjectDeliverablesPanel project={project} onOpenWork={() => go("generate")} />;
       case "tasks":
         return <ProjectWorkPanel project={project} />;
       case "history":

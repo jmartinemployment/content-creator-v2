@@ -118,7 +118,23 @@ type GenerateRun = {
   startedAt: Date;
 };
 
-export default function ProjectContentWorkspace({ project }: { project: GccProject }) {
+/** The part of the workspace a project section shows: the brief, or Generate with its output. */
+export type ContentView = "brief" | "generate";
+
+export default function ProjectContentWorkspace({
+  project,
+  view,
+  onOpen,
+}: {
+  project: GccProject;
+  /**
+   * Which part is on screen. The other stays mounted and hidden: the brief editor holds unsaved
+   * edits and Generate holds a run's report, and unmounting either would lose them.
+   */
+  view: ContentView;
+  /** Moves to the other part, for the places one sends the reader to the other. */
+  onOpen?: (view: ContentView) => void;
+}) {
   const projectId = project.id;
   const [detail, setDetail] = useState<ProjectContent | null>(null);
   // Set when the project's drafts could not be read. Said on screen; an empty list would read as
@@ -834,10 +850,12 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         ) : null}
       </div>
 
-      {/* One surface. Each stage is a band on it, divided by a rule -- see Stage. */}
+      {/* One surface. Each stage is a band on it, divided by a rule -- see Stage. The brief and
+          Generate are separate sections of the project (Jeff, 2026-10-12: "Separate Brief &
+          Generate"), so one of the two groups below is hidden. */}
       <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <div hidden={view !== "brief"}>
         <Stage
-          step={1}
           title="Brief"
           note={
             briefOpen
@@ -885,8 +903,10 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         </>
           )}
         </Stage>
+        </div>
 
-        <Stage step={2} title="Generate" note="What to produce from this brief. Each one is written independently.">
+        <div hidden={view !== "generate"}>
+        <Stage title="Generate" note="What to produce from the saved brief. Each one is written independently.">
           {/* Lives here rather than inside the brief: it is the choice Generate acts on, and inside
               the brief it disappeared the moment the brief was collapsed. */}
           <ContentTypePicker selected={outputTypes} onToggle={toggleOutputType} />
@@ -997,12 +1017,16 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
             </p>
           ) : null}
           {!briefSaved ? (
-            <p className="mt-3 text-sm text-muted">Unsaved changes. Save the brief first.</p>
+            <p className="mt-3 text-sm text-muted">
+              The brief has unsaved changes. Save it first. <OpenBrief onOpen={onOpen} />
+            </p>
           ) : !briefReady ? (
-            <p className="mt-3 text-sm text-muted">Nothing is saved in the brief yet.</p>
+            <p className="mt-3 text-sm text-muted">
+              Nothing is saved in the brief yet. <OpenBrief onOpen={onOpen} />
+            </p>
           ) : savedBriefMissing.length > 0 ? (
             <p className="mt-3 text-sm text-muted">
-              The saved brief is missing: {savedBriefMissing.join(", ")}.
+              The saved brief is missing: {savedBriefMissing.join(", ")}. <OpenBrief onOpen={onOpen} />
             </p>
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
@@ -1020,11 +1044,11 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
           )}
         </Stage>
 
-      <Stage step={3} title="Output">
+      <Stage title="Output">
       {draftsError ? (
         <p className="mb-4 border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           This project&rsquo;s drafts could not be read from the server, so none are shown:{" "}
-          {draftsError}. They are not deleted. The brief above saves regardless.
+          {draftsError}. They are not deleted. The brief saves regardless.
         </p>
       ) : null}
       {/* The generated content set: one tab per content type this create produced, and inside a
@@ -1150,7 +1174,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           {selectedGroup && selectedGroup.artifacts.length === 0
             ? `No ${selectedGroup.label} yet for this project. Pick it as an output type, then Generate above.`
-            : "No draft artifact yet. Save the Content Brief, then Generate above."}
+            : "No draft artifact yet. Save the brief, then Generate above."}
         </div>
       ) : (
         <div className="flex flex-col gap-7">
@@ -1310,6 +1334,7 @@ export default function ProjectContentWorkspace({ project }: { project: GccProje
         </div>
       )}
       </Stage>
+        </div>
       </div>
 
       {actionError ? (
@@ -1893,14 +1918,26 @@ function contentTypeLabel(value: string): string {
   return CONTENT_TYPES.find((t) => t.value === value)?.label ?? value;
 }
 
+/** The way from Generate to the brief, where Generate is waiting on it. */
+function OpenBrief({ onOpen }: { onOpen?: (view: ContentView) => void }) {
+  if (!onOpen) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen("brief")}
+      className="font-medium text-[#C83803] underline-offset-2 hover:underline"
+    >
+      Open Brief
+    </button>
+  );
+}
+
 function Stage({
-  step,
   title,
   note,
   children,
   aside,
 }: {
-  step: number;
   title: string;
   note?: string;
   children: React.ReactNode;
@@ -1909,10 +1946,7 @@ function Stage({
   return (
     <section className="border-t border-border px-5 py-7 first:border-t-0 sm:px-7">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="flex items-baseline gap-2.5 font-display text-xl text-foreground">
-          <span className="text-sm font-normal text-muted tabular-nums">{step}</span>
-          {title}
-        </h2>
+        <h2 className="font-display text-xl text-foreground">{title}</h2>
         {aside}
       </div>
       {note ? <p className="mt-1 max-w-[62ch] text-sm leading-relaxed text-muted">{note}</p> : null}
