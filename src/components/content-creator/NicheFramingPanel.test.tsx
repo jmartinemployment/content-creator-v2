@@ -113,7 +113,7 @@ test("a tool's section holds its pain point, its rows, its hook and its FAQ, in 
   assert.deepEqual(failuresShown(), ["Reminders are sent by hand.", "Disputes stall payment."]);
   assert.equal((screen.getByPlaceholderText(PAIN_POINT) as HTMLTextAreaElement).value, "Collections run on memory.");
   assert.equal((screen.getByPlaceholderText(HOOK) as HTMLTextAreaElement).value, "Get paid without chasing.");
-  const labels = ["Core pain point", "Where small businesses fail, and the tool’s remedy", "The marketing/sales hook to pitch", "Tool page FAQ"]
+  const labels = ["Core pain point", "Where small businesses fail, and the tool’s remedy", "The automation to pitch — the marketing/sales hook", "Tool page FAQ"]
     .map((label) => screen.getByText(label));
   for (let i = 1; i < labels.length; i += 1) {
     assert.ok(
@@ -137,14 +137,14 @@ test("the hook typed in a tool's section is saved as that tool's pitch, and no o
   assert.equal(saved.current.automationToPitch, "");
 });
 
-test("a closed section says what the tool has: its rows, whether it has a hook, its searches", async (t) => {
+test("a closed section says what the tool has: its rows, whether it has a pitch and an FAQ, its searches", async (t) => {
   t.after(cleanup);
   installProject(["https://www.chaserhq.com", "https://upflow.io"]);
   open(framing());
   await partnersLoaded();
 
-  assert.match(section(/Chaserhq/).textContent ?? "", /no rows · no hook · 1 search$/);
-  assert.match(section(/Upflow/).textContent ?? "", /2 rows · hook · 3 searches$/);
+  assert.match(section(/Chaserhq/).textContent ?? "", /no rows · no pitch · no FAQ · 1 search$/);
+  assert.match(section(/Upflow/).textContent ?? "", /2 rows · pitch · FAQ · 3 searches$/);
 });
 
 test("a row added in a tool's section is that tool's, and is last", async (t) => {
@@ -254,7 +254,7 @@ test("a row saved for all partners is still shown, under the category, and can b
   assert.equal(saved.current.painPoints, "");
   assert.deepEqual(saved.current.perTool["chaserhq.com"].evidence.map((r) => r.problem), ["Invoices go out late."]);
   assert.equal(screen.queryByText("Rows saved for all partners"), null);
-  assert.match(section(/Chaserhq/).textContent ?? "", /1 row · no hook · 2 searches$/);
+  assert.match(section(/Chaserhq/).textContent ?? "", /1 row · no pitch · no FAQ · 2 searches$/);
 });
 
 test("what is saved under a host that is no longer a partner is shown, says so, and can be given to a partner", async (t) => {
@@ -265,8 +265,8 @@ test("what is saved under a host that is no longer a partner is shown, says so, 
   await partnersLoaded();
 
   const stranded = section(/upflow\.io — not a partner of this project/);
-  assert.match(stranded.textContent ?? "", /2 rows · hook · used by no page$/);
-  assert.match(section(/Getupflow/).textContent ?? "", /no rows · no hook · 1 search$/);
+  assert.match(stranded.textContent ?? "", /2 rows · pitch · FAQ · used by no page$/);
+  assert.match(section(/Getupflow/).textContent ?? "", /no rows · no pitch · no FAQ · 1 search$/);
 
   fireEvent.click(stranded);
   // All of it is there to read, not only the rows.
@@ -282,7 +282,7 @@ test("what is saved under a host that is no longer a partner is shown, says so, 
   assert.equal(saved.current.perTool["upflow.io"], undefined);
   assert.deepEqual(saved.current.perTool["getupflow.com"], framing().perTool["upflow.io"]);
   assert.equal(screen.queryByRole("button", { name: /not a partner of this project/ }), null);
-  assert.match(section(/Getupflow/).textContent ?? "", /2 rows · hook · 3 searches$/);
+  assert.match(section(/Getupflow/).textContent ?? "", /2 rows · pitch · FAQ · 3 searches$/);
 });
 
 test("no host is called not a partner before the project's partners are known", async (t) => {

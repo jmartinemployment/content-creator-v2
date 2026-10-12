@@ -207,10 +207,10 @@ export default function NicheFramingPanel({
             ) : null}
           </div>
           <p className="mt-1 text-xs text-muted">
-            One section a tool, holding everything you researched for it: its core pain point, where
-            small businesses fail and what the tool does about each, the marketing/sales hook to
-            pitch, and its page&rsquo;s FAQ. A pain point or a hook left empty uses the
-            category&rsquo;s.
+            One section a tool, holding everything you researched for it, in this order: its core
+            pain point, where small businesses fail and what the tool does about each, the automation
+            to pitch (its marketing/sales hook), and its tool page FAQ. A pain point or a pitch left
+            empty uses the category&rsquo;s.
           </p>
           <ul className="mt-2 space-y-1.5">
             {partners.map((partner) => (
@@ -350,10 +350,11 @@ function ToolSection({
             `${host} — not a partner of this project`
           )}
         </span>
-        {/* What is entered, read off the closed section: a tool with no hook says so here. */}
+        {/* What is entered, read off the closed section: a tool with no pitch or no FAQ says so here. */}
         <span className="shrink-0 text-xs text-muted">
           {rows === 0 ? "no rows" : `${rows} ${rows === 1 ? "row" : "rows"}`}
-          {set.automationToPitch.trim() ? " · hook" : " · no hook"}
+          {set.automationToPitch.trim() ? " · pitch" : " · no pitch"}
+          {set.faqQuestions.trim() ? " · FAQ" : " · no FAQ"}
           {partner
             ? questions.length === 0
               ? " · bare keyword only"
@@ -379,7 +380,7 @@ function ToolSection({
           />
           <EvidenceRows framing={framing} owner={host} partners={partners} onChange={onChange} />
           <TextBox
-            label="The marketing/sales hook to pitch"
+            label="The automation to pitch — the marketing/sales hook"
             hint={`What you would say to sell ${name}. Its page argues it as what answers the problem; left empty, the category's automation to pitch is used there. The pillar and the blog are told it under ${name}'s name, to argue in their own words.`}
             value={set.automationToPitch}
             onChange={(automationToPitch) => patchSet({ automationToPitch })}
