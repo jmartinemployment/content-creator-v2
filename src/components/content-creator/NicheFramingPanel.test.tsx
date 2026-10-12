@@ -179,30 +179,6 @@ test("removing a row takes it from that tool, and the row below keeps what was t
   assert.equal((screen.getByPlaceholderText(TERMS) as HTMLInputElement).value, "");
 });
 
-test("research pasted in a tool's section makes rows for that tool", async (t) => {
-  t.after(cleanup);
-  installProject(["https://www.chaserhq.com", "https://upflow.io"]);
-  const { saved } = open(framing());
-  await partnersLoaded();
-
-  fireEvent.click(section(/Chaserhq/));
-  fireEvent.change(screen.getByPlaceholderText(/^International vendors are paid manually/), {
-    target: { value: "Nobody chases.\tAutomated chasing by email and SMS.\tchasing, reminders\nDisputes stall.\tA payment portal." },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Make rows" }));
-
-  assert.deepEqual(
-    saved.current.perTool["chaserhq.com"].evidence,
-    [
-      { problem: "Nobody chases.", solution: "Automated chasing by email and SMS.", terms: ["chasing", "reminders"] },
-      { problem: "Disputes stall.", solution: "A payment portal.", terms: [] },
-    ],
-  );
-  assert.equal(saved.current.perTool["chaserhq.com"].painPoints, "Nobody chases.\n\nDisputes stall.");
-  assert.equal(saved.current.perTool["upflow.io"].evidence.length, 2);
-  assert.deepEqual(failuresShown(), ["Nobody chases.", "Disputes stall."]);
-});
-
 test("a second search term can be typed, comma and all", async (t) => {
   t.after(cleanup);
   installProject(["https://www.chaserhq.com", "https://upflow.io"]);

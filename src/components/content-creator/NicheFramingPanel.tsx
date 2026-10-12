@@ -11,7 +11,6 @@ import {
   giveToolEntriesTo,
   hostsWithNoPartner,
   moveEvidenceRow,
-  parseEvidenceRows,
   partnerQuestions,
   taxonomyFirstLevel,
   taxonomyPathNamesNoDepartment,
@@ -519,9 +518,6 @@ function editedRow(row: EvidenceRow, next: Partial<EvidenceRow>): EvidenceRow {
  * describing three failures of six and fixing none of those three; remedies written in the vendor's
  * own words found the product page for all six. Nothing here is ever quoted.
  *
- * Rows can be pasted in from a research answer and reviewed before the brief is saved; the
- * conversion is a deterministic split on the table's columns, never a model.
- *
  * `owner` is a tool's host, or `ALL_PARTNERS` for the rows a brief was saved with for every partner.
  * Those are listed under the category with the tool each can be given to, and none can be added: a
  * failure is entered under the tool whose remedy it has.
@@ -537,7 +533,6 @@ function EvidenceRows({
   partners: Partner[];
   onChange: (next: NicheFraming) => void;
 }) {
-  const [pasted, setPasted] = useState("");
   const forAll = owner === ALL_PARTNERS;
   const rows = evidenceRowsOf(framing, owner);
 
@@ -549,12 +544,6 @@ function EvidenceRows({
   }
   function addRows(added: EvidenceRow[]) {
     onChange(withEvidenceRows(framing, owner, [...rows, ...added]));
-  }
-  function importPasted() {
-    const parsed = parseEvidenceRows(pasted);
-    if (parsed.length === 0) return;
-    addRows(parsed);
-    setPasted("");
   }
 
   const inputClass = boxClass;
@@ -644,38 +633,13 @@ function EvidenceRows({
         ))}
       </ol>
       {forAll ? null : (
-        <>
-          <button
-            type="button"
-            onClick={() => addRows([emptyEvidenceRow()])}
-            className="mt-2 text-xs font-medium text-brand hover:underline"
-          >
-            + Add a row
-          </button>
-
-          <label className="mt-3 block">
-            <span className="text-xs text-foreground">Paste research to make rows</span>
-            <span className="mt-0.5 block text-xs text-muted">
-              A research table (failure, remedy, terms per line) or blank-line blocks. Rows appear
-              above to correct; nothing is saved until the brief is.
-            </span>
-            <textarea
-              value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
-              rows={4}
-              placeholder={"International vendors are paid manually through bank wires.\tGlobal payments through Mass Payments: 200+ countries, 120 currencies, 50+ payment methods.\tglobal payments, mass payments, wire"}
-              className={inputClass}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={importPasted}
-            disabled={pasted.trim().length === 0}
-            className="mt-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
-          >
-            Make rows
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={() => addRows([emptyEvidenceRow()])}
+          className="mt-2 text-xs font-medium text-brand hover:underline"
+        >
+          + Add a row
+        </button>
       )}
     </div>
   );

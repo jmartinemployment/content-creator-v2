@@ -14,7 +14,6 @@ import {
   migrateBrief,
   moveEvidenceRow,
   nicheFramingSetHasAny,
-  parseEvidenceRows,
   partnerQuestions,
   withEvidenceRows,
   taxonomyFirstLevel,
@@ -299,48 +298,6 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
     assert.deepEqual(read.evidence, []);
     assert.deepEqual(read.perTool["upflow.io"].evidence, f.perTool["upflow.io"].evidence);
     assert.deepEqual(Object.keys(read.perTool["upflow.io"]).sort(), Object.keys(emptyNicheFramingSet()).sort());
-  });
-});
-
-describe("parseEvidenceRows — pasted research becomes rows for review", () => {
-  it("reads a tab- or pipe-separated table, dropping the header, with a trailing comma list as terms", () => {
-    const rows = parseEvidenceRows(
-      "Your problem\tTipalti solution\tTerms\n" +
-        "International vendors are paid manually through bank wires.\tGlobal payments through Mass Payments: 200+ countries, 120 currencies.\tglobal payments, mass payments\n" +
-        "Finance staff chase vendors for onboarding information. | Self-service supplier portal and embedded payee onboarding.\n",
-    );
-    assert.equal(rows.length, 2);
-    assert.equal(rows[0]?.problem, "International vendors are paid manually through bank wires.");
-    assert.equal(rows[0]?.solution, "Global payments through Mass Payments: 200+ countries, 120 currencies.");
-    assert.deepEqual(rows[0]?.terms, ["global payments", "mass payments"]);
-    assert.equal(rows[1]?.problem, "Finance staff chase vendors for onboarding information.");
-    assert.deepEqual(rows[1]?.terms, []);
-  });
-
-  it("reads a research answer's multi-space columns and joins the middle cells into the solution", () => {
-    const rows = parseEvidenceRows(
-      "Tax forms are stored inconsistently.    Supplier onboarding and tax compliance    Collects W-9 and W-8 forms through self-service onboarding.    W-9 W-8, supplier onboarding, tax compliance",
-    );
-    const [row] = rows;
-    assert.equal(row?.problem, "Tax forms are stored inconsistently.");
-    assert.equal(row?.solution, "Supplier onboarding and tax compliance Collects W-9 and W-8 forms through self-service onboarding.");
-    assert.deepEqual(row?.terms, ["W-9 W-8", "supplier onboarding", "tax compliance"]);
-  });
-
-  it("reads blank-line blocks: problem, solution, optional terms", () => {
-    const rows = parseEvidenceRows(
-      "Cannot reconcile global payments.\nAutomated payment reconciliation syncs with the ERP.\npayment reconciliation, multi-entity\n\n" +
-        "Outgrows SMB bill pay.\nPrebuilt integrations extend the existing accounting system.",
-    );
-    assert.equal(rows.length, 2);
-    assert.deepEqual(rows[0]?.terms, ["payment reconciliation", "multi-entity"]);
-    assert.equal(rows[1]?.solution, "Prebuilt integrations extend the existing accounting system.");
-    assert.deepEqual(rows[1]?.terms, []);
-  });
-
-  it("ignores text that fits neither shape rather than guessing", () => {
-    assert.deepEqual(parseEvidenceRows("just one line of prose"), []);
-    assert.deepEqual(parseEvidenceRows(""), []);
   });
 });
 
