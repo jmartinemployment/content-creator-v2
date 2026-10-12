@@ -8,14 +8,14 @@ import {
   emptyEvidenceRow,
   emptyNicheFraming,
   emptyNicheFramingSet,
-  evidenceOwners,
   evidenceRowHasAny,
+  giveToolEntriesTo,
+  hostsWithNoPartner,
   migrateBrief,
   moveEvidenceRow,
   nicheFramingSetHasAny,
   parseEvidenceRows,
   partnerQuestions,
-  placedEvidenceRows,
   withEvidenceRows,
   taxonomyFirstLevel,
   taxonomyPathNamesNoDepartment,
@@ -146,7 +146,7 @@ describe("rows are the one place a failure is entered", () => {
   });
 });
 
-describe("a row belongs to one partner or to all of them (2026-10-11)", () => {
+describe("a row belongs to one partner or to all of them, and a tool's entries are filed under its host", () => {
   const row = (problem: string, solution = "") => ({ problem, solution, terms: [] as string[] });
   const framing = () => ({
     ...emptyNicheFraming(),
@@ -167,21 +167,19 @@ describe("a row belongs to one partner or to all of them (2026-10-11)", () => {
   });
   const partners = ["chaserhq.com", "upflow.io"];
 
-  it("the table lists every row: all partners' first, each partner's in the project's order, then a removed partner's", () => {
-    assert.deepEqual(evidenceOwners(framing(), partners), [ALL_PARTNERS, "chaserhq.com", "upflow.io", "gone.example"]);
-    assert.deepEqual(
-      placedEvidenceRows(framing(), partners).map((p) => [p.owner, p.index, p.row.problem]),
-      [
-        [ALL_PARTNERS, 0, "Invoices go out late."],
-        ["upflow.io", 0, "Reminders are sent by hand."],
-        ["gone.example", 0, "A row under a removed partner."],
-      ],
-    );
-  });
+  it("a host that is not a partner is listed when the brief holds anything under it, rows or not", () => {
+    assert.deepEqual(hostsWithNoPartner(framing(), partners), ["gone.example"]);
 
-  it("a host with no rows that is not a partner is not listed", () => {
-    const f = { ...framing(), perTool: { "old.example": { ...emptyNicheFramingSet(), coreProblem: "x" } } };
-    assert.deepEqual(evidenceOwners(f, partners), [ALL_PARTNERS, "chaserhq.com", "upflow.io"]);
+    // Its pain point alone is something saved: it was hidden while only a host's rows were listed.
+    const f = {
+      ...framing(),
+      perTool: {
+        "old.example": { ...emptyNicheFramingSet(), coreProblem: "x" },
+        "blank.example": emptyNicheFramingSet(),
+      },
+    };
+    assert.deepEqual(hostsWithNoPartner(f, partners), ["old.example"]);
+    assert.deepEqual(hostsWithNoPartner(framing(), [...partners, "gone.example"]), []);
   });
 
   it("giving a row to a partner moves it into that partner's own rows, after its last, and nowhere else", () => {
@@ -245,6 +243,54 @@ describe("a row belongs to one partner or to all of them (2026-10-11)", () => {
     ]);
     // Chaserhq is searched with the core problem alone: the row is no longer every partner's.
     assert.deepEqual(needs("chaserhq.com"), ["Cash arrives whenever the customer gets round to paying."]);
+  });
+
+  it("a host's entries given to a partner with none of its own move whole, and the host is dropped", () => {
+    const before = framing();
+    const after = giveToolEntriesTo(before, "upflow.io", "chaserhq.com");
+
+    assert.equal(after.perTool["upflow.io"], undefined);
+    assert.deepEqual(after.perTool["chaserhq.com"], before.perTool["upflow.io"]);
+    // The same rows, not copies, and nothing else in the brief is touched.
+    assert.equal(after.perTool["chaserhq.com"].evidence[0], before.perTool["upflow.io"].evidence[0]);
+    assert.deepEqual(after.evidence, before.evidence);
+    assert.deepEqual(after.perTool["gone.example"], before.perTool["gone.example"]);
+  });
+
+  it("a partner keeps the pain point and the hook it has; rows and questions are added after its own", () => {
+    const before = {
+      ...framing(),
+      perTool: {
+        ...framing().perTool,
+        "chaserhq.com": {
+          ...emptyNicheFramingSet(),
+          coreProblem: "Nobody owns the chase.",
+          faqQuestions: "Does it sync with QuickBooks?\nIs there a free plan?",
+          evidence: [row("Nobody chases.", "Automated chasing.")],
+          painPoints: "Nobody chases.",
+        },
+      },
+    };
+    const after = giveToolEntriesTo(before, "upflow.io", "chaserhq.com");
+    const given = after.perTool["chaserhq.com"];
+
+    assert.equal(given.coreProblem, "Nobody owns the chase.");
+    // It had no hook, so it takes the one given.
+    assert.equal(given.automationToPitch, "A collections workflow.");
+    assert.deepEqual(given.evidence.map((r) => r.problem), ["Nobody chases.", "Reminders are sent by hand."]);
+    assert.equal(given.painPoints, "Nobody chases.\n\nReminders are sent by hand.");
+    // A question it already asks is not asked twice.
+    assert.equal(given.faqQuestions, "Does it sync with QuickBooks?\nIs there a free plan?");
+    // The pain point it did not take stays where it was, still shown, and nothing else does.
+    assert.deepEqual(after.perTool["upflow.io"], { ...emptyNicheFramingSet(), coreProblem: "Collections run on memory." });
+    assert.deepEqual(hostsWithNoPartner(after, ["chaserhq.com"]), ["upflow.io", "gone.example"]);
+  });
+
+  it("giving a host's entries to itself, to all partners or from a host that holds none changes nothing", () => {
+    const f = framing();
+    assert.equal(giveToolEntriesTo(f, "upflow.io", "upflow.io"), f);
+    assert.equal(giveToolEntriesTo(f, "upflow.io", ALL_PARTNERS), f);
+    assert.equal(giveToolEntriesTo(f, "nobody.example", "chaserhq.com"), f);
   });
 
   it("nothing new is saved: a brief with a moved row reads back as the same rows", () => {

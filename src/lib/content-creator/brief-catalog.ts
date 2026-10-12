@@ -215,7 +215,12 @@ export type NicheFramingSet = {
    * true, which is the kind of false claim about a live format `.cursor/rules` exists to forbid.
    */
   painPoints: string;
-  /** What removes the problem, and the shape of the offer. */
+  /**
+   * What removes the problem, and the shape of the offer. For the category the form calls it "The
+   * automation to pitch"; in a tool's own section it is "The marketing/sales hook to pitch" (Jeff,
+   * 2026-10-12), the last part of his research for a partner. One field either way: GeekAPI gives a
+   * tool's page its own, or the category's when the tool has none, as what answers the problem.
+   */
   automationToPitch: string;
   /**
    * One retrieval question per failure (Geek-Crawler-Rag `plans/retrieval-from-the-brief.md`,
@@ -223,7 +228,8 @@ export type NicheFramingSet = {
    * index's meaning half, `terms` to its keyword half. Measured on Tipalti the same day: the
    * brief's pain points found the vendor *describing* three of six failures and the fix for none of
    * those three; solution descriptions in the vendor's own vocabulary found the product page for all
-   * six. Per tool, rows are *added* to the category's, like pain points.
+   * six. Per tool, rows are *added* to the category's, like pain points. The form enters them in
+   * the tool's own section; the category's are only what an older brief was saved with.
    *
    * Never quoted. Like every other field here it is prompt and retrieval input; quotes still come
    * only from crawled partner pages.
@@ -330,16 +336,15 @@ export function derivePainPoints(rows: readonly EvidenceRow[]): string {
 }
 
 /**
- * Who a row belongs to: one partner's host, or every partner. The form shows one table of rows with
- * the partner chosen on each (Jeff, 2026-10-11: the research is five failures and five remedies per
- * partner, and a row named no partner). Nothing new is stored: a row for every partner is the
- * category's `evidence`, a row for one partner is that host's `perTool` entry's, which is where
- * GeekAPI already reads each from.
+ * Who a row belongs to: one partner's host, or every partner. A row for one partner is that host's
+ * `perTool` entry's, entered in that tool's own section of the form; a row for every partner is the
+ * category's `evidence`. GeekAPI reads each from there.
+ *
+ * The form enters rows per tool only (Jeff, 2026-10-12: one section a tool, holding everything
+ * researched for it). A brief saved with rows for every partner still shows them, under the
+ * category, where each can be given to a tool or removed.
  */
 export const ALL_PARTNERS = "";
-
-/** A row with where it is stored: its owner, and its place in that owner's rows. */
-export type PlacedEvidenceRow = { owner: string; index: number; row: EvidenceRow };
 
 /** The rows one owner holds: the category's for `ALL_PARTNERS`, else that host's own. */
 export function evidenceRowsOf(framing: NicheFraming, owner: string): EvidenceRow[] {
@@ -347,29 +352,63 @@ export function evidenceRowsOf(framing: NicheFraming, owner: string): EvidenceRo
 }
 
 /**
- * The owners that hold rows, in the order the table lists them: every partner first, then the
- * project's partners in the project's order, then any other host a saved brief still holds rows
- * under (a partner removed from the project since). The last are listed so no saved row is hidden.
+ * The hosts a saved brief holds entries under that are not partners of the project: a partner whose
+ * address was changed or removed since. Listed so nothing saved is hidden.
+ *
+ * Everything a tool has in the brief is filed under its host, and changing a partner's address in
+ * the Profile moves none of it. On 2026-10-12 a partner's address was corrected and its five rows,
+ * its pain point, its hook and its FAQ stayed under the old one: the new site was searched once
+ * where the others were searched six times, and its tool page was refused.
  */
-export function evidenceOwners(framing: NicheFraming, partnerHosts: readonly string[]): string[] {
-  const owners = [ALL_PARTNERS];
-  for (const host of partnerHosts) {
-    if (host && !owners.includes(host)) owners.push(host);
-  }
-  for (const host of Object.keys(framing.perTool)) {
-    if (!owners.includes(host) && evidenceRowsOf(framing, host).length > 0) owners.push(host);
-  }
-  return owners;
+export function hostsWithNoPartner(framing: NicheFraming, partnerHosts: readonly string[]): string[] {
+  return Object.keys(framing.perTool).filter(
+    (host) => !partnerHosts.includes(host) && nicheFramingSetHasAny(framing.perTool[host]),
+  );
 }
 
-/** Every row in the brief, each with its owner, in the table's order. */
-export function placedEvidenceRows(
-  framing: NicheFraming,
-  partnerHosts: readonly string[],
-): PlacedEvidenceRow[] {
-  return evidenceOwners(framing, partnerHosts).flatMap((owner) =>
-    evidenceRowsOf(framing, owner).map((row, index) => ({ owner, index, row })),
-  );
+/**
+ * Everything saved under one host given to a partner: its rows after the partner's own, its FAQ
+ * questions after the partner's own (a question the partner already has is not added twice), and its
+ * pain point and its hook where the partner has none.
+ *
+ * Nothing is overwritten. A pain point or a hook the partner already has stays, and the other stays
+ * where it was, still shown, for the operator to choose between. A host left with nothing is dropped.
+ */
+export function giveToolEntriesTo(framing: NicheFraming, from: string, to: string): NicheFraming {
+  const source = framing.perTool[from];
+  if (!source || from === to || to === ALL_PARTNERS) return framing;
+  const target = framing.perTool[to] ?? emptyNicheFramingSet();
+
+  const takesProblem = target.coreProblem.trim().length === 0;
+  const takesPitch = target.automationToPitch.trim().length === 0;
+  const evidence = [...target.evidence, ...source.evidence];
+  const has = new Set(lines(target.faqQuestions));
+  const faqQuestions = [...lines(target.faqQuestions), ...lines(source.faqQuestions).filter((q) => !has.has(q))].join("\n");
+
+  const given: NicheFramingSet = {
+    coreProblem: takesProblem ? source.coreProblem : target.coreProblem,
+    automationToPitch: takesPitch ? source.automationToPitch : target.automationToPitch,
+    evidence,
+    painPoints: derivePainPoints(evidence),
+    faqQuestions,
+  };
+  const left: NicheFramingSet = {
+    ...emptyNicheFramingSet(),
+    coreProblem: takesProblem ? "" : source.coreProblem,
+    automationToPitch: takesPitch ? "" : source.automationToPitch,
+  };
+
+  const perTool = { ...framing.perTool, [to]: given };
+  if (nicheFramingSetHasAny(left)) perTool[from] = left;
+  else delete perTool[from];
+  return { ...framing, perTool };
+}
+
+function lines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 /** One owner's rows replaced, with that owner's "where they fail" derived from them as ever. */
