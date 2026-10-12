@@ -372,7 +372,7 @@ function ToolSection({
           )}
           <TextBox
             label="Core pain point"
-            hint={`${name}'s own. Left empty, the category's core problem is used.`}
+            hint={`${name}'s own. Its page opens on it; left empty, the category's core problem is used there. The pillar and the blog are told it under ${name}'s name.`}
             value={set.coreProblem}
             onChange={(coreProblem) => patchSet({ coreProblem })}
             placeholder="Fractional CFOs lose twenty hours a month rebuilding the same forecast in a spreadsheet."
@@ -380,7 +380,7 @@ function ToolSection({
           <EvidenceRows framing={framing} owner={host} partners={partners} onChange={onChange} />
           <TextBox
             label="The marketing/sales hook to pitch"
-            hint={`What you would say to sell ${name}. Its page argues it as what answers the problem; left empty, the category's automation to pitch is used.`}
+            hint={`What you would say to sell ${name}. Its page argues it as what answers the problem; left empty, the category's automation to pitch is used there. The pillar and the blog are told it under ${name}'s name, to argue in their own words.`}
             value={set.automationToPitch}
             onChange={(automationToPitch) => patchSet({ automationToPitch })}
             placeholder="Stop rebuilding the forecast every Monday. A rolling 52-week view of cash in five minutes, with no formulas."
