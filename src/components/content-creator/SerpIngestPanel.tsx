@@ -19,10 +19,16 @@ import {
  * nobody read was captured. `.cursor/rules/no-unwired-code.mdc` had listed it since 2026-09-27
  * ("SERP ingest changed nothing"). Removed 2026-10-03 as Phase 1 of the dead-code removal.
  *
- * The questions are the half that does something: they become the pillar's FAQ section
- * (`GccGenerateService:2407`) and license headings against PAA (`:3120`). So the panel is named for
+ * The questions are the half that does something: they become the pillar's FAQ section (GeekAPI
+ * `GccGenerateService.WriteFaqInBatchesAsync`) and are headings an outline may take
+ * (`GccHeadingProvenanceGuard`, the "paa" source). So the panel is named for
  * that now -- "SERP ingest" described where the data came from, not what it is for, which is why its
  * output looked inert when three quarters of it was.
+ *
+ * Since 2026-10-13 a confirmed question arrives in the brief's People Also Ask box as a row with no
+ * answer. Jeff supplies the answer to each question: nothing is searched for it, the writer says his
+ * answer in the Brief's voice, and a question with no answer is left off the page and reported. So
+ * confirming questions here does not by itself put anything on the pillar, and the panel says so.
  */
 export function SerpIngestPanel({
   gapTopic,
@@ -104,8 +110,10 @@ export function SerpIngestPanel({
       <p className="text-sm font-semibold text-foreground">FAQ questions from a saved results page</p>
       <p className="text-xs text-[var(--gcc-muted)]">
         Run the keyword search in your browser, save the results page, and upload it. The People Also
-        Ask questions you confirm become the pillar&rsquo;s FAQ section &mdash; a pillar with no
-        questions here gets no FAQ. Prefer <strong>page 1</strong>; page 2 usually has no PAA.
+        Ask questions you confirm go into &ldquo;People Also Ask (direct entry, optional)&rdquo; below,
+        each with no answer yet. The pillar&rsquo;s People Also Ask section is written from the answers
+        you type there, and a question with no answer is left off the page. Prefer{" "}
+        <strong>page 1</strong>; page 2 usually has no PAA.
       </p>
 
       <div className="flex flex-wrap gap-2">

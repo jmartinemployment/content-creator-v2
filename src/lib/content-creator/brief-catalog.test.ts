@@ -3,22 +3,34 @@ import { describe, it } from "node:test";
 
 import {
   ALL_PARTNERS,
+  briefAsSaved,
+  briefFingerprint,
   contentBriefMissingFields,
   derivePainPoints,
+  emptyContentBrief,
   emptyEvidenceRow,
+  emptyFaqRow,
   emptyNicheFraming,
   emptyNicheFramingSet,
   evidenceRowHasAny,
+  faqRowHasNoAnswer,
+  faqRowsFromStored,
+  faqRowsToSaved,
+  faqRowsWithNoAnswer,
+  faqRowsWithQuestion,
   giveToolEntriesTo,
   hostsWithNoPartner,
   migrateBrief,
   moveEvidenceRow,
   nicheFramingSetHasAny,
+  parseBriefJson,
   partnerQuestions,
   withEvidenceRows,
   taxonomyFirstLevel,
   taxonomyPathNamesNoDepartment,
+  type FaqRow,
 } from "./brief-catalog";
+import { briefToJson } from "@/services/gcc-api";
 
 describe("the taxonomy path's first level is the department, checked as GeekAPI checks it", () => {
   it("a department is accepted whatever its case, spacing or the separator after it", () => {
@@ -163,6 +175,7 @@ describe("rows are the one place a failure is entered", () => {
 
 describe("a row belongs to one partner or to all of them, and a tool's entries are filed under its host", () => {
   const row = (problem: string, solution = "") => ({ problem, solution, terms: [] as string[] });
+  const faq = (question: string, answer = ""): FaqRow => ({ question, answer });
   const framing = () => ({
     ...emptyNicheFraming(),
     coreProblem: "Cash arrives whenever the customer gets round to paying.",
@@ -173,7 +186,7 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
         ...emptyNicheFramingSet(),
         coreProblem: "Collections run on memory.",
         automationToPitch: "A collections workflow.",
-        faqQuestions: "Does it sync with QuickBooks?",
+        faqQuestions: [faq("Does it sync with QuickBooks?", "Yes, both ways.")],
         evidence: [row("Reminders are sent by hand.", "Automated reminder sequences.")],
         painPoints: "Reminders are sent by hand.",
       },
@@ -214,7 +227,7 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
     // What the partner's section holds besides rows is untouched.
     assert.equal(after.perTool["upflow.io"].coreProblem, "Collections run on memory.");
     assert.equal(after.perTool["upflow.io"].automationToPitch, "A collections workflow.");
-    assert.equal(after.perTool["upflow.io"].faqQuestions, "Does it sync with QuickBooks?");
+    assert.deepEqual(after.perTool["upflow.io"].faqQuestions, [faq("Does it sync with QuickBooks?", "Yes, both ways.")]);
     assert.equal(after.coreProblem, before.coreProblem);
     assert.deepEqual(after.perTool["gone.example"], before.perTool["gone.example"]);
   });
@@ -281,7 +294,7 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
         "chaserhq.com": {
           ...emptyNicheFramingSet(),
           coreProblem: "Nobody owns the chase.",
-          faqQuestions: "Does it sync with QuickBooks?\nIs there a free plan?",
+          faqQuestions: [faq("Does it sync with QuickBooks?", "Yes, both ways."), faq("Is there a free plan?", "No.")],
           evidence: [row("Nobody chases.", "Automated chasing.")],
           painPoints: "Nobody chases.",
         },
@@ -295,11 +308,68 @@ describe("a row belongs to one partner or to all of them, and a tool's entries a
     assert.equal(given.automationToPitch, "A collections workflow.");
     assert.deepEqual(given.evidence.map((r) => r.problem), ["Nobody chases.", "Reminders are sent by hand."]);
     assert.equal(given.painPoints, "Nobody chases.\n\nReminders are sent by hand.");
-    // A question it already asks is not asked twice.
-    assert.equal(given.faqQuestions, "Does it sync with QuickBooks?\nIs there a free plan?");
+    // A question it already asks, with the same answer, is not asked twice.
+    assert.deepEqual(given.faqQuestions, [
+      faq("Does it sync with QuickBooks?", "Yes, both ways."),
+      faq("Is there a free plan?", "No."),
+    ]);
     // The pain point it did not take stays where it was, still shown, and nothing else does.
     assert.deepEqual(after.perTool["upflow.io"], { ...emptyNicheFramingSet(), coreProblem: "Collections run on memory." });
     assert.deepEqual(hostsWithNoPartner(after, ["chaserhq.com"]), ["upflow.io", "gone.example"]);
+  });
+
+  it("a host's FAQ rows are given with their answers, after the partner's own", () => {
+    const before = {
+      ...framing(),
+      perTool: {
+        "old.example": {
+          ...emptyNicheFramingSet(),
+          faqQuestions: [
+            faq("  Does it send reminders?  ", "Yes, on a schedule you set."),
+            faq("Is there a free plan?", "This answer is the host's."),
+            faq("Does it take card payments?"),
+            // Typed with no question yet: given as it is, so nothing typed is lost.
+            faq("", "An answer waiting for its question."),
+            emptyFaqRow(),
+          ],
+        },
+        "chaserhq.com": {
+          ...emptyNicheFramingSet(),
+          faqQuestions: [faq("Is there a free plan?", "No."), faq("Does it send reminders?", "Yes, on a schedule you set.")],
+        },
+      },
+    };
+    const after = giveToolEntriesTo(before, "old.example", "chaserhq.com");
+
+    assert.deepEqual(after.perTool["chaserhq.com"].faqQuestions, [
+      // The partner's own rows first, each with the answer it had.
+      faq("Is there a free plan?", "No."),
+      faq("Does it send reminders?", "Yes, on a schedule you set."),
+      // Then the questions it did not ask, a question with no answer among them.
+      faq("Does it take card payments?"),
+      faq("", "An answer waiting for its question."),
+    ]);
+    // A question both ask with two different answers: the partner's stays, and the host's row stays
+    // under the host, still shown, for the operator to choose between.
+    assert.deepEqual(after.perTool["old.example"].faqQuestions, [faq("Is there a free plan?", "This answer is the host's.")]);
+    assert.deepEqual(hostsWithNoPartner(after, ["chaserhq.com"]), ["old.example"]);
+  });
+
+  it("a partner that asks a question and has no answer takes the answer given with it", () => {
+    const before = {
+      ...framing(),
+      perTool: {
+        "old.example": { ...emptyNicheFramingSet(), faqQuestions: [faq("Is there a free plan?", "No, there is a trial.")] },
+        "chaserhq.com": { ...emptyNicheFramingSet(), faqQuestions: [faq("Is there a free plan?"), faq("Does it sync?", "Yes.")] },
+      },
+    };
+    const after = giveToolEntriesTo(before, "old.example", "chaserhq.com");
+
+    assert.deepEqual(after.perTool["chaserhq.com"].faqQuestions, [
+      faq("Is there a free plan?", "No, there is a trial."),
+      faq("Does it sync?", "Yes."),
+    ]);
+    assert.equal(after.perTool["old.example"], undefined);
   });
 
   it("giving a host's entries to itself, to all partners or from a host that holds none changes nothing", () => {
@@ -376,33 +446,166 @@ describe("brief evidence rows", () => {
   });
 });
 
-describe("FAQ fields (2026-10-08): the blog's questions on the brief, a tool's questions in its own entry", () => {
-  it("reads blogFaqQuestions as lines or an array, and a tool's faqQuestions the same way", () => {
+/**
+ * The three FAQ boxes (2026-10-13): the pillar's People Also Ask, the blog's FAQ and each tool
+ * page's FAQ are rows of a question and the operator's own answer. A brief saved before then holds
+ * questions alone, one per line or as an array, and must load as rows with no answer; what a Save
+ * writes is always the array of rows GeekAPI reads.
+ */
+describe("a FAQ box is rows of a question and its answer, whatever shape the brief was saved in", () => {
+  const LINES = "Does it sync with QuickBooks Online?\n\n  Can a bookkeeper schedule a payment?  \r\n";
+  const QUESTIONS = ["Does it sync with QuickBooks Online?", "  Can a bookkeeper schedule a payment?  ", "", 7];
+  const ROWS = [
+    { question: "Does it sync with QuickBooks Online?", answer: "  Yes, within the hour.  " },
+    { question: "  Can a bookkeeper schedule a payment?  " },
+    // Neither a question nor an answer: dropped. A value that is not text counts as empty.
+    { question: "", answer: "   " },
+    { question: 7, answer: null },
+    // An answer with no question yet is kept, so nothing typed is lost.
+    { question: 12, answer: "An answer waiting for its question." },
+    null,
+  ];
+  const UNANSWERED: FaqRow[] = [
+    { question: "Does it sync with QuickBooks Online?", answer: "" },
+    { question: "Can a bookkeeper schedule a payment?", answer: "" },
+  ];
+  const ANSWERED: FaqRow[] = [
+    { question: "Does it sync with QuickBooks Online?", answer: "Yes, within the hour." },
+    { question: "Can a bookkeeper schedule a payment?", answer: "" },
+    { question: "", answer: "An answer waiting for its question." },
+  ];
+
+  /** One stored value, saved in each of the three boxes at once. */
+  function loaded(stored: unknown) {
     const brief = migrateBrief({
-      blogFaqQuestions: ["How long does a rollout take?", "What does it cost to run?"],
-      nicheFraming: {
-        perTool: {
-          "tipalti.com": { faqQuestions: "Does it sync with QuickBooks Online?\n\nCan a bookkeeper schedule a payment?" },
-        },
-      },
+      paaQuestions: stored,
+      blogFaqQuestions: stored,
+      nicheFraming: { perTool: { "Tipalti.com": { faqQuestions: stored } } },
     });
-    assert.equal(brief.blogFaqQuestions, "How long does a rollout take?\nWhat does it cost to run?");
-    assert.equal(
-      brief.nicheFraming.perTool["tipalti.com"]?.faqQuestions,
-      "Does it sync with QuickBooks Online?\n\nCan a bookkeeper schedule a payment?",
-    );
-    assert.equal(brief.nicheFraming.faqQuestions, "", "the category carries no tool FAQ");
+    return {
+      "People Also Ask": brief.paaQuestions,
+      "Blog FAQ": brief.blogFaqQuestions,
+      "Tool page FAQ": brief.nicheFraming.perTool["tipalti.com"]?.faqQuestions,
+    };
+  }
+
+  it("questions typed one per line load as rows with no answer, in each of the three boxes", () => {
+    assert.deepEqual(loaded(LINES), {
+      "People Also Ask": UNANSWERED,
+      "Blog FAQ": UNANSWERED,
+      "Tool page FAQ": UNANSWERED,
+    });
   });
 
-  it("a tool's FAQ questions alone make its entry an override, and the searches are unchanged by them", () => {
-    const tool = { ...emptyNicheFramingSet(), faqQuestions: "Does it fly?" };
+  it("an array of questions loads as rows with no answer, in each of the three boxes", () => {
+    assert.deepEqual(loaded(QUESTIONS), {
+      "People Also Ask": UNANSWERED,
+      "Blog FAQ": UNANSWERED,
+      "Tool page FAQ": UNANSWERED,
+    });
+  });
+
+  it("an array of rows loads with its answers, in each of the three boxes", () => {
+    assert.deepEqual(loaded(ROWS), {
+      "People Also Ask": ANSWERED,
+      "Blog FAQ": ANSWERED,
+      "Tool page FAQ": ANSWERED,
+    });
+  });
+
+  it("a box that was never saved, or holds something that is no list, loads with no rows", () => {
+    for (const stored of [undefined, null, "", "  \n ", [], 7, { question: "Not a list?" }]) {
+      assert.deepEqual(faqRowsFromStored(stored), [], JSON.stringify(stored));
+    }
+    const brief = migrateBrief({ audienceNotes: "A brief saved before any of the boxes existed." });
+    assert.deepEqual(brief.paaQuestions, []);
+    assert.deepEqual(brief.blogFaqQuestions, []);
+    assert.deepEqual(brief.nicheFraming.faqQuestions, [], "the category carries no tool FAQ");
+  });
+
+  it("a Save writes each box as an array of a question and its answer, trimmed, a row with neither left out", () => {
+    const typed: FaqRow[] = [
+      { question: "  Does it sync with QuickBooks Online?  ", answer: "  Yes, within the hour.\n" },
+      { question: "Can a bookkeeper schedule a payment?", answer: "   " },
+      { question: "   ", answer: "An answer waiting for its question." },
+      emptyFaqRow(),
+      { question: "  ", answer: "\n" },
+    ];
+    const brief = {
+      ...emptyContentBrief(),
+      paaQuestions: typed,
+      blogFaqQuestions: typed,
+      nicheFraming: {
+        ...emptyNicheFraming(),
+        perTool: { "tipalti.com": { ...emptyNicheFramingSet(), coreProblem: "Global payments.", faqQuestions: typed } },
+      },
+    };
+
+    const saved = JSON.parse(briefToJson(brief)) as {
+      paaQuestions: unknown;
+      blogFaqQuestions: unknown;
+      nicheFraming: { perTool: Record<string, { coreProblem: unknown; faqQuestions: unknown }> };
+    };
+
+    assert.deepEqual(saved.paaQuestions, ANSWERED);
+    assert.deepEqual(saved.blogFaqQuestions, ANSWERED);
+    assert.deepEqual(saved.nicheFraming.perTool["tipalti.com"].faqQuestions, ANSWERED);
+    // Nothing else of the brief is changed by a Save, and the form's own copy is left as typed.
+    assert.equal(saved.nicheFraming.perTool["tipalti.com"].coreProblem, "Global payments.");
+    assert.equal(brief.paaQuestions, typed);
+    assert.deepEqual(briefAsSaved(brief).paaQuestions, faqRowsToSaved(typed));
+  });
+
+  it("what was saved reads back as the same rows", () => {
+    const brief = {
+      ...emptyContentBrief(),
+      paaQuestions: ANSWERED,
+      blogFaqQuestions: UNANSWERED,
+      nicheFraming: {
+        ...emptyNicheFraming(),
+        perTool: { "tipalti.com": { ...emptyNicheFramingSet(), faqQuestions: ANSWERED } },
+      },
+    };
+    const read = parseBriefJson(briefToJson(brief));
+    assert.ok(read);
+    assert.deepEqual(read.paaQuestions, ANSWERED);
+    assert.deepEqual(read.blogFaqQuestions, UNANSWERED);
+    assert.deepEqual(read.nicheFraming.perTool["tipalti.com"].faqQuestions, ANSWERED);
+  });
+
+  it("a brief saved with lines and the same brief as rows with no answer say the same thing", () => {
+    // Opening a brief saved before 2026-10-13 is not an unsaved change, and neither is a row that
+    // was added and not typed in.
+    const old = migrateBrief({ paaQuestions: "What is AI implementation?", blogFaqQuestions: ["What does it cost?"] });
+    const opened = {
+      ...old,
+      paaQuestions: [...old.paaQuestions, emptyFaqRow()],
+      blogFaqQuestions: [{ question: "What does it cost? ", answer: "" }],
+    };
+    assert.equal(briefFingerprint(opened, "ai implementation"), briefFingerprint(old, "ai implementation"));
+
+    const answered = { ...old, paaQuestions: [{ question: "What is AI implementation?", answer: "Putting a model to work." }] };
+    assert.notEqual(briefFingerprint(answered, "ai implementation"), briefFingerprint(old, "ai implementation"));
+  });
+
+  it("a row with a question counts as asked, and one with a question and no answer as unanswered", () => {
+    const rows: FaqRow[] = [
+      { question: "Does it sync?", answer: "Yes." },
+      { question: "Is there a free plan?", answer: "  " },
+      { question: " ", answer: "An answer waiting for its question." },
+      emptyFaqRow(),
+    ];
+    assert.deepEqual(faqRowsWithQuestion(rows).map((r) => r.question), ["Does it sync?", "Is there a free plan?"]);
+    assert.deepEqual(faqRowsWithNoAnswer(rows).map((r) => r.question), ["Is there a free plan?"]);
+    assert.deepEqual(rows.map(faqRowHasNoAnswer), [false, true, false, false]);
+  });
+
+  it("a tool's FAQ rows alone make its entry something saved, a blank row does not, and the searches are unchanged by them", () => {
+    const tool = { ...emptyNicheFramingSet(), faqQuestions: [{ question: "Does it fly?", answer: "" }] };
     assert.equal(nicheFramingSetHasAny(tool), true);
+    assert.equal(nicheFramingSetHasAny({ ...emptyNicheFramingSet(), faqQuestions: [{ question: "", answer: "It does." }] }), true);
+    assert.equal(nicheFramingSetHasAny({ ...emptyNicheFramingSet(), faqQuestions: [emptyFaqRow()] }), false);
+    // Nothing is searched for a FAQ question: the answer is the operator's.
     assert.deepEqual(partnerQuestions(emptyNicheFramingSet(), tool), []);
-  });
-
-  it("a brief saved before the fields existed loads with them empty", () => {
-    const brief = migrateBrief({ paaQuestions: "What is AI implementation?" });
-    assert.equal(brief.blogFaqQuestions, "");
-    assert.equal(brief.nicheFraming.faqQuestions, "");
   });
 });

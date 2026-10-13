@@ -22,6 +22,7 @@ import {
 } from "@/services/gcc-api";
 import { SerpIngestPanel } from "@/components/content-creator/SerpIngestPanel";
 import NicheFramingPanel from "@/components/content-creator/NicheFramingPanel";
+import FaqRows from "@/components/content-creator/FaqRows";
 import {
   applyCuratedSerpToBrief,
   type CuratedSerpSeed,
@@ -287,9 +288,12 @@ export default function ContentBriefPanel({
     setSerpConflicts(conflicts);
   }
 
-  function forceReplaceSerpField(field: SerpMergeConflict["field"], value: string) {
-    const next = { ...brief, [field]: value };
-    setBrief(next);
+  // "Use SERP value": the offered questions take the box's place, each as a row. A question that is
+  // in both keeps the answer already typed for it (2026-10-13); the answer to a question that is not
+  // in the offered list goes with its row, which is what choosing to replace means.
+  function forceReplaceSerpField(field: SerpMergeConflict["field"], offered: string) {
+    const { brief: replaced } = applyCuratedSerpToBrief(brief, { paaQuestions: offered }, "replace");
+    setBrief(replaced);
     setSerpConflicts((prev) => prev.filter((c) => c.field !== field));
   }
 
@@ -388,6 +392,11 @@ export default function ContentBriefPanel({
           <p className="font-semibold">
             This brief already had content in {serpConflicts.length === 1 ? "a field" : "fields"} the
             confirmed SERP also offered — kept what was already here (fill-empty). Replace instead:
+          </p>
+          {/* Answers are typed by hand and a replace can take one away, so it says which. */}
+          <p>
+            &ldquo;Use SERP value&rdquo; keeps the answer you typed for a question the results page
+            also has. A question the results page does not have is removed, with its answer.
           </p>
           {serpConflicts.map((c) => (
             <div key={c.field} className="flex items-center justify-between gap-2">
@@ -563,37 +572,43 @@ export default function ContentBriefPanel({
         </label>
       </div>
 
-      <label className={`${labelClass} mt-5`}>
-        People Also Ask (direct entry, optional)
-        {/* Stage 7: "Direct PAA entry — one question per line" — the field and splitLines already
-            existed; the only thing missing was somewhere to type into it without a saved SERP
-            page. Kept separate from SerpIngestPanel's upload flow on purpose: an operator who
-            already knows the real questions from the SERP shouldn't need to save and parse a page
-            just to enter them. fill-empty still applies if a SERP is uploaded afterward — typed
-            entries here are exactly the "existing content" that upload will not clobber. */}
-        <textarea
-          value={brief.paaQuestions}
-          onChange={(e) => patch({ paaQuestions: e.target.value })}
-          rows={3}
-          placeholder={"One question per line, e.g.\nWhat is AI implementation?\nHow much does it cost?"}
-          className={`${fieldClass} font-mono text-xs`}
-        />
-      </label>
+      {/* The pillar's questions, each with the operator's own answer (2026-10-13). Jeff supplies the
+          answer: nothing is searched for it, the writer says it in the Brief's voice, and a question
+          with no answer is left off the page and reported. Until then this was a box of questions
+          typed one per line, each searched for on every partner's site.
 
-      <label className={`${labelClass} mt-5`}>
-        Blog FAQ (optional)
+          Entered here directly, apart from SerpIngestPanel's upload: an operator who already knows
+          the real questions should not need to save and parse a results page to enter them. A page
+          uploaded afterward fills this box only when it holds nothing; rows typed here are the
+          existing content an upload will not replace unasked.
+
+          A div, where it was a label around one box: each row's two boxes have labels of their own,
+          and a label cannot hold another. */}
+      <div className={`${labelClass} mt-5`}>
+        <span>People Also Ask (direct entry, optional)</span>
         <span className="block text-xs font-normal text-muted">
-          One question per line. Answered at the end of the blog, in calls of eight; the pillar
-          answers the People Also Ask list above instead.
+          {"Each question with your answer. The pillar's People Also Ask section says your answer in the Brief's voice. Nothing is searched for it. A question with no answer is left off the page and reported."}
         </span>
-        <textarea
-          value={brief.blogFaqQuestions}
-          onChange={(e) => patch({ blogFaqQuestions: e.target.value })}
-          rows={3}
-          placeholder={"One question per line, e.g.\nHow long does an AP automation rollout take?\nWhat does it cost to run?"}
-          className={`${fieldClass} font-mono text-xs`}
+        <FaqRows
+          label="People Also Ask (direct entry, optional)"
+          rows={brief.paaQuestions}
+          onChange={(paaQuestions) => patch({ paaQuestions })}
         />
-      </label>
+      </div>
+
+      {/* The blog's own questions, entered and answered the same way (2026-10-13), and written at the
+          end of the blog. */}
+      <div className={`${labelClass} mt-5`}>
+        <span>Blog FAQ (optional)</span>
+        <span className="block text-xs font-normal text-muted">
+          {"Each question with your answer. Written at the end of the blog from your answer, in the Brief's voice. Nothing is searched for it. A question with no answer is left off the page and reported."}
+        </span>
+        <FaqRows
+          label="Blog FAQ (optional)"
+          rows={brief.blogFaqQuestions}
+          onChange={(blogFaqQuestions) => patch({ blogFaqQuestions })}
+        />
+      </div>
 
       {/* The reason Generate is off, not a reason to refuse a save: any draft saves. */}
       {!complete ? (

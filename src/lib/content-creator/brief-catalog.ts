@@ -176,13 +176,23 @@ export interface ContentBrief {
   toneOfVoice: ToneOfVoice | "";
   eeatSignals: EeatSignal[];
   lengthBand: LengthBandKey | "";
-  paaQuestions: string;
   /**
-   * The blog's FAQ questions, one per line (2026-10-08). The pillar answers `paaQuestions` in its
-   * People Also Ask section; the blog had no FAQ of its own. Read by GeekAPI as `blogFaqQuestions`
-   * and answered at the end of the blog, in calls of eight, like the pillar's.
+   * The pillar's People Also Ask questions, each with the operator's own answer (2026-10-13). Jeff
+   * supplies the answer to each question: nothing is searched for it, the writer says his answer in
+   * the Brief's voice in the pillar's People Also Ask section, and a question with no answer is left
+   * off the page and reported. Until then this was the questions alone, typed one per line, and each
+   * was searched for on every partner's site. A search results page can still offer questions
+   * (`serp-lens.ts`); each arrives as a row with no answer.
    */
-  blogFaqQuestions: string;
+  paaQuestions: FaqRow[];
+  /**
+   * The blog's FAQ questions, each with the operator's own answer (the box since 2026-10-08, the
+   * answers since 2026-10-13). The pillar has `paaQuestions` for its People Also Ask section; this is
+   * the blog's own list, read by GeekAPI as `blogFaqQuestions` and written at the end of the blog.
+   * The same rule as the pillar's: nothing is searched, the writer says Jeff's answer in the Brief's
+   * voice, and a question with no answer is left off the page and reported.
+   */
+  blogFaqQuestions: FaqRow[];
   /**
    * The operator's own framing of this niche's problem — researched by hand, per taxonomy leaf.
    *
@@ -211,8 +221,8 @@ export type NicheFramingSet = {
    * Not one per line: the research states a failure as a lead plus the paragraph explaining it, and
    * splitting on every newline turned one failure into four fragments too thin to argue from. The
    * backend reader is `GccNicheFramingReader.ReadParagraphs`, which splits on `\n\s*\n` — this comment
-   * said "one per line, the same convention as `paaQuestions`" for a day after that stopped being
-   * true, which is the kind of false claim about a live format `.cursor/rules` exists to forbid.
+   * said "one per line" for a day after that stopped being true, which is the kind of false claim
+   * about a live format `.cursor/rules` exists to forbid.
    */
   painPoints: string;
   /**
@@ -236,13 +246,28 @@ export type NicheFramingSet = {
    */
   evidence: EvidenceRow[];
   /**
-   * The operator's FAQ questions for one tool, one per line (2026-10-08). Read only from a tool's
-   * own `perTool` entry (`GccNicheFramingReader.ToolFaqQuestions`); the category has no FAQ for a
-   * tool page, so the form shows the box per tool only. Answered on that tool's page from the
-   * partner's retrieved pages alone; a question no page answers is left out and reported as a gap,
-   * never answered from general knowledge.
+   * The operator's FAQ questions for one tool, each with his own answer (the box since 2026-10-08,
+   * the answers since 2026-10-13). Read only from a tool's own `perTool` entry; the category has no
+   * FAQ for a tool page, so the form shows the box per tool only and the category's list stays empty.
+   * Jeff supplies the answer to each question: the partner's site is not searched for it, the writer
+   * says his answer on that tool's page in the Brief's voice, and a question with no answer is left
+   * off the page and reported.
    */
-  faqQuestions: string;
+  faqQuestions: FaqRow[];
+};
+
+/**
+ * One FAQ question and the operator's own answer to it (2026-10-13). The one shape of all three FAQ
+ * boxes of the brief: the pillar's People Also Ask (`paaQuestions`), the blog's FAQ
+ * (`blogFaqQuestions`) and a tool page's FAQ (`perTool[host].faqQuestions`).
+ *
+ * Until then each box held questions alone, typed one per line, and GeekAPI searched the partners'
+ * sites for each answer. Jeff supplies the answer now: nothing is searched, the writer says his
+ * answer in the Brief's voice, and a question with no answer is left off the page and reported.
+ */
+export type FaqRow = {
+  question: string;
+  answer: string;
 };
 
 export type EvidenceRow = {
@@ -294,7 +319,7 @@ export type NicheFraming = NicheFramingSet & {
 };
 
 export function emptyNicheFramingSet(): NicheFramingSet {
-  return { coreProblem: "", painPoints: "", automationToPitch: "", evidence: [], faqQuestions: "" };
+  return { coreProblem: "", painPoints: "", automationToPitch: "", evidence: [], faqQuestions: [] };
 }
 
 export function emptyEvidenceRow(): EvidenceRow {
@@ -304,6 +329,71 @@ export function emptyEvidenceRow(): EvidenceRow {
 /** True when a row carries anything at all. A blank row is a row the operator has not written yet. */
 export function evidenceRowHasAny(row: EvidenceRow): boolean {
   return Boolean(row.problem.trim() || row.solution.trim() || row.terms.some((t) => t.trim()));
+}
+
+export function emptyFaqRow(): FaqRow {
+  return { question: "", answer: "" };
+}
+
+/** True when a row carries a question, an answer or both. A blank row is one not written yet. */
+export function faqRowHasAny(row: FaqRow): boolean {
+  return Boolean(row.question.trim() || row.answer.trim());
+}
+
+/**
+ * True when a row asks a question and has no answer. GeekAPI leaves such a question off the page and
+ * reports it, so the form says so under the row and counts it on a tool's closed section.
+ */
+export function faqRowHasNoAnswer(row: FaqRow): boolean {
+  return row.question.trim().length > 0 && row.answer.trim().length === 0;
+}
+
+/** The rows that ask a question, answered or not. */
+export function faqRowsWithQuestion(rows: readonly FaqRow[]): FaqRow[] {
+  return rows.filter((row) => row.question.trim().length > 0);
+}
+
+/** The rows that ask a question and have no answer. */
+export function faqRowsWithNoAnswer(rows: readonly FaqRow[]): FaqRow[] {
+  return rows.filter(faqRowHasNoAnswer);
+}
+
+/**
+ * Rows as they are saved: each question and each answer trimmed, a row with neither dropped. A row
+ * with a question and no answer is saved, and so is a row with an answer and no question, so nothing
+ * typed is lost.
+ */
+export function faqRowsToSaved(rows: readonly FaqRow[]): FaqRow[] {
+  return rows
+    .map((row) => ({ question: row.question.trim(), answer: row.answer.trim() }))
+    .filter(faqRowHasAny);
+}
+
+/**
+ * One FAQ box read from a stored brief, in any of the three shapes a brief has held it in: questions
+ * typed one per line (every brief saved before 2026-10-13), an array of questions (a programmatic
+ * writer's), or an array of rows, each a question and its answer (what the form saves now). The two
+ * older shapes load as rows with no answer.
+ *
+ * A value inside a row that is not text counts as empty, and an entry with neither a question nor an
+ * answer is dropped. What comes back is trimmed as a save trims it, so a brief read back says what
+ * was saved.
+ */
+export function faqRowsFromStored(raw: unknown): FaqRow[] {
+  const text = (v: unknown): string => (typeof v === "string" ? v : "");
+  const questions = (lines: string): FaqRow[] =>
+    lines.split("\n").map((question) => ({ question, answer: "" }));
+
+  if (typeof raw === "string") return faqRowsToSaved(questions(raw));
+  if (!Array.isArray(raw)) return [];
+  return faqRowsToSaved(
+    raw.flatMap((entry): FaqRow[] => {
+      if (typeof entry === "string") return questions(entry);
+      if (!entry || typeof entry !== "object") return [];
+      const row = entry as Record<string, unknown>;
+      return [{ question: text(row.question), answer: text(row.answer) }];
+    }),
+  );
 }
 
 export function emptyNicheFraming(): NicheFraming {
@@ -317,7 +407,7 @@ export function nicheFramingSetHasAny(set: NicheFramingSet): boolean {
       set.painPoints.trim() ||
       set.automationToPitch.trim() ||
       set.evidence.some(evidenceRowHasAny) ||
-      set.faqQuestions.trim(),
+      set.faqQuestions.some(faqRowHasAny),
   );
 }
 
@@ -368,11 +458,17 @@ export function hostsWithNoPartner(framing: NicheFraming, partnerHosts: readonly
 
 /**
  * Everything saved under one host given to a partner: its rows after the partner's own, its FAQ
- * questions after the partner's own (a question the partner already has is not added twice), and its
- * pain point and its hook where the partner has none.
+ * rows after the partner's own, and its pain point and its hook where the partner has none.
  *
- * Nothing is overwritten. A pain point or a hook the partner already has stays, and the other stays
- * where it was, still shown, for the operator to choose between. A host left with nothing is dropped.
+ * A FAQ row is given with its answer (2026-10-13): the partner's rows first, then the host's rows
+ * whose question, trimmed, the partner does not already ask. A question both ask is not added twice.
+ * Its answer follows the rule for the pain point and the hook: the partner's row takes the host's
+ * answer where it has none, and where the two have different answers the host's row stays where it
+ * was.
+ *
+ * Nothing is overwritten. A pain point, a hook or an answer the partner already has stays, and the
+ * other stays where it was, still shown, for the operator to choose between. A host left with nothing
+ * is dropped.
  */
 export function giveToolEntriesTo(framing: NicheFraming, from: string, to: string): NicheFraming {
   const source = framing.perTool[from];
@@ -382,8 +478,23 @@ export function giveToolEntriesTo(framing: NicheFraming, from: string, to: strin
   const takesProblem = target.coreProblem.trim().length === 0;
   const takesPitch = target.automationToPitch.trim().length === 0;
   const evidence = [...target.evidence, ...source.evidence];
-  const has = new Set(lines(target.faqQuestions));
-  const faqQuestions = [...lines(target.faqQuestions), ...lines(source.faqQuestions).filter((q) => !has.has(q))].join("\n");
+
+  const faqQuestions = [...target.faqQuestions];
+  const faqLeft: FaqRow[] = [];
+  for (const row of source.faqQuestions.filter(faqRowHasAny)) {
+    const question = row.question.trim();
+    // An answer typed with no question matches no row: it is given as it is.
+    const at = question ? faqQuestions.findIndex((own) => own.question.trim() === question) : -1;
+    if (at < 0) {
+      faqQuestions.push(row);
+      continue;
+    }
+    const answer = row.answer.trim();
+    const ownAnswer = faqQuestions[at].answer.trim();
+    if (!answer || answer === ownAnswer) continue;
+    if (!ownAnswer) faqQuestions[at] = { ...faqQuestions[at], answer: row.answer };
+    else faqLeft.push(row);
+  }
 
   const given: NicheFramingSet = {
     coreProblem: takesProblem ? source.coreProblem : target.coreProblem,
@@ -396,19 +507,13 @@ export function giveToolEntriesTo(framing: NicheFraming, from: string, to: strin
     ...emptyNicheFramingSet(),
     coreProblem: takesProblem ? "" : source.coreProblem,
     automationToPitch: takesPitch ? "" : source.automationToPitch,
+    faqQuestions: faqLeft,
   };
 
   const perTool = { ...framing.perTool, [to]: given };
   if (nicheFramingSetHasAny(left)) perTool[from] = left;
   else delete perTool[from];
   return { ...framing, perTool };
-}
-
-function lines(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 }
 
 /** One owner's rows replaced, with that owner's "where they fail" derived from them as ever. */
@@ -514,8 +619,8 @@ export function emptyContentBrief(): ContentBrief {
     // just defaulted, so there is nothing left to persist here beyond the constant set itself.
     eeatSignals: EEAT_SIGNALS.map((s) => s.value),
     lengthBand: "",
-    paaQuestions: "",
-    blogFaqQuestions: "",
+    paaQuestions: [],
+    blogFaqQuestions: [],
     nicheFraming: emptyNicheFraming(),
   };
 }
@@ -624,11 +729,11 @@ export function migrateBrief(raw: unknown): ContentBrief {
   base.eeatSignals = EEAT_SIGNALS.map((s) => s.value);
 
   base.lengthBand = (str(p.lengthBand) as LengthBandKey) || "";
-  base.paaQuestions = str(p.paaQuestions);
-  // One per line, or an array from a programmatic writer -- the backend reader accepts both.
-  base.blogFaqQuestions = Array.isArray(p.blogFaqQuestions)
-    ? p.blogFaqQuestions.filter((x): x is string => typeof x === "string").join("\n")
-    : str(p.blogFaqQuestions);
+  // The pillar's and the blog's FAQ boxes, in whichever shape the brief was saved with them: questions
+  // typed one per line, an array of questions, or rows of a question and its answer (2026-10-13).
+  // The older shapes load as rows with no answer, for the operator to answer.
+  base.paaQuestions = faqRowsFromStored(p.paaQuestions);
+  base.blogFaqQuestions = faqRowsFromStored(p.blogFaqQuestions);
   // Read back explicitly, like every other field. migrateBrief rebuilds from emptyContentBrief, so a
   // field missing here is saved to the server and then silently wiped on the next load.
   base.nicheFraming = migrateNicheFraming(p.nicheFraming);
@@ -644,10 +749,9 @@ function migrateNicheFramingSet(raw: unknown): NicheFramingSet {
 
   set.coreProblem = str(p.coreProblem);
   set.automationToPitch = str(p.automationToPitch);
-  // The tool's FAQ questions: one per line, or an array -- the backend reader accepts both.
-  set.faqQuestions = Array.isArray(p.faqQuestions)
-    ? p.faqQuestions.filter((x): x is string => typeof x === "string").join("\n")
-    : str(p.faqQuestions);
+  // The tool's FAQ box, read as the pillar's and the blog's are: lines, an array of questions, or rows
+  // of a question and its answer (2026-10-13). The older shapes load as rows with no answer.
+  set.faqQuestions = faqRowsFromStored(p.faqQuestions);
   // Accepts an array as well as lines, matching what the backend reader accepts — a programmatic
   // writer (a later paste-and-extract acquisition) may store either.
   // Joined on a BLANK line, because a blank line is the separator: each entry is one failure and may
@@ -794,10 +898,40 @@ export function parseBriefJson(briefJson: string | null | undefined): ContentBri
 }
 
 /**
+ * The brief as a Save writes it. Each of the three FAQ boxes is written as an array of rows, a
+ * question and its answer, each trimmed, a row with neither left out (`faqRowsToSaved`): the pillar's
+ * `paaQuestions`, the blog's `blogFaqQuestions` and each tool's `nicheFraming.perTool[host].faqQuestions`.
+ * This is the shape GeekAPI reads since 2026-10-13, when Jeff began supplying the answer to each
+ * question. A brief saved before then holds lines, and becomes rows the first time it is saved again.
+ *
+ * Nothing else in the brief is changed. The form holds a row the operator has added and not yet
+ * typed in; this is where such a row is left out of what is saved.
+ */
+export function briefAsSaved(brief: ContentBrief): ContentBrief {
+  const perTool: Record<string, NicheFramingSet> = {};
+  for (const [host, set] of Object.entries(brief.nicheFraming.perTool)) {
+    perTool[host] = { ...set, faqQuestions: faqRowsToSaved(set.faqQuestions) };
+  }
+  return {
+    ...brief,
+    paaQuestions: faqRowsToSaved(brief.paaQuestions),
+    blogFaqQuestions: faqRowsToSaved(brief.blogFaqQuestions),
+    nicheFraming: {
+      ...brief.nicheFraming,
+      faqQuestions: faqRowsToSaved(brief.nicheFraming.faqQuestions),
+      perTool,
+    },
+  };
+}
+
+/**
  * What a brief says, as one comparable string: the brief as migrated, plus its keyword. Used to tell
  * whether the form differs from what the server holds. `lengthBand` is left out: the brief carries
  * none (it is derived per output type at generate time), and older copies that still hold one say the
  * same thing as copies that do not.
+ *
+ * A FAQ row is compared as it would be saved, trimmed and with blank rows left out, because the
+ * migration reads rows that way. So a row added and not yet typed in is not an unsaved change.
  */
 export function briefFingerprint(brief: ContentBrief, topic: string): string {
   return JSON.stringify({ ...migrateBrief(brief), lengthBand: "", __topic: topic.trim() });

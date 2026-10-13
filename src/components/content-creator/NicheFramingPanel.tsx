@@ -8,6 +8,8 @@ import {
   emptyNicheFramingSet,
   evidenceRowHasAny,
   evidenceRowsOf,
+  faqRowsWithNoAnswer,
+  faqRowsWithQuestion,
   giveToolEntriesTo,
   hostsWithNoPartner,
   moveEvidenceRow,
@@ -16,11 +18,13 @@ import {
   taxonomyPathNamesNoDepartment,
   withEvidenceRows,
   type EvidenceRow,
+  type FaqRow,
   type NicheFraming,
   type NicheFramingSet,
   type PartnerQuestion,
 } from "@/lib/content-creator/brief-catalog";
 import Link from "next/link";
+import FaqRows from "@/components/content-creator/FaqRows";
 import { getProject } from "@/services/gcc-projects-api";
 
 /**
@@ -271,15 +275,12 @@ function TextBox({
   value,
   onChange,
   placeholder,
-  mono,
 }: {
   label: string;
   hint?: string;
   value: string;
   onChange: (next: string) => void;
   placeholder: string;
-  /** A list typed one item a line, shown in a fixed-width face. */
-  mono?: boolean;
 }) {
   return (
     <label className="mt-3 block">
@@ -290,16 +291,30 @@ function TextBox({
         onChange={(e) => onChange(e.target.value)}
         rows={3}
         placeholder={placeholder}
-        className={mono ? `${boxClass} font-mono text-xs` : boxClass}
+        className={boxClass}
       />
     </label>
   );
 }
 
 /**
+ * What a tool's closed section says of its FAQ: none when no row asks a question, and how many of
+ * its questions have no answer when some do not. A question with no answer is left off the tool's
+ * page and reported (2026-10-13), so it is counted here, where it can be seen without opening the
+ * section.
+ */
+function faqSummary(rows: readonly FaqRow[]): string {
+  if (faqRowsWithQuestion(rows).length === 0) return " · no FAQ";
+  const noAnswer = faqRowsWithNoAnswer(rows).length;
+  return noAnswer === 0 ? " · FAQ" : ` · FAQ (${noAnswer} with no answer)`;
+}
+
+/**
  * Everything the brief holds for one tool, in the order the research gives it: the core pain point,
  * where small businesses fail and the tool's remedy for each, the marketing/sales hook to pitch, and
- * the tool page's FAQ. Then what that tool's crawl is searched with, which follows from them.
+ * the tool page's FAQ, each question with the operator's own answer (2026-10-13). Then what that
+ * tool's crawl is searched with, which follows from the pain point and the rows; nothing is searched
+ * for the FAQ.
  *
  * `partner` is null for a host the brief holds entries under that is not a partner of the project: a
  * partner whose address was changed or removed. GeekAPI reads nothing filed under such a host, so the
@@ -354,7 +369,7 @@ function ToolSection({
         <span className="shrink-0 text-xs text-muted">
           {rows === 0 ? "no rows" : `${rows} ${rows === 1 ? "row" : "rows"}`}
           {set.automationToPitch.trim() ? " · pitch" : " · no pitch"}
-          {set.faqQuestions.trim() ? " · FAQ" : " · no FAQ"}
+          {faqSummary(set.faqQuestions)}
           {partner
             ? questions.length === 0
               ? " · bare keyword only"
@@ -386,14 +401,19 @@ function ToolSection({
             onChange={(automationToPitch) => patchSet({ automationToPitch })}
             placeholder="Stop rebuilding the forecast every Monday. A rolling 52-week view of cash in five minutes, with no formulas."
           />
-          <TextBox
-            label="Tool page FAQ"
-            hint={`One question per line. Answered on this tool's page from ${host}'s pages only; a question no page answers is left out and reported.`}
-            value={set.faqQuestions}
-            onChange={(faqQuestions) => patchSet({ faqQuestions })}
-            placeholder={"Does it sync with QuickBooks Online?\nCan a bookkeeper schedule a payment the owner releases?"}
-            mono
-          />
+          {/* Not a label around the rows, as a TextBox is: each row's two boxes have labels of their
+              own, and a label cannot hold another. */}
+          <div className="mt-4">
+            <span className="text-sm text-foreground">Tool page FAQ</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              {`Each question with your answer. Written on ${name}'s page from your answer, in the Brief's voice. Nothing is searched for it. A question with no answer is left off the page and reported.`}
+            </span>
+            <FaqRows
+              label="Tool page FAQ"
+              rows={set.faqQuestions}
+              onChange={(faqQuestions) => patchSet({ faqQuestions })}
+            />
+          </div>
           {partner ? <SearchList host={host} questions={questions} /> : null}
         </div>
       ) : null}
@@ -403,8 +423,9 @@ function ToolSection({
 
 /**
  * What a host that is not a partner holds, given to the partner it belongs to. Its rows and its FAQ
- * questions are added to that partner's; its pain point and its hook go where that partner has none,
- * and stay here, still shown, where it has one. Nothing is saved until the brief is.
+ * questions, each with its answer, are added to that partner's; its pain point and its hook go where
+ * that partner has none, and stay here, still shown, where it has one. Nothing is saved until the
+ * brief is.
  */
 function GiveToPartner({
   host,

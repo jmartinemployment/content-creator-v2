@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import NicheFramingPanel from "@/components/content-creator/NicheFramingPanel";
 import {
   emptyNicheFraming,
@@ -41,7 +41,7 @@ function framing(): NicheFraming {
         ...emptyNicheFramingSet(),
         coreProblem: "Collections run on memory.",
         automationToPitch: "Get paid without chasing.",
-        faqQuestions: "Does it sync with QuickBooks?",
+        faqQuestions: [{ question: "Does it sync with QuickBooks?", answer: "Yes, both ways, within the hour." }],
         evidence: [
           { problem: "Reminders are sent by hand.", solution: "Automated reminder sequences.", terms: ["reminders"] },
           { problem: "Disputes stall payment.", solution: "A payment portal.", terms: [] },
@@ -82,6 +82,7 @@ function open(initial: NicheFraming): { saved: { current: NicheFraming } } {
 }
 
 const FAILURE = "Tax forms, vendor details and compliance records are stored inconsistently.";
+const NO_ANSWER = "No answer entered. This question is left off the page until it has one.";
 const TERMS = "supplier onboarding, W-9 W-8, tax compliance";
 const HOOK = /^Stop rebuilding the forecast every Monday/;
 const PAIN_POINT = /^Fractional CFOs lose twenty hours a month/;
@@ -92,6 +93,11 @@ function failuresShown(): string[] {
 
 function section(name: RegExp): HTMLButtonElement {
   return screen.getByRole("button", { name }) as HTMLButtonElement;
+}
+
+/** The rows under "Tool page FAQ" in the tool section that is open. */
+function toolFaq() {
+  return within(screen.getByRole("group", { name: "Tool page FAQ" }));
 }
 
 async function partnersLoaded(): Promise<void> {
@@ -121,6 +127,73 @@ test("a tool's section holds its pain point, its rows, its hook and its FAQ, in 
       `${labels[i].textContent} comes after ${labels[i - 1].textContent}`,
     );
   }
+  // The FAQ is a question with the operator's own answer, and says what is done with it.
+  assert.equal((toolFaq().getByLabelText("Question") as HTMLInputElement).value, "Does it sync with QuickBooks?");
+  assert.equal((toolFaq().getByLabelText("Answer") as HTMLTextAreaElement).value, "Yes, both ways, within the hour.");
+  assert.ok(
+    screen.getByText(
+      "Each question with your answer. Written on Upflow's page from your answer, in the Brief's voice. Nothing is searched for it. A question with no answer is left off the page and reported.",
+    ),
+  );
+  assert.equal(screen.queryByText(/One question per line\. Answered on this tool/), null);
+});
+
+test("a question and its answer typed in a tool's section are saved as that tool's, and no other's", async (t) => {
+  t.after(cleanup);
+  installProject(["https://www.chaserhq.com", "https://upflow.io"]);
+  const { saved } = open(framing());
+  await partnersLoaded();
+
+  fireEvent.click(section(/Chaserhq/));
+  // With no rows there is the button and nothing else.
+  assert.equal(toolFaq().queryByLabelText("Question"), null);
+  assert.equal(toolFaq().queryByRole("button", { name: "Remove" }), null);
+
+  fireEvent.click(toolFaq().getByRole("button", { name: "Add a question" }));
+  fireEvent.change(toolFaq().getByLabelText("Question"), { target: { value: "Is there a free plan?" } });
+  assert.ok(toolFaq().getByText(NO_ANSWER));
+  assert.match(section(/Chaserhq/).textContent ?? "", /no rows · no pitch · FAQ \(1 with no answer\) · 1 search$/);
+
+  fireEvent.change(toolFaq().getByLabelText("Answer"), { target: { value: "No. There is a 14-day trial." } });
+  assert.equal(toolFaq().queryByText(NO_ANSWER), null);
+
+  assert.deepEqual(saved.current.perTool["chaserhq.com"].faqQuestions, [
+    { question: "Is there a free plan?", answer: "No. There is a 14-day trial." },
+  ]);
+  assert.deepEqual(saved.current.perTool["upflow.io"].faqQuestions, framing().perTool["upflow.io"].faqQuestions);
+  assert.deepEqual(saved.current.faqQuestions, []);
+  // Nothing is searched for a FAQ question: the tool is still searched for the category's problem alone.
+  assert.match(section(/Chaserhq/).textContent ?? "", /no rows · no pitch · FAQ · 1 search$/);
+});
+
+test("a closed section says of the FAQ: none, entered, or how many questions have no answer", async (t) => {
+  t.after(cleanup);
+  installProject(["https://www.chaserhq.com", "https://upflow.io", "https://ramp.com", "https://bill.com"]);
+  open({
+    ...framing(),
+    perTool: {
+      ...framing().perTool,
+      // A row with an answer and no question yet, and a blank row: no question is asked.
+      "chaserhq.com": {
+        ...emptyNicheFramingSet(),
+        faqQuestions: [{ question: " ", answer: "An answer waiting for its question." }, { question: "", answer: "" }],
+      },
+      "ramp.com": {
+        ...emptyNicheFramingSet(),
+        faqQuestions: [
+          { question: "Does it sync with QuickBooks?", answer: "Yes." },
+          { question: "Is there a free plan?", answer: "" },
+          { question: "Does it take card payments?", answer: "   " },
+        ],
+      },
+    },
+  });
+  await partnersLoaded();
+
+  assert.match(section(/Bill/).textContent ?? "", / · no FAQ · /);
+  assert.match(section(/Chaserhq/).textContent ?? "", / · no FAQ · /);
+  assert.match(section(/Upflow/).textContent ?? "", / · FAQ · 4 searches$/);
+  assert.match(section(/Ramp/).textContent ?? "", / · FAQ \(2 with no answer\) · 1 search$/);
 });
 
 test("the hook typed in a tool's section is saved as that tool's pitch, and no other's", async (t) => {

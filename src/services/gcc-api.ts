@@ -3,7 +3,7 @@
  * Proxied via /api/cw same-origin helper (Bearer forward).
  */
 
-import type { ContentBrief } from "@/lib/content-creator/brief-catalog";
+import { briefAsSaved, type ContentBrief } from "@/lib/content-creator/brief-catalog";
 import type { SiteSectionContext } from "@/lib/types";
 import type { SavedSerpParseResult } from "@/lib/content-creator/serp-lens";
 import type { GccPartnerToolReadiness } from "@/services/workflow-tools-hub";
@@ -692,8 +692,13 @@ export function previewBodyDocument(bodyDocumentJson: string, max = 1200): strin
   }
 }
 
+/**
+ * The brief as the JSON a Save sends. Written through `briefAsSaved`, so each of the three FAQ boxes
+ * goes out as an array of rows, a question and its answer (2026-10-13), and a row the operator added
+ * and typed nothing in is not saved.
+ */
 export function briefToJson(brief: ContentBrief): string {
-  return JSON.stringify(brief);
+  return JSON.stringify(briefAsSaved(brief));
 }
 
 export function parseSavedSerp(
