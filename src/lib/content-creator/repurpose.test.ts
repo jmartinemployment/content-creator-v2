@@ -1,9 +1,11 @@
 import {
   REPURPOSE_TYPES,
   deletedPiecesLine,
+  generateSourceOf,
   isRepurposeSource,
   isRepurposeType,
   lastRepurposeLines,
+  nothingToWriteFromLine,
   pageOf,
   pieceButtonLabel,
   pieceOfType,
@@ -53,7 +55,7 @@ assertEqual(
 assertEqual(
   ["pillar", "blog", "tool", "image-prompt", "email-newsletter", "", null].map(isRepurposeType),
   [false, false, false, false, false, false, false],
-  "nothing else is a Repurpose type: the other emails are disabled, not written from a page",
+  "nothing else is a short piece: the other emails are disabled, not written from a page",
 );
 
 assertEqual(
@@ -96,38 +98,110 @@ assertEqual(
 );
 assertEqual(pieceButtonLabel(oldEmail, all), "Automated Approval Workflows", "a page of its own keeps its name");
 
-// ---- what a Generate deletes with a page --------------------------------------------------------
+// ---- the page a Generate writes its short pieces from -------------------------------------------
+
+assertEqual(generateSourceOf(["pillar", "blog", "tool"], all), null, "no short piece ticked: nothing to decide");
+assertEqual(
+  generateSourceOf(["pillar", "social"], []),
+  { page: "pillar", thisRun: true },
+  "Pillar ticked: the pieces are written from the Pillar this run writes",
+);
+assertEqual(
+  generateSourceOf(["social"], [blog, pillar]),
+  { page: "pillar", thisRun: false },
+  "Pillar not ticked and the project has one: the saved one",
+);
+assertEqual(
+  generateSourceOf(["blog", "social"], [pillar]),
+  { page: "pillar", thisRun: false },
+  "the saved Pillar, though Blog is ticked",
+);
+assertEqual(
+  generateSourceOf(["blog", "ads"], [ramp]),
+  { page: "blog", thisRun: true },
+  "no Pillar: the Blog this run writes",
+);
+assertEqual(generateSourceOf(["ads"], [blog, ramp]), { page: "blog", thisRun: false }, "no Pillar: the saved Blog");
+assertEqual(
+  generateSourceOf(["tool", "ads"], [ramp, rampPost, oldEmail, piece("odd", "pillar", ramp)]),
+  { page: null, thisRun: false },
+  "a tool page, a piece under one and an email saved as a page of its own are not a Pillar or a Blog",
+);
+
+assertEqual(nothingToWriteFromLine(["pillar", "blog"], []), null, "no short piece ticked: nothing is said");
+assertEqual(nothingToWriteFromLine(["ads"], [pillar]), null, "there is a Pillar: nothing is said");
+assertEqual(nothingToWriteFromLine(["pillar", "ads"], []), null, "Pillar is ticked: nothing is said");
+assertEqual(
+  nothingToWriteFromLine(["tool", "ads"], [ramp]),
+  "Ads is written from this project's Pillar, or from its Blog when it has no Pillar, and it has neither. Tick Pillar as well.",
+  "one piece ticked with nothing to write it from",
+);
+assertEqual(
+  nothingToWriteFromLine(["social", "email-cold-outreach"], []),
+  "Email — cold outreach, Social are written from this project's Pillar, or from its Blog when it has no Pillar, and it has neither. Tick Pillar as well.",
+  "several, named as the list names them and in its order",
+);
+
+// ---- what a Generate deletes before it writes ---------------------------------------------------
 
 assertEqual(deletedPiecesLine(["pillar"], [pillar, blog], false), null, "a page with no pieces: nothing is said");
 assertEqual(deletedPiecesLine([], all, false), null, "nothing ticked: nothing is said");
 assertEqual(deletedPiecesLine(["image-prompt"], all, false), null, "a type that is not a page with pieces: nothing is said");
 assertEqual(
   deletedPiecesLine(["blog"], all, false),
-  "Writing the Blog again deletes the 1 piece Repurpose wrote from it.",
+  "Writing the Blog again deletes the 1 piece written from it.",
   "one page with one piece",
 );
 assertEqual(
   deletedPiecesLine(["pillar"], all, false),
-  "Writing the Pillar again deletes the 3 pieces Repurpose wrote from it.",
+  "Writing the Pillar again deletes the 3 pieces written from it.",
   "one page with several",
 );
 assertEqual(
   deletedPiecesLine(["pillar", "blog", "tool"], all, false),
-  "Writing these pages again deletes the 5 pieces Repurpose wrote from them: 3 from the Pillar, 1 from the Blog, 1 from the Tool page “Ramp”.",
+  "Writing these pages again deletes the 5 pieces written from them: 3 from the Pillar, 1 from the Blog, 1 from the Tool page “Ramp”.",
   "several pages: the total, and each page's share",
 );
 // Tool pages for some partners only: which pages that writes is the server's to say.
 assertEqual(
   deletedPiecesLine(["pillar", "tool"], all, true),
-  "Writing the Pillar again deletes the 3 pieces Repurpose wrote from it. A tool page written this run loses the pieces Repurpose wrote from it.",
+  "Writing the Pillar again deletes the 3 pieces written from it. A tool page written this run loses the pieces written from it.",
   "tool pages narrowed to some partners are not counted, and the rule is said",
 );
 assertEqual(
   deletedPiecesLine(["tool"], all, true),
-  "A tool page written this run loses the pieces Repurpose wrote from it.",
+  "A tool page written this run loses the pieces written from it.",
   "and with nothing else ticked the rule alone is said",
 );
 assertEqual(deletedPiecesLine(["tool"], [pillar, ramp, bill], true), null, "no tool page has a piece: nothing is said");
+
+// A short piece that is ticked is written once for the project: every one of its type goes first.
+assertEqual(deletedPiecesLine(["ads"], [pillar, blog], false), null, "a piece the project has none of: nothing is said");
+assertEqual(
+  deletedPiecesLine(["email-cold-outreach"], all, false),
+  "Writing Email — cold outreach again deletes the 3 this project already has.",
+  "the one under the Pillar, the one under the Blog and the one saved under no page",
+);
+assertEqual(
+  deletedPiecesLine(["email-cold-outreach"], [pillar, oldEmail], false),
+  "Writing Email — cold outreach again deletes the 1 this project already has.",
+  "one",
+);
+assertEqual(
+  deletedPiecesLine(["ads", "social"], all, false),
+  "Writing Social, Ads again deletes the 3 this project already has.",
+  "several pieces ticked, named in the list's order",
+);
+assertEqual(
+  deletedPiecesLine(["pillar", "email-cold-outreach"], all, false),
+  "Writing the Pillar again deletes the 3 pieces written from it. Writing Email — cold outreach again deletes the 2 this project already has.",
+  "the Pillar's email is counted once, with the Pillar",
+);
+assertEqual(
+  deletedPiecesLine(["tool", "social"], all, true),
+  "A tool page written this run loses the pieces written from it. Writing Social again deletes the 2 this project already has.",
+  "tool pages narrowed: the post under one is certain to go, being a ticked piece, and is counted",
+);
 
 // ---- a page's last Repurpose, read back ---------------------------------------------------------
 

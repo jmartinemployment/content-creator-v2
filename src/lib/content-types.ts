@@ -40,10 +40,10 @@ export function contentTypeLabel(value: string | null | undefined): string {
 
 /**
  * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan. One exists so
- * far, for the PDF / LinkedIn document -- plans/enable-linkedin-document.md (2026-10-08), written and
- * not yet approved, so the type stays here until that plan's G5. None for the other twelve: the
- * scoping note of 2026-09-22 was retired by plans/fix-overview.md (Appendix A) and is in git history
- * only. Mirrors GccGenerateService.DisabledContentTypes
+ * far, for the PDF / LinkedIn document -- GeekBackend plans/enable-pdf.md, approved 2026-10-13 and
+ * being built, so the type stays here until that plan's step 5 takes it out. None for the other
+ * twelve: the scoping note of 2026-09-22 was retired by plans/fix-overview.md (Appendix A) and is in
+ * git history only. Mirrors GccGenerateService.DisabledContentTypes
  * (GeekBackend), the real, enforced gate; this list is what makes that same state visible before
  * Generate is even clicked. Revised same day: Pillar and Blog re-enabled -- they have real,
  * independent dedicated generators and only break in one specific combination (multi-select
@@ -57,10 +57,10 @@ export function contentTypeLabel(value: string | null | undefined): string {
  * disabled -- cold outreach is the one email variant genuinely implemented, and Social/Ads/Image
  * prompt were never flagged as broken.
  *
- * Not disabled is not the same as written by Generate. Since 2026-10-12 Email-cold-outreach, Social
- * and Ads are written by Repurpose from an approved pillar, blog or tool page, and GeekAPI refuses
- * them on Generate. They keep their tabs, so they stay out of this list; Generate's picker leaves
- * them out by `isRepurposeType` (src/lib/content-creator/repurpose.ts).
+ * Email-cold-outreach, Social and Ads are short pieces: each is written from a page, never from the
+ * brief alone (src/lib/content-creator/repurpose.ts). Since 2026-10-13 they are on Generate's list
+ * again and Generate writes each from the project's Pillar; Repurpose, on an approved page, writes
+ * one again from that page. From 2026-10-12 to 2026-10-13 Generate's picker left them out.
  * Normalized the same way as the backend: strip non-letters, lowercase, so "tech-article" and
  * "techArticle", or "linkedin-document" and "PDF / LinkedIn document", each match one entry.
  */

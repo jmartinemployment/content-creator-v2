@@ -14,10 +14,12 @@ import type { GccArtifact, GccArtifactVersion, GccGenerateJobEvent, GccProjectRu
 import type { GccProject } from "@/services/gcc-projects-api";
 
 /**
- * Repurpose on the page (GeekBackend plans/use-everything.md, step 5). An email, a social post and an
- * ad are written from an approved pillar, blog or tool page and by nothing else, so: Generate's list
- * does not offer them, an approved page does, a page that is not approved says why not, a piece says
- * which page it came from, and Generate says what a ticked page takes with it.
+ * A short piece on the page. An email, a social post and an ad are written from a page of the project:
+ * by Generate from its Pillar when ticked under "Content type" (Jeff, 2026-10-13), and by Repurpose
+ * again from one approved pillar, blog or tool page. So: Generate's list offers them and says what
+ * they are written from, an approved page offers Repurpose, a page that is not approved says why not,
+ * a piece says which page it came from, and Generate says what it deletes and when it has nothing to
+ * write a piece from.
  *
  * The page is rendered against a GeekAPI answered from fixtures, as in
  * no-foreign-guid-on-screen.test.tsx. Nothing here follows a run on the hub: the Repurpose that is
@@ -213,7 +215,9 @@ const ALREADY_RUNNING =
  * GeekAPI, answered from the fixtures. A path nothing here answers is remembered and fails the test;
  * every Repurpose asked for is remembered with what was sent, and refused as a second run is.
  */
-function installGeekApi(): { unanswered: string[]; repurposes: { path: string; body: unknown }[] } {
+function installGeekApi(
+  held: GccArtifact[] = artifacts,
+): { unanswered: string[]; repurposes: { path: string; body: unknown }[] } {
   const unanswered: string[] = [];
   const repurposes: { path: string; body: unknown }[] = [];
   const base = `/api/cw/api/geek-content-creator`;
@@ -228,7 +232,7 @@ function installGeekApi(): { unanswered: string[]; repurposes: { path: string; b
       return new Response(ALREADY_RUNNING, { status: 409 });
     }
     if (path === projectBase) return json(project);
-    if (path === `${projectBase}/artifacts`) return json(artifacts);
+    if (path === `${projectBase}/artifacts`) return json(held);
     if (path === `${projectBase}/generate/latest`) return json({ run: null });
     if (path === `${projectBase}/pages/${PILLAR_ID}/repurpose/latest`) return json({ run: pillarRepurpose });
     if (path === `${projectBase}/pages/${TOOL_ID}/repurpose/latest`) return json({ run: null });
@@ -258,28 +262,53 @@ async function openOnThePillar() {
   return api;
 }
 
-test("Generate's list does not offer an email, a social post or an ad, and says where they are written", async (t) => {
+test("Generate's list offers an email, a social post and an ad, and says what they are written from", async (t) => {
   t.after(cleanup);
   const api = await openOnThePillar();
 
   const list = within(screen.getByRole("group", { name: "Content type" }));
-  for (const offered of ["Pillar", "Blog", "Tool page", "Image prompt"]) {
-    assert.ok(list.getByRole("checkbox", { name: offered }), `${offered} is on Generate's list`);
-  }
-  for (const piece of ["Email — cold outreach", "Social", "Ads"]) {
-    assert.equal(list.queryByRole("checkbox", { name: piece }), null, `${piece} is not on Generate's list`);
+  for (const offered of ["Pillar", "Blog", "Tool page", "Image prompt", "Email — cold outreach", "Social", "Ads"]) {
+    const box = list.getByRole("checkbox", { name: offered }) as HTMLInputElement;
+    assert.equal(box.disabled, false, `${offered} is on Generate's list and can be ticked`);
+    assert.equal(box.checked, false, `${offered} is not ticked until it is asked for`);
   }
   assert.ok(
-    list.getByText(/Email — cold outreach, Social, Ads are not written by Generate\./),
-    "the list says the three are written elsewhere, and where",
+    list.getByText(/Email — cold outreach, Social, Ads are written from this project.s Pillar: the one this run writes when Pillar is ticked, otherwise the one already saved\./),
+    "the list says the three are written from the Pillar, and which one",
   );
 
-  // Their tabs stay: what was written from a page is read there.
+  // Their tabs are where each is read.
   assert.ok(tab(/^Email — cold outreach \(2\)$/));
   assert.ok(tab(/^Social$/));
   assert.ok(tab(/^Ads$/));
 
   assert.deepEqual(api.unanswered, [], "every request the page made was answered by the fixtures");
+});
+
+test("a piece ticked on a project with no Pillar and no Blog holds Generate and says why", async (t) => {
+  t.after(cleanup);
+  // The project has a tool page and the email Repurpose wrote from it, and nothing else.
+  const api = installGeekApi(artifacts.filter((a) => a.id === TOOL_ID || a.id === TOOL_EMAIL_ID));
+  render(<ProjectContentWorkspace project={project} view="generate" />);
+  await waitFor(() => assert.ok(heading("Repurpose")));
+
+  const list = within(screen.getByRole("group", { name: "Content type" }));
+  const held = () =>
+    screen.queryByText(
+      "Social is written from this project's Pillar, or from its Blog when it has no Pillar, and it has neither. Tick Pillar as well.",
+    );
+  const generate = () => screen.getByRole("button", { name: /^Generate / }) as HTMLButtonElement;
+
+  fireEvent.click(list.getByRole("checkbox", { name: "Social" }));
+  assert.ok(held(), "the page says there is nothing to write the post from");
+  assert.equal(generate().disabled, true, "and Generate is held");
+
+  // Ticking Pillar gives the post a page to be written from: this run's.
+  fireEvent.click(list.getByRole("checkbox", { name: "Pillar" }));
+  assert.equal(held(), null);
+  assert.equal(generate().disabled, false);
+
+  assert.deepEqual(api.unanswered, []);
 });
 
 test("an approved page offers Repurpose, lists its pieces and shows what its last Repurpose said", async (t) => {
@@ -378,20 +407,24 @@ test("each piece in a tab is named for the page it was written from", async (t) 
   await waitFor(() => assert.ok(screen.getByText("What Ramp routes by rule")));
   assert.ok(screen.getByRole("button", { name: "the Tool page “Ramp”" }));
 
-  // A tab with nothing in it says how its pieces are made, not to tick it on Generate.
+  // A tab with nothing in it says how its piece is made: ticked on Generate, written from the Pillar.
   fireEvent.click(tab(/^Social$/));
   await waitFor(() =>
-    assert.ok(screen.getByText(/No Social yet for this project\. It is written from an approved Pillar, Blog or Tool page/)),
+    assert.ok(
+      screen.getByText(
+        'No Social yet for this project. Tick it under "Content type" and Generate above: it is written from this project\'s Pillar.',
+      ),
+    ),
   );
 
   assert.deepEqual(api.unanswered, []);
 });
 
-test("Generate says how many pieces a ticked page takes with it", async (t) => {
+test("Generate says how many pieces a ticked page takes with it, and how many a ticked piece replaces", async (t) => {
   t.after(cleanup);
   const api = await openOnThePillar();
   const list = within(screen.getByRole("group", { name: "Content type" }));
-  const deleted = () => screen.queryByText(/deletes the \d+ pieces? Repurpose wrote/);
+  const deleted = () => screen.queryByText(/again deletes the \d+ /);
 
   assert.equal(deleted(), null, "nothing ticked: nothing is said");
 
@@ -399,14 +432,23 @@ test("Generate says how many pieces a ticked page takes with it", async (t) => {
   assert.equal(deleted(), null, "a page with no pieces: nothing is said");
 
   fireEvent.click(list.getByRole("checkbox", { name: "Pillar" }));
-  assert.ok(screen.getByText("Writing the Pillar again deletes the 1 piece Repurpose wrote from it."));
+  assert.ok(screen.getByText("Writing the Pillar again deletes the 1 piece written from it."));
 
   fireEvent.click(list.getByRole("checkbox", { name: "Tool page" }));
   assert.ok(
     screen.getByText(
-      "Writing these pages again deletes the 2 pieces Repurpose wrote from them: 1 from the Pillar, 1 from the Tool page “Ramp”.",
+      "Writing these pages again deletes the 2 pieces written from them: 1 from the Pillar, 1 from the Tool page “Ramp”.",
     ),
   );
+
+  // An email ticked alone: both of the project's emails go, the Pillar's and the tool page's.
+  for (const ticked of ["Blog", "Pillar", "Tool page"]) fireEvent.click(list.getByRole("checkbox", { name: ticked }));
+  assert.equal(deleted(), null);
+  fireEvent.click(list.getByRole("checkbox", { name: "Email — cold outreach" }));
+  assert.ok(screen.getByText("Writing Email — cold outreach again deletes the 2 this project already has."));
+  // The project has a Pillar to write it from, so Generate is not held.
+  assert.equal((screen.getByRole("button", { name: /^Generate / }) as HTMLButtonElement).disabled, false);
+  assert.equal(screen.queryByText(/and it has neither/), null);
 
   assert.deepEqual(api.unanswered, []);
 });

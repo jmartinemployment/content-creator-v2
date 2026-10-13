@@ -3,19 +3,21 @@ import { draftWrittenLabel, runRecord } from "@/lib/content-creator/run-display"
 import type { GccArtifact } from "@/services/gcc-api";
 
 /**
- * Repurpose: a short piece (an email, a social post, an ad) is written from one approved page of the
- * project and saved under it. Jeff, 2026-10-12: short content types "ARE DERIVED OR REPURPOSED FROM
- * EXISTING CONTENT".
+ * A short piece (an email, a social post, an ad) is written from one page of the project and saved
+ * under it, never from the brief alone. Jeff, 2026-10-12: short content types "ARE DERIVED OR
+ * REPURPOSED FROM EXISTING CONTENT".
  *
- * Until then "Email — cold outreach", "Social" and "Ads" were ticked on Generate and written from the
- * brief alone, with no page in front of the writer. GeekAPI now refuses them there
- * (`GccRepurpose.GenerateRefusal`, GeekBackend), so the picker does not offer them and each has its
- * place on the page it is written from. What is here is what the screen needs to say about that:
- * which types these are, which pages they can be written from, which pieces a page already has, and
- * what a Generate deletes with a page it writes again.
+ * Two runs write one. Generate does when the piece is ticked under "Content type" (Jeff, 2026-10-13:
+ * "Add my Email, Social, and Ads, back to generate"): from the project's Pillar, the one that run
+ * writes or the one already saved, or from its Blog when it has no Pillar. Repurpose, under "Approve &
+ * export" on an approved pillar, blog or tool page, writes it again from that page without running
+ * Generate. From 2026-10-12 to 2026-10-13 only Repurpose did, and the picker left the three out.
+ *
+ * What is here is what the screen needs to say about that: which types these are, which page a
+ * Generate writes them from, which pieces a page already has, and what a Generate deletes.
  */
 
-/** The pieces Repurpose writes, in the order they are offered. Each is a tab of the Output. */
+/** The short pieces, in the order they are offered. Each is a tab of the Output. */
 export const REPURPOSE_TYPES: readonly string[] = ["email-cold-outreach", "social", "ads"];
 
 /** Letters only, lower case: how GeekAPI compares a content type, so "aiTool" and "tool" are one. */
@@ -26,7 +28,7 @@ function lettersOf(type: string | null | undefined): string {
 const REPURPOSE_LETTERS = new Set(REPURPOSE_TYPES.map(lettersOf));
 const SOURCE_LETTERS = new Set(["pillar", "blog", "tool", "aitool"]);
 
-/** Whether a content type is written by Repurpose, and so is not offered on Generate. */
+/** Whether a content type is a short piece: an email, a social post or an ad, written from a page. */
 export function isRepurposeType(type: string | null | undefined): boolean {
   return REPURPOSE_LETTERS.has(lettersOf(type));
 }
@@ -94,13 +96,59 @@ export function pieceButtonLabel(piece: GccArtifact, artifacts: readonly GccArti
 }
 
 /**
- * What a Generate says under its list when a page it is about to write again has pieces under it:
- * they are deleted with it. Null when no ticked page has any. A line of text, not a panel and not an
- * extra click: writing the page again is what was asked for.
+ * The page a Generate writes its ticked short pieces from, by the rule GeekAPI uses
+ * (`GccRepurpose.GenerateSourceOf`, GeekBackend): the project's Pillar, the one this run writes when
+ * "Pillar" is ticked and otherwise the one already saved; with no Pillar, its Blog by the same rule.
+ *
+ * Null when no short piece is ticked. `page` is null when one is ticked and the project has neither
+ * page and neither is ticked: there is nothing to write it from, and the server refuses the run.
+ */
+export function generateSourceOf(
+  outputTypes: readonly string[],
+  artifacts: readonly GccArtifact[],
+): { page: "pillar" | "blog" | null; thisRun: boolean } | null {
+  if (!outputTypes.some(isRepurposeType)) return null;
+  const ticked = new Set(outputTypes.map(kindOf));
+  for (const page of ["pillar", "blog"] as const) {
+    if (ticked.has(page)) return { page, thisRun: true };
+    if (artifacts.some((a) => !a.parentArtifactId && kindOf(a.type) === page)) return { page, thisRun: false };
+  }
+  return { page: null, thisRun: false };
+}
+
+/** The ticked short pieces by the names on the list, joined: "Email — cold outreach, Social". */
+function tickedPieces(outputTypes: readonly string[]): string {
+  return REPURPOSE_TYPES.filter((t) => outputTypes.some((o) => lettersOf(o) === lettersOf(t)))
+    .map(typeLabel)
+    .join(", ");
+}
+
+/**
+ * What Generate says, and is held for, when a short piece is ticked and there is no page to write it
+ * from. Null when nothing is ticked that needs one, or when there is one.
+ */
+export function nothingToWriteFromLine(
+  outputTypes: readonly string[],
+  artifacts: readonly GccArtifact[],
+): string | null {
+  const source = generateSourceOf(outputTypes, artifacts);
+  if (!source || source.page) return null;
+  const several = outputTypes.filter(isRepurposeType).length > 1;
+  return `${tickedPieces(outputTypes)} ${several ? "are" : "is"} written from this project's Pillar, or from its Blog when it has no Pillar, and it has neither. Tick Pillar as well.`;
+}
+
+/**
+ * What a Generate says under its list about what it deletes before it writes. Null when it deletes
+ * no piece. A line of text, not a panel and not an extra click: writing again is what was asked for.
+ *
+ * Two things delete a piece. A page written again loses the pieces written from it, whatever their
+ * type. And a short piece that is ticked is written once for the project, so every one of that type
+ * the project already has goes first: the one under the Pillar, one Repurpose wrote from another
+ * page, and one an older Generate saved under no page. A piece is counted once.
  *
  * When tool pages are ticked for some partners and not all, which tool pages the run writes is the
- * server's to say (it names them from the partners' crawls), so their pieces are not counted here
- * and the line says the rule instead of a number that could be wrong.
+ * server's to say (it names them from the partners' crawls), so the pieces under them are not counted
+ * here and the line says the rule instead of a number that could be wrong.
  */
 export function deletedPiecesLine(
   outputTypes: readonly string[],
@@ -111,24 +159,41 @@ export function deletedPiecesLine(
   const ticked = new Set(outputTypes.map(kindOf));
   const withPieces = artifacts
     .filter((a) => isRepurposeSource(a) && ticked.has(kindOf(a.type)))
-    .map((page) => ({ page, pieces: piecesOf(page, artifacts).length }))
-    .filter((row) => row.pieces > 0);
+    .map((page) => ({ page, pieces: piecesOf(page, artifacts) }))
+    .filter((row) => row.pieces.length > 0);
 
   const counted = withPieces.filter((row) => !(toolsNarrowed && kindOf(row.page.type) === "tool"));
-  const toolRule = withPieces.length > counted.length
-    ? "A tool page written this run loses the pieces Repurpose wrote from it."
-    : "";
+  const lines: string[] = [];
+  if (counted.length > 0) {
+    const total = counted.reduce((sum, row) => sum + row.pieces.length, 0);
+    const pieces = total === 1 ? "the 1 piece" : `the ${total} pieces`;
+    lines.push(
+      counted.length === 1
+        ? `Writing ${sourceLabel(counted[0].page)} again deletes ${pieces} written from it.`
+        : `Writing these pages again deletes ${pieces} written from them: ${counted
+            .map((row) => `${row.pieces.length} from ${sourceLabel(row.page)}`)
+            .join(", ")}.`,
+    );
+  }
+  if (withPieces.length > counted.length) {
+    lines.push("A tool page written this run loses the pieces written from it.");
+  }
 
-  if (counted.length === 0) return toolRule || null;
+  // The ticked short pieces the project already has, apart from those counted with a page above.
+  const withAPage = new Set(counted.flatMap((row) => row.pieces.map((piece) => piece.id)));
+  const already = artifacts.filter(
+    (a) => isRepurposeType(a.type) && ticked.has(kindOf(a.type)) && !withAPage.has(a.id),
+  ).length;
+  if (already > 0) {
+    const what = tickedPieces(outputTypes);
+    lines.push(
+      already === 1
+        ? `Writing ${what} again deletes the 1 this project already has.`
+        : `Writing ${what} again deletes the ${already} this project already has.`,
+    );
+  }
 
-  const total = counted.reduce((sum, row) => sum + row.pieces, 0);
-  const pieces = total === 1 ? "the 1 piece" : `the ${total} pieces`;
-  const line = counted.length === 1
-    ? `Writing ${sourceLabel(counted[0].page)} again deletes ${pieces} Repurpose wrote from it.`
-    : `Writing these pages again deletes ${pieces} Repurpose wrote from them: ${counted
-        .map((row) => `${row.pieces} from ${sourceLabel(row.page)}`)
-        .join(", ")}.`;
-  return toolRule ? `${line} ${toolRule}` : line;
+  return lines.length > 0 ? lines.join(" ") : null;
 }
 
 /**

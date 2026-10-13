@@ -15,6 +15,7 @@ import {
   isRepurposeSource,
   isRepurposeType,
   lastRepurposeLines,
+  nothingToWriteFromLine,
   pageOf,
   pieceButtonLabel,
   pieceOfType,
@@ -639,6 +640,10 @@ export default function ProjectContentWorkspace({
   // server's to say, so the pieces under them are not counted on this page.
   const toolsNarrowed = toolPagesRequested && toolPartners.length < project.partnerUrls.length;
   const deletedWithPages = deletedPiecesLine(outputTypes, detail.artifacts, toolsNarrowed);
+  // A short piece ticked on a project with no Pillar and no Blog, neither ticked: the server refuses
+  // the run, and this page can see why before it is asked. When the drafts could not be read the page
+  // does not know what the project has, and unknown is not "none": the server answers.
+  const nothingToWriteFrom = draftsError ? null : nothingToWriteFromLine(outputTypes, detail.artifacts);
 
   /** Open a page or a piece from a link to it. The tab follows what is opened. */
   function openDraft(a: GccArtifact) {
@@ -1223,8 +1228,9 @@ export default function ProjectContentWorkspace({
             </fieldset>
           ) : null}
 
-          {/* A page written again is deleted first, and its pieces with it. Said here, where the page
-              is ticked, and not asked: writing the page again is what was asked for. */}
+          {/* A page written again is deleted first, and its pieces with it; a short piece written
+              again replaces every one of its type the project has. Said here, where they are ticked,
+              and not asked: writing them again is what was asked for. */}
           {deletedWithPages ? <p className="mt-3 text-sm text-foreground">{deletedWithPages}</p> : null}
 
           <div className="mt-4 border-t border-border pt-4">
@@ -1257,7 +1263,8 @@ export default function ProjectContentWorkspace({
               missingProjectSiteRun ||
               generating ||
               outputTypes.length === 0 ||
-              noToolPicked
+              noToolPicked ||
+              nothingToWriteFrom !== null
             }
             onClick={() => void runGenerate(false)}
             className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
@@ -1302,6 +1309,8 @@ export default function ProjectContentWorkspace({
             <p className="mt-3 text-sm text-muted">{briefGap}</p>
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
+          ) : nothingToWriteFrom ? (
+            <p className="mt-3 text-sm text-muted">{nothingToWriteFrom}</p>
           ) : null}
           {runIndicatorShown ? null : (
             <GenerateRunReport
@@ -1448,7 +1457,7 @@ export default function ProjectContentWorkspace({
         <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           {selectedGroup && selectedGroup.artifacts.length === 0
             ? isRepurposeType(selectedGroup.type)
-              ? `No ${selectedGroup.label} yet for this project. It is written from an approved Pillar, Blog or Tool page: open the page, approve it, and use Repurpose under it.`
+              ? `No ${selectedGroup.label} yet for this project. Tick it under "Content type" and Generate above: it is written from this project's Pillar.`
               : `No ${selectedGroup.label} yet for this project. Pick it as an output type, then Generate above.`
             : "No draft artifact yet. Save the brief, then Generate above."}
         </div>
@@ -1631,7 +1640,8 @@ export default function ProjectContentWorkspace({
               <p className="mt-1 text-sm text-muted">
                 Writes an email, a social post or an ad from this page&rsquo;s text, for the reader, the
                 voice and the problem in the brief. Each is saved under this page. Repurpose again
-                replaces it; writing this page again with Generate deletes it.
+                replaces it. Generate deletes it when it writes this page again, and when the same
+                piece is ticked under &ldquo;Content type&rdquo;, which writes one from the Pillar.
               </p>
               {!approved ? (
                 <p className="mt-3 text-sm text-muted">
@@ -2113,8 +2123,9 @@ function GenerateRunLog({ projectId, jobId }: { projectId: string; jobId: string
  * task checkboxes ("Content Type selection should mirror tasks", Jeff). Nothing is ever checked
  * by default.
  *
- * The three pieces Repurpose writes are not offered: GeekAPI refuses them on Generate (2026-10-12),
- * and each is asked for on the page it is written from.
+ * "Email — cold outreach", "Social" and "Ads" are on the list (Jeff, 2026-10-13: "Add my Email,
+ * Social, and Ads, back to generate"). Generate writes each from the project's Pillar, and the line
+ * under the list says so. From 2026-10-12 to 2026-10-13 the list left them out.
  */
 function ContentTypePicker({
   selected,
@@ -2129,7 +2140,7 @@ function ContentTypePicker({
         Content type
       </legend>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-        {CONTENT_TYPES.filter((o) => !isRepurposeType(o.value)).map((o) => {
+        {CONTENT_TYPES.map((o) => {
           const disabled = isContentTypeDisabled(o.value);
           return (
             <label
@@ -2150,11 +2161,12 @@ function ContentTypePicker({
           );
         })}
       </div>
-      {/* Three of the Output's tabs are not on this list, and a list that silently lost them would
-          read as the types being gone. */}
+      {/* Three of the list are not written from the brief and the research as the pages are, and a
+          list that did not say so would read as if they were. */}
       <p className="mt-2 text-xs text-muted">
-        {REPURPOSE_TYPES.map((t) => contentTypeLabel(t)).join(", ")} are not written by Generate. Each is
-        written from an approved Pillar, Blog or Tool page: open the page under Output and use Repurpose.
+        {REPURPOSE_TYPES.map((t) => contentTypeLabel(t)).join(", ")} are written from this project&rsquo;s
+        Pillar: the one this run writes when Pillar is ticked, otherwise the one already saved. A project
+        with no Pillar has them written from its Blog. One of each a project.
       </p>
     </fieldset>
   );
