@@ -1050,9 +1050,12 @@ export const LENGTH_BAND_OPTIONS: {
  * never independent facts, and asking the operator to pick a length band by hand risked one that
  * quietly disagreed with the type already set at creation. `startingContentType` (content-types.ts,
  * twenty values) and `LengthBandKey` (ten bands) do not line up one-to-one — several content types
- * share a band, and "social"/"ads"/"linkedin-document" pick the closest platform-specific band
- * rather than naming one exactly — but every value has a real destination, and callers no longer
- * need a blank/unmapped case.
+ * share a band, and "social"/"ads" pick the closest platform-specific band rather than naming one
+ * exactly.
+ *
+ * The PDF / LinkedIn document has no band. It was given the LinkedIn post's, which is a post's
+ * length and not a deck's; a deck is held to its slides (a title and a few lines each), and what its
+ * tab states is how many slides it has and how long its post is.
  */
 const LENGTH_BAND_BY_CONTENT_TYPE: Record<string, LengthBandKey> = {
   pillar: "pillar",
@@ -1074,11 +1077,11 @@ const LENGTH_BAND_BY_CONTENT_TYPE: Record<string, LengthBandKey> = {
   social: "socialLinkedIn",
   "image-prompt": "imagePrompt",
   ads: "googleAds",
-  "linkedin-document": "socialLinkedIn",
 };
 
 /**
- * "" for no content type chosen yet, or one outside the twenty known values -- no default band.
+ * "" for no content type chosen yet, one outside the twenty known values, or the PDF / LinkedIn
+ * document, which has none -- no default band.
  * `ContentBrief.lengthBand` is already typed `LengthBandKey | ""` for exactly this state; every
  * real caller resolves a real content type before this result is ever persisted.
  */

@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { SiteContextBanner } from "@/components/SiteContextBanner";
-import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
+import { CONTENT_TYPES, isContentTypeDisabled, isDeckType } from "@/lib/content-types";
 import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
   REPURPOSE_TYPES,
@@ -79,7 +79,9 @@ import { ApiError } from "@/services/gcc-api";
 import {
   approveGccVersion,
   briefRevisionSavedAt,
+  deckFacts,
   downloadArtifactHtmlExport,
+  downloadGccVersionPdf,
   downloadProjectHtmlExport,
   generateProject,
   getGenerateJobEvents,
@@ -517,15 +519,26 @@ export default function ProjectContentWorkspace({
   // that cannot be computed is not a reason to put an error banner over a finished draft.
   // Keyed on the topic, not the whole project: every Save updates detail's brief, and re-scoring an
   // unchanged draft on each one is wasted work.
+  //
+  // Not asked for a PDF / LinkedIn document. It is slides and a post, not a page of the site: the
+  // server answers the search score for one with a refusal, and the polish checks are a page's (the
+  // quality of its opening paragraph).
+  //
+  // Scored only when the version on screen is the chosen page's own. Choosing another page changes
+  // the page at once and its version a moment later, and in between the old version would be scored
+  // again under the new page's name: a deck's, asked for as a pillar's, when going from one to the other.
   const scoredTopic = detail?.topic;
+  const deckOnScreen = isDeckType(artifact?.type);
+  const scoredVersionId =
+    version && artifact && version.artifactId === artifact.id && !deckOnScreen ? version.id : null;
   useEffect(() => {
-    if (!version || !scoredTopic) return;
+    if (!scoredVersionId || !scoredTopic) return;
     let live = true;
     void (async () => {
       try {
         const [nextSeo, nextPolish] = await Promise.all([
-          seoGccVersion(version.id, scoredTopic),
-          polishGccVersion(version.id),
+          seoGccVersion(scoredVersionId, scoredTopic),
+          polishGccVersion(scoredVersionId),
         ]);
         if (!live) return;
         setSeo(nextSeo);
@@ -537,7 +550,7 @@ export default function ProjectContentWorkspace({
     return () => {
       live = false;
     };
-  }, [version, scoredTopic]);
+  }, [scoredVersionId, scoredTopic]);
 
   function run(label: string, fn: () => Promise<void>) {
     setActionError(null);
@@ -1520,6 +1533,7 @@ export default function ProjectContentWorkspace({
             />
           </section>
 
+          {deckOnScreen ? null : (
           <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">On-page SEO &amp; polish</h3>
             {/* No Run buttons. Both analysers are deterministic -- same draft in, same numbers out
@@ -1572,13 +1586,22 @@ export default function ProjectContentWorkspace({
               </div>
             ) : null}
           </section>
+          )}
 
           <section className="border-t border-border pt-6">
             <h3 className="font-display text-lg text-foreground">Approve &amp; export</h3>
-            <p className="mt-1 text-sm text-muted">
-              Approve marks this page&rsquo;s newest version approved on the server. Export this page
-              downloads the page on screen as one HTML file; Export HTML downloads every page as a zip.
-            </p>
+            {deckOnScreen ? (
+              <p className="mt-1 text-sm text-muted">
+                Approve marks this deck approved on the server. Download PDF downloads the slides as
+                the PDF you post, one slide a page; Export HTML downloads every page as a zip, with
+                this deck&rsquo;s PDF, its post and its first comment in it.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted">
+                Approve marks this page&rsquo;s newest version approved on the server. Export this page
+                downloads the page on screen as one HTML file; Export HTML downloads every page as a zip.
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {approved ? (
                 <p className="text-sm font-medium text-green-800">Content approved.</p>
@@ -1598,8 +1621,27 @@ export default function ProjectContentWorkspace({
                   Approve content
                 </button>
               )}
-              {/* The page on screen as one HTML file -- the pillar alone, one tool page, the blog.
-                  Jeff, 2026-10-09: "Why can't I export just Pillar from this run?" */}
+              {/* A deck is posted as a PDF and is not a page of the site: its one file is the PDF,
+                  made by the server from the deck on screen each time it is asked for. */}
+              {deckOnScreen ? (
+                <button
+                  type="button"
+                  // Held until the version on screen is this deck's own: choosing the deck's tab
+                  // changes the page a moment before its version is read.
+                  disabled={pending || !artifact || !version || version.artifactId !== artifact.id}
+                  onClick={() =>
+                    run("PDF downloaded.", async () => {
+                      if (!artifact || !version) return;
+                      await downloadGccVersionPdf(version.id, artifact.name || artifact.type);
+                    })
+                  }
+                  className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Download PDF
+                </button>
+              ) : (
+              /* The page on screen as one HTML file -- the pillar alone, one tool page, the blog.
+                 Jeff, 2026-10-09: "Why can't I export just Pillar from this run?" */
               <button
                 type="button"
                 disabled={pending || !artifact || !version}
@@ -1613,6 +1655,7 @@ export default function ProjectContentWorkspace({
               >
                 Export this page (.html)
               </button>
+              )}
               {/* Export every artifact on this create as a zip of HTML documents -- the export v1
                   had, which existed here with no caller. Not gated on approval: an operator
                   reviewing output outside the browser is exactly when it is wanted. */}
@@ -2466,6 +2509,9 @@ function ArtifactBody({
     ? html.replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length
     : 0;
   const outOfRange = !!target && words > 0 && (words < target.min || words > target.max);
+  // A deck has no word target. What is stated for it is what it is: its slides, and its post's
+  // length, which is what LinkedIn limits.
+  const deck = isDeckType(contentType) ? deckFacts(bodyDocumentJson) : null;
 
   return (
     <div className="mt-4">
@@ -2486,6 +2532,12 @@ function ArtifactBody({
 
       {metaDescription ? (
         <p className="mb-2 text-sm text-muted">{metaDescription}</p>
+      ) : null}
+
+      {deck ? (
+        <p className="mb-3 text-xs text-muted">
+          {`${deck.slides} slides. The post is ${deck.postWords.toLocaleString()} words, ${deck.postCharacters.toLocaleString()} characters.`}
+        </p>
       ) : null}
 
       {target && words > 0 ? (

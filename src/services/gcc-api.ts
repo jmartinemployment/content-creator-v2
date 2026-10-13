@@ -414,6 +414,34 @@ export async function downloadArtifactHtmlExport(artifactId: string, fallbackNam
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Download a PDF / LinkedIn document as the PDF that is posted: one slide a page, made by GeekAPI
+ * from the saved deck. The file name is the server's, the deck's title.
+ */
+export async function downloadGccVersionPdf(versionId: string, fallbackName: string): Promise<void> {
+  const path = `/api/geek-content-creator/versions/${encodeURIComponent(versionId)}/pdf`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText);
+    throw new ApiError(detail || response.statusText, response.status);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = named ? decodeURIComponent(named) : `${fallbackName}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Parse a 409 Conflict body from Generate when site grounding is stale. */
 export function parseStaleGroundingError(err: unknown): GccStaleGroundingError | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
@@ -607,6 +635,100 @@ function shortPieceToHtml(p: Record<string, unknown>): string | null {
   return null;
 }
 
+/** What a slide is, said beside its number. A partner's slide says the partner instead. */
+const DECK_SLIDE_KINDS: Record<string, string> = {
+  cover: "Cover",
+  problem: "The problem",
+  approach: "The approach",
+  next: "What to do next",
+};
+
+/**
+ * A PDF / LinkedIn document as it is saved, or null when the body is not one: its slides in order
+ * (the cover first), what each one is, the post, and the links for the first comment.
+ *
+ * What a slide is comes from the saved `slides` list and never from where a section stands, as on
+ * the server (GccLinkedInDocument.ReadSaved): a page with no such list is not read as a deck.
+ */
+function readDeck(p: Record<string, unknown>): {
+  slides: { section: DocSection; what: string }[];
+  post: string;
+  firstComment: string;
+} | null {
+  if (!Array.isArray(p.slides) || !isWireDocument(p.body)) return null;
+  const doc = p.body as WireDocument;
+  if (!doc.lede) return null;
+  const sections = [doc.lede, ...(doc.sections ?? [])];
+  if (p.slides.length !== sections.length) return null;
+
+  const slides = sections.map((section, i) => {
+    const listed = (p.slides as unknown[])[i] as { kind?: unknown; partner?: unknown } | null;
+    const partner = typeof listed?.partner === "string" ? listed.partner.trim() : "";
+    const kind = typeof listed?.kind === "string" ? listed.kind : "";
+    return { section, what: partner || DECK_SLIDE_KINDS[kind] || "" };
+  });
+  return {
+    slides,
+    post: typeof p.caption === "string" ? p.caption.trim() : "",
+    firstComment: typeof p.firstComment === "string" ? p.firstComment.trim() : "",
+  };
+}
+
+/**
+ * How many slides a saved deck has and how long its post is, or null when the body is not a deck.
+ * A deck has no word target: these are stated, not judged.
+ */
+export function deckFacts(
+  bodyDocumentJson: string,
+): { slides: number; postWords: number; postCharacters: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyDocumentJson);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const deck = readDeck(parsed as Record<string, unknown>);
+  if (!deck) return null;
+  return {
+    slides: deck.slides.length,
+    postWords: deck.post.split(/\s+/).filter(Boolean).length,
+    postCharacters: deck.post.length,
+  };
+}
+
+/**
+ * A deck, drawn as what is posted: each slide with its number and what it is, then the LinkedIn post
+ * the document is attached to, then the links to paste as the first comment under the post. The post
+ * and the comment are text and are escaped; a link in the comment is shown as its address, to copy.
+ */
+function deckToHtml(p: Record<string, unknown>): string | null {
+  const deck = readDeck(p);
+  if (!deck) return null;
+
+  const rows: string[] = [];
+  deck.slides.forEach(({ section, what }, i) => {
+    rows.push(
+      `<p><strong>Slide ${i + 1} of ${deck.slides.length}</strong>${what ? ` · ${escHtml(what)}` : ""}</p>`,
+    );
+    if (section.heading?.trim()) rows.push(`<h3>${escHtml(section.heading)}</h3>`);
+    for (const paragraph of section.paragraphs ?? []) {
+      const drawn = renderParagraph(paragraph);
+      if (drawn) rows.push(drawn);
+    }
+  });
+
+  if (deck.post) rows.push("<h2>The LinkedIn post</h2>", textToHtml(deck.post));
+  if (deck.firstComment) {
+    rows.push(
+      "<h2>The first comment</h2>",
+      "<p><em>Paste this as the first comment under the post. The post itself carries no link.</em></p>",
+      textToHtml(deck.firstComment),
+    );
+  }
+  return rows.join("\n");
+}
+
 /**
  * Render a stored artifact body (CWV2 ContentDocument, image-prompt, or tool JSON) into
  * readable HTML for `dangerouslySetInnerHTML`. Returns null when it can't produce a
@@ -618,6 +740,13 @@ export function renderArtifactBody(bodyDocumentJson: string): string | null {
     parsed = JSON.parse(bodyDocumentJson);
   } catch {
     return null;
+  }
+
+  // A PDF / LinkedIn document: its slides, its post and its first comment. Before the page's
+  // branch, because a deck's slides are stored in the document every page is.
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const deck = deckToHtml(parsed as Record<string, unknown>);
+    if (deck) return deck;
   }
 
   // Long-form ContentDocument (top-level or nested under .body for tool pages).

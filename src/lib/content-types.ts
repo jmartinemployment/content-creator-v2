@@ -39,30 +39,25 @@ export function contentTypeLabel(value: string | null | undefined): string {
 }
 
 /**
- * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan. One exists so
- * far, for the PDF / LinkedIn document -- GeekBackend plans/enable-pdf.md, approved 2026-10-13 and
- * being built, so the type stays here until that plan's step 5 takes it out. None for the other
- * twelve: the scoping note of 2026-09-22 was retired by plans/fix-overview.md (Appendix A) and is in
- * git history only. Mirrors GccGenerateService.DisabledContentTypes
- * (GeekBackend), the real, enforced gate; this list is what makes that same state visible before
- * Generate is even clicked. Revised same day: Pillar and Blog re-enabled -- they have real,
- * independent dedicated generators and only break in one specific combination (multi-select
- * alongside a sibling long-form type), tracked as its own bug fix, not a reason to disable a type
- * that mostly works. Tool remains excluded outright -- it meets the bar these others don't.
+ * Content types disabled 2026-09-22 (Jeff) pending a written, approved resolve plan. One has had
+ * one: the PDF / LinkedIn document, enabled 2026-10-13 by GeekBackend plans/enable-pdf.md, which gave
+ * it a writer, checks and a PDF of its own. None for the other twelve: the scoping note of 2026-09-22
+ * was retired by plans/fix-overview.md (Appendix A) and is in git history only. Mirrors
+ * GccGenerateService.DisabledContentTypes (GeekBackend), the real, enforced gate; this list is what
+ * makes that same state visible before Generate is even clicked. Change the two together, GeekBackend
+ * first: the other order offers a type the server refuses.
+ *
  * Everything still here has no real, correctly-routed implementation: the generic-fallback
- * long-form types, LinkedInDocument (zero content-type-specific treatment), and
- * EmailNewsletter/EmailStoryNurture/EmailTransactional (all three currently produce
- * cold-outreach-shaped content regardless of which is picked -- the wrong thing, not a thin
- * version of the right thing). Email-cold-outreach, Social, Ads, and Image prompt are not
- * disabled -- cold outreach is the one email variant genuinely implemented, and Social/Ads/Image
- * prompt were never flagged as broken.
+ * long-form types, and EmailNewsletter/EmailStoryNurture/EmailTransactional (all three currently
+ * produce cold-outreach-shaped content regardless of which is picked -- the wrong thing, not a thin
+ * version of the right thing).
  *
  * Email-cold-outreach, Social and Ads are short pieces: each is written from a page, never from the
  * brief alone (src/lib/content-creator/repurpose.ts). Since 2026-10-13 they are on Generate's list
  * again and Generate writes each from the project's Pillar; Repurpose, on an approved page, writes
  * one again from that page. From 2026-10-12 to 2026-10-13 Generate's picker left them out.
  * Normalized the same way as the backend: strip non-letters, lowercase, so "tech-article" and
- * "techArticle", or "linkedin-document" and "PDF / LinkedIn document", each match one entry.
+ * "techArticle" match one entry.
  */
 const DISABLED_CONTENT_TYPES = new Set([
   "techarticle",
@@ -74,7 +69,6 @@ const DISABLED_CONTENT_TYPES = new Set([
   "service",
   "local",
   "whitepaper",
-  "linkedindocument",
   "emailnewsletter",
   "emailstorynurture",
   "emailtransactional",
@@ -83,4 +77,13 @@ const DISABLED_CONTENT_TYPES = new Set([
 export function isContentTypeDisabled(value: string): boolean {
   const normalized = value.replace(/[^a-zA-Z]/g, "").toLowerCase();
   return DISABLED_CONTENT_TYPES.has(normalized);
+}
+
+/**
+ * Whether a type is the PDF / LinkedIn document, however it is spelled: a deck of slides and the
+ * LinkedIn post that carries it. It is not a page of the site, so it is drawn as slides, downloaded
+ * as a PDF, and not scored for search.
+ */
+export function isDeckType(value: string | null | undefined): boolean {
+  return (value ?? "").replace(/[^a-zA-Z]/g, "").toLowerCase() === "linkedindocument";
 }

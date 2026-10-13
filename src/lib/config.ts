@@ -60,17 +60,3 @@ export const apiConfig = {
 
 export const LLM_PROVIDERS = ["OpenAi", "Anthropic"] as const;
 export type LlmProvider = (typeof LLM_PROVIDERS)[number];
-
-export const STARTING_CONTENT_TYPES = [
-  "blog",
-  "pillar",
-  "techArticle",
-  "email",
-  "linkedin",
-  "x",
-  "instagram",
-  "imagePrompt",
-  "aiTool",
-] as const;
-
-export type StartingContentType = (typeof STARTING_CONTENT_TYPES)[number];
