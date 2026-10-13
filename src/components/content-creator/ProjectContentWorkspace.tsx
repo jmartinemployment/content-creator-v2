@@ -2162,11 +2162,13 @@ function ContentTypePicker({
         })}
       </div>
       {/* Three of the list are not written from the brief and the research as the pages are, and a
-          list that did not say so would read as if they were. */}
+          list that did not say so would read as if they were.
+
+          One string, not an expression followed by text: the production build dropped the space
+          between the two ("Social, Adsare written", live on 2026-10-13) while the test's compiler
+          kept it, so the test passed on a sentence the screen did not show. */}
       <p className="mt-2 text-xs text-muted">
-        {REPURPOSE_TYPES.map((t) => contentTypeLabel(t)).join(", ")} are written from this project&rsquo;s
-        Pillar: the one this run writes when Pillar is ticked, otherwise the one already saved. A project
-        with no Pillar has them written from its Blog. One of each a project.
+        {`${REPURPOSE_TYPES.map((t) => contentTypeLabel(t)).join(", ")} are written from this project’s Pillar: the one this run writes when Pillar is ticked, otherwise the one already saved. A project with no Pillar has them written from its Blog. One of each a project.`}
       </p>
     </fieldset>
   );
