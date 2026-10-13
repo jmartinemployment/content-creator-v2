@@ -1,5 +1,6 @@
 import {
   appendUnique,
+  withoutIds,
   draftWrittenLabel,
   lastRunLines,
   runRecord,
@@ -270,6 +271,16 @@ assertEqual(
   "warnings split by the grounding label, order kept",
 );
 assertEqual(appendUnique(["a"], ["a", "b", "b"]), ["a", "b"], "appendUnique adds each new item once");
+
+// A second run is refused by naming the one in the way, with its id. The page shows no such id.
+assertEqual(
+  withoutIds(
+    "A Generate is already running on this project (job 44444444-4444-4444-8444-444444444444, started 2026-10-12 18:20:00Z for pillar). Nothing was started -- wait for it to finish.",
+  ),
+  "A Generate is already running on this project (job (id), started 2026-10-12 18:20:00Z for pillar). Nothing was started -- wait for it to finish.",
+  "a line the server said is shown without the identifier in it",
+);
+assertEqual(withoutIds("pillar ready."), "pillar ready.", "a line with no identifier is shown as it is");
 {
   const prev = ["a"];
   if (appendUnique(prev, ["a"]) !== prev) {

@@ -10,6 +10,19 @@ import { SiteContextBanner } from "@/components/SiteContextBanner";
 import { CONTENT_TYPES, isContentTypeDisabled } from "@/lib/content-types";
 import { everyPartnerFailedExtraction } from "@/lib/content-creator/preflight-readiness";
 import {
+  REPURPOSE_TYPES,
+  deletedPiecesLine,
+  isRepurposeSource,
+  isRepurposeType,
+  lastRepurposeLines,
+  pageOf,
+  pieceButtonLabel,
+  pieceOfType,
+  piecesOf,
+  repurposeSavedLine,
+  sourceLabel,
+} from "@/lib/content-creator/repurpose";
+import {
   draftWrittenLabel,
   lastRunLines,
   runRecord,
@@ -19,6 +32,7 @@ import {
   appendUnique,
   splitGroundingWarnings,
   summarizeEventPayload,
+  withoutIds,
 } from "@/lib/content-creator/run-display";
 import {
   AUDIENCE_SEGMENTS,
@@ -68,6 +82,7 @@ import {
   downloadProjectHtmlExport,
   generateProject,
   getGenerateJobEvents,
+  getLatestPageRepurpose,
   getLatestProjectRun,
   listProjectArtifacts,
   listGccVersions,
@@ -76,6 +91,7 @@ import {
   polishGccVersion,
   previewBodyDocument,
   renderArtifactBody,
+  repurposePage,
   seoGccVersion,
   type GccArtifact,
   type GccArtifactVersion,
@@ -108,15 +124,47 @@ function writtenBy(metadataJson?: string | null): string | null {
   }
 }
 
-/** A Generate this page started and is following. */
+/** A run this page started and is following: a Generate, or a Repurpose of one page. */
 type GenerateRun = {
-  /** The content types asked for, as the picker had them when Generate was pressed. */
+  /** The content types asked for, as the picker had them when the run was started. */
   types: string[];
   /** False while the server is still checking the request; true once the run exists. */
   accepted: boolean;
-  /** When Generate was pressed, then when the run was accepted. This page's own clock. */
+  /** When the button was pressed, then when the run was accepted. This page's own clock. */
   startedAt: Date;
+  /** Set on a Repurpose: the page the pieces are written from, as the screen names it ("the Pillar"). */
+  from?: string;
 };
+
+/**
+ * What a Repurpose of one page has said: its lines, the pieces it did not write and why, and the
+ * ones it saved with a gap. Kept apart from the Generate's report: a project's last Generate lists
+ * the gaps its pages shipped with, and writing an email from one of those pages must not take that
+ * list off the screen.
+ */
+type RepurposeReport = {
+  pageId: string;
+  /** The run, for its full record. Null until the server has accepted it. */
+  jobId: string | null;
+  lines: string[];
+  refusals: string[];
+  warnings: string[];
+};
+
+/** A page's Repurpose report, with any identifier the server put in a line left out. */
+function repurposeReportOf(
+  pageId: string,
+  jobId: string | null,
+  said: { lines?: string[] | null; refusals?: string[] | null; warnings?: string[] | null } = {},
+): RepurposeReport {
+  return {
+    pageId,
+    jobId,
+    lines: (said.lines ?? []).map(withoutIds),
+    refusals: (said.refusals ?? []).map(withoutIds),
+    warnings: (said.warnings ?? []).map(withoutIds),
+  };
+}
 
 /** The part of the workspace a project section shows: the brief, or Generate with its output. */
 export type ContentView = "brief" | "generate";
@@ -165,7 +213,10 @@ export default function ProjectContentWorkspace({
   // the run's history was whatever happened to arrive last.
   const [generateMsgs, setGenerateMsgs] = useState<string[]>([]);
   const pushGenerateMsg = useCallback((msg: string) => {
-    setGenerateMsgs((prev) => (prev.includes(msg) ? prev : [...prev, msg]));
+    // Many of these lines are the server's own words, and a refused start names the run that is in
+    // the way by its id. The id is left out here, where every line of the run passes.
+    const line = withoutIds(msg);
+    setGenerateMsgs((prev) => (prev.includes(line) ? prev : [...prev, line]));
   }, []);
   // Accumulated, never overwritten -- generateMsg was one string, so with five tool events each
   // refusal replaced the last and the terminal "Generate finished." then wiped them all. Three
@@ -215,6 +266,39 @@ export default function ProjectContentWorkspace({
   function toggleToolPartner(url: string) {
     setToolPartners((prev) => (prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]));
   }
+  // Repurpose: the pieces ticked on the page on screen, and what its run has said. The ticks are
+  // the operator's and start empty, as Generate's do.
+  const [repurposeTypes, setRepurposeTypes] = useState<string[]>([]);
+  function toggleRepurposeType(value: string) {
+    setRepurposeTypes((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+  }
+  const [repurposeReport, setRepurposeReport] = useState<RepurposeReport | null>(null);
+  const addToRepurposeReport = useCallback(
+    (part: { lines?: string[]; refusals?: string[]; warnings?: string[] }) => {
+      setRepurposeReport((prev) =>
+        prev
+          ? {
+              ...prev,
+              lines: appendUnique(prev.lines, (part.lines ?? []).map(withoutIds)),
+              refusals: appendUnique(prev.refusals, (part.refusals ?? []).map(withoutIds)),
+              warnings: appendUnique(prev.warnings, (part.warnings ?? []).map(withoutIds)),
+            }
+          : prev,
+      );
+    },
+    [],
+  );
+  // Which kind of run the hub connection is following. The handlers are made once per connection and
+  // outlive the render that made them, so they read this, not state.
+  const runKindRef = useRef<"generate" | "repurpose">("generate");
+  /** A line about the run being followed, put where that run reports. */
+  const pushRunMsg = useCallback(
+    (msg: string) => {
+      if (runKindRef.current === "repurpose") addToRepurposeReport({ lines: [msg] });
+      else pushGenerateMsg(msg);
+    },
+    [addToRepurposeReport, pushGenerateMsg],
+  );
   const toolPagesRequested = outputTypes.includes("tool");
   const noToolPicked = toolPagesRequested && project.partnerUrls.length > 0 && toolPartners.length === 0;
   const [stalePrompt, setStalePrompt] = useState<GccStaleGroundingError | null>(null);
@@ -384,6 +468,23 @@ export default function ProjectContentWorkspace({
     void resumeLatestRunRef.current?.();
   }, [projectId]);
 
+  // The page on screen, when a piece can be written from it: an approved pillar, blog or tool page.
+  // Its newest Repurpose is read when it is opened -- see resumePageRepurpose.
+  const repurposeSourceId =
+    artifact && isRepurposeSource(artifact) && artifact.status?.toLowerCase() === "approved" ? artifact.id : null;
+  const resumePageRepurposeRef = useRef<((pageId: string, live: () => boolean) => Promise<void>) | null>(null);
+  useEffect(() => {
+    resumePageRepurposeRef.current = resumePageRepurpose;
+  });
+  useEffect(() => {
+    if (!repurposeSourceId) return;
+    let live = true;
+    void resumePageRepurposeRef.current?.(repurposeSourceId, () => live);
+    return () => {
+      live = false;
+    };
+  }, [projectId, repurposeSourceId]);
+
   /**
    * Close the hub, from wherever.
    *
@@ -400,6 +501,7 @@ export default function ProjectContentWorkspace({
     const conn = hubRef.current;
     hubRef.current = null;
     generateJobIdRef.current = null;
+    runKindRef.current = "generate";
     // Never rejects into the void: a stop that fails on an already-dead socket is the state we
     // wanted anyway, and an unhandled rejection here would surface as an error the operator cannot
     // act on.
@@ -485,6 +587,11 @@ export default function ProjectContentWorkspace({
   // What Generate will read: the server's brief_json, kept current by the panel's onBriefSaved.
   const savedBriefMissing = contentBriefMissingFields(migrateBrief(safeParse(detail.briefJson)));
   const approved = artifact?.status?.toLowerCase() === "approved";
+  // Repurpose, for what is on screen: a page a piece can be written from lists its pieces, and a
+  // piece names the page it was written from.
+  const repurposeSource = artifact && isRepurposeSource(artifact) ? artifact : null;
+  const pagePieces = repurposeSource ? piecesOf(repurposeSource, detail.artifacts) : [];
+  const writtenFrom = artifact ? pageOf(artifact, detail.artifacts) : null;
   const siteSection = parseSiteSectionJson(detail.siteSectionJson);
   // Generate reads the saved brief, so it needs that brief complete and the screen to match it. It
   // was `!!detail.briefJson || briefSavedOnServer`: any brief on the server, however old, enabled
@@ -503,6 +610,41 @@ export default function ProjectContentWorkspace({
   // (Jeff, 2026-09-22: two hours of "same error"). Refuse here, in words, instead.
   const missingProjectSiteRun = !detail.projectSiteRunId;
   const runIndicatorShown = generateRun !== null && !runIndicatorHidden;
+  // What the saved brief still needs before a run can read it, said the same way under Generate and
+  // under Repurpose: both read brief_json from the server. Null when it is saved and complete.
+  const briefGap = !briefSaved ? (
+    <>
+      The brief has unsaved changes. Save it first. <OpenBrief onOpen={onOpen} />
+    </>
+  ) : !briefReady ? (
+    <>
+      Nothing is saved in the brief yet. <OpenBrief onOpen={onOpen} />
+    </>
+  ) : savedBriefMissing.length > 0 ? (
+    <>
+      The saved brief is missing: {savedBriefMissing.join(", ")}. <OpenBrief onOpen={onOpen} />
+    </>
+  ) : null;
+  // Repurpose is behind the gates Generate is: a crawled site and a complete, saved brief. The server
+  // holds them and refuses by name; these are the ones this page can already see.
+  const canRepurpose =
+    repurposeSource !== null &&
+    approved &&
+    canGenerate &&
+    !missingProjectSiteRun &&
+    repurposeTypes.length > 0 &&
+    !generating &&
+    !pending;
+  // Tool pages ticked for some of the project's partners and not all: which pages that writes is the
+  // server's to say, so the pieces under them are not counted on this page.
+  const toolsNarrowed = toolPagesRequested && toolPartners.length < project.partnerUrls.length;
+  const deletedWithPages = deletedPiecesLine(outputTypes, detail.artifacts, toolsNarrowed);
+
+  /** Open a page or a piece from a link to it. The tab follows what is opened. */
+  function openDraft(a: GccArtifact) {
+    setSelectedType(null);
+    void loadVersionFor(a);
+  }
 
   /**
    * Follow a generate job on the hub. Each content type pushes as it finishes, so artifacts appear
@@ -611,16 +753,80 @@ export default function ProjectContentWorkspace({
    * and must not say it has stopped either.
    */
   function stopFollowing(reason: string) {
-    pushGenerateMsg(
+    pushRunMsg(
       `${reason}, so it can no longer say whether the run is still going. Reload the page in a few minutes: whatever the run saved will be there, each draft labelled with the time it was written.`,
     );
     setGenerateRun(null);
     closeHub();
   }
 
-  async function attachToGenerateJob(jobId: string) {
+  /**
+   * Read the newest Repurpose of the page on screen when it is opened, and pick up from it: the same
+   * read resumeLatestRun makes for the project's Generate, for the same reason. One going now is
+   * rejoined; one that has ended is shown with what it recorded, which was otherwise on the page only
+   * while the page that watched it stayed open.
+   *
+   * A Repurpose going on a page that is not the one on screen is not found by this. Pressing
+   * Generate or Repurpose while it runs is refused by the server, which names it.
+   */
+  async function resumePageRepurpose(pageId: string, live: () => boolean) {
+    // A run this page is following, or a Repurpose it is starting, says its own report as it goes.
+    const busy = () => generateJobIdRef.current !== null || runKindRef.current === "repurpose";
+    if (busy()) return;
+    let latest;
+    try {
+      latest = await getLatestPageRepurpose(projectId, pageId);
+    } catch (err) {
+      if (!live() || busy()) return;
+      const reason = err instanceof Error ? err.message : String(err);
+      setRepurposeReport(
+        repurposeReportOf(pageId, null, {
+          lines: [`This page could not read whether a Repurpose has run from it (${reason}).`],
+        }),
+      );
+      return;
+    }
+    if (!live() || busy() || !latest) return;
+
+    if (latest.status === "running") {
+      const page = detail?.artifacts.find((a) => a.id === pageId);
+      setRepurposeReport(repurposeReportOf(pageId, latest.jobId));
+      setRunIndicatorHidden(false);
+      setGenerateRun({
+        types: latest.requestedTypes,
+        accepted: true,
+        startedAt: new Date(latest.startedAtUtc),
+        from: page ? sourceLabel(page) : "this page",
+      });
+      try {
+        await attachToGenerateJob(latest.jobId, "repurpose");
+      } catch (err) {
+        if (generateJobIdRef.current !== null) {
+          const reason = err instanceof Error ? err.message : String(err);
+          stopFollowing(
+            `A Repurpose is running from this page, but this page could not connect to follow it (${reason})`,
+          );
+        }
+      }
+      return;
+    }
+
+    const recorded = runRecord(latest.resultJson);
+    setRepurposeReport(
+      repurposeReportOf(pageId, latest.jobId, {
+        lines: lastRepurposeLines(latest),
+        refusals: recorded?.refusals,
+        warnings: recorded?.warnings,
+      }),
+    );
+  }
+
+  async function attachToGenerateJob(jobId: string, kind: "generate" | "repurpose" = "generate") {
     generateJobIdRef.current = jobId;
-    setRunLogJobId(jobId);
+    runKindRef.current = kind;
+    // Each kind of run has its own report, and its own link to its full record.
+    if (kind === "generate") setRunLogJobId(jobId);
+    else setRepurposeReport((prev) => (prev ? { ...prev, jobId } : prev));
     let conn = hubRef.current;
     if (!conn) {
       conn = createWorkflowHubConnection();
@@ -636,6 +842,17 @@ export default function ProjectContentWorkspace({
 
       onGccGenerateTypeEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
+        if (runKindRef.current === "repurpose") {
+          // Spelled as the run's record spells it ("social: Refused: ..."), so each is listed once.
+          if (evt.status === "failed") {
+            addToRepurposeReport({ refusals: [`${evt.contentType}: ${evt.error ?? "failed"}`] });
+          } else if (evt.status === "warning") {
+            addToRepurposeReport({ warnings: [`${evt.contentType}: ${evt.error ?? "written with a gap"}`] });
+          }
+          // A piece that wrote is said once, by the run's last line: the pieces are listed on the page.
+          void reloadRef.current();
+          return;
+        }
         if (evt.status === "failed") {
           // Appended, not assigned: one type can emit several of these (one per partner for tool),
           // and each one names a partner the operator would otherwise have to infer from a count.
@@ -657,6 +874,25 @@ export default function ProjectContentWorkspace({
 
       onGccGenerateEvent(conn, (evt) => {
         if (evt.jobId !== generateJobIdRef.current) return;
+        if (runKindRef.current === "repurpose") {
+          if (evt.status === "ready") {
+            const recorded = runRecord(evt.resultJson);
+            const saved = recorded?.savedIds ? ` ${repurposeSavedLine(recorded.savedIds.length)}` : "";
+            addToRepurposeReport({
+              lines: [`Repurpose finished at ${timeOfDay(new Date())}.${saved}`],
+              refusals: recorded?.refusals ?? [],
+              warnings: recorded?.warnings ?? [],
+            });
+            // The page stays on the page the pieces were written from: they are listed there, each
+            // one a click away, beside what the run did not write.
+            endRun(null);
+          } else if (evt.status === "failed") {
+            // The refusal or fault verbatim: when every piece is refused, this is each one's reason.
+            addToRepurposeReport({ lines: [evt.error ?? "Repurpose failed."] });
+            endRun(null);
+          }
+          return;
+        }
         if (evt.status === "ready") {
           // The aggregate the job recorded, read back here as well as from the live per-type events.
           // Those events are live-only: a socket that dropped mid-draft (the 1006 case) and rejoined
@@ -685,7 +921,7 @@ export default function ProjectContentWorkspace({
           if (refusedJobId !== generateJobIdRef.current) return;
           const reason = err instanceof Error ? err.message : String(err);
           if (reason.includes("Generate job not found")) {
-            pushGenerateMsg(
+            pushRunMsg(
               "The server no longer has this run. That is what a restart of the server leaves behind: a restart stops any run that is going.",
             );
             endRun(null);
@@ -792,19 +1028,60 @@ export default function ProjectContentWorkspace({
     }
   }
 
+  /**
+   * Repurpose: write the ticked pieces from the page on screen. A run like a Generate -- the server
+   * answers with a job and reports over the hub -- that reports under the page it is written from
+   * and leaves the last Generate's report where it is.
+   */
+  async function runRepurpose() {
+    const page = repurposeSource;
+    if (!page || !canRepurpose) return;
+    // In the order they are offered, not the order they were ticked.
+    const types = REPURPOSE_TYPES.filter((t) => repurposeTypes.includes(t));
+    setRepurposeReport(repurposeReportOf(page.id, null));
+    runEndedRef.current = null;
+    setRunIndicatorHidden(false);
+    runKindRef.current = "repurpose";
+    setGenerateRun({ types, accepted: false, startedAt: new Date(), from: sourceLabel(page) });
+    try {
+      const started = await repurposePage(projectId, page.id, { outputTypes: types, provider });
+      setGenerateRun((r) => (r ? { ...r, accepted: true, startedAt: new Date() } : r));
+      try {
+        await attachToGenerateJob(started.jobId, "repurpose");
+      } catch (err) {
+        // Accepted and going; only this page's line to it failed. Not a failed Repurpose.
+        if (generateJobIdRef.current !== null) {
+          const reason = err instanceof Error ? err.message : String(err);
+          stopFollowing(`The Repurpose was started, but this page could not connect to follow it (${reason})`);
+        }
+      }
+    } catch (err) {
+      // Refused before anything started: the server's reason, as it gave it.
+      addToRepurposeReport({
+        lines: [err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Repurpose failed"],
+      });
+      runKindRef.current = "generate";
+      setGenerateRun(null);
+    }
+  }
+
   return (
     <>
       {generateRun && runIndicatorShown ? (
         <GenerateRunningIndicator run={generateRun} onHide={() => setRunIndicatorHidden(true)}>
-          <GenerateRunReport
-            msgs={generateMsgs}
-            preflight={preflight}
-            notes={generateNotes}
-            warnings={generateWarnings}
-            groundingWarnings={groundingWarnings}
-            projectId={projectId}
-            jobId={runLogJobId}
-          />
+          {generateRun.from ? (
+            repurposeReport ? <RepurposeRunReport report={repurposeReport} projectId={projectId} /> : null
+          ) : (
+            <GenerateRunReport
+              msgs={generateMsgs}
+              preflight={preflight}
+              notes={generateNotes}
+              warnings={generateWarnings}
+              groundingWarnings={groundingWarnings}
+              projectId={projectId}
+              jobId={runLogJobId}
+            />
+          )}
         </GenerateRunningIndicator>
       ) : null}
     {/* Inert under the indicator: what is on the page is from earlier runs, and nothing on it can be
@@ -821,8 +1098,9 @@ export default function ProjectContentWorkspace({
             <RunSpinner className="h-4 w-4" />
             <span>
               <span className="font-semibold">{runHeadline(generateRun)}</span>
-              {generateRun.accepted ? ` — started at ${timeOfDay(generateRun.startedAt)}.` : "."} The drafts on this
-              page are from earlier runs.
+              {generateRun.accepted ? ` — started at ${timeOfDay(generateRun.startedAt)}.` : "."}
+              {/* A Generate rewrites the pages on screen; a Repurpose leaves the page it reads as it is. */}
+              {generateRun.from ? "" : " The drafts on this page are from earlier runs."}
             </span>
           </span>
           <button
@@ -945,6 +1223,10 @@ export default function ProjectContentWorkspace({
             </fieldset>
           ) : null}
 
+          {/* A page written again is deleted first, and its pieces with it. Said here, where the page
+              is ticked, and not asked: writing the page again is what was asked for. */}
+          {deletedWithPages ? <p className="mt-3 text-sm text-foreground">{deletedWithPages}</p> : null}
+
           <div className="mt-4 border-t border-border pt-4">
             <label className="block">
               <span className="text-sm font-medium text-foreground">Writing model</span>
@@ -1016,18 +1298,8 @@ export default function ProjectContentWorkspace({
               project&rsquo;s site, then start the create again.
             </p>
           ) : null}
-          {!briefSaved ? (
-            <p className="mt-3 text-sm text-muted">
-              The brief has unsaved changes. Save it first. <OpenBrief onOpen={onOpen} />
-            </p>
-          ) : !briefReady ? (
-            <p className="mt-3 text-sm text-muted">
-              Nothing is saved in the brief yet. <OpenBrief onOpen={onOpen} />
-            </p>
-          ) : savedBriefMissing.length > 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              The saved brief is missing: {savedBriefMissing.join(", ")}. <OpenBrief onOpen={onOpen} />
-            </p>
+          {briefGap ? (
+            <p className="mt-3 text-sm text-muted">{briefGap}</p>
           ) : outputTypes.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Choose at least one thing to write.</p>
           ) : null}
@@ -1151,7 +1423,9 @@ export default function ProjectContentWorkspace({
                         : "border-border bg-surface text-muted hover:bg-muted/30")
                     }
                   >
-                    {a.name || a.id.slice(0, 8)}
+                    {/* A piece carries its page's name, and a pillar and a blog are both named for the
+                        keyword: a piece's button says the page it was written from. */}
+                    {pieceButtonLabel(a, detail.artifacts)}
                     {/* When the text on this page was written: its newest version's time, not the
                         day the page was first made. A Generate rewrites the pages it can and refuses
                         the ones it cannot, so the pages of one tab are not all from one run -- and
@@ -1173,7 +1447,9 @@ export default function ProjectContentWorkspace({
       ) : !version ? (
         <div className="border-l-2 border-[var(--gcc-accent)] bg-[var(--gcc-accent)]/5 px-3 py-2 text-sm text-foreground">
           {selectedGroup && selectedGroup.artifacts.length === 0
-            ? `No ${selectedGroup.label} yet for this project. Pick it as an output type, then Generate above.`
+            ? isRepurposeType(selectedGroup.type)
+              ? `No ${selectedGroup.label} yet for this project. It is written from an approved Pillar, Blog or Tool page: open the page, approve it, and use Repurpose under it.`
+              : `No ${selectedGroup.label} yet for this project. Pick it as an output type, then Generate above.`
             : "No draft artifact yet. Save the brief, then Generate above."}
         </div>
       ) : (
@@ -1194,6 +1470,20 @@ export default function ProjectContentWorkspace({
               ) : null}
               {approved ? (
                 <span className="text-sm text-[var(--gcc-accent)]">Approved</span>
+              ) : null}
+              {/* A piece is written from one page and carries that page's name. Which page, and the
+                  way back to it, is said here: a tab holding one piece has no row of buttons to say it. */}
+              {writtenFrom ? (
+                <span className="text-sm text-muted">
+                  Written from{" "}
+                  <button
+                    type="button"
+                    onClick={() => openDraft(writtenFrom)}
+                    className="font-medium text-[#C83803] underline-offset-2 hover:underline"
+                  >
+                    {sourceLabel(writtenFrom)}
+                  </button>
+                </span>
               ) : null}
               {/* Which writer produced this draft. Shown because the whole point of the Writing model
                   control is comparing two drafts, and with several artifacts per type named after the
@@ -1331,6 +1621,105 @@ export default function ProjectContentWorkspace({
               </button>
             </div>
           </section>
+
+          {/* Repurpose: an email, a social post and an ad are written from a page, here, and by
+              nothing else (Jeff, 2026-10-12: short content types "ARE DERIVED OR REPURPOSED FROM
+              EXISTING CONTENT"). Under a pillar, a blog and a tool page; not under a piece. */}
+          {repurposeSource ? (
+            <section className="border-t border-border pt-6">
+              <h3 className="font-display text-lg text-foreground">Repurpose</h3>
+              <p className="mt-1 text-sm text-muted">
+                Writes an email, a social post or an ad from this page&rsquo;s text, for the reader, the
+                voice and the problem in the brief. Each is saved under this page. Repurpose again
+                replaces it; writing this page again with Generate deletes it.
+              </p>
+              {!approved ? (
+                <p className="mt-3 text-sm text-muted">
+                  Approve this page first. A piece is written from a page that has been approved.
+                </p>
+              ) : (
+                <>
+                  <fieldset className="mt-4 rounded-md border border-border p-3">
+                    <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+                      Write from this page
+                    </legend>
+                    <div className="flex flex-col gap-1.5">
+                      {REPURPOSE_TYPES.map((type) => {
+                        const existing = pieceOfType(repurposeSource, type, detail.artifacts);
+                        const writtenAt = existing?.latestVersionAtUtc
+                          ? draftWrittenLabel(existing.latestVersionAtUtc)
+                          : "";
+                        return (
+                          <label key={type} className="flex items-center gap-1.5 text-xs font-normal text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={repurposeTypes.includes(type)}
+                              disabled={generating}
+                              onChange={() => toggleRepurposeType(type)}
+                              className="h-3.5 w-3.5 rounded border-border text-[#C83803] focus:ring-2 focus:ring-brand/20 disabled:opacity-50"
+                            />
+                            {contentTypeLabel(type)}
+                            {existing ? (
+                              <span className="text-muted">
+                                {" "}
+                                &mdash; replaces the one written{writtenAt ? ` ${writtenAt}` : " from this page"}
+                              </span>
+                            ) : null}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                  <button
+                    type="button"
+                    disabled={!canRepurpose}
+                    onClick={() => void runRepurpose()}
+                    className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generateRun?.from ? "Repurposing…" : "Repurpose"}
+                  </button>
+                  {briefGap ? (
+                    <p className="mt-3 text-sm text-muted">{briefGap}</p>
+                  ) : missingProjectSiteRun ? (
+                    <p className="mt-3 text-sm text-muted">
+                      This project has no site crawl to work from, so nothing can be written.
+                    </p>
+                  ) : repurposeTypes.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted">Choose at least one piece to write.</p>
+                  ) : null}
+                </>
+              )}
+
+              {/* What this page already has under it, each a click away. */}
+              {pagePieces.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-foreground">Written from this page</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {pagePieces.map((piece) => (
+                      <button
+                        key={piece.id}
+                        type="button"
+                        onClick={() => openDraft(piece)}
+                        className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-muted/30"
+                      >
+                        {contentTypeLabel(piece.type)}
+                        {piece.latestVersionAtUtc && draftWrittenLabel(piece.latestVersionAtUtc) ? (
+                          <span className="font-normal"> · {draftWrittenLabel(piece.latestVersionAtUtc)}</span>
+                        ) : null}
+                        {piece.status?.toLowerCase() === "approved" ? " ✓" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* What the page's Repurpose has said. Its own report, apart from the Generate's above:
+                  the last Generate's list of gaps stays where it is. */}
+              {repurposeReport && repurposeReport.pageId === repurposeSource.id && !runIndicatorShown ? (
+                <RepurposeRunReport report={repurposeReport} projectId={projectId} />
+              ) : null}
+            </section>
+          ) : null}
         </div>
       )}
       </Stage>
@@ -1351,7 +1740,8 @@ export default function ProjectContentWorkspace({
 /** What the run is doing, in the words both the indicator and its bar use. */
 function runHeadline(run: GenerateRun): string {
   if (!run.accepted) return "Checking before anything is written";
-  return `Generating ${run.types.map((t) => contentTypeLabel(t)).join(", ")}`;
+  const types = run.types.map((t) => contentTypeLabel(t)).join(", ");
+  return run.from ? `Writing ${types} from ${run.from}` : `Generating ${types}`;
 }
 
 /** Motion that says "working". Still for a reader who has asked for no motion; the words carry it. */
@@ -1408,7 +1798,24 @@ function GenerateRunningIndicator({
             </h2>
           </div>
 
-          {run.accepted ? (
+          {run.from ? (
+            run.accepted ? (
+              <>
+                <p className="mt-4 text-sm text-foreground">Started at {timeOfDay(run.startedAt)}.</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Each piece is written from the page&rsquo;s own text, and the pieces that write are
+                  saved together at the end, under that page. When the run finishes this closes and
+                  they are listed under Repurpose on the page.
+                </p>
+              </>
+            ) : (
+              <p className="mt-4 text-sm leading-relaxed text-muted">
+                Making sure the project&rsquo;s site is crawled, the brief is complete and the page is
+                approved. Nothing is written until this passes; if it does not, the reason is shown
+                and nothing is started.
+              </p>
+            )
+          ) : run.accepted ? (
             <>
               <p className="mt-4 text-sm text-foreground">
                 Started at {timeOfDay(run.startedAt)}. This takes several minutes.
@@ -1569,6 +1976,37 @@ function GenerateRunReport({
 }
 
 /**
+ * What a Repurpose of one page has said: its lines, the pieces it did not write and why, the ones it
+ * saved with a gap, and its full record when something was refused. Drawn in the running indicator
+ * while the run covers the page and under "Repurpose" on the page otherwise, as a Generate's is.
+ */
+function RepurposeRunReport({ report, projectId }: { report: RepurposeReport; projectId: string }) {
+  const needsLog =
+    report.refusals.length > 0 ||
+    report.warnings.length > 0 ||
+    report.lines.some((line) => /failed|refus/i.test(line));
+
+  return (
+    <>
+      {report.lines.length > 0 ? (
+        <ul className="mt-3 space-y-0.5">
+          {report.lines.map((line) => (
+            <li key={line} className="whitespace-pre-wrap text-sm text-foreground">
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <RunReportList title="Not written" items={report.refusals} />
+      <RunReportList title="Written with a gap" items={report.warnings} />
+      {needsLog && report.jobId ? (
+        <GenerateRunLog key={report.jobId} projectId={projectId} jobId={report.jobId} />
+      ) : null}
+    </>
+  );
+}
+
+/**
  * One named list of what a run said -- "Grounding", "Not written", "Written with a gap". Nothing when
  * the list is empty: a heading over nothing would read as a count of zero the run never gave.
  */
@@ -1674,6 +2112,9 @@ function GenerateRunLog({ projectId, jobId }: { projectId: string; jobId: string
  * is no second grid anywhere to drift from this one. Same grid/input sizing as ProjectWorkPanel's
  * task checkboxes ("Content Type selection should mirror tasks", Jeff). Nothing is ever checked
  * by default.
+ *
+ * The three pieces Repurpose writes are not offered: GeekAPI refuses them on Generate (2026-10-12),
+ * and each is asked for on the page it is written from.
  */
 function ContentTypePicker({
   selected,
@@ -1688,7 +2129,7 @@ function ContentTypePicker({
         Content type
       </legend>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-        {CONTENT_TYPES.map((o) => {
+        {CONTENT_TYPES.filter((o) => !isRepurposeType(o.value)).map((o) => {
           const disabled = isContentTypeDisabled(o.value);
           return (
             <label
@@ -1709,6 +2150,12 @@ function ContentTypePicker({
           );
         })}
       </div>
+      {/* Three of the Output's tabs are not on this list, and a list that silently lost them would
+          read as the types being gone. */}
+      <p className="mt-2 text-xs text-muted">
+        {REPURPOSE_TYPES.map((t) => contentTypeLabel(t)).join(", ")} are not written by Generate. Each is
+        written from an approved Pillar, Blog or Tool page: open the page under Output and use Repurpose.
+      </p>
     </fieldset>
   );
 }
@@ -1789,19 +2236,25 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
       <p className="mt-1 text-sm text-muted">
         {total === 0
           ? "None of this project's drafts carry image prompts."
-          : `${total} prompt${total === 1 ? "" : "s"} — one per H2 plus the hero, for each draft.`}{" "}
+          : `${total} prompt${total === 1 ? "" : "s"} — the hero and one per H2 for each page, and one for each piece written from a page.`}{" "}
         Copy these into your image generator. They are production instructions, which is why they
         are not printed in the page.
       </p>
 
       <div className="mt-4 flex flex-col gap-6">
-        {groups.map((group) => (
+        {groups.map((group) => {
+          // A piece carries its page's name, so the pillar's email and the blog's read alike.
+          const from = pageOf(group.artifact, artifacts);
+          return (
           <div key={group.artifact.id} className="flex flex-col gap-2">
             <div className="flex items-baseline gap-2">
               <h3 className="text-sm font-semibold text-foreground">
                 {group.artifact.name || contentTypeLabel(group.artifact.type)}
               </h3>
-              <span className="text-xs text-muted">{group.artifact.type}</span>
+              <span className="text-xs text-muted">
+                {group.artifact.type}
+                {from ? ` · written from ${sourceLabel(from)}` : ""}
+              </span>
             </div>
 
             {group.prompts.length === 0 ? (
@@ -1833,7 +2286,8 @@ function ImagePromptsPanel({ artifacts }: { artifacts: GccArtifact[] }) {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

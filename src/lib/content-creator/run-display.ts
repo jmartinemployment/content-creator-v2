@@ -270,6 +270,15 @@ export function splitGroundingWarnings(warnings: readonly string[]): {
   return { grounding, pieces };
 }
 
+/**
+ * A line the server said, as the page shows it: any identifier in it left out. The page shows no
+ * identifier but the project's and the labelled Run ID, and a server's refusal can carry one: a
+ * second run is refused with "A Generate is already running on this project (job ...)".
+ */
+export function withoutIds(line: string): string {
+  return replaceGuids(line, "(id)");
+}
+
 /** `prev` with each new item of `items` added once, in order; `prev` itself when nothing is new. */
 export function appendUnique(prev: string[], items: readonly string[]): string[] {
   const added = items.filter((item, i) => !prev.includes(item) && items.indexOf(item) === i);

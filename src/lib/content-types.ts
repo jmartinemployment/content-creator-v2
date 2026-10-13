@@ -56,6 +56,11 @@ export function contentTypeLabel(value: string | null | undefined): string {
  * version of the right thing). Email-cold-outreach, Social, Ads, and Image prompt are not
  * disabled -- cold outreach is the one email variant genuinely implemented, and Social/Ads/Image
  * prompt were never flagged as broken.
+ *
+ * Not disabled is not the same as written by Generate. Since 2026-10-12 Email-cold-outreach, Social
+ * and Ads are written by Repurpose from an approved pillar, blog or tool page, and GeekAPI refuses
+ * them on Generate. They keep their tabs, so they stay out of this list; Generate's picker leaves
+ * them out by `isRepurposeType` (src/lib/content-creator/repurpose.ts).
  * Normalized the same way as the backend: strip non-letters, lowercase, so "tech-article" and
  * "techArticle", or "linkedin-document" and "PDF / LinkedIn document", each match one entry.
  */

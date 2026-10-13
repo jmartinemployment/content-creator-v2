@@ -116,21 +116,6 @@ export type SiteAnalysis = {
   pages?: Array<{ url: string; title: string; headings: Array<{ level: number; text: string }> }>;
 };
 
-export type RepurposeMixRequest = {
-  blog?: boolean;
-  techArticle?: boolean;
-  emailCount?: number;
-  linkedInCount?: number;
-  xCount?: number;
-  instagramCount?: number;
-  metaAdsCount?: number;
-  googleAdsCount?: number;
-  aiToolNames?: string[];
-  aiToolBrief?: string | null;
-  imagePrompts?: boolean;
-  provider?: string;
-};
-
 export type ToolGenerateRequest = {
   toolNames: string[];
   brief?: string | null;

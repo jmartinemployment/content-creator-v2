@@ -35,9 +35,11 @@ export interface GeneratedContentGroup {
 export type GeneratedContentSet = GeneratedContentGroup[];
 
 /**
- * The types that always get a tab: every type the Generate picker offers enabled, in the picker's
- * order, less `image-prompt`, which has the workspace's own tab. Derived from the same registry the
- * picker reads, so enabling a type gives it a tab in the same change.
+ * The types that always get a tab: every type of the registry that is not disabled, in the
+ * registry's order, less `image-prompt`, which has the workspace's own tab. That is what Generate's
+ * picker offers and the three pieces Repurpose writes from a page (an email, a social post, an ad),
+ * which the picker leaves out. Derived from the same registry the picker reads, so enabling a type
+ * gives it a tab in the same change.
  */
 export const ALWAYS_SHOWN_TYPES: readonly string[] = CONTENT_TYPES.filter(
   (t) => !isContentTypeDisabled(t.value) && t.value !== "image-prompt",

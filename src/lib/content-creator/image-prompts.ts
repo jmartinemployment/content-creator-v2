@@ -14,11 +14,23 @@
  *
  * They live on the document itself — `lede.imagePrompt` and each section's — rather than as
  * artifacts of their own, so this reads them back out of the stored body.
+ *
+ * A short piece (an email, a social post, an ad) is not a document: it carries one prompt, as an
+ * object beside its own fields. Until 2026-10-12 this read documents only, so that prompt was
+ * written, paid for, stored and listed here as "carries no image prompts".
  */
 export interface ArtifactImagePrompt {
-  /** "Hero" for the opening, otherwise the H2 the prompt belongs to. */
+  /** "Hero" for the opening, otherwise the H2 the prompt belongs to. "Image" for a short piece's one. */
   heading: string;
   prompt: string;
+}
+
+/** The one prompt a short piece carries: `{ ..., "imagePrompt": { "prompt": string, ... } }`. */
+function shortPiecePrompt(parsed: Record<string, unknown>): string | null {
+  const held = parsed.imagePrompt;
+  if (!held || typeof held !== "object") return null;
+  const prompt = (held as Record<string, unknown>).prompt;
+  return typeof prompt === "string" && prompt.trim() ? prompt.trim() : null;
 }
 
 type WireSection = {
@@ -38,6 +50,10 @@ export function imagePromptsFor(bodyDocumentJson: string): ArtifactImagePrompt[]
   let doc: WireDoc | null = null;
   try {
     const parsed = JSON.parse(bodyDocumentJson) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const own = shortPiecePrompt(parsed);
+      if (own) return [{ heading: "Image", prompt: own }];
+    }
     // Tool and blog bodies are an envelope with the document under `body`; a pillar may be bare.
     const candidate = (parsed?.body ?? parsed) as WireDoc | undefined;
     if (candidate && typeof candidate === "object") doc = candidate;

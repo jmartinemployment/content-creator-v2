@@ -134,6 +134,29 @@ export function generateProject(
 }
 
 /**
+ * Repurpose: write short pieces (an email, a social post, an ad) from one approved page of the
+ * project. They are saved under that page, and the page's earlier pieces of the same types are
+ * deleted first. A run like a Generate: 202 with a job to follow on the hub.
+ *
+ * The server refuses, having started nothing, a page that is not an approved pillar, blog or tool
+ * page with text, a type that is not a short piece, an incomplete brief, a site that is not crawled,
+ * and a second run while a Generate or a Repurpose is going on the project.
+ */
+export function repurposePage(
+  projectId: string,
+  pageId: string,
+  opts: { provider: string; outputTypes: string[] },
+): Promise<{ jobId: string; projectId: string; pageId: string; status: string }> {
+  return gccRequest(
+    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/repurpose`,
+    {
+      method: "POST",
+      body: JSON.stringify({ provider: opts.provider, outputTypes: opts.outputTypes }),
+    },
+  );
+}
+
+/**
  * When the brief a version was generated from was saved, from the version's metadata (J7; contract
  * §3). Null for every version written before GeekAPI records it.
  */
@@ -163,6 +186,8 @@ export interface GccProjectRun {
   /** What an ended run recorded: what it saved, what it refused by name, the pre-flight, the gaps. */
   resultJson?: string | null;
   error?: string | null;
+  /** The page a Repurpose was written from. Absent on a Generate. */
+  sourcePageId?: string | null;
 }
 
 /**
@@ -174,6 +199,20 @@ export interface GccProjectRun {
 export async function getLatestProjectRun(projectId: string): Promise<GccProjectRun | null> {
   const body = await gccRequest<{ run: GccProjectRun | null }>(
     `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/generate/latest`,
+  );
+  return body.run ?? null;
+}
+
+/**
+ * The newest Repurpose of one page -- the one going now, or the last to end -- or null when the page
+ * has never been repurposed. Read when an approved page is opened, for the reason
+ * getLatestProjectRun is read when the workspace opens: what a run refused is otherwise on the page
+ * only while the page that watched it stays open. Apart from the project's newest Generate, which a
+ * Repurpose never takes the place of.
+ */
+export async function getLatestPageRepurpose(projectId: string, pageId: string): Promise<GccProjectRun | null> {
+  const body = await gccRequest<{ run: GccProjectRun | null }>(
+    `/api/geek-content-creator/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/repurpose/latest`,
   );
   return body.run ?? null;
 }
@@ -531,6 +570,44 @@ function isWireDocument(v: unknown): v is WireDocument {
 }
 
 /**
+ * Text the model wrote, as paragraphs: a blank line starts a new one and a single line break stays a
+ * line break. Escaped: this is text, and is never read as markup.
+ */
+function textToHtml(text: string): string {
+  return text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${escHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("\n");
+}
+
+/**
+ * A short piece, drawn as what it is. An email is a subject, a body and the text of its button; a
+ * social post or an ad is its text. Null for anything else.
+ *
+ * Until 2026-10-12 an email drew its body alone -- no subject, no button text -- and the body was
+ * put on the page as markup, unescaped; a post had no drawing at all and showed as raw data. The
+ * image prompt each carries is on the Image prompts tab, as every page's is.
+ */
+function shortPieceToHtml(p: Record<string, unknown>): string | null {
+  const str = (key: string) => (typeof p[key] === "string" ? (p[key] as string).trim() : "");
+
+  if (str("subject") && str("body")) {
+    const rows = [`<p><strong>Subject:</strong> ${escHtml(str("subject"))}</p>`, textToHtml(str("body"))];
+    if (str("ctaLabel")) rows.push(`<p><strong>Button text:</strong> ${escHtml(str("ctaLabel"))}</p>`);
+    return rows.join("\n");
+  }
+
+  // A post is its text and nothing beside it but its image prompt.
+  if (str("text") && Object.keys(p).every((key) => key === "text" || key === "imagePrompt")) {
+    return textToHtml(str("text"));
+  }
+
+  return null;
+}
+
+/**
  * Render a stored artifact body (CWV2 ContentDocument, image-prompt, or tool JSON) into
  * readable HTML for `dangerouslySetInnerHTML`. Returns null when it can't produce a
  * meaningful render (caller can fall back to a collapsed JSON view).
@@ -557,6 +634,12 @@ export function renderArtifactBody(bodyDocumentJson: string): string | null {
     }
     rows.push(docToHtml(p.body as WireDocument));
     return rows.filter(Boolean).join("\n");
+  }
+
+  // An email, a social post or an ad: its own fields, as text.
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const piece = shortPieceToHtml(parsed as Record<string, unknown>);
+    if (piece) return piece;
   }
 
   // Field-based artifacts (image prompt, metadata packs): labeled fields, never raw JSON.
