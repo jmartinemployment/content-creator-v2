@@ -10,7 +10,7 @@
  * signed-in user's token predates that scope — signing in again fixes it.
  */
 
-import { ApiError } from "./gcc-api";
+import { ApiError, refusalOf } from "./gcc-api";
 
 const API_BASE = "/api/cw";
 const PROJECTS = "/api/geek-content-creator/projects";
@@ -104,8 +104,7 @@ async function projectsRequest<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new ApiError(detail || response.statusText, response.status);
+    throw await refusalOf(response);
   }
 
   if (response.status === 204) return undefined as T;

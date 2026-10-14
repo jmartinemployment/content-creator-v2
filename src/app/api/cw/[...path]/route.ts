@@ -50,9 +50,9 @@ async function proxy(
     // Previously uncaught -- a timeout, a reset connection, or GeekAPI simply not answering threw
     // here and Next.js's own default handling returned a bare, empty 500 with no body at all,
     // indistinguishable from every other kind of failure. This is the one that's actually ours to
-    // report accurately. Plain text, not JSON: gccRequest's error path reads the body directly as
-    // the error message (response.text(), never parsed), matching every other error body this
-    // proxy already passes through unchanged from GeekAPI itself.
+    // report accurately. Plain text, not JSON: the form's error path (`refusalOf` in
+    // services/gcc-api.ts) shows a body that is not JSON as it came, and reads the sentence out of
+    // the JSON this proxy passes through unchanged from GeekAPI itself.
     const detail = err instanceof Error ? err.message : String(err);
     return new Response(`Could not reach GeekAPI: ${detail}`, {
       status: 502,

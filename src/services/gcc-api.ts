@@ -11,10 +11,56 @@ import type { GccPartnerToolReadiness } from "@/services/workflow-tools-hub";
 const API_BASE = "/api/cw";
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  /** The body the server answered with, as it came. `message` is the sentence in it. */
+  readonly body: string;
+
+  constructor(message: string, public status: number, body?: string) {
     super(message);
     this.name = "ApiError";
+    this.body = body ?? message;
   }
+}
+
+/**
+ * The sentence a refused request carries, for the screen.
+ *
+ * GeekAPI refuses with JSON: `{ "error": "..." }` from a route, or a document with a `title` when a
+ * request failed in a way no route handled. Printed as text, the braces, the field names and the
+ * trace id went on the page: on 2026-10-14 the Profile of "Cash Flow Forecasting: Automated
+ * Enterprise Resource Planning" showed a whole such document under "Site URL". A body that is
+ * neither, the proxy's own plain text included, is shown as it came.
+ */
+export function refusalText(body: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (typeof parsed === "string") return parsed.trim() || body;
+  if (typeof parsed !== "object" || parsed === null) return body;
+
+  const fields = parsed as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const error = text(fields.error);
+  if (error) return error;
+
+  const title = text(fields.title);
+  if (!title) return body;
+  const rest = [text(fields.detail)];
+  // ASP.NET's own refusal of a body it cannot read names each field under `errors`.
+  if (typeof fields.errors === "object" && fields.errors !== null) {
+    for (const messages of Object.values(fields.errors as Record<string, unknown>)) {
+      if (Array.isArray(messages)) rest.push(...messages.map(text));
+    }
+  }
+  return [title, ...rest.filter((line) => line.length > 0)].join(" ");
+}
+
+/** The error a refused response is read into: its sentence for the screen, its body kept whole. */
+export async function refusalOf(response: Response): Promise<ApiError> {
+  const body = (await response.text().catch(() => "")) || response.statusText;
+  return new ApiError(refusalText(body), response.status, body);
 }
 
 export interface GccSerpIndex {
@@ -39,8 +85,7 @@ async function gccRequest<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new ApiError(detail || response.statusText, response.status);
+    throw await refusalOf(response);
   }
 
   if (response.status === 204) return undefined as T;
@@ -371,8 +416,7 @@ export async function downloadProjectHtmlExport(projectId: string): Promise<void
     throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
   }
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new ApiError(detail || response.statusText, response.status);
+    throw await refusalOf(response);
   }
 
   const blob = await response.blob();
@@ -399,8 +443,7 @@ export async function downloadArtifactHtmlExport(artifactId: string, fallbackNam
     throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
   }
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new ApiError(detail || response.statusText, response.status);
+    throw await refusalOf(response);
   }
 
   const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -427,8 +470,7 @@ export async function downloadGccVersionPdf(versionId: string, fallbackName: str
     throw new ApiError("Could not reach GeekAPI Content Creator.", 0);
   }
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new ApiError(detail || response.statusText, response.status);
+    throw await refusalOf(response);
   }
 
   const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -446,7 +488,7 @@ export async function downloadGccVersionPdf(versionId: string, fallbackName: str
 export function parseStaleGroundingError(err: unknown): GccStaleGroundingError | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
   try {
-    const body = JSON.parse(err.message) as Partial<GccStaleGroundingError>;
+    const body = JSON.parse(err.body) as Partial<GccStaleGroundingError>;
     if (body.error !== "stale_site_analysis") return null;
     return body as GccStaleGroundingError;
   } catch {
